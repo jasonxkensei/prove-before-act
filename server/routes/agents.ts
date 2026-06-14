@@ -322,7 +322,7 @@ export function registerAgentsRoutes(app: Express) {
         trial: `${TRIAL_QUOTA} free certifications — start immediately after registration`,
         prepaid_credits: {
           endpoint: `POST ${baseUrl}/api/credits/purchase`,
-          price: "100 proofs for $5 USDC on Base",
+          price: "100 proofs for $1 USDC on Base",
         },
         x402_pay_per_use: {
           description: "Pay per request with USDC on Base — no account needed",
@@ -578,7 +578,7 @@ export function registerAgentsRoutes(app: Express) {
             credits: {
               method: "POST",
               url: `${baseUrl}/api/credits/purchase`,
-              note: "100 proofs / $5 USDC on Base",
+              note: "100 proofs / $1 USDC on Base",
             },
             x402: {
               method: "POST",

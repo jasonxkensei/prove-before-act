@@ -382,7 +382,7 @@ export function registerProofWriteRoutes(app: Express) {
                 upgrade: {
                   prepaid_credits: {
                     endpoint: `POST ${baseUrl}/api/credits/purchase`,
-                    packs: { "100_proofs": "$5 USDC", "1000_proofs": "$40 USDC", "10000_proofs": "$300 USDC" },
+                    packs: { "100_proofs": "$1 USDC", "1000_proofs": "$10 USDC", "10000_proofs": "$100 USDC" },
                     network: "Base (USDC)",
                   },
                   x402_pay_per_use: {
@@ -441,7 +441,7 @@ export function registerProofWriteRoutes(app: Express) {
           options: [
             { type: "free_trial", method: "POST", url: `${baseUrl}/api/agent/register`, body: { agent_name: "your-agent-name" }, free_certifications: TRIAL_QUOTA, description: `${TRIAL_QUOTA} free certifications, no wallet needed` },
             { type: "api_key", header: "Authorization: Bearer pm_xxx", description: "Use an existing API key" },
-            { type: "x402", price: "$0.05", network: "Base (USDC)", description: "Pay per use, no account needed" },
+            { type: "x402", price: "$0.01", network: "Base (USDC)", description: "Pay per use, no account needed" },
           ],
         });
       }
@@ -869,7 +869,7 @@ export function registerProofWriteRoutes(app: Express) {
                 upgrade: {
                   prepaid_credits: {
                     endpoint: `POST ${baseUrl}/api/credits/purchase`,
-                    packs: { "100_proofs": "$5 USDC", "1000_proofs": "$40 USDC", "10000_proofs": "$300 USDC" },
+                    packs: { "100_proofs": "$1 USDC", "1000_proofs": "$10 USDC", "10000_proofs": "$100 USDC" },
                     network: "Base (USDC)",
                   },
                   x402_pay_per_use: {
@@ -1283,7 +1283,7 @@ export function registerProofWriteRoutes(app: Express) {
                 message: `Trial quota exhausted (${TRIAL_QUOTA}/${TRIAL_QUOTA} used). Purchase prepaid credits or pay per request via x402.`,
                 trial: { quota: TRIAL_QUOTA, used: TRIAL_QUOTA, remaining: 0 },
                 upgrade: {
-                  credits: `POST ${baseUrl}/api/credits/purchase — prepaid packs: 100/$5, 1,000/$20 (launch promo -50%), 10,000/$150 (launch promo -50%) USDC on Base`,
+                  credits: `POST ${baseUrl}/api/credits/purchase — prepaid packs: 100/$1, 1,000/$10, 10,000/$100 — flat $0.01/cert USDC on Base`,
                   x402: "Send POST /api/batch without auth header to pay per request via x402 (USDC on Base)",
                   acp: "Use POST /api/acp/checkout for EGLD payment on MultiversX",
                 },
@@ -1332,7 +1332,7 @@ export function registerProofWriteRoutes(app: Express) {
           options: [
             { type: "free_trial", method: "POST", url: `${baseUrl}/api/agent/register`, body: { agent_name: "your-agent-name" }, free_certifications: TRIAL_QUOTA, description: `${TRIAL_QUOTA} free certifications, no wallet needed` },
             { type: "api_key", header: "Authorization: Bearer pm_xxx", description: "Use an existing API key" },
-            { type: "x402", price: "$0.05", network: "Base (USDC)", description: "Pay per use, no account needed" },
+            { type: "x402", price: "$0.01", network: "Base (USDC)", description: "Pay per use, no account needed" },
           ],
         });
       }

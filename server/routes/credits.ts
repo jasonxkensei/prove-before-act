@@ -16,12 +16,9 @@ export function registerCreditsRoutes(app: Express) {
     const baseUrl = `https://${_req.get("host")}`;
     const totalCerts = await getTotalCertificationCount();
     const effectivePackages = getEffectivePackages(totalCerts);
-    const promoActive = effectivePackages.some((p) => p.promo_active);
     res.json({
       packages: effectivePackages,
-      promo: promoActive
-        ? { active: true, description: "Launch promo: -50% on packs ≥1,000 certs while network total < 100k proofs (Tier 1)" }
-        : { active: false },
+      promo: { active: false },
       payment: {
         network: "eip155:8453",
         asset: "USDC",

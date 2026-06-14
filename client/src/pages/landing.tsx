@@ -43,13 +43,10 @@ export default function Landing() {
   const { data: pricing } = useQuery<{
     current_price_usd: number;
     total_certifications: number;
-    current_tier: { min: number; max: number | null; price_usd: number };
-    next_tier: { min: number; max: number | null; price_usd: number } | null;
-    certifications_until_next_tier: number | null;
   }>({
     queryKey: ["/api/pricing"],
   });
-  const price = pricing ? `$${pricing.current_price_usd}` : "$0.05";
+  const price = pricing ? `$${pricing.current_price_usd}` : "$0.01";
 
   const [agentName, setAgentName] = useState("");
   const [trialKey, setTrialKey] = useState<string | null>(null);
@@ -234,37 +231,6 @@ export default function Landing() {
 
           <p className="mt-4 text-sm text-muted-foreground">{price} per proof • Unlimited</p>
 
-          {pricing && pricing.next_tier && pricing.current_tier.max !== null && (
-            <div className="mt-3 mx-auto w-full max-w-[15rem] text-center" data-testid="tier-progress">
-              <div className="mb-2 flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                <span data-testid="text-tier-current">
-                  <span className="font-medium text-foreground">
-                    {pricing.total_certifications.toLocaleString("en-US")}
-                  </span>{" "}
-                  / {pricing.current_tier.max.toLocaleString("en-US")} certifications
-                </span>
-              </div>
-              <div className="h-2 w-full overflow-hidden rounded-md bg-muted">
-                <div
-                  className="h-full bg-primary transition-all"
-                  style={{
-                    width: `${Math.min(
-                      100,
-                      Math.max(
-                        1,
-                        (pricing.total_certifications / pricing.current_tier.max) * 100,
-                      ),
-                    )}%`,
-                  }}
-                  data-testid="bar-tier-progress"
-                />
-              </div>
-              <p className="mt-2 text-xs text-muted-foreground whitespace-nowrap" data-testid="text-tier-next">
-                Next tier: ${pricing.next_tier.price_usd}/cert after{" "}
-                {pricing.current_tier.max.toLocaleString("en-US")} certifications
-              </p>
-            </div>
-          )}
         </div>
       </section>
       {/* Machine Economy Stack */}
@@ -425,7 +391,7 @@ export default function Landing() {
                     An agent with a wallet but no xProof account can anchor its first proof in a single HTTP session. No registration, no browser, no human in the loop. The agent discovers the price, signs a USDC micro-payment on Base, and gets the proof.
                   </p>
                   <div className="flex items-center gap-2 flex-wrap text-xs">
-                    {["No API key", "USDC on Base", "eip155:8453", "~$0.05 per proof", "Coinbase CDP compatible"].map((tag) => (
+                    {["No API key", "USDC on Base", "eip155:8453", "$0.01 per proof", "Coinbase CDP compatible"].map((tag) => (
                       <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
                     ))}
                   </div>
@@ -895,7 +861,7 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
                   <p className="text-muted-foreground">
                     per proof
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">Starting at {price} — price decreases as the network grows (all-time volume).</p>
+                  <p className="text-xs text-muted-foreground mt-1">Flat rate. No tiers, no subscription.</p>
                 </div>
                 <ul className="mb-8 space-y-3 text-sm">
                   <li className="flex items-center gap-2">
@@ -990,7 +956,7 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
                 Agents pay natively.<br className="hidden md:block" /> No signup, no API key.
               </h2>
               <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                Any x402-compatible agent anchors proofs in one round-trip. $0.05 in USDC on Base. No account required.
+                Any x402-compatible agent anchors proofs in one round-trip. $0.01 in USDC on Base. No account required.
               </p>
             </div>
 
@@ -1025,7 +991,7 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
                   <div className="mt-2">{`{`}</div>
                   <div className="pl-4"><span className="text-[#79c0ff]">"x402Version"</span><span className="text-[#e6edf3]">: </span><span className="text-[#ffa657]">1</span><span className="text-[#e6edf3]">,</span></div>
                   <div className="pl-4"><span className="text-[#79c0ff]">"accepts"</span><span className="text-[#e6edf3]">: [{`{`}</span></div>
-                  <div className="pl-8"><span className="text-[#79c0ff]">"price"</span><span className="text-[#e6edf3]">: </span><span className="text-[#a5d6ff]">"$0.05"</span><span className="text-[#e6edf3]">,</span></div>
+                  <div className="pl-8"><span className="text-[#79c0ff]">"price"</span><span className="text-[#e6edf3]">: </span><span className="text-[#a5d6ff]">"$0.01"</span><span className="text-[#e6edf3]">,</span></div>
                   <div className="pl-8"><span className="text-[#79c0ff]">"network"</span><span className="text-[#e6edf3]">: </span><span className="text-[#a5d6ff]">"eip155:8453"</span><span className="text-[#e6edf3]">,</span></div>
                   <div className="pl-8"><span className="text-[#79c0ff]">"asset"</span><span className="text-[#e6edf3]">: </span><span className="text-[#a5d6ff]">"USDC"</span></div>
                   <div className="pl-4"><span className="text-[#e6edf3]">{`}]`}</span></div>
@@ -1080,7 +1046,7 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
             </div>
 
             <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-              {["USDC", "Base Mainnet", "eip155:8453", "No account needed", "$0.05 / proof"].map((label) => (
+              {["USDC", "Base Mainnet", "eip155:8453", "No account needed", "$0.01 / proof"].map((label) => (
                 <Badge key={label} variant="outline" className="text-xs font-mono" data-testid={`badge-x402-${label.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}>{label}</Badge>
               ))}
             </div>

@@ -732,19 +732,12 @@ Resend + X-PAYMENT: &lt;base64-signed-payment&gt; → 200 {"proof_id": "..."}</c
     <h2>Pricing</h2>
     <ul>
       <li>Free trial: 10 proofs — no wallet, no card (POST /api/agent/register)</li>
-      <li>Pay-per-use via x402: $0.05 / proof — USDC on Base, no account needed</li>
-      <li>Prepaid packs — <strong>Launch promo active (Tier 1, &lt;100k total proofs): -50% on packs ≥1k certs</strong>:
+      <li>Pay-per-use via x402: $0.01 / proof — USDC on Base, no account needed</li>
+      <li>Prepaid packs — flat $0.01/cert, no promo:
         <ul>
-          <li>Starter: 100 certs / $5.00 ($0.05/cert)</li>
-          <li>Pro: 1,000 certs / $20.00 ($0.02/cert) — was $40.00</li>
-          <li>Business: 10,000 certs / $150.00 ($0.015/cert) — was $300.00</li>
-        </ul>
-      </li>
-      <li>Volume tiers (pay-per-use, auto-applied as network grows):
-        <ul>
-          <li>0 – 100k proofs: $0.05 / proof</li>
-          <li>100k – 1M proofs: $0.025 / proof</li>
-          <li>1M+ proofs: $0.015 / proof</li>
+          <li>Starter: 100 certs / $1.00 ($0.01/cert)</li>
+          <li>Pro: 1,000 certs / $10.00 ($0.01/cert)</li>
+          <li>Business: 10,000 certs / $100.00 ($0.01/cert)</li>
         </ul>
       </li>
       <li>Payment: API key (Authorization: Bearer pm_...) or x402 (USDC on Base, no account)</li>

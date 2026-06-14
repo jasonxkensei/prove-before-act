@@ -58,7 +58,7 @@ xproof provides cryptographic proof of existence, authorship, and timestamp by a
 - **Name**: xproof
 - **Type**: Proof-as-a-Service
 - **Blockchain**: MultiversX (European, eco-friendly)
-- **Price**: Starting at $${priceUsd} per certification (paid in EGLD or USDC via x402) — price decreases as the network grows (all-time volume)
+- **Price**: $${priceUsd} per certification — flat rate (paid in EGLD or USDC via x402)
 - **Website**: ${baseUrl}
 
 ## Guarantees
@@ -1890,7 +1890,7 @@ ${urls}
         },
         {
           name: "investigate_proof",
-          description: "Reconstruct the full 4W audit trail for a contested agent action. Returns WHO (agent identity + SIGIL), WHAT (SHA-256 hash on-chain), WHEN (MultiversX block timestamp), WHY (decision chain anchored before acting). Includes verification summary with intent_preceded_execution flag, chronological timeline of WHY/WHAT proofs, and session heartbeat anchor. Requires x402 payment ($0.05 USDC on Base via X-PAYMENT header) or API key authentication.",
+          description: "Reconstruct the full 4W audit trail for a contested agent action. Returns WHO (agent identity + SIGIL), WHAT (SHA-256 hash on-chain), WHEN (MultiversX block timestamp), WHY (decision chain anchored before acting). Includes verification summary with intent_preceded_execution flag, chronological timeline of WHY/WHAT proofs, and session heartbeat anchor. Requires x402 payment ($0.01 USDC on Base via X-PAYMENT header) or API key authentication.",
           inputSchema: {
             type: "object",
             required: ["proof_id", "wallet"],
@@ -1970,7 +1970,7 @@ ${urls}
 
 **Prove Before Act**: anchor reasoning (SHA-256 hash) BEFORE executing any significant agent action. Hash stays local — nothing sensitive ever leaves the agent.
 
-**Proven in production**: xproof_agent_verify (Moltbook) — 4,418 on-chain proofs, 100% confirmation, 16-week streak, trust score 43,326 Verified. $0.05/proof, ~$13.80/week for a continuously accountable agent.
+**Proven in production**: xproof_agent_verify (Moltbook) — 4,418 on-chain proofs, 100% confirmation, 16-week streak, trust score 43,326 Verified. $0.01/proof, ~$2.76/week for a continuously accountable agent.
 
 ## About
 xproof is the production proof layer for AI agents — not a generic file storage or EVM attestation tool. It anchors SHA-256 hashes on MultiversX and builds a public, verifiable trust profile for every agent: certifications, audit logs, trust score, violations, and confidence-level stages.
@@ -2111,7 +2111,7 @@ The badge links to the MultiversX Explorer transaction for on-chain verification
 Certified agents can prove originality, timestamp, and integrity. Non-certified agents cannot.
 
 ## Pricing
-Starting at $${priceUsd} per certification — price decreases as the network grows (all-time volume). Tiers (all-time): 0-100K=$0.05, 100K-1M=$0.025, 1M+=$0.015. Prepaid packs: 100 certs/$5, 1,000 certs/$20 (launch promo -50%), 10,000 certs/$150 (launch promo -50%). Current pricing and tier info: https://xproof.app/api/pricing
+Flat $${priceUsd} per certification — no tiers, no promo. Prepaid packs: 100/$1, 1,000/$10, 10,000/$100 USDC on Base. Current pricing: https://xproof.app/api/pricing
 
 ## Agent Context Document
 Dedicated document answering the 10 exact questions agents ask when evaluating xProof (x402 flow, latency, retry policy, cost per 1000 anchors, comparison vs Arweave/Ceramic/Sign Protocol, MCP integration, 4W audit trail, privacy risks, fleet monitoring, Prove Before Act workflow):
@@ -2132,7 +2132,7 @@ The markdown version is optimized for LLM indexers and crawlers. It includes cop
 - [Full Specification](/.well-known/xproof.md)
 
 ## x402 Payment Protocol
-xproof supports x402 (HTTP 402 Payment Required) as an alternative to API key auth. Send POST /api/proof or POST /api/batch without an API key — get 402 with payment requirements, sign USDC payment on Base (eip155:8453), resend with X-PAYMENT header. Starting at $${priceUsd} per certification — price decreases as the network grows (all-time volume). Current pricing: https://xproof.app/api/pricing. No account needed.
+xproof supports x402 (HTTP 402 Payment Required) as an alternative to API key auth. Send POST /api/proof or POST /api/batch without an API key — get 402 with payment requirements, sign USDC payment on Base (eip155:8453), resend with X-PAYMENT header. Flat $${priceUsd} per certification. No account needed.
 
 ## x402 Bazaar Discovery
 xproof is indexed in the x402 Bazaar — the canonical discovery layer for x402-compatible services (built by Coinbase). AI agents that use the Bazaar MCP server can find xproof automatically without reading any documentation.
@@ -2356,7 +2356,7 @@ Include \`webhook_url\` in your request to receive a POST callback when the proo
 - Authenticated endpoints: /api/proof, /api/acp/checkout, /api/acp/confirm
 
 ## Pricing
-Starting at $${priceUsd} per certification — price decreases as the network grows (all-time volume). Tiers (all-time): 0-100K=$0.05, 100K-1M=$0.025, 1M+=$0.015. Prepaid packs: 100 certs/$5, 1,000 certs/$20 (launch promo -50%), 10,000 certs/$150 (launch promo -50%). Current pricing and tier info: ${baseUrl}/api/pricing
+Flat $${priceUsd} per certification — no tiers, no promo. Prepaid packs: 100/$1, 1,000/$10, 10,000/$100 USDC on Base. Current pricing: ${baseUrl}/api/pricing
 
 ## Why certify?
 Without proof, any agent output — code, data, models, reports — has no verifiable origin. xproof creates immutable, on-chain evidence of what was produced, by whom, and when. Certified agents can prove originality and integrity. Non-certified agents cannot.
@@ -2587,9 +2587,8 @@ xproof supports the x402 payment protocol as an alternative to API key authentic
 - \`POST ${baseUrl}/api/batch\` — batch certification (up to 50 files)
 
 ### Pricing
-- Starting at $${priceUsd} per certification in USDC — price decreases as the network grows (all-time volume)
-- Tiers (all-time): 0-100K=$0.05, 100K-1M=$0.025, 1M+=$0.015
-- Prepaid packs (launch promo active — Tier 1): 100/$5, 1,000/$20 (-50%), 10,000/$150 (-50%)
+- Flat $${priceUsd} per certification in USDC — no tiers, no promo
+- Prepaid packs: 100/$1, 1,000/$10, 10,000/$100 USDC on Base
 - Current pricing: ${baseUrl}/api/pricing
 - Network: Base (eip155:8453) for mainnet, Base Sepolia (eip155:84532) for testnet
 
@@ -4148,10 +4147,10 @@ Current price: **$${priceUsd} per certification**.
 |--------|------|
 | 100 anchors | $${(priceUsd * 100).toFixed(2)} |
 | 1,000 anchors | $${(priceUsd * 1000).toFixed(2)} |
-| 10,000 anchors | ~$${(priceUsd * 0.7 * 10000).toFixed(0)} (next pricing tier) |
-| 50 agents × 20 actions/day × 30 days = 30,000 anchors/month | ~$${(priceUsd * 30000).toFixed(0)}/month |
+| 10,000 anchors | $${(priceUsd * 10000).toFixed(0)} |
+| 50 agents × 20 actions/day × 30 days = 30,000 anchors/month | $${(priceUsd * 30000).toFixed(0)}/month |
 
-Price decreases as total platform volume grows (tiered model). Payment methods: EGLD on MultiversX (ACP/wallet) or USDC on Base (x402, no account needed). Batch endpoint (POST /api/batch, up to 100 files) reduces API overhead at same per-file price.
+Flat $${priceUsd} per certification — no tiers, no volume discounts. Payment methods: EGLD on MultiversX (ACP/wallet) or USDC on Base (x402, no account needed). Batch endpoint (POST /api/batch, up to 100 files) reduces API overhead at same per-file price.
 
 ---
 
@@ -4423,11 +4422,11 @@ print(f"Proof: https://xproof.app/proof/{proof['proof_id']}")
 | Single cert latency (API call → proof_id) | ~1.1s (1.075s measured) |
 | Batch of 3 files | ~1.9s (1.876s measured) |
 | On-chain confirmation | ~6s (MultiversX avg block time) |
-| Cost per proof | $0.05 USDC |
+| Cost per proof | $0.01 USDC |
 
 ### Total operational cost
 
-4,418 proofs × $0.05 = **~$221 total** over 16 weeks (~$13.80 / week) for a continuously running, publicly accountable AI agent with a full on-chain audit trail and verifiable trust score.
+4,418 proofs × $0.01 = **~$44 total** over 16 weeks (~$2.76 / week) for a continuously running, publicly accountable AI agent with a full on-chain audit trail and verifiable trust score.
 
 ### What the agent anchors
 

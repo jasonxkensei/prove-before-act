@@ -187,7 +187,7 @@ const ENDPOINT_GROUPS: EndpointGroup[] = [
         path: "/api/pricing",
         auth: "None",
         description: "Get current proof pricing information.",
-        response: `{ "current_price_usd": 0.05, "price_egld": "0.001", "volume_discount": true }`,
+        response: `{ "current_price_usd": 0.01, "price_egld": "0.001" }`,
         curl: `curl ${BASE}/api/pricing`,
       },
     ],
@@ -437,7 +437,7 @@ const ENDPOINT_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/mcp → investigate_proof",
         auth: "x402 or Bearer pm_xxx",
-        description: "MCP tool: Reconstruct the full 4W audit trail for a contested agent action. Returns WHO (agent identity + SIGIL), WHAT (SHA-256 hash on-chain), WHEN (MultiversX block timestamp), WHY (decision chain anchored before acting). Includes verification summary and session heartbeat. Requires x402 payment ($0.05 USDC on Base) or API key. Without payment, returns payment requirements.",
+        description: "MCP tool: Reconstruct the full 4W audit trail for a contested agent action. Returns WHO (agent identity + SIGIL), WHAT (SHA-256 hash on-chain), WHEN (MultiversX block timestamp), WHY (decision chain anchored before acting). Includes verification summary and session heartbeat. Requires x402 payment ($0.01 USDC on Base) or API key. Without payment, returns payment requirements.",
         body: { proof_id: "UUID of any proof in the action pair (WHY, WHAT, or heartbeat)", wallet: "Agent wallet address (erd1...)" },
         response: `{ "agent": { "wallet": "erd1...", "name": "...", "sigil_id": "..." }, "verification": { "intent_preceded_execution": true, "why_certified": true, "what_certified": true, "session_anchored": true, "all_confirmed": true }, "timeline": [{ "role": "WHY", "proof_id": "uuid", "action_type": "comment_reasoning", ... }, { "role": "WHAT", ... }], "session": { "role": "heartbeat", "proof_id": "uuid", ... } }`,
         curl: `curl -X POST ${BASE}/mcp \\

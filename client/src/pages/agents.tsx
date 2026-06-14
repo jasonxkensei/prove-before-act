@@ -163,7 +163,7 @@ export default function AgentsPage() {
   const { data: pricing } = useQuery<{ current_price_usd: number }>({
     queryKey: ["/api/pricing"],
   });
-  const price = pricing ? `$${pricing.current_price_usd}` : "$0.05";
+  const price = pricing ? `$${pricing.current_price_usd}` : "$0.01";
 
   const { data: calibratedData } = useQuery<LeaderboardResponse>({
     queryKey: ["/api/leaderboard", { calibrated: true, limit: 6, sort: "calibration" }],

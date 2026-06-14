@@ -1081,7 +1081,7 @@ export async function createMcpServer(ctx: McpContext) {
 
   server.tool(
     "investigate_proof",
-    "Reconstruct the full 4W audit trail for a contested agent action. Returns WHO (agent identity + SIGIL), WHAT (SHA-256 hash on-chain), WHEN (MultiversX block timestamp), WHY (decision chain anchored before acting). Includes verification summary with intent_preceded_execution flag, chronological timeline of WHY/WHAT proofs, and session heartbeat anchor. Requires x402 payment ($0.05 USDC on Base via X-PAYMENT header) or API key authentication. Without payment, returns payment requirements with USDC address and amount.",
+    "Reconstruct the full 4W audit trail for a contested agent action. Returns WHO (agent identity + SIGIL), WHAT (SHA-256 hash on-chain), WHEN (MultiversX block timestamp), WHY (decision chain anchored before acting). Includes verification summary with intent_preceded_execution flag, chronological timeline of WHY/WHAT proofs, and session heartbeat anchor. Requires x402 payment ($0.01 USDC on Base via X-PAYMENT header) or API key authentication. Without payment, returns payment requirements with USDC address and amount.",
     {
       proof_id: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i).describe("UUID of any proof in the action pair — WHY (reasoning), WHAT (action), or heartbeat session proof"),
       wallet: z.string().min(3).describe("Agent wallet address (erd1...) that owns the proof"),
@@ -1106,7 +1106,7 @@ export async function createMcpServer(ctx: McpContext) {
                   message: "x402 payment required for investigate_proof. Include X-PAYMENT header with USDC payment on Base.",
                   payment_requirements: paymentInfo,
                   incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}`,
-                  hint: "Include the x-payment header in your MCP POST request to /mcp. Payment is $0.05 USDC on Base (EIP-155:8453).",
+                  hint: "Include the x-payment header in your MCP POST request to /mcp. Payment is $0.01 USDC on Base (EIP-155:8453).",
                 }) }],
                 isError: true,
               };

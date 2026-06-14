@@ -3,14 +3,10 @@ import { db } from "./db";
 import { certifications } from "@shared/schema";
 import { count, and, eq, isNull, not } from "drizzle-orm";
 
-const PRICING_TIERS = [
-  { min: 0, max: 100000, priceUsd: 0.05 },
-  { min: 100001, max: 1000000, priceUsd: 0.025 },
-  { min: 1000001, max: Infinity, priceUsd: 0.015 },
-];
+export const FLAT_PRICE_USD = 0.01;
 
 let cachedPrice: { egldUsd: number; timestamp: number } | null = null;
-const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes cache
+const CACHE_DURATION_MS = 5 * 60 * 1000;
 
 let cachedTotalCount: { count: number; timestamp: number } | null = null;
 const COUNT_CACHE_DURATION_MS = 60 * 1000;
@@ -21,8 +17,6 @@ export async function getTotalCertificationCount(): Promise<number> {
   }
 
   try {
-    // Exclude unpaid ACP checkout reservations so an attacker cannot inflate
-    // the count past a pricing tier by spamming /api/acp/checkout.
     const isUnpaidAcpReservation = and(
       eq(certifications.authMethod, "acp"),
       eq(certifications.blockchainStatus, "pending"),
@@ -45,16 +39,6 @@ export async function getTotalCertificationCount(): Promise<number> {
   }
 }
 
-function getPriceForCount(totalCount: number): number {
-  for (const tier of PRICING_TIERS) {
-    if (totalCount >= tier.min && totalCount <= tier.max) {
-      return tier.priceUsd;
-    }
-  }
-  // Fallback to lowest tier price (should not happen)
-  return PRICING_TIERS[PRICING_TIERS.length - 1].priceUsd;
-}
-
 export async function getEgldUsdPrice(): Promise<number> {
   if (cachedPrice && Date.now() - cachedPrice.timestamp < CACHE_DURATION_MS) {
     return cachedPrice.egldUsd;
@@ -65,7 +49,7 @@ export async function getEgldUsdPrice(): Promise<number> {
       "https://api.coingecko.com/api/v3/simple/price?ids=elrond-erd-2&vs_currencies=usd",
       { signal: AbortSignal.timeout(5000) }
     );
-    
+
     if (!response.ok) {
       throw new Error(`CoinGecko API error: ${response.status}`);
     }
@@ -79,7 +63,7 @@ export async function getEgldUsdPrice(): Promise<number> {
 
     cachedPrice = { egldUsd, timestamp: Date.now() };
     logger.info("EGLD/USD price updated", { component: "pricing", egldUsd });
-    
+
     return egldUsd;
   } catch (error) {
     logger.error("Failed to fetch EGLD price", { component: "pricing" });
@@ -87,7 +71,7 @@ export async function getEgldUsdPrice(): Promise<number> {
       logger.info("Using cached EGLD price as fallback", { component: "pricing" });
       return cachedPrice.egldUsd;
     }
-    return 30; // Fallback price if no cache and API fails
+    return 30;
   }
 }
 
@@ -98,8 +82,7 @@ export function usdToEgld(usdAmount: number, egldUsdPrice: number): string {
 }
 
 export async function getCertificationPriceUsd(): Promise<number> {
-  const totalCount = await getTotalCertificationCount();
-  return getPriceForCount(totalCount);
+  return FLAT_PRICE_USD;
 }
 
 export async function getCertificationPriceEgld(): Promise<{
@@ -108,9 +91,9 @@ export async function getCertificationPriceEgld(): Promise<{
   egldUsdRate: number;
 }> {
   const egldUsdRate = await getEgldUsdPrice();
-  const priceUsd = await getCertificationPriceUsd();
+  const priceUsd = FLAT_PRICE_USD;
   const priceEgld = usdToEgld(priceUsd, egldUsdRate);
-  
+
   return {
     priceUsd,
     priceEgld,
@@ -120,53 +103,20 @@ export async function getCertificationPriceEgld(): Promise<{
 
 export async function getPricingInfo(): Promise<{
   current_price_usd: number;
-  current_tier: { min: number; max: number | null; price_usd: number };
   total_certifications: number;
   tiers: Array<{ min: number; max: number | null; price_usd: number }>;
-  next_tier: { min: number; max: number | null; price_usd: number } | null;
-  certifications_until_next_tier: number | null;
+  current_tier: { min: number; max: number | null; price_usd: number };
+  next_tier: null;
+  certifications_until_next_tier: null;
 }> {
   const totalCount = await getTotalCertificationCount();
-  const currentPrice = getPriceForCount(totalCount);
-
-  // Find current tier
-  let currentTier = PRICING_TIERS[0];
-  for (const tier of PRICING_TIERS) {
-    if (totalCount >= tier.min && totalCount <= tier.max) {
-      currentTier = tier;
-      break;
-    }
-  }
-
-  // Find next tier
-  let nextTier = null;
-  let certsUntilNext = null;
-  for (let i = 0; i < PRICING_TIERS.length; i++) {
-    if (PRICING_TIERS[i] === currentTier && i < PRICING_TIERS.length - 1) {
-      nextTier = PRICING_TIERS[i + 1];
-      certsUntilNext = nextTier.min - totalCount;
-      break;
-    }
-  }
 
   return {
-    current_price_usd: currentPrice,
-    current_tier: {
-      min: currentTier.min,
-      max: currentTier.max === Infinity ? null : currentTier.max,
-      price_usd: currentTier.priceUsd,
-    },
+    current_price_usd: FLAT_PRICE_USD,
     total_certifications: totalCount,
-    tiers: PRICING_TIERS.map((tier) => ({
-      min: tier.min,
-      max: tier.max === Infinity ? null : tier.max,
-      price_usd: tier.priceUsd,
-    })),
-    next_tier: nextTier ? {
-      min: nextTier.min,
-      max: nextTier.max === Infinity ? null : nextTier.max,
-      price_usd: nextTier.priceUsd,
-    } : null,
-    certifications_until_next_tier: certsUntilNext,
+    tiers: [{ min: 0, max: null, price_usd: FLAT_PRICE_USD }],
+    current_tier: { min: 0, max: null, price_usd: FLAT_PRICE_USD },
+    next_tier: null,
+    certifications_until_next_tier: null,
   };
 }

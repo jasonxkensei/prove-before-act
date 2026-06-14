@@ -21,27 +21,27 @@ export const CREDIT_PACKAGES: CreditPackage[] = [
     name: "Starter",
     description: "100 certifications — ideal for small agents or testing at scale",
     certs: 100,
-    price_usdc: "5.00",
-    price_usdc_raw: "5000000",
-    price_per_cert: "$0.05",
+    price_usdc: "1.00",
+    price_usdc_raw: "1000000",
+    price_per_cert: "$0.01",
   },
   {
     id: "pro",
     name: "Pro",
     description: "1,000 certifications — for production agents with regular output",
     certs: 1000,
-    price_usdc: "40.00",
-    price_usdc_raw: "40000000",
-    price_per_cert: "$0.04",
+    price_usdc: "10.00",
+    price_usdc_raw: "10000000",
+    price_per_cert: "$0.01",
   },
   {
     id: "business",
     name: "Business",
     description: "10,000 certifications — high-volume agents, best unit price",
     certs: 10000,
-    price_usdc: "300.00",
-    price_usdc_raw: "300000000",
-    price_per_cert: "$0.03",
+    price_usdc: "100.00",
+    price_usdc_raw: "100000000",
+    price_per_cert: "$0.01",
   },
 ];
 
@@ -49,47 +49,23 @@ export function getPackage(id: string): CreditPackage | null {
   return CREDIT_PACKAGES.find((p) => p.id === id) ?? null;
 }
 
-// Launch promo: -50% on packs of 1,000+ certs while the network stays in Tier 1 (< 100k total certs).
-// Packs below 1,000 certs are excluded — the discount is a volume incentive for committed agents.
-const PROMO_TIER1_MAX_CERTS = 100000;
-
 export interface EffectiveCreditPackage extends CreditPackage {
   promo_active: boolean;
-  original_price_usdc?: string;
-  original_price_per_cert?: string;
 }
 
 /**
- * Returns each package with its effective (possibly discounted) price for a given total network cert count.
- * When the network is in Tier 1 (totalCerts < 100k), packs of 1,000+ certs are 50% off.
+ * Returns packages — flat $0.01/cert, no promo.
  */
-export function getEffectivePackages(totalCerts: number): EffectiveCreditPackage[] {
-  const promoActive = totalCerts < PROMO_TIER1_MAX_CERTS;
-  return CREDIT_PACKAGES.map((pkg) => {
-    if (promoActive && pkg.certs >= 1000) {
-      const rawHalf = (BigInt(pkg.price_usdc_raw) / 2n).toString();
-      const usdHalf = (parseFloat(pkg.price_usdc) / 2).toFixed(2);
-      const perCertHalf = `$${(parseFloat(pkg.price_usdc) / 2 / pkg.certs).toFixed(4).replace(/\.?0+$/, "")}`;
-      return {
-        ...pkg,
-        price_usdc: usdHalf,
-        price_usdc_raw: rawHalf,
-        price_per_cert: perCertHalf,
-        promo_active: true,
-        original_price_usdc: pkg.price_usdc,
-        original_price_per_cert: pkg.price_per_cert,
-      };
-    }
-    return { ...pkg, promo_active: false };
-  });
+export function getEffectivePackages(_totalCerts: number): EffectiveCreditPackage[] {
+  return CREDIT_PACKAGES.map((pkg) => ({ ...pkg, promo_active: false }));
 }
 
 /**
- * Returns the effective (possibly discounted) version of a single package.
+ * Returns the package by id.
  * Returns null if the id is not found.
  */
-export function getEffectivePackage(id: string, totalCerts: number): EffectiveCreditPackage | null {
-  return getEffectivePackages(totalCerts).find((p) => p.id === id) ?? null;
+export function getEffectivePackage(id: string, _totalCerts: number): EffectiveCreditPackage | null {
+  return getEffectivePackages(0).find((p) => p.id === id) ?? null;
 }
 
 let _client: ReturnType<typeof createPublicClient> | null = null;

@@ -7,7 +7,7 @@ export default function ConditionsUtilisation() {
   const { data: pricing } = useQuery<{ current_price_usd: number }>({
     queryKey: ["/api/pricing"],
   });
-  const price = pricing ? `$${pricing.current_price_usd}` : "$0.05";
+  const price = pricing ? `$${pricing.current_price_usd}` : "$0.01";
 
   return (
     <div className="min-h-screen bg-background">

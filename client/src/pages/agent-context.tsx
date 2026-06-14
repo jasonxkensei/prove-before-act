@@ -96,7 +96,7 @@ export default function AgentContextPage() {
           <div className="grid gap-3 sm:grid-cols-3">
             {[
               { step: "1", title: "Send request", desc: "POST /api/proof without any auth header" },
-              { step: "2", title: "Receive 402", desc: "Get price ($0.05 USDC) + payment payload to sign" },
+              { step: "2", title: "Receive 402", desc: "Get price ($0.01 USDC) + payment payload to sign" },
               { step: "3", title: "Pay & anchor", desc: "Resend with X-PAYMENT header — get proof instantly" },
             ].map((s) => (
               <div key={s.step} className="rounded-md border bg-muted/30 p-3">
@@ -292,13 +292,13 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
       content: (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            xProof uses a tiered pricing model that decreases as total platform volume grows. Current price is <strong className="text-foreground">$0.05 per certification</strong>.
+            xProof uses a flat rate of <strong className="text-foreground">$0.01 per certification</strong> — no tiers, no promo, no volume discounts. The same price whether you anchor 1 or 10,000 proofs.
           </p>
           <div className="grid gap-3 sm:grid-cols-3">
             {[
-              { label: "Current price", value: "$0.05", detail: "per certification at current tier" },
-              { label: "Cost per 1,000 anchors", value: "$50", detail: "at $0.05 per cert" },
-              { label: "Cost per 10,000 anchors", value: "~$150", detail: "launch promo -50% pack (normally $300)" },
+              { label: "Current price", value: "$0.01", detail: "per certification — flat rate" },
+              { label: "Cost per 1,000 anchors", value: "$10", detail: "at $0.01 per cert" },
+              { label: "Cost per 10,000 anchors", value: "$100", detail: "prepaid pack — same flat rate" },
             ].map((m) => (
               <div key={m.label} className="rounded-md border bg-muted/30 p-3 text-center">
                 <div className="text-2xl font-bold text-primary mb-1">{m.value}</div>
@@ -311,7 +311,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
             <p className="text-xs font-semibold">Cost comparison for a fleet of 50 agents, 20 actions/day each:</p>
             <ul className="text-xs text-muted-foreground space-y-0.5 ml-3">
               <li>• 50 agents × 20 actions × 30 days = <strong className="text-foreground">30,000 anchors/month</strong></li>
-              <li>• At $0.05 = <strong className="text-foreground">$1,500/month</strong></li>
+              <li>• At $0.01 = <strong className="text-foreground">$300/month</strong></li>
               <li>• Per agent: <strong className="text-foreground">$30/month</strong> — lower than most SaaS compliance tools</li>
               <li>• Batch mode (up to 100 files per call): same price, reduced API overhead</li>
             </ul>
@@ -819,7 +819,7 @@ print(f"Trade executed. Proof: https://xproof.app{outcome['verify_url']}")`} />
                 <div className="flex justify-between"><span>Single cert latency</span><span className="font-mono text-foreground">~1.1s</span></div>
                 <div className="flex justify-between"><span>Batch of 3 files</span><span className="font-mono text-foreground">~1.9s</span></div>
                 <div className="flex justify-between"><span>On-chain confirmation</span><span className="font-mono text-foreground">~6s</span></div>
-                <div className="flex justify-between"><span>Cost per proof</span><span className="font-mono text-foreground">$0.05 USDC</span></div>
+                <div className="flex justify-between"><span>Cost per proof</span><span className="font-mono text-foreground">$0.01 USDC</span></div>
               </div>
             </div>
           </div>
@@ -832,8 +832,8 @@ print(f"Trade executed. Proof: https://xproof.app{outcome['verify_url']}")`} />
           <div className="rounded-md border bg-muted/30 p-3 space-y-2">
             <p className="text-xs font-semibold">Total operational cost (16 weeks)</p>
             <div className="text-xs text-muted-foreground space-y-1">
-              <p>4,418 proofs × $0.05 = <strong className="text-foreground">~$221 total</strong></p>
-              <p>~$13.80 / week for a continuously running, publicly accountable AI agent with a full on-chain audit trail and verifiable trust score.</p>
+              <p>4,418 proofs × $0.01 = <strong className="text-foreground">~$44 total</strong></p>
+              <p>~$2.76 / week for a continuously running, publicly accountable AI agent with a full on-chain audit trail and verifiable trust score.</p>
             </div>
           </div>
 
@@ -1162,7 +1162,7 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
 
           <div className="rounded-md border border-primary/20 bg-primary/5 p-3">
             <p className="text-xs text-muted-foreground">
-              <strong className="text-foreground">Bottom line:</strong> xProof is the right choice for agents that need to prove their reasoning before acting — especially at low cost, with x402, and without a pre-existing account. It is not trying to replace Arweave or Sign Protocol. It's filling the gap they don't cover: agent decision accountability at $0.05/proof.
+              <strong className="text-foreground">Bottom line:</strong> xProof is the right choice for agents that need to prove their reasoning before acting — especially at low cost, with x402, and without a pre-existing account. It is not trying to replace Arweave or Sign Protocol. It's filling the gap they don't cover: agent decision accountability at $0.01/proof.
             </p>
           </div>
         </div>
