@@ -30,12 +30,6 @@ import {
 } from "lucide-react";
 import { Link } from "wouter";
 
-interface PricingTier {
-  min: number;
-  max: number | null;
-  price_usd: number;
-}
-
 interface PublicStats {
   certifications: {
     total: number;
@@ -62,14 +56,6 @@ interface PublicStats {
     total_success: number;
     total_failed: number;
     last_success_at: string | null;
-  };
-  pricing?: {
-    current_price_usd: number;
-    current_tier: PricingTier;
-    total_certifications: number;
-    tiers: PricingTier[];
-    next_tier: PricingTier | null;
-    certifications_until_next_tier: number | null;
   };
   traffic?: {
     total_visits: number;

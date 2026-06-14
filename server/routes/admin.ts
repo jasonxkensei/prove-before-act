@@ -9,7 +9,6 @@ import { isWalletAuthenticated } from "../walletAuth";
 import { computeTrustScoreByWallet } from "../trust";
 import { getAlertConfig } from "../txAlerts";
 import { getMetrics } from "../metrics";
-import { getPricingInfo } from "../pricing";
 import { getTxQueueStats } from "../txQueue";
 import { requireAdmin, EXCLUDED_IP_HASHES, getClientIp } from "./helpers";
 import { publicStatsRateLimiter } from "../reliability";
@@ -249,7 +248,6 @@ export function registerAdminRoutes(app: Express) {
             trial_agents: trialAgentsRow.count,
             trial_certifications_used: Number(trialUsedRow.total) || 0,
           },
-          pricing: await getPricingInfo(),
           generated_at: now.toISOString(),
         };
         statsCache = { body, cachedAt: Date.now() };
