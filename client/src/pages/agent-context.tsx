@@ -110,7 +110,7 @@ export default function AgentContextPage() {
 curl -X POST https://xproof.app/api/proof \\
   -H "Content-Type: application/json" \\
   -d '{"file_hash": "YOUR_SHA256_HASH", "filename": "decision.md"}'
-# → HTTP 402 {"payment": {"amount": "50000", "currency": "USDC", "network": "eip155:8453", ...}}
+# → HTTP 402 {"payment": {"amount": "10000", "currency": "USDC", "network": "eip155:8453", ...}}
 
 # Step 3 — resend with signed USDC payment on Base
 curl -X POST https://xproof.app/api/proof \\
@@ -146,7 +146,7 @@ def anchor_x402(reasoning: dict, filename: str, wallet_signer) -> dict:
 
     payment_info = r.json()["payment"]
     # payment_info = {
-    #   "amount": "50000", "currency": "USDC", "network": "eip155:8453",
+    #   "amount": "10000", "currency": "USDC", "network": "eip155:8453",
     #   "payee": "0x...", "payload": { ... x402 standard payload ... }
     # }
 

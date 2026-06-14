@@ -399,7 +399,7 @@ export default function Landing() {
                 <div className="flex-1 min-w-0">
                   <pre className="text-xs font-mono bg-background/60 border border-border/50 rounded-md p-3 leading-relaxed overflow-x-auto whitespace-pre text-foreground/80">
 {`# 1. Send without auth → get HTTP 402 with price
-POST /api/proof → 402 {"payment": {"amount": "50000", "currency": "USDC"}}
+POST /api/proof → 402 {"payment": {"amount": "10000", "currency": "USDC"}}
 
 # 2. Sign USDC payment on Base (eip155:8453)
 # 3. Resend with X-PAYMENT header → get proof instantly

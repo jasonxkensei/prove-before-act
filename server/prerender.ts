@@ -293,7 +293,7 @@ ${safeJsonLd({
       "name": "How much does a proof cost?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Each proof costs $${priceUsd.toFixed(2)}. There is no subscription or hidden fees. Payment is accepted in USDC on Base mainnet or EGLD on MultiversX. New API key registrations include 10 free proofs. Volume pricing decreases as all-time network usage grows."
+        "text": "Each proof costs $${priceUsd.toFixed(2)} — flat rate, no tiers, no subscriptions. Payment is accepted in USDC on Base mainnet or EGLD on MultiversX. New API key registrations include 10 free proofs."
       }
     },
     {
@@ -670,7 +670,7 @@ curl -X POST ${baseUrl}/api/proof \\
   <section>
     <h2>x402 — No API key, fully autonomous</h2>
     <p>Any agent with a USDC wallet on Base (eip155:8453) can anchor proofs without any account:</p>
-    <pre><code>POST ${baseUrl}/api/proof (no auth) → HTTP 402 {"payment": {"amount": "50000", "currency": "USDC", "network": "eip155:8453"}}
+    <pre><code>POST ${baseUrl}/api/proof (no auth) → HTTP 402 {"payment": {"amount": "10000", "currency": "USDC", "network": "eip155:8453"}}
 Resend + X-PAYMENT: &lt;base64-signed-payment&gt; → 200 {"proof_id": "..."}</code></pre>
     <p>Compatible: Coinbase CDP, Conway Terminal, OpenClaw. No MultiversX wallet required on the agent side.</p>
   </section>

@@ -2898,7 +2898,7 @@ XPROOF_BASE_URL = "https://xproof.app"
 def certify_file(file_path: str, author_name: str = "AI Agent") -> str:
     """Certify a file on the MultiversX blockchain. Creates immutable proof of existence and ownership.
     Records the SHA-256 hash of the file on-chain. The file never leaves your device.
-    Cost: Starting at $${priceUsd} per certification, paid in EGLD or USDC via x402 (all-time volume pricing).
+    Cost: Flat $${priceUsd} per certification — no tiers, no volume discounts. Paid in EGLD or USDC via x402.
     
     Args:
         file_path: Path to the file to certify
@@ -4020,7 +4020,7 @@ x402 is a payment-in-HTTP protocol. An agent sends a request with no credentials
 curl -X POST ${baseUrl}/api/proof \\
   -H "Content-Type: application/json" \\
   -d '{"file_hash": "YOUR_SHA256", "filename": "decision.md"}'
-# → HTTP 402 {"payment": {"amount": "50000", "currency": "USDC", "network": "eip155:8453", ...}}
+# → HTTP 402 {"payment": {"amount": "10000", "currency": "USDC", "network": "eip155:8453", ...}}
 
 # Step 3 — pay and anchor in one request
 curl -X POST ${baseUrl}/api/proof \\
@@ -4056,7 +4056,7 @@ def anchor_x402(reasoning: dict, filename: str, wallet_signer) -> dict:
     assert r.status_code == 402, f"Expected 402, got {r.status_code}"
 
     payment_info = r.json()["payment"]
-    # {"amount": "50000", "currency": "USDC", "network": "eip155:8453", "payee": "0x...", ...}
+    # {"amount": "10000", "currency": "USDC", "network": "eip155:8453", "payee": "0x...", ...}
 
     # 3. Sign with your Base wallet (USDC on eip155:8453)
     signed = wallet_signer.sign_x402(payment_info)
