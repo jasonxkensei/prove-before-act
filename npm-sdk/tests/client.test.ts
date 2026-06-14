@@ -319,8 +319,8 @@ describe("XProofClient", () => {
     const fetchMock = mockFetch(200, {
       protocol: "xproof",
       version: "1.0",
-      price_usd: 0.05,
-      tiers: [{ min: 1, max: 100, price: 0.05 }],
+      price_usd: 0.01,
+      tiers: [{ min: 0, max: null, price: 0.01 }],
     });
     globalThis.fetch = fetchMock;
 
@@ -328,7 +328,7 @@ describe("XProofClient", () => {
     const pricing = await client.getPricing();
 
     expect(pricing.protocol).toBe("xproof");
-    expect(pricing.priceUsd).toBe(0.05);
+    expect(pricing.priceUsd).toBe(0.01);
     expect(pricing.tiers).toHaveLength(1);
   });
 

@@ -6,8 +6,7 @@ All notable changes to `@xproof/xproof` will be documented here.
 
 ### Changed
 
-- **Pricing update** — Tier 3 (1M+ proofs) lowered from $0.01 to **$0.015** per proof. The SDK reads pricing dynamically via `client.getPricing()` — no code change required.
-- **Launch promo** — Prepaid packs ≥ 1,000 certs receive **-50% while network stays in Tier 1** (<100k total all-time proofs): Pro 1k $40→$20, Business 10k $300→$150. Auto-applied via `GET /api/credits/packages`.
+- **Flat pricing** — Single rate of **$0.01 per proof**, no tiers, no promo. Prepaid packs: 100/$1, 1,000/$10, 10,000/$100 USDC. The SDK reads pricing dynamically via `client.getPricing()` — no code change required.
 - **User-Agent** header updated to `xproof-js/0.1.9`.
 
 ### How to upgrade

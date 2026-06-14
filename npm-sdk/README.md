@@ -473,7 +473,7 @@ Both emit a single JSON line per violation — identical in structure to the `co
 
 ```typescript
 const pricing = await client.getPricing();
-console.log(pricing.priceUsd); // e.g. 0.05
+console.log(pricing.priceUsd); // e.g. 0.01
 ```
 
 ## Error Handling

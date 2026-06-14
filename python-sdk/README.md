@@ -808,7 +808,7 @@ Both tools write the violation evidence on-chain before raising — so the struc
 
 ```python
 pricing = client.get_pricing()
-print(pricing.price_usd)  # e.g. 0.05
+print(pricing.price_usd)  # e.g. 0.01
 ```
 
 ## API Reference

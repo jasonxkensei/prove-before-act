@@ -95,19 +95,18 @@ describe("parsePricingInfo", () => {
     const data = {
       protocol: "xproof",
       version: "1.0",
-      price_usd: 0.05,
+      price_usd: 0.01,
       tiers: [
-        { min_certifications: 0, max_certifications: 100, price_usd: 0.05 },
-        { min_certifications: 101, max_certifications: null, price_usd: 0.03 },
+        { min_certifications: 0, max_certifications: null, price_usd: 0.01 },
       ],
       payment_methods: [{ name: "USDC" }, { name: "EGLD" }],
     };
     const info = parsePricingInfo(data);
     expect(info.protocol).toBe("xproof");
-    expect(info.priceUsd).toBe(0.05);
-    expect(info.tiers).toHaveLength(2);
+    expect(info.priceUsd).toBe(0.01);
+    expect(info.tiers).toHaveLength(1);
     expect(info.tiers[0].minCertifications).toBe(0);
-    expect(info.tiers[1].maxCertifications).toBeNull();
+    expect(info.tiers[0].maxCertifications).toBeNull();
     expect(info.paymentMethods).toHaveLength(2);
   });
 

@@ -216,8 +216,8 @@ def test_get_pricing():
         json={
             "protocol": "xproof",
             "version": "1.0",
-            "price_usd": 0.05,
-            "tiers": [{"min": 1, "max": 100, "price": 0.05}],
+            "price_usd": 0.01,
+            "tiers": [{"min": 0, "max": None, "price": 0.01}],
             "payment_methods": [{"method": "USDC", "network": "Base"}],
         },
         status=200,
@@ -225,9 +225,9 @@ def test_get_pricing():
     client = XProofClient()
     pricing = client.get_pricing()
     assert pricing.protocol == "xproof"
-    assert pricing.price_usd == 0.05
+    assert pricing.price_usd == 0.01
     assert len(pricing.tiers) == 1
-    assert pricing.tiers[0].price_usd == 0.05
+    assert pricing.tiers[0].price_usd == 0.01
 
 
 @responses.activate
@@ -447,7 +447,7 @@ def test_no_auth_for_public_endpoints():
     responses.add(
         responses.GET,
         f"{BASE}/api/pricing",
-        json={"protocol": "xproof", "version": "1.0", "price_usd": 0.05},
+        json={"protocol": "xproof", "version": "1.0", "price_usd": 0.01},
         status=200,
     )
     client = XProofClient()

@@ -147,7 +147,7 @@ Every certification answers four questions:
 
 ## Payment Options
 
-- **API key**: Get 10 free certifications via `/api/agent/register`. Purchase more at $0.05/cert.
+- **API key**: Get 10 free certifications via `/api/agent/register`. Purchase more at $0.01/cert.
 - **x402**: Pay per-request with USDC on Base — no account needed. Machine-native.
 
 ## Links
