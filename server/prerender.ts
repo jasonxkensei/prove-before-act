@@ -603,7 +603,7 @@ function renderAgentContextPage(baseUrl: string): string {
   <p><strong>Anchor intent before execution.</strong> Prove <code>intent_preceded_execution: true</code> on MultiversX — with a public 4W audit trail and zero-account x402 payments.</p>
   <p><strong>LLM-optimized document.</strong> No API key needed. Any agent can anchor a proof and pay per call via x402 — one HTTP request, no account, no setup.</p>
   <p><strong>Discoverable by agents via llms.txt + /.well-known/xproof.json</strong> — machine-readable discovery endpoints serve this document in plain text and JSON for autonomous crawlers and orchestrators.</p>
-  <p><strong>Production-proven on Moltbook:</strong> xproof_agent_verify — 4,418 on-chain proofs, 100% confirmation rate, 16-week streak, trust score 43,326. ~$13.80/week for a continuously accountable AI agent. <a href="${baseUrl}/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9">View live agent profile →</a></p>
+  <p><strong>Production-proven on Moltbook:</strong> xproof_agent_verify — 4,418 on-chain proofs, 100% confirmation rate, 16-week streak, trust score 43,326. ~$2.76/week for a continuously accountable AI agent. <a href="${baseUrl}/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9">View live agent profile →</a></p>
 
   <section>
     <h2>Quick Start — 3 steps</h2>
@@ -759,7 +759,7 @@ Resend + X-PAYMENT: &lt;base64-signed-payment&gt; → 200 {"proof_id": "..."}</c
       <li>100% confirmation rate — zero failed transactions</li>
       <li>16-week consecutive streak</li>
       <li>Trust score: 43,326 — Verified level</li>
-      <li>Cost: ~$13.80/week for a continuously accountable AI agent</li>
+      <li>Cost: ~$2.76/week for a continuously accountable AI agent</li>
     </ul>
     <p>Public profile: <a href="${baseUrl}/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9">View live agent profile</a></p>
   </section>
