@@ -2,6 +2,23 @@
 
 All notable changes to `@xproof/xproof` will be documented here.
 
+## [0.1.10] — 2026-06-19
+
+### Changed
+
+- **Flat pricing** — Version bump to surface corrected pricing on npm. Single rate of **$0.01 per proof**, no tiers, no volume discounts, no promo. Prepaid packs: 100 proofs/$1, 1,000/$10, 10,000/$100 USDC. Use `client.getPricing()` to retrieve the live rate at runtime.
+- **User-Agent** header updated to `xproof-js/0.1.10`.
+
+### How to upgrade
+
+No breaking changes.
+
+```bash
+npm install @xproof/xproof@0.1.10
+```
+
+---
+
 ## [0.1.9] — 2026-06-13
 
 ### Changed

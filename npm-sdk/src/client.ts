@@ -36,7 +36,7 @@ import type {
 } from "./types.js";
 import { JURISDICTION_TYPES } from "./types.js";
 
-const VERSION = "0.1.9";
+const VERSION = "0.1.10";
 const DEFAULT_BASE_URL = "https://xproof.app";
 const DEFAULT_TIMEOUT = 30_000;
 

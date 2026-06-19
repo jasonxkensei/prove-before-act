@@ -7,6 +7,13 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.2.9] — 2026-06-19
+
+### Changed
+- **Flat pricing** — Version bump to surface corrected pricing on PyPI. Single rate of **$0.01 per proof**, no tiers, no volume discounts, no promo. Prepaid packs: 100 proofs/$1, 1,000/$10, 10,000/$100 USDC. Use `client.get_pricing()` to retrieve the live rate at runtime.
+
+---
+
 ## [0.2.8] — 2026-06-13
 
 ### Added
