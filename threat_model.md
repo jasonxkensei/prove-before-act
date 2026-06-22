@@ -175,3 +175,10 @@ Required guarantees:
 - Visibility-gated public artifacts remain in scope for stale-cache disclosure until every JSON, Markdown, badge-markdown, and prerendered HTML variant of a proof/profile explicitly uses `Cache-Control: private, no-store` or an equivalent anti-caching policy.
 - `/api/certificates/:id.pdf` must mirror the same proof-plus-profile visibility gate used by `/api/proof/:id`, prerendered proof HTML, and the JSON/Markdown proof artifacts. Treat "proof `isPublic` alone is consent" as insufficient for public certificate download.
 - `transactionUrl` should not be treated as a generic user-controlled hyperlink when downstream surfaces label it as a blockchain explorer destination. Scheme allowlisting prevents XSS, but public proof integrity still requires either a trusted explorer allowlist or server-derived explorer URLs bound to the verified transaction hash.
+
+## Scan Notes — 2026-06-22
+
+- Current auth/admin review found no production-reachable wallet spoofing or fail-open admin path; keep the auth/admin anchors in scope only if Native Auth verification, session creation, or admin-wallet authorization logic changes.
+- Current MCP review found `investigate_proof` read-only for x402 callers and subject/admin-gated before recording violations for API-key callers; keep MCP governance writes as review anchors only if auth or audit-trail mutation logic changes.
+- Wallet-backed certification and ACP issuance must cryptographically bind every public-facing attribution field that downstream proof JSON/PDF treats as part of the proof context, at minimum filename and claimed author identity. Hash-only payment binding is insufficient when off-chain metadata is displayed as trustworthy certification evidence.
+- `/widget/trust/:wallet.js` is a public non-`/api` route and therefore sits outside the generic `/api` limiter. Keep it as an anonymous DoS review anchor until it has route-specific throttling and cached or precomputed calibration data.
