@@ -326,7 +326,7 @@ export default function Docs4WPage() {
                     </div>
                     <h3 className="text-sm font-semibold" data-testid="text-who-title">WHO</h3>
                   </div>
-                  <p className="text-xs text-muted-foreground">Agent identity via SIGIL identity chain or MultiversX wallet address. Persistent across sessions — auditors can trace all actions to one identity.</p>
+                  <p className="text-xs text-muted-foreground">Agent identity provided by the MultiversX wallet and the <strong className="text-foreground">MX-8004</strong> Trustless Agents Standard (identity registry, validation loop, reputation). Persistent across sessions — auditors can trace every action back to one verifiable identity.</p>
                 </CardContent>
               </Card>
               <Card className="border-primary/20">
@@ -337,7 +337,7 @@ export default function Docs4WPage() {
                     </div>
                     <h3 className="text-sm font-semibold" data-testid="text-what-title">WHAT</h3>
                   </div>
-                  <p className="text-xs text-muted-foreground">SHA-256 hash of exact content produced. Anchored after publication to prove output integrity.</p>
+                  <p className="text-xs text-muted-foreground">SHA-256 hash of the actual result produced. Anchored <strong className="text-foreground">after execution</strong> — cryptographic proof of exactly what the agent produced.</p>
                 </CardContent>
               </Card>
               <Card className="border-primary/20">
@@ -348,7 +348,7 @@ export default function Docs4WPage() {
                     </div>
                     <h3 className="text-sm font-semibold" data-testid="text-why-title">WHY</h3>
                   </div>
-                  <p className="text-xs text-muted-foreground">Decision chain + trigger hash + prompt hash. Anchored BEFORE acting — cryptographic proof that intent preceded execution.</p>
+                  <p className="text-xs text-muted-foreground">Full reasoning — analysis, context, and decision/intention. Anchored <strong className="text-foreground">before acting</strong> — cryptographic proof that intent preceded execution.</p>
                 </CardContent>
               </Card>
               <Card className="border-primary/20">
