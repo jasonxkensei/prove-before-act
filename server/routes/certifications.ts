@@ -10,6 +10,24 @@ import { getCertificationPriceEgld } from "../pricing";
 import { broadcastSignedTransaction, getTxExplorerUrl } from "../blockchain";
 import { tryDisplaceAcpReservation } from "./helpers";
 
+/**
+ * Parses pipe-separated metadata from a certified tx data payload.
+ * Expected format: <prefix>|filename:<name>|author:<author>
+ * Returns the values found; undefined when a field is absent.
+ */
+function parseCertifyPayloadMeta(decoded: string): { fileName?: string; authorName?: string } {
+  const meta: { fileName?: string; authorName?: string } = {};
+  const parts = decoded.split("|");
+  for (let i = 1; i < parts.length; i++) {
+    if (parts[i].startsWith("filename:")) {
+      meta.fileName = parts[i].slice("filename:".length);
+    } else if (parts[i].startsWith("author:")) {
+      meta.authorName = parts[i].slice("author:".length);
+    }
+  }
+  return meta;
+}
+
 export function registerCertificationsRoutes(app: Express) {
   // Create certification (unlimited, free service)
   // Admin wallets (ADMIN_WALLETS env) are always exempt from any payment requirements
@@ -147,6 +165,36 @@ export function registerCertificationsRoutes(app: Express) {
           return res.status(402).json({
             message: "Transaction data field does not match the certified file hash. The on-chain transaction must contain the certify payload for this file.",
           });
+        }
+
+        // Guard against delimiter ambiguity: the payload uses | as a separator so
+        // neither fileName nor authorName may contain that character.
+        if (data.fileName.includes("|") || data.authorName.includes("|")) {
+          logger.withRequest(req).warn("fileName or authorName contains pipe delimiter", { transactionHash, fileHash: data.fileHash });
+          return res.status(400).json({ message: "fileName and authorName must not contain the | character." });
+        }
+
+        // Require both filename and author to be present in the on-chain payload AND
+        // match the submitted request fields exactly. A hash-only payload (no |filename:
+        // or |author: segments) leaves displayed metadata unbound from the payment and is
+        // therefore rejected — callers cannot obtain a certified proof for arbitrary
+        // metadata by signing a bare certify:<hash> transaction. Admin wallets exempt.
+        const txPayloadMeta = parseCertifyPayloadMeta(decodedTxData);
+        if (txPayloadMeta.fileName === undefined) {
+          logger.withRequest(req).warn("fileName absent from on-chain tx payload", { transactionHash, fileHash: data.fileHash });
+          return res.status(402).json({ message: "The on-chain transaction payload must include a |filename:<name> field binding the certified document name." });
+        }
+        if (txPayloadMeta.authorName === undefined) {
+          logger.withRequest(req).warn("authorName absent from on-chain tx payload", { transactionHash, fileHash: data.fileHash });
+          return res.status(402).json({ message: "The on-chain transaction payload must include a |author:<name> field binding the certified author." });
+        }
+        if (txPayloadMeta.fileName !== data.fileName) {
+          logger.withRequest(req).warn("fileName mismatch with on-chain tx payload", { transactionHash, fileHash: data.fileHash });
+          return res.status(402).json({ message: "fileName does not match the filename bound in the on-chain transaction payload." });
+        }
+        if (txPayloadMeta.authorName !== data.authorName) {
+          logger.withRequest(req).warn("authorName mismatch with on-chain tx payload", { transactionHash, fileHash: data.fileHash });
+          return res.status(402).json({ message: "authorName does not match the author bound in the on-chain transaction payload." });
         }
       }
 
@@ -464,6 +512,34 @@ export function registerCertificationsRoutes(app: Express) {
             return res.status(402).json({
               message: "Transaction data field does not match the certified file hash. The signed transaction must contain the certify payload for this file.",
             });
+          }
+
+          // Guard against delimiter ambiguity in the broadcast path.
+          if (validatedData.fileName.includes("|") || validatedData.authorName.includes("|")) {
+            logger.withRequest(req).warn("Broadcast: fileName or authorName contains pipe delimiter", { fileHash: validatedData.fileHash });
+            return res.status(400).json({ message: "fileName and authorName must not contain the | character." });
+          }
+
+          // Require both filename and author to be present in the signed tx payload AND
+          // match the submitted request fields exactly. A hash-only signed payload leaves
+          // displayed metadata unbound from the signed transaction; those requests are
+          // rejected so callers cannot certify arbitrary metadata with a bare payload.
+          const broadcastTxMeta = parseCertifyPayloadMeta(decodedSignedData);
+          if (broadcastTxMeta.fileName === undefined) {
+            logger.withRequest(req).warn("Broadcast: fileName absent from signed tx payload", { fileHash: validatedData.fileHash });
+            return res.status(402).json({ message: "The signed transaction payload must include a |filename:<name> field binding the certified document name." });
+          }
+          if (broadcastTxMeta.authorName === undefined) {
+            logger.withRequest(req).warn("Broadcast: authorName absent from signed tx payload", { fileHash: validatedData.fileHash });
+            return res.status(402).json({ message: "The signed transaction payload must include a |author:<name> field binding the certified author." });
+          }
+          if (broadcastTxMeta.fileName !== validatedData.fileName) {
+            logger.withRequest(req).warn("Broadcast: fileName mismatch with signed tx payload", { fileHash: validatedData.fileHash });
+            return res.status(402).json({ message: "fileName does not match the filename bound in the signed transaction payload." });
+          }
+          if (broadcastTxMeta.authorName !== validatedData.authorName) {
+            logger.withRequest(req).warn("Broadcast: authorName mismatch with signed tx payload", { fileHash: validatedData.fileHash });
+            return res.status(402).json({ message: "authorName does not match the author bound in the signed transaction payload." });
           }
         }
 

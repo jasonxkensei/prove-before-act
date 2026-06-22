@@ -157,10 +157,14 @@ export function registerAcpRoutes(app: Express) {
         });
       }
 
-      // Build transaction payload for MultiversX
-      // Data format: certify@<hash>@<filename>
+      // Build transaction payload for MultiversX.
+      // Data format: certify@<hash>@<filename>@<author>
+      // author_name is included so it is cryptographically bound to the on-chain
+      // payment — an ACP caller cannot later display a different "Certified By"
+      // identity than what was committed in the paid transaction data field.
+      const acpAuthor = (data.inputs.author_name || "AI Agent").trim();
       const dataField = Buffer.from(
-        `certify@${data.inputs.file_hash}@${data.inputs.filename}`
+        `certify@${data.inputs.file_hash}@${data.inputs.filename}@${acpAuthor}`
       ).toString("base64");
 
       // Persist payment invariants so they can be verified at confirm time
