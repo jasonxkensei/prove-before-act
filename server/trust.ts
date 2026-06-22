@@ -874,22 +874,41 @@ export interface CalibrationSummary {
   outcomeCount: number;
 }
 
+const CALIBRATION_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes — matches widget Cache-Control max-age
+const calibrationCache = new Map<string, { value: CalibrationSummary | null; cachedAt: number }>();
+let calibrationCacheInFlight = new Map<string, Promise<CalibrationSummary | null>>();
+
 export async function getCalibrationSummaryByWallet(walletAddress: string): Promise<CalibrationSummary | null> {
-  try {
-    const result = await db.execute(sql`
-      SELECT AVG(ao.confidence_gap)::float AS mean_gap, COUNT(*)::int AS cnt
-      FROM agent_outcomes ao
-      JOIN users u ON u.id = ao.user_id
-      WHERE u.wallet_address = ${walletAddress} AND ao.visibility = 'public'
-    `);
-    const row = result.rows[0] as any;
-    const cnt = Number(row?.cnt ?? 0);
-    if (cnt === 0) return null;
-    const meanGap = Number(row.mean_gap);
-    return { meanGap, biasLabel: calibrationLabelFromMean(meanGap), outcomeCount: cnt };
-  } catch {
-    return null;
+  const cached = calibrationCache.get(walletAddress);
+  if (cached && Date.now() - cached.cachedAt < CALIBRATION_CACHE_TTL_MS) {
+    return cached.value;
   }
+
+  const inflight = calibrationCacheInFlight.get(walletAddress);
+  if (inflight) return inflight;
+
+  const work = (async () => {
+    try {
+      const result = await db.execute(sql`
+        SELECT AVG(ao.confidence_gap)::float AS mean_gap, COUNT(*)::int AS cnt
+        FROM agent_outcomes ao
+        JOIN users u ON u.id = ao.user_id
+        WHERE u.wallet_address = ${walletAddress} AND ao.visibility = 'public'
+      `);
+      const row = result.rows[0] as any;
+      const cnt = Number(row?.cnt ?? 0);
+      const value = cnt === 0 ? null : { meanGap: Number(row.mean_gap), biasLabel: calibrationLabelFromMean(Number(row.mean_gap)), outcomeCount: cnt };
+      calibrationCache.set(walletAddress, { value, cachedAt: Date.now() });
+      return value;
+    } catch {
+      return null;
+    } finally {
+      calibrationCacheInFlight.delete(walletAddress);
+    }
+  })();
+
+  calibrationCacheInFlight.set(walletAddress, work);
+  return work;
 }
 
 export function generateTrustBadgeSvg(level: TrustLevel, score: number, attestationCount = 0, violationCount = 0, calibrationLabel?: string | null): string {

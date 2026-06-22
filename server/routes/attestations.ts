@@ -607,7 +607,7 @@ export function registerAttestationsRoutes(app: Express) {
   });
 
   // GET /widget/trust/:wallet.js — embeddable trust badge JS widget
-  app.get("/widget/trust/:wallet.js", async (req, res) => {
+  app.get("/widget/trust/:wallet.js", publicReadRateLimiter, async (req, res) => {
     try {
       const { wallet } = req.params;
 
@@ -621,14 +621,16 @@ export function registerAttestationsRoutes(app: Express) {
 
       const baseUrl = `https://${req.get("host")}`;
 
-      const [userCheck, calibrationRaw] = await Promise.all([
-        db.select({ isPublicProfile: users.isPublicProfile })
-          .from(users)
-          .where(eq(users.walletAddress, wallet))
-          .then((rows) => rows[0] ?? null),
-        getCalibrationSummaryByWallet(wallet),
-      ]);
-      const calibration = userCheck?.isPublicProfile ? calibrationRaw : null;
+      // Fail-fast: check public profile visibility BEFORE running the expensive
+      // calibration aggregate. Only fetch calibration if the profile is public.
+      const userCheck = await db.select({ isPublicProfile: users.isPublicProfile })
+        .from(users)
+        .where(eq(users.walletAddress, wallet))
+        .then((rows) => rows[0] ?? null);
+
+      const calibration = userCheck?.isPublicProfile
+        ? await getCalibrationSummaryByWallet(wallet)
+        : null;
 
       const safeCalibration = calibration
         ? JSON.stringify({
