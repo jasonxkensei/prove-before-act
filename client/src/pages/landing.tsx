@@ -337,15 +337,15 @@ export default function Landing() {
                   The canonical agent accountability loop
                 </h2>
                 <p className="text-muted-foreground max-w-xl mx-auto text-sm">
-                  Anchor reasoning <em>before</em> executing any significant action. The proof becomes the immutable record of intent — available to auditors, regulators, or any other agent.
+                  Anchor reasoning (WHY) on-chain <em>before</em> executing. Anchor actual result (WHAT) after. Full 4W audit trail — available to auditors, regulators, or any other agent.
                 </p>
               </div>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-0 sm:gap-0">
                 {[
-                  { step: "1", label: "Reason", desc: "Agent produces reasoning (WHY)", icon: Bot },
-                  { step: "2", label: "Hash locally", desc: "SHA-256 — file never leaves agent", icon: Shield },
-                  { step: "3", label: "Anchor", desc: "POST hash → get proof_id in ~1.1s", icon: Blocks },
-                  { step: "4", label: "Execute", desc: "Action proceeds with audit reference", icon: Play },
+                  { step: "1", label: "Reason", desc: "Agent writes full reasoning + decision (WHY)", icon: Bot },
+                  { step: "2", label: "Anchor WHY", desc: "Hash → anchor on-chain before acting", icon: Blocks },
+                  { step: "3", label: "Execute", desc: "Action proceeds with immutable WHY reference", icon: Play },
+                  { step: "4", label: "Anchor WHAT", desc: "Certify actual result after execution", icon: Shield },
                 ].map((s, i) => {
                   const Icon = s.icon;
                   return (

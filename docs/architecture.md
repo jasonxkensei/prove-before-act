@@ -427,7 +427,7 @@ AI agents discover xproof capabilities through multiple standard endpoints:
 ```
 [1] GET /api/acp/products
     - Returns available products with pricing
-    - Product: "blockchain-certification" at $0.05 in EGLD
+    - Product: "blockchain-certification" at $0.01 in EGLD
       |
 [2] POST /api/acp/checkout
     Authorization: Bearer pm_<api_key>

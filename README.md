@@ -19,7 +19,7 @@
   <img src="https://img.shields.io/badge/protocol-x402-purple?style=flat-square" alt="x402" />
   <img src="https://img.shields.io/badge/protocol-ACP-orange?style=flat-square" alt="ACP" />
   <img src="https://img.shields.io/badge/standard-MX--8004-teal?style=flat-square" alt="MX-8004" />
-  <img src="https://img.shields.io/badge/price-from%20%240.05%2Fcert-brightgreen?style=flat-square" alt="from $0.05/cert" />
+  <img src="https://img.shields.io/badge/price-%240.01%2Fcert-brightgreen?style=flat-square" alt="$0.01/cert" />
 </p>
 
 ---
@@ -125,15 +125,9 @@ engaging. Trust becomes mathematical, not reputational.
 
 ## Pricing
 
-**Starting at $0.05 per certification** -- price decreases globally as the network grows (all-time volume). No subscriptions. No monthly fees.
+**$0.01 per certification — flat rate.** No tiers, no subscriptions, no monthly fees.
 
-| All-time certifications | Price per cert |
-|---|---|
-| 0 -- 100,000 | $0.05 |
-| 100,001 -- 1,000,000 | $0.025 |
-| 1,000,001+ | $0.01 |
-
-Current pricing & tier info: **https://xproof.app/api/pricing**
+Current pricing: **https://xproof.app/api/pricing**
 
 | Payment Method | Currency | Account Required |
 |---|---|---|
@@ -289,7 +283,7 @@ Any agent can certify without an API key using the x402 payment protocol:
 3. Sign the payment and resend with `X-PAYMENT` header
 4. Receive the proof
 
-Starting at **$0.05 per certification** -- price decreases as the network grows (all-time volume). Current pricing: https://xproof.app/api/pricing. No signup. No API key. No account.
+**$0.01 per certification** — flat rate. Current pricing: https://xproof.app/api/pricing. No signup. No API key. No account.
 
 ### MCP -- Model Context Protocol
 

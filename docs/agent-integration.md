@@ -9,7 +9,7 @@ xproof provides blockchain-anchored file certification on MultiversX. AI agents 
 - **Protect intellectual property** -- Establish timestamped ownership records for AI-generated works.
 - **Build trust** -- Provide cryptographic, publicly verifiable proof that content has not been altered.
 
-Each certification costs $0.05 (paid in EGLD) and produces a permanent, publicly verifiable record on the MultiversX blockchain.
+Each certification costs $0.01 (flat rate) and produces a permanent, publicly verifiable record on the MultiversX blockchain.
 
 ---
 
@@ -377,7 +377,7 @@ Response:
       "id": "blockchain-certification",
       "name": "Blockchain File Certification",
       "pricing": {
-        "amount": "0.05",
+        "amount": "0.01",
         "currency": "USD",
         "paymentCurrency": "EGLD"
       }
@@ -416,7 +416,7 @@ Response:
   "payment": {
     "address": "erd1...",
     "amount_egld": "1666666666666666",
-    "amount_usd": "0.05"
+    "amount_usd": "0.01"
   },
   "expires_at": "2026-02-01T12:30:00.000Z"
 }
@@ -567,6 +567,6 @@ After certification, proofs are publicly accessible in multiple formats:
 
 API key requests are subject to standard rate limiting to prevent abuse.
 
-**Pricing:** $0.05 per certification, paid in EGLD. No subscriptions or monthly fees.
+**Pricing:** $0.01 per certification — flat rate. No subscriptions or monthly fees.
 
 The ACP health endpoint (`/api/acp/health`) and product discovery (`/api/acp/products`) are not rate-limited.

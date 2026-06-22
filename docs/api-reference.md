@@ -513,7 +513,7 @@ Discover available products for AI agent purchase.
       "name": "Blockchain File Certification",
       "description": "Anchor a SHA-256 file hash on MultiversX blockchain for proof of existence",
       "pricing": {
-        "amount": "0.05",
+        "amount": "0.01",
         "currency": "USD",
         "paymentCurrency": "EGLD",
         "model": "per_unit"
@@ -563,7 +563,7 @@ Start an ACP checkout session. Creates a payment request with a 30-minute expiry
   "payment": {
     "address": "erd1...",
     "amount_egld": "1666666666666666",
-    "amount_usd": "0.05",
+    "amount_usd": "0.01",
     "egld_usd_rate": 30.00
   },
   "expires_at": "2026-02-01T12:30:00.000Z"
