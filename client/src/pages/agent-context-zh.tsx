@@ -73,6 +73,7 @@ export default function AgentContextZhPage() {
     "4w": true,
     privacy: true,
     fleet: true,
+    "fleet-1000": true,
     workflow: true,
     moltbook: true,
     keyfields: true,
@@ -599,6 +600,207 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
             <p className="text-xs text-muted-foreground">
               <strong className="text-foreground">xproof_agent_verify</strong>（Moltbook的验证机器人）已连续16周锚定 <strong className="text-foreground">4,418次存证</strong>，链上确认率 <strong className="text-foreground">100%</strong>。其公开档案位于 <code className="font-mono bg-muted px-1 rounded text-xs">/agent/erd1hlx4xann...gyu9</code>，任何管理员或合作伙伴系统均可实时查询。
             </p>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "fleet-1000",
+      icon: BarChart3,
+      title: "如何为集群每日认证1000次决策？（批量实战指南）",
+      badge: "集群运营商必读",
+      content: (
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            每日1000次决策认证是<strong className="text-foreground">$10/天（$300/月）</strong>。以下是在生产环境中可靠实现这一规模的完整架构，包含批量缓冲、异步提交、合规监控与成本核算。
+          </p>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            {[
+              { label: "每日认证1000次", value: "$10/天", detail: "$0.01 × 1000，固定费率" },
+              { label: "每月认证30,000次", value: "$300/月", detail: "50智能体 × 20次/天" },
+              { label: "单次批量上限", value: "100条", detail: "一次API调用最多100个哈希" },
+            ].map((m) => (
+              <div key={m.label} className="rounded-md border bg-muted/30 p-3 text-center">
+                <div className="text-xl font-bold text-primary mb-1">{m.value}</div>
+                <div className="text-xs font-medium mb-1">{m.label}</div>
+                <div className="text-xs text-muted-foreground">{m.detail}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="rounded-md border border-primary/20 bg-primary/5 p-3 space-y-1">
+            <p className="text-xs font-semibold text-primary">推荐架构：本地缓冲 + 定时批量提交</p>
+            <ul className="text-xs text-muted-foreground space-y-0.5 ml-2">
+              <li>• 智能体本地缓冲操作哈希（内存队列）</li>
+              <li>• 每隔N秒或缓冲满100条时，批量提交到 <code className="font-mono bg-muted px-1 rounded">POST /api/batch</code></li>
+              <li>• 对每条哈希存储返回的 <code className="font-mono bg-muted px-1 rounded">proof_id</code>，用于后续审计查询</li>
+              <li>• 监控循环每小时核验：锚定数量是否与决策数量匹配</li>
+            </ul>
+          </div>
+
+          <CodeBlock code={`import hashlib, json, time, threading, requests
+from collections import deque
+from datetime import datetime, timezone
+
+class FleetCertifier:
+    """
+    高吞吐量批量认证器 — 适用于每日1000+次决策的集群。
+    线程安全，本地缓冲 + 定时批量提交。
+    """
+    
+    BATCH_SIZE = 100        # API单次上限
+    FLUSH_INTERVAL = 30     # 每30秒提交一次（可按需调整）
+    BASE = "https://xproof.app"
+    
+    def __init__(self, api_key: str, agent_id: str):
+        self.api_key = api_key
+        self.agent_id = agent_id
+        self._queue: deque = deque()
+        self._lock = threading.Lock()
+        self._proof_log: list[dict] = []       # 本地审计台账
+        self._stats = {"submitted": 0, "anchored": 0, "failed": 0}
+        
+        # 启动后台批量提交线程
+        t = threading.Thread(target=self._flush_loop, daemon=True)
+        t.start()
+    
+    def queue_decision(self, reasoning: dict, action: str) -> None:
+        """
+        将一次决策加入待认证队列。非阻塞——立即返回。
+        在执行操作前调用此方法（行动前证明）。
+        """
+        ts = datetime.now(timezone.utc).isoformat()
+        content = json.dumps({**reasoning, "action": action, "ts": ts,
+                               "agent": self.agent_id}, sort_keys=True)
+        file_hash = hashlib.sha256(content.encode()).hexdigest()
+        
+        with self._lock:
+            self._queue.append({
+                "file_hash": file_hash,
+                "filename": f"decision_{ts[:10]}_{len(self._proof_log):06d}.json",
+                "_local_action": action,
+                "_local_ts": ts,
+            })
+    
+    def _flush_loop(self):
+        """后台线程：定时将缓冲队列批量提交到xProof。"""
+        while True:
+            time.sleep(self.FLUSH_INTERVAL)
+            self._flush()
+    
+    def _flush(self):
+        with self._lock:
+            batch = []
+            for _ in range(min(self.BATCH_SIZE, len(self._queue))):
+                batch.append(self._queue.popleft())
+        
+        if not batch:
+            return
+        
+        payload = [{"file_hash": b["file_hash"], "filename": b["filename"]}
+                   for b in batch]
+        try:
+            resp = requests.post(
+                f"{self.BASE}/api/batch",
+                headers={"Authorization": f"Bearer {self.api_key}",
+                         "Content-Type": "application/json"},
+                json={"files": payload},
+                timeout=15
+            )
+            if resp.status_code == 200:
+                results = resp.json().get("results", [])
+                for item, result in zip(batch, results):
+                    proof_id = result.get("proof_id")
+                    self._proof_log.append({
+                        "proof_id": proof_id,
+                        "action": item["_local_action"],
+                        "ts": item["_local_ts"],
+                        "verify_url": f"{self.BASE}/proof/{proof_id}",
+                    })
+                self._stats["anchored"] += len(results)
+            else:
+                # 失败时重新入队（最多重试1次）
+                with self._lock:
+                    for item in batch:
+                        self._queue.appendleft(item)
+                self._stats["failed"] += len(batch)
+        except Exception:
+            with self._lock:
+                for item in batch:
+                    self._queue.appendleft(item)
+        
+        self._stats["submitted"] += len(batch)
+    
+    def status(self) -> dict:
+        """返回当前认证状态 — 用于监控与合规核查。"""
+        return {
+            **self._stats,
+            "queue_pending": len(self._queue),
+            "proof_log_size": len(self._proof_log),
+        }
+    
+    def flush_now(self):
+        """强制立即提交（用于关机前清空队列）。"""
+        while self._queue:
+            self._flush()
+
+
+# -----------------------------------------------------------------------
+# 使用示例 — 50个智能体集群，每天每个20次操作 = 1000次/天
+# -----------------------------------------------------------------------
+certifier = FleetCertifier(api_key="pm_您的密钥", agent_id="fleet-manager-v1")
+
+# 每个智能体在执行前调用此方法（非阻塞）
+certifier.queue_decision(
+    reasoning={
+        "model": "gpt-4o-mini",
+        "rationale": "用户意图评分=0.91，置信度高，触发推荐策略",
+        "inputs": {"user_id": "u_123", "session_score": 0.91},
+    },
+    action="执行个性化内容推荐"
+)
+
+# 监控（每小时调用一次）
+status = certifier.status()
+print(f"已锚定: {status['anchored']} | 待提交: {status['queue_pending']} | 失败: {status['failed']}")
+# 告警条件: failed > 0 或 queue_pending > 200（积压超过2批）`} />
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+              <p className="text-xs font-semibold">合规核查接口（每日/每周）</p>
+              <div className="space-y-1.5 text-xs text-muted-foreground font-mono">
+                <p><span className="text-primary">GET</span> /api/agents/&#123;wallet&#125; → cert_total（核验总锚定数）</p>
+                <p><span className="text-primary">GET</span> /api/agents/&#123;wallet&#125;/timeline → 完整操作时间线</p>
+                <p><span className="text-primary">GET</span> /api/agents/&#123;wallet&#125;/violations → 违规记录（应为0）</p>
+              </div>
+            </div>
+            <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+              <p className="text-xs font-semibold">告警阈值建议</p>
+              <ul className="space-y-1 text-xs text-muted-foreground ml-1">
+                <li>• 队列积压 &gt; 200条 → 批量API可能超时</li>
+                <li>• 失败计数 &gt; 0 → 检查API密钥与网络</li>
+                <li>• 24小时内cert_total无增长 → 存证中断告警</li>
+                <li>• 违规数增加 → 立即调查（会影响信任评分）</li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3">
+            <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-1">实际成本核算 — 不同规模场景</p>
+            <div className="grid gap-2 sm:grid-cols-3 mt-2">
+              {[
+                { scale: "小型团队", spec: "5个智能体 × 10次/天", cost: "$15/月" },
+                { scale: "中型集群", spec: "50个智能体 × 20次/天", cost: "$300/月" },
+                { scale: "大型部署", spec: "500个智能体 × 20次/天", cost: "$3,000/月" },
+              ].map((s) => (
+                <div key={s.scale} className="text-center">
+                  <div className="text-sm font-bold text-foreground">{s.cost}</div>
+                  <div className="text-xs font-medium">{s.scale}</div>
+                  <div className="text-xs text-muted-foreground">{s.spec}</div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       ),

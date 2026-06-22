@@ -146,8 +146,8 @@ export default function LandingZh() {
           </h1>
 
           <p className="mx-auto mb-5 max-w-2xl text-lg md:text-xl text-muted-foreground leading-relaxed">
-            将智能体的感知、决策与执行结果锚定上链——链上存证、可组合、API优先。
-            为智能体集群运营商提供完整的操作审计与合规证明基础设施。
+            为AI智能体提供<strong className="text-foreground">合规存证 · 风控留痕 · 审计追溯</strong>——
+            每次决策执行前锚定推理依据，执行后锚定实际结果，形成不可篡改的4W审计轨迹。
           </p>
 
           <div className="mb-8 flex justify-center">
@@ -294,11 +294,12 @@ export default function LandingZh() {
                   行动前证明
                 </Badge>
                 <h2 className="mb-3 text-2xl md:text-3xl font-bold">
-                  智能体问责的标准操作闭环
+                  合规风控的标准操作闭环
                 </h2>
                 <p className="text-muted-foreground max-w-xl mx-auto text-sm">
-                  在执行前将推理过程（WHY）锚定链上，执行后将实际结果（WHAT）存证上链。
-                  形成完整的4W审计轨迹——可供审计员、监管机构或其他智能体随时查阅。
+                  执行前将推理依据（WHY）锚定链上，形成<strong className="text-foreground">合规留痕</strong>；
+                  执行后将实际结果（WHAT）存证，完成<strong className="text-foreground">风控审计轨迹</strong>。
+                  全程可供审计员、监管机构或合作系统随时独立验证。
                 </p>
               </div>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-0">
@@ -344,20 +345,20 @@ export default function LandingZh() {
         <div className="container">
           <div className="mx-auto max-w-4xl">
             <div className="mb-10 text-center">
-              <Badge variant="outline" className="mb-4">4W 审计框架</Badge>
+              <Badge variant="outline" className="mb-4">4W 合规审计框架</Badge>
               <h2 className="mb-3 text-2xl md:text-3xl font-bold">
-                每次操作，四个维度全面存证
+                每次操作，四维合规存证
               </h2>
               <p className="text-muted-foreground max-w-xl mx-auto text-sm">
-                每个可审计的智能体操作均可分解为四个可验证维度，每个维度有独立的事实来源与存证时机。
+                每个智能体操作均可分解为四个可独立验证的维度，直接对应监管合规要求中的责任归属、操作记录与决策追溯。
               </p>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[
                 {
                   w: "WHO",
-                  zh: "操作主体",
-                  desc: "通过MX-8004可信智能体标准进行身份认证，跨会话持久可追溯",
+                  zh: "责任主体",
+                  desc: "通过MX-8004可信智能体标准身份绑定，责任到人、可追溯、跨会话持久",
                   icon: Users,
                   color: "text-primary",
                   border: "border-primary/20",
@@ -366,7 +367,7 @@ export default function LandingZh() {
                 {
                   w: "WHAT",
                   zh: "操作结果",
-                  desc: "执行后产生的实际结果的SHA-256哈希值，链上存证精确输出",
+                  desc: "实际执行结果的SHA-256哈希，链上精确存证——防止事后篡改",
                   icon: Shield,
                   color: "text-blue-500",
                   border: "border-blue-500/20",
@@ -375,7 +376,7 @@ export default function LandingZh() {
                 {
                   w: "WHEN",
                   zh: "操作时间",
-                  desc: "链上时间戳（certified_at）+ 交易哈希，独立于智能体自身",
+                  desc: "区块链时间戳（certified_at）+ 交易哈希，独立于智能体，不可伪造",
                   icon: Clock,
                   color: "text-green-500",
                   border: "border-green-500/20",
@@ -384,7 +385,7 @@ export default function LandingZh() {
                 {
                   w: "WHY",
                   zh: "决策依据",
-                  desc: "完整推理过程——分析、上下文与决策意图，执行前锚定",
+                  desc: "完整推理过程与决策意图，执行前锚定——构成合规风控的核心证据",
                   icon: Network,
                   color: "text-amber-500",
                   border: "border-amber-500/20",
@@ -410,8 +411,8 @@ export default function LandingZh() {
             </div>
             <div className="mt-6 text-center">
               <p className="text-xs text-muted-foreground">
-                关键原则：<span className="text-foreground font-medium">WHY在执行前锚定，WHAT在执行后锚定</span>——
-                这是行动前证明的密码学保障。
+                合规核心原则：<span className="text-foreground font-medium">WHY（决策依据）执行前锚定，WHAT（操作结果）执行后锚定</span>——
+                形成不可倒序的密码学因果链，满足监管机构的事后溯源要求。
               </p>
             </div>
           </div>
@@ -425,14 +426,15 @@ export default function LandingZh() {
             <div className="mb-10 text-center">
               <Badge variant="outline" className="mb-4">
                 <Users className="mr-1.5 h-3 w-3" />
-                集群运营商
+                集群运营商 · 合规风控
               </Badge>
               <h2 className="mb-3 text-2xl md:text-3xl font-bold">
-                为智能体集群运营而设计
+                智能体集群的合规风控基础设施
               </h2>
               <p className="text-muted-foreground max-w-xl mx-auto text-sm">
-                管理数十至数千个智能体的运营商，需要可扩展的审计基础设施。
-                xproof 的批量认证、信任评分与违规检测专为大规模部署而构建。
+                管理数十至数千个智能体的运营商，需要可扩展的<strong className="text-foreground">合规存证</strong>与<strong className="text-foreground">风险审计</strong>基础设施。
+                xproof 的批量认证、信任评分与违规检测专为大规模部署与监管合规而构建。
+                <span className="block mt-1.5 text-primary font-medium">每日1000次决策认证仅需$10，批量API单次提交最多100条。</span>
               </p>
             </div>
 
@@ -806,11 +808,11 @@ print(proof["verify_url"])  # 链上可验证`}
         <div className="container">
           <div className="mx-auto max-w-2xl text-center">
             <h2 className="mb-4 text-2xl md:text-3xl font-bold">
-              为您的智能体集群建立信任基础设施
+              为您的智能体集群建立合规风控基础设施
             </h2>
             <p className="mb-8 text-muted-foreground">
               从10次免费存证开始。无需钱包，无需信用卡。
-              30秒内将行动前证明集成到您的智能体工作流中。
+              30秒内接入<strong className="text-foreground">合规存证 · 风控留痕 · 审计追溯</strong>——直接响应监管要求。
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button size="lg" asChild className="text-base h-12 px-8">
