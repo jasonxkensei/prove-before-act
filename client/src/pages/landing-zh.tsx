@@ -134,20 +134,20 @@ export default function LandingZh() {
         <div className="mx-auto max-w-5xl text-center">
           <div className="mb-5 flex justify-center">
             <Badge variant="outline" className="text-xs px-3 py-1 gap-1.5" data-testid="badge-prove-before-act-zh">
-              <Play className="h-3 w-3 text-primary" />
-              行动前证明 — 执行前锚定决策依据
+              <AlertTriangle className="h-3 w-3 text-amber-500" />
+              AI决策无留痕，监管追责无依据
             </Badge>
           </div>
 
           <h1 className="mb-6 text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-tight">
-            智能体信任，
+            AI决策，
             <br />
-            <span className="text-primary">链上可证明。</span>
+            <span className="text-primary">链上留痕。</span>
           </h1>
 
           <p className="mx-auto mb-5 max-w-2xl text-lg md:text-xl text-muted-foreground leading-relaxed">
-            为AI智能体提供<strong className="text-foreground">合规存证 · 风控留痕 · 审计追溯</strong>——
-            每次决策执行前锚定推理依据，执行后锚定实际结果，形成不可篡改的4W审计轨迹。
+            监管检查时，您能提供AI决策的完整证明吗？xproof 为每次智能体操作生成<strong className="text-foreground">不可篡改的合规存证</strong>——
+            决策前锚定推理依据，执行后锚定实际结果，构建完整的<strong className="text-foreground">风控留痕与审计追溯链</strong>。
           </p>
 
           <div className="mb-8 flex justify-center">
@@ -196,15 +196,16 @@ export default function LandingZh() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-foreground mb-0.5">
-                符合中国AI监管合规要求
+                未留痕的AI决策，是最大的合规风险
               </p>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                《生成式人工智能服务管理暂行办法》要求AI服务提供者保留决策记录与操作日志。
-                xproof 提供不可篡改的链上存证，为您的智能体合规运营提供可审计的决策证明。
+                《生成式人工智能服务管理暂行办法》《数据安全法》明确要求AI系统保留可审查的决策记录。
+                一旦发生争议或监管检查，<strong className="text-foreground">无法举证等同于违规</strong>。
+                xproof 为每次AI决策生成链上不可篡改的证明，每次 $0.01，审计时随时可查。
               </p>
             </div>
             <Badge variant="outline" className="text-xs border-amber-500/30 text-amber-600 dark:text-amber-400 whitespace-nowrap shrink-0">
-              合规基础设施
+              风控合规基础设施
             </Badge>
           </div>
         </div>
@@ -358,7 +359,8 @@ export default function LandingZh() {
                 {
                   w: "WHO",
                   zh: "责任主体",
-                  desc: "通过MX-8004可信智能体标准身份绑定，责任到人、可追溯、跨会话持久",
+                  desc: "绑定MX-8004可信智能体身份——监管机构要求的「责任到人」，跨会话持久可追溯",
+                  reg: "《数据安全法》第27条：数据处理者身份可识别",
                   icon: Users,
                   color: "text-primary",
                   border: "border-primary/20",
@@ -367,7 +369,8 @@ export default function LandingZh() {
                 {
                   w: "WHAT",
                   zh: "操作结果",
-                  desc: "实际执行结果的SHA-256哈希，链上精确存证——防止事后篡改",
+                  desc: "实际执行结果的SHA-256哈希，链上精确存证，防止事后篡改或否认",
+                  reg: "《生成式AI办法》第17条：记录日志并保存六个月以上",
                   icon: Shield,
                   color: "text-blue-500",
                   border: "border-blue-500/20",
@@ -376,7 +379,8 @@ export default function LandingZh() {
                 {
                   w: "WHEN",
                   zh: "操作时间",
-                  desc: "区块链时间戳（certified_at）+ 交易哈希，独立于智能体，不可伪造",
+                  desc: "区块链时间戳 + 交易哈希，独立于智能体系统，任何第三方均可独立核验",
+                  reg: "《网络安全法》第21条：保留网络日志不少于六个月",
                   icon: Clock,
                   color: "text-green-500",
                   border: "border-green-500/20",
@@ -385,7 +389,8 @@ export default function LandingZh() {
                 {
                   w: "WHY",
                   zh: "决策依据",
-                  desc: "完整推理过程与决策意图，执行前锚定——构成合规风控的核心证据",
+                  desc: "完整推理链在执行前锚定——出现争议时，这是证明AI决策合理性的核心证据",
+                  reg: "《算法推荐管理规定》：算法决策须有可解释的依据",
                   icon: Network,
                   color: "text-amber-500",
                   border: "border-amber-500/20",
@@ -403,7 +408,8 @@ export default function LandingZh() {
                         <span className={`text-base font-bold font-mono ${item.color}`}>{item.w}</span>
                         <span className="text-xs text-muted-foreground">{item.zh}</span>
                       </div>
-                      <p className="text-xs text-muted-foreground leading-relaxed">{item.desc}</p>
+                      <p className="text-xs text-muted-foreground leading-relaxed mb-2">{item.desc}</p>
+                      <p className={`text-[10px] leading-snug font-medium ${item.color} opacity-80`}>{item.reg}</p>
                     </CardContent>
                   </Card>
                 );
@@ -429,13 +435,34 @@ export default function LandingZh() {
                 集群运营商 · 合规风控
               </Badge>
               <h2 className="mb-3 text-2xl md:text-3xl font-bold">
-                智能体集群的合规风控基础设施
+                合规风控成本 vs. 违规代价
               </h2>
               <p className="text-muted-foreground max-w-xl mx-auto text-sm">
-                管理数十至数千个智能体的运营商，需要可扩展的<strong className="text-foreground">合规存证</strong>与<strong className="text-foreground">风险审计</strong>基础设施。
-                xproof 的批量认证、信任评分与违规检测专为大规模部署与监管合规而构建。
-                <span className="block mt-1.5 text-primary font-medium">每日1000次决策认证仅需$10，批量API单次提交最多100条。</span>
+                一次监管检查无法举证，损失可能是合同终止、罚款或项目叫停。
+                <strong className="text-foreground">每日1000次决策的全量存证，仅需$10</strong>——
+                这是智能体集群最低成本的风控保障，每次 $0.01。
               </p>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-4 mb-10 max-w-2xl mx-auto">
+              <div className="rounded-md border border-destructive/20 bg-destructive/5 p-4">
+                <p className="text-sm font-semibold text-destructive mb-2">不部署留痕的代价</p>
+                <ul className="space-y-1.5 text-xs text-muted-foreground">
+                  <li className="flex items-start gap-1.5"><span className="text-destructive mt-0.5 shrink-0">✗</span>监管检查无法举证 → 视同违规</li>
+                  <li className="flex items-start gap-1.5"><span className="text-destructive mt-0.5 shrink-0">✗</span>客户争议无法溯源 → 合同纠纷</li>
+                  <li className="flex items-start gap-1.5"><span className="text-destructive mt-0.5 shrink-0">✗</span>AI决策黑盒运行 → 被监管叫停风险</li>
+                  <li className="flex items-start gap-1.5"><span className="text-destructive mt-0.5 shrink-0">✗</span>每次审计事件：数万元法律 + 运营成本</li>
+                </ul>
+              </div>
+              <div className="rounded-md border border-primary/20 bg-primary/5 p-4">
+                <p className="text-sm font-semibold text-primary mb-2">xproof 合规风控</p>
+                <ul className="space-y-1.5 text-xs text-muted-foreground">
+                  <li className="flex items-start gap-1.5"><span className="text-primary mt-0.5 shrink-0">✓</span>每日1000次决策全量存证：<strong className="text-foreground">$10/天</strong></li>
+                  <li className="flex items-start gap-1.5"><span className="text-primary mt-0.5 shrink-0">✓</span>监管检查：随时出具链上证明</li>
+                  <li className="flex items-start gap-1.5"><span className="text-primary mt-0.5 shrink-0">✓</span>客户争议：完整4W审计轨迹即时导出</li>
+                  <li className="flex items-start gap-1.5"><span className="text-primary mt-0.5 shrink-0">✓</span>批量API：单次提交100条，3行代码集成</li>
+                </ul>
+              </div>
             </div>
 
             <div className="grid md:grid-cols-3 gap-6 mb-10">
