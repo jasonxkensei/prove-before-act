@@ -100,7 +100,7 @@ export default function LandingZh() {
             <a href="/docs" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
               开发文档
             </a>
-            <a href="/agent-context" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+            <a href="/agent-context/zh" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
               <Bot className="h-3.5 w-3.5" />
               智能体集成
             </a>
@@ -328,7 +328,7 @@ export default function LandingZh() {
               </div>
               <div className="mt-5 text-center">
                 <Button asChild variant="outline" size="sm">
-                  <a href="/agent-context#workflow">
+                  <a href="/agent-context/zh#workflow">
                     查看Python完整实现
                     <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
                   </a>
@@ -631,7 +631,7 @@ print(proof["verify_url"])  # 链上可验证`}
                 </pre>
                 <div className="mt-4 flex flex-col sm:flex-row gap-2 justify-center">
                   <Button asChild variant="outline" size="sm">
-                    <a href="/agent-context">查看完整文档 <ArrowRight className="ml-1.5 h-3.5 w-3.5" /></a>
+                    <a href="/agent-context/zh">查看完整文档 <ArrowRight className="ml-1.5 h-3.5 w-3.5" /></a>
                   </Button>
                   <Button asChild variant="ghost" size="sm">
                     <a href="/leaderboard">注册公开智能体</a>
@@ -841,7 +841,7 @@ print(proof["verify_url"])  # 链上可验证`}
             <nav className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground justify-center">
               <a href="/docs" className="hover:text-foreground transition-colors">开发文档</a>
               <a href="/leaderboard" className="hover:text-foreground transition-colors">信任排行榜</a>
-              <a href="/agent-context" className="hover:text-foreground transition-colors">智能体集成</a>
+              <a href="/agent-context/zh" className="hover:text-foreground transition-colors">智能体集成</a>
               <a href="/docs/4w" className="hover:text-foreground transition-colors">4W框架</a>
               <a href="/" className="hover:text-foreground transition-colors border border-border/50 rounded px-2 py-0.5 font-mono">EN</a>
             </nav>

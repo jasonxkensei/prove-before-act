@@ -1183,6 +1183,13 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
             <span className="hidden sm:inline">Optimized for autonomous agents and LLMs</span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
+            <a
+              href="/agent-context/zh"
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors border border-border/50 rounded-md px-2.5 py-1.5 font-mono"
+              data-testid="link-lang-zh-agent-context"
+            >
+              中文
+            </a>
             <Button asChild variant="outline" size="sm" data-testid="button-machine-readable">
               <a href="/agent-context.md" target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
