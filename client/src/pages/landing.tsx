@@ -166,6 +166,13 @@ export default function Landing() {
             </a>
           </nav>
           <div className="flex items-center gap-3">
+            <a
+              href="/zh"
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors border border-border/50 rounded-md px-2.5 py-1.5 font-mono"
+              data-testid="link-lang-zh"
+            >
+              中文
+            </a>
             <Button 
               variant="ghost" 
               size="sm" 

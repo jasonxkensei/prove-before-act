@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useWalletAuth } from "@/hooks/useWalletAuth";
 import { Loader2 } from "lucide-react";
 import Landing from "@/pages/landing";
+const LandingZh = lazy(() => import("@/pages/landing-zh"));
 
 const NotFound = lazy(() => import("@/pages/not-found"));
 const Dashboard = lazy(() => import("@/pages/dashboard"));
@@ -66,6 +67,7 @@ function Router() {
       <Suspense fallback={fallback}>
         <Switch>
           <Route path="/" component={Landing} />
+          <Route path="/zh" component={LandingZh} />
           <Route path="/proof/:id" component={ProofPage} />
           <Route path="/audit/:id" component={AuditPage} />
           <Route path="/legal/mentions" component={MentionsLegales} />
@@ -89,6 +91,7 @@ function Router() {
           <Route>
             <Redirect to="/" />
           </Route>
+
         </Switch>
       </Suspense>
     );
@@ -121,6 +124,7 @@ function Router() {
         <Route path="/docs/base-violations" component={DocsBaseViolationsPage} />
         <Route path="/incident/:wallet/:proofId" component={IncidentReportPage} />
         <Route path="/agent-context" component={AgentContextPage} />
+        <Route path="/zh" component={LandingZh} />
         <Route component={NotFound} />
       </Switch>
     </Suspense>
