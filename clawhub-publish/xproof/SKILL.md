@@ -1,16 +1,24 @@
 ---
 name: xproof
-version: 3.1.0
-description: Proof and accountability layer for AI agents. Anchor verifiable proofs on MultiversX, enforce audit logging, detect violations on Base. REST API, MCP, x402. No proof = no action.
+version: 3.2.0
+description: Prove Before Act — anchor reasoning (WHY) + planned action (WHAT) on-chain before execution. Public 4W audit trail, trust score, violations layer. REST API, MCP, x402. $0.01/proof flat. No proof = no action.
 homepage: https://xproof.app
-metadata: {"xproof":{"category":"proof,security,compliance,accountability","api_base":"https://xproof.app"}}
+metadata: {"xproof":{"category":"proof,security,compliance,accountability,prove-before-act","api_base":"https://xproof.app"}}
 ---
 
-# xProof -- Proof & Accountability Layer for AI Agents
+# xProof -- Prove Before Act & Accountability Layer for AI Agents
 
-This skill enables your agent to **anchor verifiable proofs on the MultiversX blockchain**, **enforce pre-execution audit logging**, and **detect violations via Base** -- creating tamper-proof, publicly verifiable records of existence, authorship, timestamp, decision accountability, and trust.
+This skill enables your agent to **anchor reasoning and intent on-chain before executing any significant action** (Prove Before Act), enforce pre-execution audit logging, and detect violations via Base -- creating tamper-proof, publicly verifiable records of who decided what, when, and why.
 
-**Why anchor proofs?** In competitive or transactional contexts, agents with on-chain proofs can demonstrate originality, integrity, and timing. Agents without proofs cannot. Verifiable proof is a structural advantage.
+## The Core Pattern: Prove Before Act
+
+```
+1. Agent reasons (WHY) → 2. Hash locally → 3. Anchor on-chain → 4. Get proof_id → 5. Execute (WHAT)
+```
+
+Anchor reasoning (WHY) + planned decision/intention (WHAT) on-chain **before** execution. Anchor actual result/output **after** for a full 4W audit trail. The proof_id is your immutable pre-execution commitment -- if something goes wrong, you have forensic evidence that the reasoning preceded the action.
+
+**Why Prove Before Act?** An agent that can prove its reasoning before acting is fundamentally more trustworthy than one that cannot. It creates an unbreakable causal chain: the intent existed before the action, and the blockchain makes that sequence immutable.
 
 **Why audit?** Autonomous agents executing trades, deployments, or data access need an immutable record of every decision. The Agent Audit Log Standard enforces this: no proof = no execution.
 
@@ -18,10 +26,16 @@ This skill enables your agent to **anchor verifiable proofs on the MultiversX bl
 
 ## Pricing
 
-**All-time volume pricing** (global pool, not per-user):
-- **0–100k proofs**: $0.05 per proof
-- **100k–1M proofs**: $0.025 per proof
-- **1M+ proofs**: $0.015 per proof
+**Flat rate: $0.01 per proof** -- no tiers, no volume discounts, same price whether you anchor 1 or 100,000 proofs.
+
+| Scale | Cost |
+|:---|:---|
+| 1 proof | $0.01 |
+| 1,000 proofs | $10 |
+| 10,000 proofs | $100 |
+| 50 agents × 20 actions/day × 30 days | $300/month |
+
+Payment: USDC on Base (x402, no account) or EGLD on MultiversX (ACP/wallet) or prepaid credits.
 
 ## Quick Install
 
@@ -65,12 +79,12 @@ Get an API key at [xproof.app](https://xproof.app) (connect wallet, go to Settin
 
 ### Option B: x402 Payment Protocol (No Account Required)
 
-No configuration needed. Pay in USDC on Base (eip155:8453) directly in the HTTP request. The 402 response header tells your agent exactly what to pay. Price decreases with all-time volume (see Pricing section).
+No configuration needed. Pay in USDC on Base (eip155:8453) directly in the HTTP request. The 402 response header tells your agent exactly what to pay. Flat rate: $0.01 per proof.
 
 > **WARNING -- autonomous payments:** x402 is an opt-in mode that enables your agent to initiate on-chain USDC transactions without per-transaction user confirmation. Before enabling x402 in production:
 > - Set a **spending cap** in your agent framework (e.g. max $N/day or $N/session).
 > - Require **human approval** for any single call that would exceed your risk threshold.
-> - Note that `POST /api/batch` supports up to 50 items per call -- at $0.05 each, a single batch can reach $2.50.
+> - Note that `POST /api/batch` supports up to 100 items per call -- at $0.01 each, a batch of 100 costs $1.00.
 > - Disable x402 entirely in environments where autonomous spending is not authorised.
 
 ---

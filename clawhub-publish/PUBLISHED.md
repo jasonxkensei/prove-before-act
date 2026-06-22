@@ -1,4 +1,28 @@
-# Published — xproof v3.1.0 SKILL.md
+# Published — xproof SKILL.md
+
+---
+
+## v3.2.0 — 2026-06-22
+
+**Target repo:** https://github.com/jasonxkensei/xproof-openclaw-skill  
+**Branch:** main
+
+| Item | Value |
+|---|---|
+| SKILL.md SHA (live) | `6719a60b1d8ee9e820722e4ae58a07d09acb536b` |
+| Live URL | https://github.com/jasonxkensei/xproof-openclaw-skill/blob/main/xproof/SKILL.md |
+
+### Changes in v3.2.0
+
+- **Pricing corrected** — tiered structure ($0.05/$0.025/$0.015) replaced with flat **$0.01/proof** + cost table
+- **Prove Before Act** — added as headline concept with canonical wording: *"Anchor reasoning (WHY) + planned decision/intention (WHAT) on-chain before execution. Anchor actual result/output after for a full 4W audit trail."*
+- **x402 warning** — fixed `$0.05 each` → `$0.01 each`, batch cap corrected 50 → 100 items
+- **Frontmatter description** — rewritten to lead with Prove Before Act and $0.01 flat
+- **Version** bumped 3.1.0 → 3.2.0
+
+---
+
+## v3.1.0 — 2026-06-13 (archived as `xproof/SKILL-v3.1.0.md`)
 
 **Date:** 2026-06-13T00:00:00Z  
 **Target repo:** https://github.com/jasonxkensei/xproof-openclaw-skill  
