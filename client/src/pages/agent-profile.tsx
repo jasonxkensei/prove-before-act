@@ -834,11 +834,15 @@ function CalibrationCard({ data, wallet }: { data: CalibrationData; wallet: stri
                     data-testid="select-proof-id"
                   >
                     <option value="">Select a proof…</option>
-                    {eligibleProofs.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.file_name ? `${p.file_name} — confidence: ${p.confidence_level}` : `${p.id.slice(0, 12)}… — confidence: ${p.confidence_level}`}
-                      </option>
-                    ))}
+                    {eligibleProofs.map((p) => {
+                      const dateStr = p.created_at ? new Date(p.created_at).toISOString().slice(0, 10) : "";
+                      const label = p.file_name ? `${p.file_name} — confidence: ${p.confidence_level}` : `${p.id.slice(0, 12)}… — confidence: ${p.confidence_level}`;
+                      return (
+                        <option key={p.id} value={p.id}>
+                          {dateStr ? `${label} · ${dateStr}` : label}
+                        </option>
+                      );
+                    })}
                   </select>
                 )}
               </div>
@@ -1128,11 +1132,15 @@ function CalibrationCard({ data, wallet }: { data: CalibrationData; wallet: stri
                   data-testid="select-proof-id"
                 >
                   <option value="">Select a proof…</option>
-                  {eligibleProofs.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.file_name ? `${p.file_name} — confidence: ${p.confidence_level}` : `${p.id.slice(0, 12)}… — confidence: ${p.confidence_level}`}
-                    </option>
-                  ))}
+                  {eligibleProofs.map((p) => {
+                    const dateStr = p.created_at ? new Date(p.created_at).toISOString().slice(0, 10) : "";
+                    const label = p.file_name ? `${p.file_name} — confidence: ${p.confidence_level}` : `${p.id.slice(0, 12)}… — confidence: ${p.confidence_level}`;
+                    return (
+                      <option key={p.id} value={p.id}>
+                        {dateStr ? `${label} · ${dateStr}` : label}
+                      </option>
+                    );
+                  })}
                 </select>
               )}
             </div>
