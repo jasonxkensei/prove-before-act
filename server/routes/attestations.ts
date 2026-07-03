@@ -9,6 +9,14 @@ import { attestationIssuanceRateLimiter, publicSearchRateLimiter, publicPdfRateL
 import { computeTrustScoreByWallet, getCalibrationSummaryByWallet } from "../trust";
 import { isValidWebhookUrl, safeWebhookFetch } from "../webhook";
 
+// Short-lived cache for the per-wallet public-profile visibility flag used by
+// the trust widget. Keyed by wallet address; TTL matches the widget
+// Cache-Control max-age and the calibration aggregate cache (5 minutes).
+// This prevents every anonymous widget hit from running a live DB lookup even
+// after the calibration aggregate is already served from cache.
+const WIDGET_PROFILE_CACHE_TTL_MS = 5 * 60 * 1000;
+const widgetProfileCache = new Map<string, { isPublicProfile: boolean | null; cachedAt: number }>();
+
 export function registerAttestationsRoutes(app: Express) {
   // ============================================
   // Attestation routes — Domain-specific trust signals
@@ -623,12 +631,24 @@ export function registerAttestationsRoutes(app: Express) {
 
       // Fail-fast: check public profile visibility BEFORE running the expensive
       // calibration aggregate. Only fetch calibration if the profile is public.
-      const userCheck = await db.select({ isPublicProfile: users.isPublicProfile })
-        .from(users)
-        .where(eq(users.walletAddress, wallet))
-        .then((rows) => rows[0] ?? null);
+      // The result is cached for WIDGET_PROFILE_CACHE_TTL_MS to prevent every
+      // anonymous widget hit from performing a live DB lookup (a distributed
+      // attacker bypassing the shared HTTP cache via query-string nonces would
+      // otherwise drive continuous DB work even after calibration is cached).
+      let isPublicProfile: boolean | null = null;
+      const cachedProfile = widgetProfileCache.get(wallet);
+      if (cachedProfile && Date.now() - cachedProfile.cachedAt < WIDGET_PROFILE_CACHE_TTL_MS) {
+        isPublicProfile = cachedProfile.isPublicProfile;
+      } else {
+        const userCheck = await db.select({ isPublicProfile: users.isPublicProfile })
+          .from(users)
+          .where(eq(users.walletAddress, wallet))
+          .then((rows) => rows[0] ?? null);
+        isPublicProfile = userCheck?.isPublicProfile ?? null;
+        widgetProfileCache.set(wallet, { isPublicProfile, cachedAt: Date.now() });
+      }
 
-      const calibration = userCheck?.isPublicProfile
+      const calibration = isPublicProfile
         ? await getCalibrationSummaryByWallet(wallet)
         : null;
 
