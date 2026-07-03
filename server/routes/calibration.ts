@@ -433,6 +433,19 @@ export function registerCalibrationRoutes(app: Express) {
       );
       const hasPrivateOutcomes = privCheckResult.rows[0]?.exists === true;
 
+      // Count certifications that have metadata.confidence_level but no
+      // submitted outcome yet — surfaced to the owner as an actionable prompt.
+      const pendingResult = await pool.query<{ cnt: string }>(
+        `SELECT COUNT(*) AS cnt
+         FROM certifications c
+         LEFT JOIN agent_outcomes ao ON ao.certification_id = c.id
+         WHERE c.user_id = $1
+           AND c.metadata->>'confidence_level' IS NOT NULL
+           AND ao.id IS NULL`,
+        [user.id]
+      );
+      const pendingOutcomeCount = parseInt(pendingResult.rows[0]?.cnt ?? "0", 10);
+
       // Fetch last N public outcomes for this agent, most recent first.
       // When a cursor is supplied, keyset-filter to avoid scanning sorted rows
       // before the cursor position (eliminates deep-offset cost).
@@ -471,6 +484,7 @@ export function registerCalibrationRoutes(app: Express) {
           agent_name: user.agentName ?? null,
           outcome_count: 0,
           has_private_outcomes: hasPrivateOutcomes,
+          pending_outcome_count: pendingOutcomeCount,
           calibration: null,
           message: "No public outcome data yet for this agent.",
           time_series: [],
@@ -505,6 +519,7 @@ export function registerCalibrationRoutes(app: Express) {
         agent_name: user.agentName ?? null,
         outcome_count: count,
         has_private_outcomes: hasPrivateOutcomes,
+        pending_outcome_count: pendingOutcomeCount,
         calibration: {
           mean_gap: roundedMean,
           variance: roundedVariance,

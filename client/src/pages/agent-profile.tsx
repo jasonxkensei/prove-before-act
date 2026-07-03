@@ -126,6 +126,7 @@ interface CalibrationData {
   agent_name: string | null;
   outcome_count: number;
   has_private_outcomes: boolean;
+  pending_outcome_count?: number;
   calibration: {
     mean_gap: number;
     variance: number;
@@ -773,6 +774,8 @@ function CalibrationCard({ data, wallet }: { data: CalibrationData; wallet: stri
     submitOutcomeMutation.mutate({ proof_id: proofId, outcome_score: score, visibility: "public" });
   }
 
+  const pendingCount = data.pending_outcome_count ?? 0;
+
   if (!data.calibration || data.outcome_count === 0) {
     return (
       <Card data-testid="card-calibration">
@@ -781,16 +784,26 @@ function CalibrationCard({ data, wallet }: { data: CalibrationData; wallet: stri
             <Target className="h-4 w-4" />
             Confidence calibration
             {isOwner && (
-              <Button
-                size="sm"
-                variant="ghost"
-                className="ml-auto text-xs"
-                onClick={() => setShowForm((v) => !v)}
-                data-testid="button-outcome-toggle"
-              >
-                <Plus className="h-3.5 w-3.5 mr-1" />
-                Add outcome
-              </Button>
+              <span className="ml-auto flex items-center gap-2">
+                {pendingCount > 0 && (
+                  <span
+                    className="inline-flex items-center rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400"
+                    data-testid="badge-pending-outcomes"
+                  >
+                    {pendingCount} proof{pendingCount !== 1 ? "s" : ""} need{pendingCount === 1 ? "s" : ""} outcome
+                  </span>
+                )}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-xs"
+                  onClick={() => setShowForm((v) => !v)}
+                  data-testid="button-outcome-toggle"
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1" />
+                  Add outcome
+                </Button>
+              </span>
             )}
           </CardTitle>
         </CardHeader>
@@ -922,6 +935,14 @@ function CalibrationCard({ data, wallet }: { data: CalibrationData; wallet: stri
             {style.label}
           </span>
           <span className="ml-auto flex items-center gap-2">
+            {isOwner && pendingCount > 0 && (
+              <span
+                className="inline-flex items-center rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400"
+                data-testid="badge-pending-outcomes"
+              >
+                {pendingCount} proof{pendingCount !== 1 ? "s" : ""} need{pendingCount === 1 ? "s" : ""} outcome
+              </span>
+            )}
             <span className="text-xs font-normal text-muted-foreground" data-testid="text-outcome-count">
               {data.outcome_count} outcome{data.outcome_count !== 1 ? "s" : ""}
             </span>
