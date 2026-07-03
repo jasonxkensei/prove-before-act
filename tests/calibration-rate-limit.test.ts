@@ -320,6 +320,53 @@ describe("GET /api/agent/calibration/:agentId/eligible-proofs", () => {
       },
       20_000,
     );
+
+    it(
+      "wallet-address path param: requests 1–10 return 401 (auth-blocked, no refund); request 11 returns 429 from the IP limiter",
+      async () => {
+        // Same scenario as the UUID variant above, but the path param is the
+        // owner's WALLET ADDRESS instead of their UUID.  The handler resolves
+        // the agent via the OR (eq(users.id, agentId), eq(users.walletAddress, agentId))
+        // clause, so the wallet-address branch exercises a different code path
+        // in the isOwner comparison (sessionWallet vs agent.walletAddress rather
+        // than callerUserId vs agent.id).  A refactor that breaks the
+        // wallet-address branch would not be caught by the UUID variant alone.
+        //
+        // Wipe counters first so this it() starts with a clean IP window even
+        // though the previous it() may have exhausted the IP bucket.
+        await wipeCounters(
+          `eligible_proofs:${testApiKeyId}:%`,
+          `eligible_proofs:${nonOwnerApiKeyId}:%`,
+        );
+
+        // Target: owner's endpoint addressed by WALLET ADDRESS, not UUID.
+        // Caller: the NON-OWNER key — valid credential, wrong owner.
+        const url     = `${BASE_URL}/api/agent/calibration/${TEST_WALLET}/eligible-proofs`;
+        const headers = { Authorization: `Bearer ${NON_OWNER_RAW_KEY}` };
+
+        // ── Requests 1–10: handler resolves agent by wallet address, confirms
+        // the caller is not the owner, and returns 401 without decrement().
+        for (let i = 0; i < 10; i++) {
+          const res  = await fetch(url, { headers });
+          const body = await res.json() as Record<string, unknown>;
+          expect(
+            res.status,
+            `request ${i + 1} (wallet param): handler must auth-block the non-owner (401), not rate-limit (429)`,
+          ).toBe(401);
+          expect(body.error).toBe("UNAUTHORIZED");
+        }
+
+        // ── Request 11: IP pre-check exhausted — returns 429 before handler runs.
+        const limited     = await fetch(url, { headers });
+        const limitedBody = await limited.json() as Record<string, unknown>;
+        expect(limited.status).toBe(429);
+        expect(limitedBody.error).toBe("TOO_MANY_REQUESTS");
+        expect(typeof limitedBody.message).toBe("string");
+        expect(limitedBody.message as string).toContain("eligible-proofs");
+        expect(limitedBody.message as string).not.toContain("max 30");
+      },
+      20_000,
+    );
   });
 
 });
