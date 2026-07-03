@@ -1,0 +1,173 @@
+/**
+ * Unit tests for PgRateLimitStore.decrement().
+ *
+ * The eligible-proofs and CSV-export two-tier rate limiters rely on
+ * decrement() to refund an IP token for confirmed owners, letting them
+ * bypass the 10/min (or 5/min) IP pre-check and be governed only by the
+ * more generous 30/min owner tier.
+ *
+ * If the store is ever replaced (Redis adapter, sliding-window, accidental
+ * stub) and decrement() becomes a no-op, owners would silently be rate-
+ * limited at the stricter IP cap with no HTTP-level test catching it,
+ * because the integration tests only verify the observable 429 boundary.
+ *
+ * These tests directly exercise the store against the live DB so the
+ * assertion is implementation-independent: a no-op decrement means the
+ * count stays at N after the call, which fails the "count === N - 1" check
+ * regardless of which store class is underneath.
+ *
+ * Two describe blocks — one per store that exposes a refund path:
+ *   1. eligibleProofsIpAnonStore (namespace "eligible_proofs_ip")
+ *   2. csvAnonStore              (namespace "pub_csv")
+ */
+
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { pool } from "../server/db";
+import { eligibleProofsIpAnonStore, csvAnonStore } from "../server/reliability";
+
+// A deliberately unusual IP that will never appear in real traffic or other
+// test fixtures — avoids any cross-test bucket collision.
+const UNIT_TEST_IP = "198.51.100.1"; // RFC 5737 TEST-NET-2
+
+// ── Shared helpers ────────────────────────────────────────────────────────────
+
+async function ensureTable(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS rate_limit_counters (
+      bucket   TEXT PRIMARY KEY,
+      count    INTEGER NOT NULL DEFAULT 0,
+      reset_at TIMESTAMPTZ NOT NULL
+    )
+  `);
+}
+
+/** Read the current count for the most-recent active window for this key. */
+async function readCount(namespace: string, key: string): Promise<number | null> {
+  const result = await pool.query<{ count: number }>(
+    `SELECT count FROM rate_limit_counters
+     WHERE bucket LIKE $1
+     ORDER BY reset_at DESC
+     LIMIT 1`,
+    [`${namespace}:${key}:%`],
+  );
+  return result.rows.length > 0 ? Number(result.rows[0].count) : null;
+}
+
+/** Delete all buckets for this key so each describe block starts clean. */
+async function deleteBuckets(namespace: string, key: string): Promise<void> {
+  await pool.query(
+    `DELETE FROM rate_limit_counters WHERE bucket LIKE $1`,
+    [`${namespace}:${key}:%`],
+  );
+}
+
+// ── eligibleProofsIpAnonStore ─────────────────────────────────────────────────
+
+describe("PgRateLimitStore.decrement — eligibleProofsIpAnonStore", () => {
+  const NS = "eligible_proofs_ip";
+
+  beforeAll(async () => {
+    await ensureTable();
+    await deleteBuckets(NS, UNIT_TEST_IP);
+  });
+
+  afterAll(async () => {
+    await deleteBuckets(NS, UNIT_TEST_IP);
+  });
+
+  it("reduces the counter by exactly 1 after a single increment", async () => {
+    const { totalHits } = await eligibleProofsIpAnonStore.increment(UNIT_TEST_IP);
+    expect(totalHits).toBeGreaterThanOrEqual(1);
+
+    await eligibleProofsIpAnonStore.decrement(UNIT_TEST_IP);
+
+    const after = await readCount(NS, UNIT_TEST_IP);
+    // If decrement() is a no-op the count stays at totalHits and this fails.
+    expect(after).toBe(totalHits - 1);
+  });
+
+  it("clamps at 0 and never goes negative when decremented below zero", async () => {
+    await deleteBuckets(NS, UNIT_TEST_IP);
+
+    await eligibleProofsIpAnonStore.increment(UNIT_TEST_IP); // count = 1
+    await eligibleProofsIpAnonStore.decrement(UNIT_TEST_IP); // count = 0
+    await eligibleProofsIpAnonStore.decrement(UNIT_TEST_IP); // GREATEST(0, 0-1) → still 0
+
+    const after = await readCount(NS, UNIT_TEST_IP);
+    expect(after).toBe(0);
+  });
+
+  it("restores the full budget when N increments are followed by N decrements", async () => {
+    await deleteBuckets(NS, UNIT_TEST_IP);
+
+    // Simulate 3 owner requests each consuming and then refunding a token.
+    await eligibleProofsIpAnonStore.increment(UNIT_TEST_IP);
+    await eligibleProofsIpAnonStore.increment(UNIT_TEST_IP);
+    await eligibleProofsIpAnonStore.increment(UNIT_TEST_IP);
+
+    const afterIncrements = await readCount(NS, UNIT_TEST_IP);
+    expect(afterIncrements).toBe(3);
+
+    await eligibleProofsIpAnonStore.decrement(UNIT_TEST_IP);
+    await eligibleProofsIpAnonStore.decrement(UNIT_TEST_IP);
+    await eligibleProofsIpAnonStore.decrement(UNIT_TEST_IP);
+
+    const afterDecrements = await readCount(NS, UNIT_TEST_IP);
+    // A no-op decrement leaves count at 3; a working decrement brings it to 0.
+    expect(afterDecrements).toBe(0);
+  });
+});
+
+// ── csvAnonStore ──────────────────────────────────────────────────────────────
+
+describe("PgRateLimitStore.decrement — csvAnonStore", () => {
+  const NS = "pub_csv";
+
+  beforeAll(async () => {
+    await ensureTable();
+    await deleteBuckets(NS, UNIT_TEST_IP);
+  });
+
+  afterAll(async () => {
+    await deleteBuckets(NS, UNIT_TEST_IP);
+  });
+
+  it("reduces the counter by exactly 1 after a single increment", async () => {
+    const { totalHits } = await csvAnonStore.increment(UNIT_TEST_IP);
+    expect(totalHits).toBeGreaterThanOrEqual(1);
+
+    await csvAnonStore.decrement(UNIT_TEST_IP);
+
+    const after = await readCount(NS, UNIT_TEST_IP);
+    expect(after).toBe(totalHits - 1);
+  });
+
+  it("clamps at 0 and never goes negative when decremented below zero", async () => {
+    await deleteBuckets(NS, UNIT_TEST_IP);
+
+    await csvAnonStore.increment(UNIT_TEST_IP); // count = 1
+    await csvAnonStore.decrement(UNIT_TEST_IP); // count = 0
+    await csvAnonStore.decrement(UNIT_TEST_IP); // GREATEST(0, 0-1) → 0
+
+    const after = await readCount(NS, UNIT_TEST_IP);
+    expect(after).toBe(0);
+  });
+
+  it("restores the full budget when N increments are followed by N decrements", async () => {
+    await deleteBuckets(NS, UNIT_TEST_IP);
+
+    await csvAnonStore.increment(UNIT_TEST_IP);
+    await csvAnonStore.increment(UNIT_TEST_IP);
+    await csvAnonStore.increment(UNIT_TEST_IP);
+
+    const afterIncrements = await readCount(NS, UNIT_TEST_IP);
+    expect(afterIncrements).toBe(3);
+
+    await csvAnonStore.decrement(UNIT_TEST_IP);
+    await csvAnonStore.decrement(UNIT_TEST_IP);
+    await csvAnonStore.decrement(UNIT_TEST_IP);
+
+    const afterDecrements = await readCount(NS, UNIT_TEST_IP);
+    expect(afterDecrements).toBe(0);
+  });
+});
