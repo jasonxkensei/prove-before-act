@@ -17,6 +17,9 @@ export function registerTrustRoutes(app: Express) {
   // GET /api/leaderboard — public, paginated + server-side filters
   app.get("/api/leaderboard", publicSearchRateLimiter, async (req, res) => {
     try {
+      const VALID_CAL_FILTERS = ["calibrated", "overconfident", "underconfident"] as const;
+      type CalFilter = typeof VALID_CAL_FILTERS[number];
+      const rawCalibration = req.query.calibration as string | undefined;
       const filters = {
         page: req.query.page ? parseInt(req.query.page as string, 10) : undefined,
         limit: req.query.limit ? parseInt(req.query.limit as string, 10) : undefined,
@@ -24,6 +27,7 @@ export function registerTrustRoutes(app: Express) {
         search: (req.query.search as string) || undefined,
         attestedOnly: req.query.attested === "true",
         calibratedOnly: req.query.calibrated === "true",
+        calibrationFilter: (VALID_CAL_FILTERS as readonly string[]).includes(rawCalibration ?? "") ? rawCalibration as CalFilter : undefined,
         sortBy: (req.query.sort as "score" | "certs" | "streak" | "attestations" | "calibration") || undefined,
       };
       const result = await getLeaderboard(filters);

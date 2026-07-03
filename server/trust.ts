@@ -405,6 +405,7 @@ export interface LeaderboardFilters {
   search?: string;
   attestedOnly?: boolean;
   calibratedOnly?: boolean;
+  calibrationFilter?: "calibrated" | "overconfident" | "underconfident";
   sortBy?: "score" | "certs" | "streak" | "attestations" | "calibration";
 }
 
@@ -727,7 +728,9 @@ export async function getLeaderboard(filters: LeaderboardFilters = {}): Promise<
   if (filters.attestedOnly) {
     entries = entries.filter((e) => e.activeAttestations > 0);
   }
-  if (filters.calibratedOnly) {
+  if (filters.calibrationFilter) {
+    entries = entries.filter((e) => e.calibrationLabel === filters.calibrationFilter);
+  } else if (filters.calibratedOnly) {
     entries = entries.filter((e) => e.calibrationLabel !== null);
   }
 

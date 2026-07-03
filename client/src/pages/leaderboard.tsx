@@ -181,10 +181,16 @@ export default function Leaderboard() {
     registerMutation.reset();
   }
 
+  const VALID_CAL_FILTERS = ["all", "calibrated", "overconfident", "underconfident"] as const;
+  type CalibrationFilter = typeof VALID_CAL_FILTERS[number];
+
   const [search, setSearch] = useState(() => getInitialParam("q", ""));
   const [categoryFilter, setCategoryFilter] = useState(() => getInitialParam("category", "all"));
   const [attestedOnly, setAttestedOnly] = useState(() => getInitialParam("attested", "") === "true");
-  const [calibratedOnly, setCalibratedOnly] = useState(() => getInitialParam("calibrated", "") === "true");
+  const [calibrationFilter, setCalibrationFilter] = useState<CalibrationFilter>(() => {
+    const v = getInitialParam("calibration", "all");
+    return (VALID_CAL_FILTERS as readonly string[]).includes(v) ? (v as CalibrationFilter) : "all";
+  });
   const [sortBy, setSortBy] = useState<SortBy>(() => {
     const v = getInitialParam("sort", "score");
     return (VALID_SORTS as readonly string[]).includes(v) ? (v as SortBy) : "score";
@@ -200,7 +206,7 @@ export default function Leaderboard() {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, categoryFilter, attestedOnly, calibratedOnly, sortBy]);
+  }, [debouncedSearch, categoryFilter, attestedOnly, calibrationFilter, sortBy]);
 
   // Sync filter state to URL for shareability
   useEffect(() => {
@@ -208,19 +214,19 @@ export default function Leaderboard() {
     if (debouncedSearch) params.set("q", debouncedSearch);
     if (categoryFilter !== "all") params.set("category", categoryFilter);
     if (attestedOnly) params.set("attested", "true");
-    if (calibratedOnly) params.set("calibrated", "true");
+    if (calibrationFilter !== "all") params.set("calibration", calibrationFilter);
     if (sortBy !== "score") params.set("sort", sortBy);
     if (page > 1) params.set("page", String(page));
     const qs = params.toString();
     window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
-  }, [debouncedSearch, categoryFilter, attestedOnly, calibratedOnly, sortBy, page]);
+  }, [debouncedSearch, categoryFilter, attestedOnly, calibrationFilter, sortBy, page]);
 
   useEffect(() => {
     document.title = "Agent Trust Leaderboard | xproof";
   }, []);
 
   const { data, isLoading } = useQuery<LeaderboardResponse>({
-    queryKey: ["/api/leaderboard", page, limit, categoryFilter, debouncedSearch, attestedOnly, calibratedOnly, sortBy],
+    queryKey: ["/api/leaderboard", page, limit, categoryFilter, debouncedSearch, attestedOnly, calibrationFilter, sortBy],
     queryFn: async () => {
       const params = new URLSearchParams();
       params.set("page", String(page));
@@ -228,7 +234,7 @@ export default function Leaderboard() {
       if (debouncedSearch) params.set("search", debouncedSearch);
       if (categoryFilter !== "all") params.set("category", categoryFilter);
       if (attestedOnly) params.set("attested", "true");
-      if (calibratedOnly) params.set("calibrated", "true");
+      if (calibrationFilter !== "all") params.set("calibration", calibrationFilter);
       params.set("sort", sortBy);
       const res = await fetch(`/api/leaderboard?${params.toString()}`);
       if (!res.ok) throw new Error("Failed to fetch leaderboard");
@@ -364,19 +370,29 @@ export default function Leaderboard() {
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
-                variant={calibratedOnly ? "default" : "outline"}
-                size="sm"
-                data-testid="button-calibrated-filter"
-                onClick={() => setCalibratedOnly((v) => !v)}
-                className="gap-1.5"
-              >
-                <Crosshair className="h-3.5 w-3.5" />
-                Calibrated only
-              </Button>
+              <div>
+                <Select
+                  value={calibrationFilter}
+                  onValueChange={(v) => setCalibrationFilter(v as CalibrationFilter)}
+                >
+                  <SelectTrigger
+                    data-testid="select-calibration-filter"
+                    className={`w-44 gap-1.5 ${calibrationFilter !== "all" ? "border-primary text-primary" : ""}`}
+                  >
+                    <Crosshair className="h-3.5 w-3.5 shrink-0" />
+                    <SelectValue placeholder="Calibration" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All agents</SelectItem>
+                    <SelectItem value="calibrated">Calibrated</SelectItem>
+                    <SelectItem value="overconfident">Overconfident</SelectItem>
+                    <SelectItem value="underconfident">Underconfident</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </TooltipTrigger>
             <TooltipContent side="bottom" className="max-w-xs text-center">
-              Show only agents with calibration data. Calibration measures whether an agent's confidence scores match its actual outcome accuracy.
+              Filter by calibration bias. Calibration measures whether an agent's confidence scores match its actual outcome accuracy.
             </TooltipContent>
           </Tooltip>
         </div>
@@ -635,8 +651,10 @@ export default function Leaderboard() {
           {attestedOnly && (
             <span className="ml-2 text-emerald-600 dark:text-emerald-400">· Attested agents only</span>
           )}
-          {calibratedOnly && (
-            <span className="ml-2 text-emerald-600 dark:text-emerald-400">· Calibrated agents only</span>
+          {calibrationFilter !== "all" && (
+            <span className="ml-2 text-emerald-600 dark:text-emerald-400">
+              · {calibrationFilter.charAt(0).toUpperCase() + calibrationFilter.slice(1)} agents only
+            </span>
           )}
         </p>
       </div>
