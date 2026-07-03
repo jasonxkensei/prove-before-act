@@ -200,7 +200,17 @@ export default function Leaderboard() {
     return isNaN(p) || p < 1 ? 1 : p;
   });
   const limit = 50;
-  const [selectedWallets, setSelectedWallets] = useState<Set<string>>(new Set());
+  const SHORTLIST_KEY = "xproof_compare_shortlist";
+  const [selectedWallets, setSelectedWallets] = useState<Set<string>>(() => {
+    try {
+      const raw = sessionStorage.getItem("xproof_compare_shortlist");
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) return new Set(arr as string[]);
+      }
+    } catch {}
+    return new Set();
+  });
 
   const debouncedSearch = useDebounce(search, 300);
 
@@ -225,6 +235,12 @@ export default function Leaderboard() {
     document.title = "Agent Trust Leaderboard | xproof";
   }, []);
 
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(SHORTLIST_KEY, JSON.stringify(Array.from(selectedWallets)));
+    } catch {}
+  }, [selectedWallets]);
+
   const { data, isLoading } = useQuery<LeaderboardResponse>({
     queryKey: ["/api/leaderboard", page, limit, categoryFilter, debouncedSearch, attestedOnly, calibrationFilter, sortBy],
     queryFn: async () => {
@@ -248,6 +264,7 @@ export default function Leaderboard() {
 
   const handleCompare = () => {
     const wallets = Array.from(selectedWallets).join(",");
+    try { sessionStorage.removeItem(SHORTLIST_KEY); } catch {}
     navigate(`/compare?wallets=${wallets}`);
   };
 
@@ -669,7 +686,7 @@ export default function Leaderboard() {
               data-testid="button-clear-compare"
               variant="ghost"
               size="sm"
-              onClick={() => setSelectedWallets(new Set())}
+              onClick={() => { try { sessionStorage.removeItem(SHORTLIST_KEY); } catch {} setSelectedWallets(new Set()); }}
             >
               Clear
             </Button>
