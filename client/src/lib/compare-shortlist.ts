@@ -11,6 +11,30 @@
 
 export const SHORTLIST_KEY = "xproof_compare_shortlist";
 
+/** Hard cap on how many wallets can be in the comparison shortlist. */
+export const SHORTLIST_MAX = 6;
+
+/**
+ * Toggle a wallet in the shortlist, enforcing the SHORTLIST_MAX cap.
+ *
+ * - If the wallet is already in `prev`, it is removed (deselect always works).
+ * - If the wallet is not in `prev` and `prev.size < SHORTLIST_MAX`, it is added.
+ * - If the wallet is not in `prev` and `prev.size >= SHORTLIST_MAX`, the call
+ *   is a no-op — the cap is enforced and the returned Set is identical in
+ *   membership to `prev`.
+ *
+ * Always returns a new Set so React state updates fire correctly.
+ */
+export function toggleWallet(prev: Set<string>, wallet: string): Set<string> {
+  const next = new Set(prev);
+  if (next.has(wallet)) {
+    next.delete(wallet);
+  } else if (next.size < SHORTLIST_MAX) {
+    next.add(wallet);
+  }
+  return next;
+}
+
 /**
  * Read the shortlist from storage.
  * Mirrors the useState lazy initializer in leaderboard.tsx.

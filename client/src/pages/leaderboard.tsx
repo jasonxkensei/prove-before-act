@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatDistanceToNow } from "date-fns";
-import { SHORTLIST_KEY, readShortlist, writeShortlist, clearShortlist } from "@/lib/compare-shortlist";
+import { SHORTLIST_KEY, SHORTLIST_MAX, readShortlist, writeShortlist, clearShortlist, toggleWallet } from "@/lib/compare-shortlist";
 
 interface LeaderboardEntry {
   walletAddress: string;
@@ -467,7 +467,7 @@ export default function Leaderboard() {
                     onClick={() => navigate(`/agent/${entry.walletAddress}`)}
                   >
                     <td className="px-3 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-                      {!selectedWallets.has(entry.walletAddress) && selectedWallets.size >= 6 ? (
+                      {!selectedWallets.has(entry.walletAddress) && selectedWallets.size >= SHORTLIST_MAX ? (
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <span className="inline-flex">
@@ -485,15 +485,7 @@ export default function Leaderboard() {
                           data-testid={`checkbox-compare-${entry.walletAddress}`}
                           checked={selectedWallets.has(entry.walletAddress)}
                           onCheckedChange={() => {
-                            setSelectedWallets((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(entry.walletAddress)) {
-                                next.delete(entry.walletAddress);
-                              } else if (next.size < 6) {
-                                next.add(entry.walletAddress);
-                              }
-                              return next;
-                            });
+                            setSelectedWallets((prev) => toggleWallet(prev, entry.walletAddress));
                           }}
                         />
                       )}
@@ -669,7 +661,7 @@ export default function Leaderboard() {
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50" data-testid="compare-floating-container">
           <div className="flex items-center gap-3 rounded-lg border bg-background/95 px-4 py-2.5 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/80">
             <span className="text-sm text-muted-foreground tabular-nums" data-testid="text-compare-selection-count">
-              {selectedWallets.size}/6 selected
+              {selectedWallets.size}/{SHORTLIST_MAX} selected
             </span>
             <Button
               data-testid="button-clear-compare"
