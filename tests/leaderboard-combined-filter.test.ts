@@ -547,3 +547,107 @@ describe("combined filter edge cases", () => {
     }
   });
 });
+
+// ─── 4. Multi-page pagination with combined filters ───────────────────────────
+
+describe("combined filter pagination across multiple pages", () => {
+  it("total and totalPages reflect the full intersection when it spans more than one page", async () => {
+    // 25 Finance+overconfident entries — more than the page limit of 20
+    const matching = Array.from({ length: 25 }, () => makeEntry("Finance", "overconfident"));
+    // Noise that must not appear in results
+    const noise = Array.from({ length: 10 }, () => makeEntry("Finance", "calibrated"));
+    const other = Array.from({ length: 8 }, () => makeEntry("Healthcare", "overconfident"));
+
+    _setLeaderboardCacheForTesting([...matching, ...noise, ...other]);
+
+    const result = await getLeaderboard({
+      category: "Finance",
+      calibrationFilter: "overconfident",
+      page: 1,
+      limit: 20,
+    } as Parameters<typeof getLeaderboard>[0]);
+
+    expect(result.total).toBe(25);
+    expect(result.totalPages).toBe(2); // ceil(25 / 20)
+    expect(result.page).toBe(1);
+    expect(result.limit).toBe(20);
+    expect(result.entries).toHaveLength(20);
+    for (const entry of result.entries) {
+      expect(entry.agentCategory).toBe("Finance");
+      expect(entry.calibrationLabel).toBe("overconfident");
+    }
+  });
+
+  it("page 2 returns the remaining entries with no overlap with page 1", async () => {
+    const matching = Array.from({ length: 25 }, () => makeEntry("Finance", "overconfident"));
+    const noise = Array.from({ length: 10 }, () => makeEntry("Finance", "calibrated"));
+    const other = Array.from({ length: 8 }, () => makeEntry("Healthcare", "overconfident"));
+
+    _setLeaderboardCacheForTesting([...matching, ...noise, ...other]);
+
+    const page1 = await getLeaderboard({
+      category: "Finance",
+      calibrationFilter: "overconfident",
+      page: 1,
+      limit: 20,
+    } as Parameters<typeof getLeaderboard>[0]);
+
+    const page2 = await getLeaderboard({
+      category: "Finance",
+      calibrationFilter: "overconfident",
+      page: 2,
+      limit: 20,
+    } as Parameters<typeof getLeaderboard>[0]);
+
+    // Page 2 carries the remaining 5 entries
+    expect(page2.entries).toHaveLength(5);
+    expect(page2.total).toBe(25);
+    expect(page2.totalPages).toBe(2);
+
+    // All page-2 entries must be valid matches
+    for (const entry of page2.entries) {
+      expect(entry.agentCategory).toBe("Finance");
+      expect(entry.calibrationLabel).toBe("overconfident");
+    }
+
+    // No wallet address should appear on both pages
+    const page1Wallets = new Set(page1.entries.map((e) => e.walletAddress));
+    for (const entry of page2.entries) {
+      expect(page1Wallets.has(entry.walletAddress)).toBe(false);
+    }
+
+    // Together the two pages cover exactly the 25 matching entries
+    const allWallets = new Set([
+      ...page1.entries.map((e) => e.walletAddress),
+      ...page2.entries.map((e) => e.walletAddress),
+    ]);
+    const matchingWallets = new Set(matching.map((e) => e.walletAddress));
+    expect(allWallets.size).toBe(25);
+    for (const w of allWallets) {
+      expect(matchingWallets.has(w)).toBe(true);
+    }
+  });
+
+  it("totalPages is ceil(total/limit) for various intersection sizes", async () => {
+    for (const [count, limit, expectedPages] of [
+      [21, 20, 2],
+      [40, 20, 2],
+      [41, 20, 3],
+      [20, 20, 1],
+    ] as [number, number, number][]) {
+      seq = 0;
+      const matching = Array.from({ length: count }, () => makeEntry("Finance", "overconfident"));
+      _setLeaderboardCacheForTesting(matching);
+
+      const result = await getLeaderboard({
+        category: "Finance",
+        calibrationFilter: "overconfident",
+        page: 1,
+        limit,
+      } as Parameters<typeof getLeaderboard>[0]);
+
+      expect(result.total).toBe(count);
+      expect(result.totalPages).toBe(expectedPages);
+    }
+  });
+});
