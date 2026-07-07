@@ -33,6 +33,44 @@ setInterval(() => {
 const OVERCONFIDENT_THRESHOLD = 0.10;
 const UNDERCONFIDENT_THRESHOLD = -0.10;
 
+// ── Pure trend computation — exported for unit testing ────────────────────────
+// Accepts the full array of confidence_gap values ordered newest-first (as
+// returned by the DB query). Returns null when there are fewer than 31 gaps
+// (need 30 for the "recent" window and at least 1 for the "previous" window).
+export type CalibrationTrend = {
+  direction: "improving" | "worsening" | "stable";
+  delta: number;
+  recent_mean_gap: number;
+  previous_mean_gap: number;
+};
+
+const TREND_RECENT_WINDOW = 30;
+const TREND_STABLE_THRESHOLD = 0.01;
+
+export function computeCalibrationTrend(gaps: number[]): CalibrationTrend | null {
+  if (gaps.length < TREND_RECENT_WINDOW + 1) return null;
+
+  const recentGaps = gaps.slice(0, TREND_RECENT_WINDOW);
+  const previousGaps = gaps.slice(TREND_RECENT_WINDOW);
+  const recentMean = recentGaps.reduce((s, g) => s + g, 0) / recentGaps.length;
+  const previousMean = previousGaps.reduce((s, g) => s + g, 0) / previousGaps.length;
+  const recentAbs = Math.abs(recentMean);
+  const previousAbs = Math.abs(previousMean);
+  const delta = Math.round((recentMean - previousMean) * 10000) / 10000;
+
+  let direction: "improving" | "worsening" | "stable";
+  if (recentAbs < previousAbs - TREND_STABLE_THRESHOLD) direction = "improving";
+  else if (recentAbs > previousAbs + TREND_STABLE_THRESHOLD) direction = "worsening";
+  else direction = "stable";
+
+  return {
+    direction,
+    delta,
+    recent_mean_gap: Math.round(recentMean * 10000) / 10000,
+    previous_mean_gap: Math.round(previousMean * 10000) / 10000,
+  };
+}
+
 function biasLabel(meanGap: number): "overconfident" | "underconfident" | "calibrated" {
   if (meanGap > OVERCONFIDENT_THRESHOLD) return "overconfident";
   if (meanGap < UNDERCONFIDENT_THRESHOLD) return "underconfident";
@@ -513,17 +551,11 @@ export function registerCalibrationRoutes(app: Express) {
         confidence_gap: parseFloat(r.confidence_gap),
       }));
 
-      // ── Calibration trend: last 30 vs previous 30 ────────────────────────
+      // ── Calibration trend: last 30 vs previous window ────────────────────
       // Fetch up to 60 most-recent public outcomes (independent of pagination)
       // to compute a directional trend indicator for the agent profile card.
-      // Requires >= 30 recent outcomes and at least 1 in the previous window.
-      let calibrationTrend: {
-        direction: "improving" | "worsening" | "stable";
-        delta: number;
-        recent_mean_gap: number;
-        previous_mean_gap: number;
-      } | null = null;
-
+      // Requires >= 31 outcomes (30 in the recent window, ≥1 in the previous
+      // window). Delegated to computeCalibrationTrend() for testability.
       const trendRows = await pool.query<{ confidence_gap: string }>(
         `SELECT confidence_gap
          FROM agent_outcomes
@@ -534,28 +566,7 @@ export function registerCalibrationRoutes(app: Express) {
       );
 
       const trendGaps = trendRows.rows.map(r => parseFloat(r.confidence_gap));
-      if (trendGaps.length >= 31) {
-        const recentGaps = trendGaps.slice(0, 30);
-        const previousGaps = trendGaps.slice(30);
-        const recentMean = recentGaps.reduce((s, g) => s + g, 0) / recentGaps.length;
-        const previousMean = previousGaps.reduce((s, g) => s + g, 0) / previousGaps.length;
-        const recentAbs = Math.abs(recentMean);
-        const previousAbs = Math.abs(previousMean);
-        const delta = Math.round((recentMean - previousMean) * 10000) / 10000;
-
-        let direction: "improving" | "worsening" | "stable";
-        const STABLE_THRESHOLD = 0.01;
-        if (recentAbs < previousAbs - STABLE_THRESHOLD) direction = "improving";
-        else if (recentAbs > previousAbs + STABLE_THRESHOLD) direction = "worsening";
-        else direction = "stable";
-
-        calibrationTrend = {
-          direction,
-          delta,
-          recent_mean_gap: Math.round(recentMean * 10000) / 10000,
-          previous_mean_gap: Math.round(previousMean * 10000) / 10000,
-        };
-      }
+      const calibrationTrend = computeCalibrationTrend(trendGaps);
 
       const responseBody = {
         agent_id: user.id,
