@@ -1,6 +1,7 @@
 import { useParams, Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { useWalletAuth } from "@/hooks/useWalletAuth";
 import {
   Shield,
   ArrowLeft,
@@ -29,6 +30,7 @@ interface CalibrationData {
   wallet_address: string;
   agent_name: string | null;
   outcome_count: number;
+  pending_outcome_count?: number;
   calibration: {
     mean_gap: number;
     variance: number;
@@ -435,6 +437,7 @@ export default function AgentCalibrationPage() {
   const [n, setN] = useState(50);
   const [downloading, setDownloading] = useState(false);
   const { toast } = useToast();
+  const { walletAddress, isAuthenticated } = useWalletAuth();
 
   const { data, isLoading, isError } = useQuery<CalibrationData>({
     queryKey: ["/api/agent/calibration", wallet, n],
@@ -484,6 +487,9 @@ export default function AgentCalibrationPage() {
   }
 
   const agentDisplayName = data?.agent_name || (wallet ? `${wallet.slice(0, 12)}…` : "Agent");
+  const isOwner = isAuthenticated && !!walletAddress && !!data?.wallet_address &&
+    walletAddress.toLowerCase() === data.wallet_address.toLowerCase();
+  const pendingCount = data?.pending_outcome_count ?? 0;
   const cal = data?.calibration;
   const points = data?.time_series ?? [];
   const reversedPoints = [...points].reverse();
@@ -552,6 +558,14 @@ export default function AgentCalibrationPage() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
+                {isOwner && pendingCount > 0 && (
+                  <span
+                    className="inline-flex items-center rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400"
+                    data-testid="badge-pending-outcomes"
+                  >
+                    {pendingCount} proof{pendingCount !== 1 ? "s" : ""} need{pendingCount === 1 ? "s" : ""} outcome
+                  </span>
+                )}
                 <div className="flex items-center rounded-md border overflow-hidden" data-testid="select-n-options">
                   {N_OPTIONS.map((opt) => (
                     <button
