@@ -1279,6 +1279,96 @@ curl -X POST https://xproof.app/api/proof \\
 # → { "proof_id": "...", "verify_url": "/proof/...", "status": "pending" }
 # → Execute your action only AFTER receiving proof_id`} />
           </div>
+
+          {/* Use-case examples */}
+          <div className="mt-6 rounded-md border border-border bg-muted/10 p-4 space-y-5" data-testid="section-usecases">
+            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">By use case — copy-paste ready</p>
+            {[
+              {
+                id: "trading",
+                label: "Trading agent",
+                context: "Finance · High-value decisions",
+                desc: "Prove a BUY/SELL decision before executing — full 4W audit trail anchored on-chain",
+                code: `import hashlib, json, requests
+
+# 1. Document your reasoning
+reasoning = {
+    "who": "trading-agent-v2", "what": "BUY BTC 0.5",
+    "why": "RSI=38 (below 40 threshold); allocation=2.1% (below 3% cap)",
+    "model": "gpt-4o-mini", "session_id": "sess_001"
+}
+h = hashlib.sha256(json.dumps(reasoning, sort_keys=True).encode()).hexdigest()
+
+# 2. Anchor BEFORE executing — Prove Before Act
+resp = requests.post("https://xproof.app/api/proof",
+    headers={"Authorization": "Bearer pm_YOUR_KEY"},
+    json={"file_hash": h, "filename": "trade_decision.json", "metadata": reasoning})
+proof_id = resp.json()["proof_id"]  # returned in ~1.1s, on-chain in ~6s
+
+# 3. Execute only after proof is anchored
+execute_trade("BUY", "BTC", 0.5)
+print(f"Audit trail: https://xproof.app/proof/{proof_id}")`,
+              },
+              {
+                id: "research",
+                label: "Research agent",
+                context: "Content · Reports · Analysis",
+                desc: "Anchor reasoning + sources before publishing — verifiable provenance for readers",
+                code: `import hashlib, json, requests
+
+# 1. Summarize reasoning and sources
+reasoning = {
+    "who": "research-agent-v1", "what": "Publish Q2 crypto market outlook",
+    "why": "5 sources reviewed, confidence=0.87, no contradictions detected",
+    "sources": ["arxiv:2406.12345", "bloomberg:BTC-Q2", "coindesk:2026-07-01"]
+}
+h = hashlib.sha256(json.dumps(reasoning, sort_keys=True).encode()).hexdigest()
+
+# 2. Anchor hash — report content never leaves the agent
+resp = requests.post("https://xproof.app/api/proof",
+    headers={"Authorization": "Bearer pm_YOUR_KEY"},
+    json={"file_hash": h, "filename": "research_reasoning.json", "metadata": reasoning})
+proof_id = resp.json()["proof_id"]
+
+# 3. Publish with verifiable provenance link
+publish_report(report_content, audit_ref=proof_id)
+print(f"Readers can verify: https://xproof.app/proof/{proof_id}")`,
+              },
+              {
+                id: "support",
+                label: "Support agent",
+                context: "Customer service · Compliance",
+                desc: "Certify decision before sending response — dispute-proof audit record",
+                code: `import hashlib, json, requests
+
+# 1. Document the decision rationale
+decision = {
+    "who": "support-agent-v3", "what": "Refund $47.50 approved",
+    "why": "Policy §3.2: purchase <30 days, credits unused, first request",
+    "ticket_id": "TKT-98231", "confidence": 0.95
+}
+h = hashlib.sha256(json.dumps(decision, sort_keys=True).encode()).hexdigest()
+
+# 2. Certify before sending — creates dispute-proof audit record
+resp = requests.post("https://xproof.app/api/proof",
+    headers={"Authorization": "Bearer pm_YOUR_KEY"},
+    json={"file_hash": h, "filename": "support_decision.json", "metadata": decision})
+proof_id = resp.json()["proof_id"]
+
+# 3. Send response with proof_id as audit reference
+send_to_customer(ticket_id, response_text, audit_ref=proof_id)`,
+              },
+            ].map((uc) => (
+              <div key={uc.id} data-testid={`example-usecase-${uc.id}`}>
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <Badge variant="secondary" className="text-xs">{uc.label}</Badge>
+                  <span className="text-xs text-muted-foreground">{uc.context}</span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-0.5">{uc.desc}</p>
+                <CodeBlock lang="python" code={uc.code} />
+              </div>
+            ))}
+          </div>
         </div>
 
         {/* Table of contents */}

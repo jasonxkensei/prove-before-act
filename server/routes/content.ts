@@ -3990,7 +3990,7 @@ title: xProof Agent Context Document
 description: Answers to the 10 exact questions autonomous agents ask when evaluating xProof as a proof-of-action service
 url: ${baseUrl}/agent-context.md
 human_page: ${baseUrl}/agent-context
-updated: 2026-06-02
+updated: 2026-07-03
 tags: [proof-of-existence, blockchain-certification, agent-accountability, x402, MCP, audit-trail, Prove-Before-Act]
 ---
 
@@ -4003,6 +4003,103 @@ tags: [proof-of-existence, blockchain-certification, agent-accountability, x402,
 xProof is the on-chain notary for AI agents. Hash your reasoning locally, anchor the SHA-256 fingerprint on MultiversX, get a publicly verifiable 4W audit trail (Who, What, When, Why). Pay per proof with USDC on Base via x402 — no account needed.
 
 **The principle**: Prove Before Act. Anchor reasoning BEFORE executing any significant action.
+
+---
+
+## ⚡ Quick Start — 5 minutes
+
+\`\`\`bash
+# Option A — Get 10 free proofs instantly (no wallet, no card)
+curl -X POST ${baseUrl}/api/agent/register \\
+  -H "Content-Type: application/json" \\
+  -d '{"agent_name": "my-agent"}'
+# → {"api_key": "pm_...", "trial": {"quota": 10, "remaining": 10}}
+
+# Option B — Pay per proof via x402 (zero account setup)
+# POST /api/proof without auth → receive HTTP 402 ($${priceUsd} USDC on Base, eip155:8453)
+# → sign payment with your Base wallet → resend with X-PAYMENT header → get proof_id
+
+# Option C — Add xProof to any MCP-compatible agent
+# {"mcpServers": {"xproof": {"url": "${baseUrl}/mcp", "headers": {"Authorization": "Bearer pm_KEY"}}}}
+# Then call register_trial (free api_key) then certify_file to anchor proofs
+\`\`\`
+
+---
+
+## Use-case examples
+
+Three copy-paste patterns for the most common agent workflows.
+
+### Trading agent — prove a decision before executing a trade
+
+\`\`\`python
+import hashlib, json, requests
+
+# 1. Document your reasoning
+reasoning = {
+    "who": "trading-agent-v2", "what": "BUY BTC 0.5",
+    "why": "RSI=38 (below 40 threshold); allocation=2.1% (below 3% cap)",
+    "model": "gpt-4o-mini", "session_id": "sess_001"
+}
+h = hashlib.sha256(json.dumps(reasoning, sort_keys=True).encode()).hexdigest()
+
+# 2. Anchor BEFORE executing — Prove Before Act
+resp = requests.post("${baseUrl}/api/proof",
+    headers={"Authorization": "Bearer pm_YOUR_KEY"},
+    json={"file_hash": h, "filename": "trade_decision.json", "metadata": reasoning})
+proof_id = resp.json()["proof_id"]  # returned in ~1.1s, on-chain in ~6s
+
+# 3. Execute only after proof is anchored
+execute_trade("BUY", "BTC", 0.5)
+print(f"Audit trail: ${baseUrl}/proof/{proof_id}")
+\`\`\`
+
+### Research agent — anchor reasoning before publishing a report
+
+\`\`\`python
+import hashlib, json, requests
+
+# 1. Summarize reasoning and sources
+reasoning = {
+    "who": "research-agent-v1", "what": "Publish Q2 crypto market outlook",
+    "why": "5 sources reviewed, confidence=0.87, no contradictions detected",
+    "sources": ["arxiv:2406.12345", "bloomberg:BTC-Q2", "coindesk:2026-07-01"]
+}
+h = hashlib.sha256(json.dumps(reasoning, sort_keys=True).encode()).hexdigest()
+
+# 2. Anchor hash — report content never leaves the agent
+resp = requests.post("${baseUrl}/api/proof",
+    headers={"Authorization": "Bearer pm_YOUR_KEY"},
+    json={"file_hash": h, "filename": "research_reasoning.json", "metadata": reasoning})
+proof_id = resp.json()["proof_id"]
+
+# 3. Publish with verifiable provenance link
+publish_report(report_content, audit_ref=proof_id)
+print(f"Readers can verify: ${baseUrl}/proof/{proof_id}")
+\`\`\`
+
+### Support agent — certify a decision before responding to a customer
+
+\`\`\`python
+import hashlib, json, requests
+
+# 1. Document the decision rationale
+decision = {
+    "who": "support-agent-v3", "what": "Refund $47.50 approved",
+    "why": "Policy §3.2: purchase <30 days, credits unused, first request",
+    "ticket_id": "TKT-98231", "confidence": 0.95
+}
+h = hashlib.sha256(json.dumps(decision, sort_keys=True).encode()).hexdigest()
+
+# 2. Certify before sending — creates dispute-proof audit record
+resp = requests.post("${baseUrl}/api/proof",
+    headers={"Authorization": "Bearer pm_YOUR_KEY"},
+    json={"file_hash": h, "filename": "support_decision.json", "metadata": decision})
+proof_id = resp.json()["proof_id"]
+
+# 3. Send response with proof_id as audit reference
+send_to_customer(ticket_id, response_text, audit_ref=proof_id)
+\`\`\`
 
 ---
 
@@ -4439,24 +4536,6 @@ Before each piece of AI-generated content is published on Moltbook, xproof_agent
 - Full Moltbook review: https://www.moltbook.com/post/1d6cf96b-5046-4c63-9ae5-43f8809f4562
 
 ---
-
-## Quick start
-
-\`\`\`bash
-# Option A: Get 10 free proofs instantly (no wallet, no credit card)
-curl -X POST ${baseUrl}/api/agent/register \\
-  -H "Content-Type: application/json" \\
-  -d '{"agent_name": "my-agent"}'
-# → {"api_key": "pm_...", "free_certifications": 10}
-
-# Option B: Pay with x402 (no account at all)
-# POST /api/proof without auth → get 402 → sign USDC on Base (eip155:8453) → resend with X-PAYMENT header
-# Full Python implementation: see Q1 above
-
-# Option C: Add MCP to your config
-# {"mcpServers": {"xproof": {"url": "${baseUrl}/mcp", "headers": {"Authorization": "Bearer pm_KEY"}}}}
-# Then call register_trial via MCP to get a free trial key with no account
-\`\`\`
 
 ## Resources
 
