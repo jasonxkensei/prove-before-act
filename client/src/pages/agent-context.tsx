@@ -82,6 +82,8 @@ export default function AgentContextPage() {
   const toggle = (id: string) =>
     setExpandedSections((prev) => ({ ...prev, [id]: !prev[id] }));
 
+  const [exampleLang, setExampleLang] = useState<"python" | "typescript">("python");
+
   const sections: Section[] = [
     {
       id: "x402",
@@ -1219,7 +1221,7 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
               LLM-optimized
             </Badge>
             <Badge variant="outline" className="text-xs text-muted-foreground">
-              Last updated June 2026
+              Last updated July 2026
             </Badge>
             <Badge variant="outline" className="text-xs text-muted-foreground">
               <Network className="mr-1.5 h-3 w-3" />
@@ -1282,14 +1284,28 @@ curl -X POST https://xproof.app/api/proof \\
 
           {/* Use-case examples */}
           <div className="mt-6 rounded-md border border-border bg-muted/10 p-4 space-y-5" data-testid="section-usecases">
-            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">By use case — copy-paste ready</p>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">By use case — copy-paste ready</p>
+              <div className="flex gap-1" data-testid="toggle-example-lang">
+                <button
+                  onClick={() => setExampleLang("python")}
+                  className={`text-xs px-2.5 py-1 rounded-md border transition-colors font-mono ${exampleLang === "python" ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:text-foreground"}`}
+                  data-testid="button-lang-python"
+                >Python</button>
+                <button
+                  onClick={() => setExampleLang("typescript")}
+                  className={`text-xs px-2.5 py-1 rounded-md border transition-colors font-mono ${exampleLang === "typescript" ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground hover:text-foreground"}`}
+                  data-testid="button-lang-typescript"
+                >TypeScript</button>
+              </div>
+            </div>
             {[
               {
                 id: "trading",
                 label: "Trading agent",
                 context: "Finance · High-value decisions",
                 desc: "Prove a BUY/SELL decision before executing — full 4W audit trail anchored on-chain",
-                code: `import hashlib, json, requests
+                codePy: `import hashlib, json, requests
 
 # 1. Document your reasoning
 reasoning = {
@@ -1308,13 +1324,36 @@ proof_id = resp.json()["proof_id"]  # returned in ~1.1s, on-chain in ~6s
 # 3. Execute only after proof is anchored
 execute_trade("BUY", "BTC", 0.5)
 print(f"Audit trail: https://xproof.app/proof/{proof_id}")`,
+                codeTs: `import crypto from "crypto";
+
+// 1. Document your reasoning
+const reasoning = {
+  who: "trading-agent-v2", what: "BUY BTC 0.5",
+  why: "RSI=38 (below 40 threshold); allocation=2.1% (below 3% cap)",
+  model: "gpt-4o-mini", session_id: "sess_001",
+};
+const sorted = JSON.stringify(reasoning, Object.keys(reasoning).sort() as any);
+const h = crypto.createHash("sha256").update(sorted).digest("hex");
+
+// 2. Anchor BEFORE executing — Prove Before Act
+const resp = await fetch("https://xproof.app/api/proof", {
+  method: "POST",
+  headers: { Authorization: "Bearer pm_YOUR_KEY", "Content-Type": "application/json" },
+  body: JSON.stringify({ file_hash: h, filename: "trade_decision.json", metadata: reasoning }),
+});
+const { proof_id } = await resp.json() as { proof_id: string };
+// returned in ~1.1s, on-chain in ~6s
+
+// 3. Execute only after proof is anchored
+await executeTrade("BUY", "BTC", 0.5);
+console.log("Audit trail: https://xproof.app/proof/" + proof_id);`,
               },
               {
                 id: "research",
                 label: "Research agent",
                 context: "Content · Reports · Analysis",
                 desc: "Anchor reasoning + sources before publishing — verifiable provenance for readers",
-                code: `import hashlib, json, requests
+                codePy: `import hashlib, json, requests
 
 # 1. Summarize reasoning and sources
 reasoning = {
@@ -1333,13 +1372,35 @@ proof_id = resp.json()["proof_id"]
 # 3. Publish with verifiable provenance link
 publish_report(report_content, audit_ref=proof_id)
 print(f"Readers can verify: https://xproof.app/proof/{proof_id}")`,
+                codeTs: `import crypto from "crypto";
+
+// 1. Summarize reasoning and sources
+const reasoning = {
+  who: "research-agent-v1", what: "Publish Q2 crypto market outlook",
+  why: "5 sources reviewed, confidence=0.87, no contradictions detected",
+  sources: ["arxiv:2406.12345", "bloomberg:BTC-Q2", "coindesk:2026-07-01"],
+};
+const sorted = JSON.stringify(reasoning, Object.keys(reasoning).sort() as any);
+const h = crypto.createHash("sha256").update(sorted).digest("hex");
+
+// 2. Anchor hash — report content never leaves the agent
+const resp = await fetch("https://xproof.app/api/proof", {
+  method: "POST",
+  headers: { Authorization: "Bearer pm_YOUR_KEY", "Content-Type": "application/json" },
+  body: JSON.stringify({ file_hash: h, filename: "research_reasoning.json", metadata: reasoning }),
+});
+const { proof_id } = await resp.json() as { proof_id: string };
+
+// 3. Publish with verifiable provenance link
+await publishReport(reportContent, { audit_ref: proof_id });
+console.log("Readers can verify: https://xproof.app/proof/" + proof_id);`,
               },
               {
                 id: "support",
                 label: "Support agent",
                 context: "Customer service · Compliance",
                 desc: "Certify decision before sending response — dispute-proof audit record",
-                code: `import hashlib, json, requests
+                codePy: `import hashlib, json, requests
 
 # 1. Document the decision rationale
 decision = {
@@ -1357,6 +1418,27 @@ proof_id = resp.json()["proof_id"]
 
 # 3. Send response with proof_id as audit reference
 send_to_customer(ticket_id, response_text, audit_ref=proof_id)`,
+                codeTs: `import crypto from "crypto";
+
+// 1. Document the decision rationale
+const decision = {
+  who: "support-agent-v3", what: "Refund $47.50 approved",
+  why: "Policy §3.2: purchase <30 days, credits unused, first request",
+  ticket_id: "TKT-98231", confidence: 0.95,
+};
+const sorted = JSON.stringify(decision, Object.keys(decision).sort() as any);
+const h = crypto.createHash("sha256").update(sorted).digest("hex");
+
+// 2. Certify before sending — creates dispute-proof audit record
+const resp = await fetch("https://xproof.app/api/proof", {
+  method: "POST",
+  headers: { Authorization: "Bearer pm_YOUR_KEY", "Content-Type": "application/json" },
+  body: JSON.stringify({ file_hash: h, filename: "support_decision.json", metadata: decision }),
+});
+const { proof_id } = await resp.json() as { proof_id: string };
+
+// 3. Send response with proof_id as audit reference
+await sendToCustomer(ticketId, responseText, { audit_ref: proof_id });`,
               },
             ].map((uc) => (
               <div key={uc.id} data-testid={`example-usecase-${uc.id}`}>
@@ -1365,7 +1447,10 @@ send_to_customer(ticket_id, response_text, audit_ref=proof_id)`,
                   <span className="text-xs text-muted-foreground">{uc.context}</span>
                 </div>
                 <p className="text-xs text-muted-foreground mb-0.5">{uc.desc}</p>
-                <CodeBlock lang="python" code={uc.code} />
+                <CodeBlock
+                  lang={exampleLang === "python" ? "python" : "typescript"}
+                  code={exampleLang === "python" ? uc.codePy : uc.codeTs}
+                />
               </div>
             ))}
           </div>

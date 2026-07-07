@@ -625,6 +625,75 @@ curl -X POST ${baseUrl}/api/proof \\
 # Response: { "proof_id": "...", "verify_url": "/proof/...", "blockchain_status": "confirmed" }</code></pre>
   </section>
 
+  <section id="use-cases">
+    <h2>Use-case examples — copy-paste ready</h2>
+
+    <h3>Trading agent — Finance · High-value decisions</h3>
+    <p>Prove a BUY/SELL decision before executing — full 4W audit trail anchored on-chain.</p>
+    <pre><code>import hashlib, json, requests
+
+# 1. Document your reasoning
+reasoning = {
+    "who": "trading-agent-v2", "what": "BUY BTC 0.5",
+    "why": "RSI=38 (below 40 threshold); allocation=2.1% (below 3% cap)",
+    "model": "gpt-4o-mini", "session_id": "sess_001"
+}
+h = hashlib.sha256(json.dumps(reasoning, sort_keys=True).encode()).hexdigest()
+
+# 2. Anchor BEFORE executing — Prove Before Act
+resp = requests.post("${baseUrl}/api/proof",
+    headers={"Authorization": "Bearer pm_YOUR_KEY"},
+    json={"file_hash": h, "filename": "trade_decision.json", "metadata": reasoning})
+proof_id = resp.json()["proof_id"]  # returned in ~1.1s, on-chain in ~6s
+
+# 3. Execute only after proof is anchored
+execute_trade("BUY", "BTC", 0.5)
+print(f"Audit trail: ${baseUrl}/proof/{proof_id}")</code></pre>
+
+    <h3>Research agent — Content · Reports · Analysis</h3>
+    <p>Anchor reasoning + sources before publishing — verifiable provenance for readers.</p>
+    <pre><code>import hashlib, json, requests
+
+# 1. Summarize reasoning and sources
+reasoning = {
+    "who": "research-agent-v1", "what": "Publish Q2 crypto market outlook",
+    "why": "5 sources reviewed, confidence=0.87, no contradictions detected",
+    "sources": ["arxiv:2406.12345", "bloomberg:BTC-Q2", "coindesk:2026-07-01"]
+}
+h = hashlib.sha256(json.dumps(reasoning, sort_keys=True).encode()).hexdigest()
+
+# 2. Anchor hash — report content never leaves the agent
+resp = requests.post("${baseUrl}/api/proof",
+    headers={"Authorization": "Bearer pm_YOUR_KEY"},
+    json={"file_hash": h, "filename": "research_reasoning.json", "metadata": reasoning})
+proof_id = resp.json()["proof_id"]
+
+# 3. Publish with verifiable provenance link
+publish_report(report_content, audit_ref=proof_id)
+print(f"Readers can verify: ${baseUrl}/proof/{proof_id}")</code></pre>
+
+    <h3>Support agent — Customer service · Compliance</h3>
+    <p>Certify decision before sending response — dispute-proof audit record.</p>
+    <pre><code>import hashlib, json, requests
+
+# 1. Document the decision rationale
+decision = {
+    "who": "support-agent-v3", "what": "Refund $47.50 approved",
+    "why": "Policy §3.2: purchase &lt;30 days, credits unused, first request",
+    "ticket_id": "TKT-98231", "confidence": 0.95
+}
+h = hashlib.sha256(json.dumps(decision, sort_keys=True).encode()).hexdigest()
+
+# 2. Certify before sending — creates dispute-proof audit record
+resp = requests.post("${baseUrl}/api/proof",
+    headers={"Authorization": "Bearer pm_YOUR_KEY"},
+    json={"file_hash": h, "filename": "support_decision.json", "metadata": decision})
+proof_id = resp.json()["proof_id"]
+
+# 3. Send response with proof_id as audit reference
+send_to_customer(ticket_id, response_text, audit_ref=proof_id)</code></pre>
+  </section>
+
   <section>
     <h2>Live Proofs — Moltbook (xproof_agent_verify)</h2>
     <p>Real proofs anchored by a production trading agent. Each proof was submitted BEFORE the order was executed.</p>

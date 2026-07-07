@@ -1303,7 +1303,7 @@ const anchorTool = tool({
               LLM优化
             </Badge>
             <Badge variant="outline" className="text-xs text-muted-foreground">
-              2026年6月更新
+              2026年7月更新
             </Badge>
             <Badge variant="outline" className="text-xs text-muted-foreground">
               <Network className="mr-1.5 h-3 w-3" />
@@ -1362,6 +1362,96 @@ curl -X POST https://xproof.app/api/proof \\
   -d '{"file_hash":"a1b2c3...64hex","filename":"reasoning.json","metadata":{"who":"my-agent","what":"买入BTC 0.5","why":"RSI=38"}}'
 # → { "proof_id": "...", "verify_url": "/proof/...", "status": "pending" }
 # → 收到proof_id后才可执行实际操作`} />
+          </div>
+
+          {/* Use-case examples — 按用例分类 */}
+          <div className="mt-6 rounded-md border border-border bg-muted/10 p-4 space-y-5" data-testid="section-usecases-zh">
+            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">按用例分类 — 可直接复制使用</p>
+            {[
+              {
+                id: "trading",
+                label: "交易智能体",
+                context: "金融 · 高价值决策",
+                desc: "在执行买卖操作前证明决策 — 完整的4W链上审计轨迹",
+                code: `import hashlib, json, requests
+
+# 1. 记录推理过程
+reasoning = {
+    "who": "trading-agent-v2", "what": "买入BTC 0.5",
+    "why": "RSI=38（低于40阈值）；仓位比例=2.1%（低于3%上限）",
+    "model": "gpt-4o-mini", "session_id": "sess_001"
+}
+h = hashlib.sha256(json.dumps(reasoning, sort_keys=True).encode()).hexdigest()
+
+# 2. 执行前锚定 — 行动前证明
+resp = requests.post("https://xproof.app/api/proof",
+    headers={"Authorization": "Bearer pm_您的密钥"},
+    json={"file_hash": h, "filename": "trade_decision.json", "metadata": reasoning})
+proof_id = resp.json()["proof_id"]  # ~1.1秒返回，~6秒链上确认
+
+# 3. 存证锚定后才执行交易
+execute_trade("买入", "BTC", 0.5)
+print(f"审计记录: https://xproof.app/proof/{proof_id}")`,
+              },
+              {
+                id: "research",
+                label: "研究智能体",
+                context: "内容 · 报告 · 分析",
+                desc: "发布报告前锚定推理过程与来源 — 可验证的溯源证明",
+                code: `import hashlib, json, requests
+
+# 1. 汇总推理过程与数据来源
+reasoning = {
+    "who": "research-agent-v1", "what": "发布Q2加密市场展望报告",
+    "why": "已审阅5个来源，置信度=0.87，未发现矛盾信息",
+    "sources": ["arxiv:2406.12345", "bloomberg:BTC-Q2", "coindesk:2026-07-01"]
+}
+h = hashlib.sha256(json.dumps(reasoning, sort_keys=True).encode()).hexdigest()
+
+# 2. 锚定哈希 — 报告内容不离开智能体
+resp = requests.post("https://xproof.app/api/proof",
+    headers={"Authorization": "Bearer pm_您的密钥"},
+    json={"file_hash": h, "filename": "research_reasoning.json", "metadata": reasoning})
+proof_id = resp.json()["proof_id"]
+
+# 3. 发布报告并附上可验证的溯源链接
+publish_report(report_content, audit_ref=proof_id)
+print(f"读者可验证: https://xproof.app/proof/{proof_id}")`,
+              },
+              {
+                id: "support",
+                label: "客服智能体",
+                context: "客户服务 · 合规",
+                desc: "发送回复前认证决策 — 可应对投诉的审计记录",
+                code: `import hashlib, json, requests
+
+# 1. 记录决策依据
+decision = {
+    "who": "support-agent-v3", "what": "退款$47.50已批准",
+    "why": "政策§3.2：购买不足30天，积分未使用，首次申请",
+    "ticket_id": "TKT-98231", "confidence": 0.95
+}
+h = hashlib.sha256(json.dumps(decision, sort_keys=True).encode()).hexdigest()
+
+# 2. 发送前认证 — 建立可应对投诉的审计记录
+resp = requests.post("https://xproof.app/api/proof",
+    headers={"Authorization": "Bearer pm_您的密钥"},
+    json={"file_hash": h, "filename": "support_decision.json", "metadata": decision})
+proof_id = resp.json()["proof_id"]
+
+# 3. 发送回复，附上proof_id作为审计参考
+send_to_customer(ticket_id, response_text, audit_ref=proof_id)`,
+              },
+            ].map((uc) => (
+              <div key={uc.id} data-testid={`example-usecase-${uc.id}-zh`}>
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <Badge variant="secondary" className="text-xs">{uc.label}</Badge>
+                  <span className="text-xs text-muted-foreground">{uc.context}</span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-0.5">{uc.desc}</p>
+                <CodeBlock code={uc.code} />
+              </div>
+            ))}
           </div>
         </div>
 
