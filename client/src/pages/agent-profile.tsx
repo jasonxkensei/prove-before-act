@@ -968,6 +968,17 @@ function CalibrationCard({ data, wallet }: { data: CalibrationData; wallet: stri
           >
             {style.label}
           </span>
+          <Button
+            asChild
+            size="sm"
+            variant="ghost"
+            className="text-xs px-1.5 h-auto py-0.5 font-normal text-muted-foreground"
+            data-testid="link-leaderboard-calibration-filter"
+          >
+            <Link href={`/leaderboard?calibration=${bias_label}`}>
+              See all {style.label.toLowerCase()} agents
+            </Link>
+          </Button>
           <span className="ml-auto flex items-center gap-2">
             {isOwner && pendingCount > 0 && (
               <span
