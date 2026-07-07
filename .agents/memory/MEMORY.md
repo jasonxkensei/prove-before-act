@@ -1,3 +1,4 @@
 - [npm publish on Replit](npm-publish-replit.md) — bash blocks `npm`; use `pnpm publish --registry https://registry.npmjs.org/` with NPM_ACCESS_TOKEN env var
 - [GitHub remote divergence](github-remote-divergence.md) — when git push fails (remote ahead), push individual files via GitHub contents API with GITHUB_PERSONAL_ACCESS_TOKEN
 - [SDK distribution channel](sdk-distribution.md) — PyPI: PYPI_API_TOKEN + twine; npm: NPM_ACCESS_TOKEN + pnpm; clawhub: GITHUB_PERSONAL_ACCESS_TOKEN + contents API to jasonxkensei/xproof-openclaw-skill
+- [Drizzle schema vs raw-SQL drift](drizzle-schema-raw-sql-drift.md) — any table/column/index/constraint created via raw SQL MUST also be declared in shared/schema.ts or drizzle-kit push will DROP it in production

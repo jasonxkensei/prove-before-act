@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm';
 import {
   bigint,
+  check,
   date,
   index,
   uniqueIndex,
@@ -93,6 +94,37 @@ export const certifications = pgTable("certifications", {
   uniqueIndex("certifications_transaction_hash_unique")
     .on(table.transactionHash)
     .where(sql`transaction_hash IS NOT NULL`),
+  // Composite partial index for trust-score and leaderboard sub-queries
+  // (confirmed public certs only, sorted/aggregated by created_at).
+  index("idx_certs_trust_lookup")
+    .on(table.userId, table.createdAt)
+    .where(sql`blockchain_status = 'confirmed' AND is_public = true`),
+  // JSONB expression indexes backing metadata-keyed lookup endpoints.
+  // These are partial indexes (WHERE clause) so they stay small.
+  index("idx_cert_meta_decision_id")
+    .on(sql`(metadata->>'decision_id')`)
+    .where(sql`metadata ? 'decision_id'`),
+  index("idx_cert_meta_sigil_pubkey")
+    .on(sql`(metadata->>'sigil_public_key')`)
+    .where(sql`metadata ? 'sigil_public_key'`),
+  index("idx_cert_meta_bnb_wallet")
+    .on(sql`(LOWER(metadata->>'bnb_wallet'))`)
+    .where(sql`metadata ? 'bnb_wallet'`),
+  index("idx_cert_meta_eliza_agent_id")
+    .on(sql`(LOWER(metadata->>'eliza_agent_id'))`)
+    .where(sql`metadata ? 'eliza_agent_id'`),
+  index("idx_cert_meta_xai_agent_id")
+    .on(sql`(LOWER(metadata->>'xai_agent_id'))`)
+    .where(sql`metadata ? 'xai_agent_id'`),
+  index("idx_cert_meta_mpp_pi")
+    .on(sql`(metadata->>'mpp_payment_intent_id')`)
+    .where(sql`metadata ? 'mpp_payment_intent_id'`),
+  index("idx_cert_meta_model_hash")
+    .on(sql`(metadata->>'model_hash')`)
+    .where(sql`metadata ? 'model_hash'`),
+  index("idx_cert_meta_strategy_hash")
+    .on(sql`(metadata->>'strategy_hash')`)
+    .where(sql`metadata ? 'strategy_hash'`),
 ]);
 
 export const certificationsRelations = relations(certifications, ({ one }) => ({
@@ -134,7 +166,12 @@ export const attestations = pgTable("attestations", {
   webhookUrl: text("webhook_url"),
   webhookSecret: varchar("webhook_secret", { length: 128 }),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  // Partial index for the batch lookups used in computeAttestationBonusBatch.
+  index("idx_attestations_subject_active")
+    .on(table.subjectWallet, table.status, table.createdAt)
+    .where(sql`status = 'active'`),
+]);
 
 export const insertAttestationSchema = createInsertSchema(attestations).omit({
   id: true,
@@ -328,7 +365,12 @@ export const visits = pgTable("visits", {
   // Privacy: only the referer hostname is stored, never the full URL or query string.
   referrerHost: varchar("referrer_host", { length: 128 }),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  // Partial index for the Traffic Sources card on /admin.
+  index("idx_visits_referrer_host")
+    .on(table.referrerHost)
+    .where(sql`referrer_host IS NOT NULL`),
+]);
 
 // Credit purchases — tracks prepaid certification credits for API key users
 export const creditPurchases = pgTable("credit_purchases", {
@@ -380,7 +422,20 @@ export const agentViolations = pgTable("agent_violations", {
   detectedAt: timestamp("detected_at").defaultNow(),
   confirmedAt: timestamp("confirmed_at"),
   notes: text("notes"),
-});
+}, (table) => [
+  // Simple index for per-wallet violation lookups.
+  index("idx_violations_wallet").on(table.walletAddress),
+  // Composite index for filtered queries (wallet + type + status).
+  index("idx_violations_wallet_type_status").on(table.walletAddress, table.type, table.status),
+  // Unique partial index: prevents duplicate violations for the same
+  // (wallet, proof, type, reason) combination when proof and reason are known.
+  uniqueIndex("idx_violations_dedupe")
+    .on(table.walletAddress, table.proofId, table.type, table.reason)
+    .where(sql`proof_id IS NOT NULL AND reason IS NOT NULL`),
+  // Check constraints: enforce the allowed enum values at the DB level.
+  check("chk_violation_type", sql`type IN ('fault', 'breach')`),
+  check("chk_violation_status", sql`status IN ('proposed', 'confirmed', 'rejected')`),
+]);
 
 export const insertAgentViolationSchema = createInsertSchema(agentViolations).omit({
   id: true,
@@ -410,7 +465,24 @@ export const agentOutcomes = pgTable("agent_outcomes", {
   confidenceGap: real("confidence_gap").notNull(),
   visibility: varchar("visibility").default("public").notNull(),
   submittedAt: timestamp("submitted_at").defaultNow().notNull(),
-});
+}, (table) => [
+  // Basic lookup indexes used by the calibration and outcome endpoints.
+  index("idx_agent_outcomes_user_id").on(table.userId),
+  index("idx_agent_outcomes_cert_id").on(table.certificationId),
+  // One outcome per certification — enforced as a unique index.
+  uniqueIndex("idx_agent_outcomes_cert_unique").on(table.certificationId),
+  // Composite indexes for visibility-filtered and time-ordered owner queries.
+  index("idx_agent_outcomes_user_vis_time").on(table.userId, table.visibility, table.submittedAt),
+  // Mixed-visibility (no filter) path: WHERE user_id = $1 ORDER BY submitted_at DESC.
+  index("idx_agent_outcomes_user_time").on(table.userId, table.submittedAt),
+  // Partial index for the private-outcome EXISTS/COUNT checks (keeps index tiny).
+  index("idx_agent_outcomes_user_private")
+    .on(table.userId, table.submittedAt)
+    .where(sql`visibility = 'private'`),
+  // Check constraints: enforce valid 0.0–1.0 range at DB level.
+  check("chk_anchored_confidence", sql`anchored_confidence >= 0 AND anchored_confidence <= 1`),
+  check("chk_outcome_score", sql`outcome_score >= 0 AND outcome_score <= 1`),
+]);
 
 export const insertAgentOutcomeSchema = createInsertSchema(agentOutcomes).omit({
   id: true,
@@ -436,4 +508,34 @@ export const trustScoreSnapshots = pgTable("trust_score_snapshots", {
   snapshotDate: date("snapshot_date").notNull().default(sql`CURRENT_DATE`),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   rank: integer("rank"),
-});
+  // Added via raw SQL migration in server/index.ts (migrateTrustSnapshotSchema).
+  // Stores the complete TrustScore object so public reads never need live computation.
+  fullTrustData: jsonb("full_trust_data"),
+}, (table) => [
+  // Covers getOldScoreBatch / getPreviousLevelBatch queries (per-wallet, sorted by date).
+  index("idx_snapshots_wallet_date").on(table.walletAddress, table.snapshotDate),
+]);
+
+// leaderboard_snapshot — single-row table holding the latest leaderboard entries
+// as a JSONB blob. Added via raw SQL in server/index.ts (migrateTrustSnapshotSchema).
+// Public GET /api/leaderboard reads from this table only.
+export const leaderboardSnapshot = pgTable("leaderboard_snapshot", {
+  id: integer("id").primaryKey().default(1),
+  entries: jsonb("entries").notNull(),
+  computedAt: timestamp("computed_at", { withTimezone: true }).notNull().defaultNow(),
+}, () => [
+  // Single-row constraint: id must always be 1.
+  check("single_row", sql`id = 1`),
+]);
+
+// rate_limit_counters — persistent rate-limit state for PgRateLimitStore.
+// Created via raw SQL in server/pgRateLimit.ts (ensureRateLimitTable).
+// Bucket key format: "{namespace}:{key}:{window_start_unix_ms}"
+export const rateLimitCounters = pgTable("rate_limit_counters", {
+  bucket: text("bucket").primaryKey(),
+  count: integer("count").notNull().default(0),
+  resetAt: timestamp("reset_at", { withTimezone: true }).notNull(),
+}, (table) => [
+  // Index on reset_at makes the periodic DELETE of expired rows an index scan.
+  index("rate_limit_counters_reset_at_idx").on(table.resetAt),
+]);
