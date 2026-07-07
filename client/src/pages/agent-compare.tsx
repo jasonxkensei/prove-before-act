@@ -1,6 +1,6 @@
 import { useQuery, useQueries } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { Shield, ArrowLeft, Loader2, AlertCircle } from "lucide-react";
+import { Shield, ArrowLeft, Loader2, AlertCircle, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -53,6 +53,12 @@ interface CalibrationData {
     mean_gap: number;
     variance: number;
     bias_label: "overconfident" | "underconfident" | "calibrated";
+  } | null;
+  calibration_trend: {
+    direction: "improving" | "worsening" | "stable";
+    delta: number;
+    recent_mean_gap: number;
+    previous_mean_gap: number;
   } | null;
   time_series: CalibrationTimePoint[];
 }
@@ -474,7 +480,7 @@ export default function AgentComparePage() {
                           );
                         })}
                       </tr>
-                      <tr>
+                      <tr className="border-b">
                         <td className="py-3 px-3 font-medium text-muted-foreground">Bias</td>
                         {agents.map((agent) => {
                           const cal = calibrationByWallet.get(agent.walletAddress)?.data;
@@ -492,6 +498,38 @@ export default function AgentComparePage() {
                               ) : (
                                 <span className="text-muted-foreground text-xs">No data</span>
                               )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                      <tr>
+                        <td className="py-3 px-3 font-medium text-muted-foreground">30-day trend</td>
+                        {agents.map((agent) => {
+                          const cal = calibrationByWallet.get(agent.walletAddress)?.data;
+                          const trend = cal?.calibration_trend ?? null;
+                          if (!trend) {
+                            return (
+                              <td key={agent.walletAddress} className="py-3 px-3" data-testid={`cell-trend-${agent.walletAddress}`}>
+                                <span className="text-muted-foreground text-xs">No data</span>
+                              </td>
+                            );
+                          }
+                          const TREND_STYLES = {
+                            improving: { Icon: TrendingUp, label: "Improving", className: "text-emerald-600 dark:text-emerald-400", badgeClass: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30" },
+                            worsening: { Icon: TrendingDown, label: "Worsening", className: "text-red-600 dark:text-red-400", badgeClass: "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30" },
+                            stable:    { Icon: Minus, label: "Stable", className: "text-muted-foreground", badgeClass: "border-border bg-muted/40 text-muted-foreground" },
+                          } as const;
+                          const ts = TREND_STYLES[trend.direction] ?? TREND_STYLES.stable;
+                          const TrendIcon = ts.Icon;
+                          return (
+                            <td key={agent.walletAddress} className="py-3 px-3" data-testid={`cell-trend-${agent.walletAddress}`}>
+                              <span
+                                className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium ${ts.badgeClass}`}
+                                data-testid={`badge-trend-${agent.walletAddress}`}
+                              >
+                                <TrendIcon className={`h-3 w-3 shrink-0 ${ts.className}`} />
+                                {ts.label}
+                              </span>
                             </td>
                           );
                         })}
