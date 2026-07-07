@@ -191,6 +191,11 @@ export const outcomeSubmitRateLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req: any) => (req.apiKey?.id as string) ?? getClientIp(req),
   message: { error: "TOO_MANY_REQUESTS", message: "Outcome submission rate limit exceeded: max 10 per 5 minutes per API key" },
+  // PgRateLimitStore persists counters in the rate_limit_counters table so:
+  //  a) state survives server restarts (consistent with all other limiters)
+  //  b) test beforeAll hooks can wipe counters via SQL DELETE without needing
+  //     a 5-minute wait between consecutive test invocations
+  store: new PgRateLimitStore("outcome_submit"),
 });
 
 // GET /api/agent/calibration/:agentId/eligible-proofs — two-tier rate limiting.

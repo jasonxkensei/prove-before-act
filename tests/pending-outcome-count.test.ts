@@ -90,6 +90,30 @@ beforeAll(async () => {
      DO UPDATE SET is_active = TRUE`,
     [SENTINEL_KEY_HASH, SENTINEL_KEY_PREFIX, testUserId],
   );
+
+  // 4. Wipe all outcome_submit rate-limit counters so consecutive test runs
+  //    within the same 5-minute window never inherit leftover quota from a
+  //    previous invocation and trigger spurious 429 failures.
+  //
+  //    outcomeSubmitRateLimiter now uses PgRateLimitStore("outcome_submit"),
+  //    which persists counters in the rate_limit_counters table keyed as
+  //    "outcome_submit:{apiKeyId}:{windowStart}".  The table is normally
+  //    created by server/index.ts on startup; the test worker may run before
+  //    ensureRateLimitTable() fires, so we create it here if absent first.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS rate_limit_counters (
+      bucket   TEXT PRIMARY KEY,
+      count    INTEGER NOT NULL DEFAULT 0,
+      reset_at TIMESTAMPTZ NOT NULL
+    )
+  `);
+  //    Deleting all rows whose bucket starts with "outcome_submit:" resets the
+  //    quota for EVERY key — safe in a test environment.  The broad namespace
+  //    wipe avoids the pattern-mismatch risk seen in earlier rate-limit wipes
+  //    where narrowing by fixture key ID silently missed buckets.
+  await pool.query(
+    `DELETE FROM rate_limit_counters WHERE bucket LIKE 'outcome_submit:%'`,
+  );
 });
 
 beforeEach(async () => {
