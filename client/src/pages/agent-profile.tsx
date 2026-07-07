@@ -1,4 +1,5 @@
 import { useParams, Link } from "wouter";
+import { buildProofOptionLabel } from "@/lib/proof-label";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import {
@@ -834,15 +835,11 @@ function CalibrationCard({ data, wallet }: { data: CalibrationData; wallet: stri
                     data-testid="select-proof-id"
                   >
                     <option value="">Select a proof…</option>
-                    {eligibleProofs.map((p) => {
-                      const dateStr = p.created_at ? new Date(p.created_at).toISOString().slice(0, 10) : "";
-                      const label = p.file_name ? `${p.file_name} — confidence: ${p.confidence_level}` : `${p.id.slice(0, 12)}… — confidence: ${p.confidence_level}`;
-                      return (
-                        <option key={p.id} value={p.id}>
-                          {dateStr ? `${label} · ${dateStr}` : label}
-                        </option>
-                      );
-                    })}
+                    {eligibleProofs.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {buildProofOptionLabel(p)}
+                      </option>
+                    ))}
                   </select>
                 )}
               </div>
@@ -1143,15 +1140,11 @@ function CalibrationCard({ data, wallet }: { data: CalibrationData; wallet: stri
                   data-testid="select-proof-id"
                 >
                   <option value="">Select a proof…</option>
-                  {eligibleProofs.map((p) => {
-                    const dateStr = p.created_at ? new Date(p.created_at).toISOString().slice(0, 10) : "";
-                    const label = p.file_name ? `${p.file_name} — confidence: ${p.confidence_level}` : `${p.id.slice(0, 12)}… — confidence: ${p.confidence_level}`;
-                    return (
-                      <option key={p.id} value={p.id}>
-                        {dateStr ? `${label} · ${dateStr}` : label}
-                      </option>
-                    );
-                  })}
+                  {eligibleProofs.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {buildProofOptionLabel(p)}
+                    </option>
+                  ))}
                 </select>
               )}
             </div>
