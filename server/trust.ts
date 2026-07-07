@@ -991,6 +991,14 @@ export function generateTrustBadgeSvg(level: TrustLevel, score: number, attestat
 </svg>`;
 }
 
+// ─── Test-only helper ────────────────────────────────────────────────────────
+// Allows unit tests to inject a known set of leaderboard entries into the
+// in-memory cache without hitting the database.  Never call this in production
+// code paths.
+export function _setLeaderboardCacheForTesting(entries: LeaderboardEntry[]): void {
+  leaderboardCache = { allEntries: entries, cachedAt: Date.now() };
+}
+
 function adjustColor(hex: string, amount: number): string {
   const num = parseInt(hex.replace("#", ""), 16);
   const r = Math.max(0, Math.min(255, (num >> 16) + amount));
