@@ -46,8 +46,35 @@ interface CalibrationData {
       calibrated: string;
     };
   } | null;
+  calibration_trend: {
+    direction: "improving" | "worsening" | "stable";
+    delta: number;
+    recent_mean_gap: number;
+    previous_mean_gap: number;
+  } | null;
   time_series: CalibrationPoint[];
 }
+
+const TREND_CONFIG = {
+  improving: {
+    icon: TrendingUp,
+    label: "Improving",
+    className: "text-emerald-600 dark:text-emerald-400",
+    bgClassName: "border-emerald-500/30 bg-emerald-500/10",
+  },
+  worsening: {
+    icon: TrendingDown,
+    label: "Worsening",
+    className: "text-red-600 dark:text-red-400",
+    bgClassName: "border-red-500/30 bg-red-500/10",
+  },
+  stable: {
+    icon: Minus,
+    label: "Stable",
+    className: "text-muted-foreground",
+    bgClassName: "border-border bg-muted/40",
+  },
+} as const;
 
 const BIAS_STYLES = {
   calibrated:    { badge: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30", bar: "bg-emerald-500", label: "Calibrated",    Icon: Minus },
@@ -496,6 +523,7 @@ export default function AgentCalibrationPage() {
 
   const biasStyle = cal ? (BIAS_STYLES[cal.bias_label] ?? BIAS_STYLES.calibrated) : null;
   const BiasIcon = biasStyle?.Icon ?? Minus;
+  const trend = data?.calibration_trend ?? null;
 
   const gapTrend = reversedPoints.length >= 6
     ? (() => {
@@ -666,6 +694,26 @@ export default function AgentCalibrationPage() {
                     </CardContent>
                   </Card>
                 </div>
+
+                {trend && (() => {
+                  const tc = TREND_CONFIG[trend.direction];
+                  const TrendIcon = tc.icon;
+                  return (
+                    <div
+                      className={`flex items-center gap-2 rounded-md border px-3 py-2 text-xs ${tc.bgClassName}`}
+                      data-testid="badge-calibration-trend"
+                    >
+                      <TrendIcon className={`h-3.5 w-3.5 shrink-0 ${tc.className}`} />
+                      <span className={`font-medium ${tc.className}`}>{tc.label}</span>
+                      <span className="text-muted-foreground">30-day trend</span>
+                      <span className="ml-auto tabular-nums text-muted-foreground">
+                        {trend.recent_mean_gap > 0 ? "+" : ""}{trend.recent_mean_gap.toFixed(3)}
+                        <span className="mx-1 opacity-50">vs</span>
+                        {trend.previous_mean_gap > 0 ? "+" : ""}{trend.previous_mean_gap.toFixed(3)}
+                      </span>
+                    </div>
+                  );
+                })()}
 
                 <Card data-testid="card-gap-trend">
                   <CardHeader>
