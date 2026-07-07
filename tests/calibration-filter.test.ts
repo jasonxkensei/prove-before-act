@@ -299,7 +299,94 @@ describe("calibrationFilter with stale or empty cache", () => {
   });
 });
 
-// ─── 6. Unknown calibration query param (HTTP integration) ───────────────────
+// ─── 6. calibration sort order — tie-breaking by trustScore ──────────────────
+
+describe('sortBy: "calibration" — tie-break and null placement', () => {
+  it("entries with the same calibrationLabel are sorted descending by trustScore", async () => {
+    const low = makeEntry("calibrated", { trustScore: 100 });
+    const high = makeEntry("calibrated", { trustScore: 500 });
+    const mid = makeEntry("calibrated", { trustScore: 300 });
+
+    _setLeaderboardCacheForTesting([low, high, mid]);
+
+    const result = await getLeaderboard({ sortBy: "calibration" });
+
+    const scores = result.entries.map((e) => e.trustScore);
+    expect(scores).toEqual([500, 300, 100]);
+  });
+
+  it("calibrated entries precede underconfident which precede overconfident", async () => {
+    const over = makeEntry("overconfident", { trustScore: 999 });
+    const under = makeEntry("underconfident", { trustScore: 999 });
+    const cal = makeEntry("calibrated", { trustScore: 1 });
+
+    _setLeaderboardCacheForTesting([over, under, cal]);
+
+    const result = await getLeaderboard({ sortBy: "calibration" });
+
+    const labels = result.entries.map((e) => e.calibrationLabel);
+    expect(labels).toEqual(["calibrated", "underconfident", "overconfident"]);
+  });
+
+  it("entries with calibrationLabel: null are placed last regardless of their trustScore", async () => {
+    const nullHigh = makeEntry(null, { trustScore: 9999 });
+    const nullMid = makeEntry(null, { trustScore: 5000 });
+    const calLow = makeEntry("calibrated", { trustScore: 1 });
+    const overLow = makeEntry("overconfident", { trustScore: 2 });
+
+    _setLeaderboardCacheForTesting([nullHigh, calLow, nullMid, overLow]);
+
+    const result = await getLeaderboard({ sortBy: "calibration" });
+
+    const entries = result.entries;
+    // First two should be non-null labels
+    expect(entries[0].calibrationLabel).not.toBeNull();
+    expect(entries[1].calibrationLabel).not.toBeNull();
+    // Last two should be null
+    expect(entries[2].calibrationLabel).toBeNull();
+    expect(entries[3].calibrationLabel).toBeNull();
+  });
+
+  it("null entries among themselves are sorted descending by trustScore", async () => {
+    const nullA = makeEntry(null, { trustScore: 200 });
+    const nullB = makeEntry(null, { trustScore: 800 });
+    const nullC = makeEntry(null, { trustScore: 50 });
+
+    _setLeaderboardCacheForTesting([nullA, nullB, nullC]);
+
+    const result = await getLeaderboard({ sortBy: "calibration" });
+
+    const scores = result.entries.map((e) => e.trustScore);
+    expect(scores).toEqual([800, 200, 50]);
+  });
+
+  it("mixed labels: full order is calibrated > underconfident > overconfident > null, each group sorted by trustScore desc", async () => {
+    const cal1 = makeEntry("calibrated", { trustScore: 300 });
+    const cal2 = makeEntry("calibrated", { trustScore: 700 });
+    const under1 = makeEntry("underconfident", { trustScore: 400 });
+    const under2 = makeEntry("underconfident", { trustScore: 100 });
+    const over1 = makeEntry("overconfident", { trustScore: 600 });
+    const none1 = makeEntry(null, { trustScore: 9000 });
+    const none2 = makeEntry(null, { trustScore: 1 });
+
+    _setLeaderboardCacheForTesting([none1, over1, under2, cal1, none2, under1, cal2]);
+
+    const result = await getLeaderboard({ sortBy: "calibration" });
+
+    const wallets = result.entries.map((e) => e.walletAddress);
+    expect(wallets).toEqual([
+      cal2.walletAddress,   // calibrated, trustScore 700
+      cal1.walletAddress,   // calibrated, trustScore 300
+      under1.walletAddress, // underconfident, trustScore 400
+      under2.walletAddress, // underconfident, trustScore 100
+      over1.walletAddress,  // overconfident, trustScore 600
+      none1.walletAddress,  // null, trustScore 9000
+      none2.walletAddress,  // null, trustScore 1
+    ]);
+  });
+});
+
+// ─── 7. Unknown calibration query param (HTTP integration) ───────────────────
 
 describe("unknown calibration= query param on /api/leaderboard", () => {
   it("returns 200 (not 400) for an unknown calibration= value", async () => {
