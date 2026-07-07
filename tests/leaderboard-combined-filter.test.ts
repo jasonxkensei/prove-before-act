@@ -289,7 +289,176 @@ describe("category + calibratedOnly combined", () => {
   });
 });
 
-// ─── 3. Edge cases ────────────────────────────────────────────────────────────
+// ─── 3. search + other filters ───────────────────────────────────────────────
+
+describe("search combined with category and/or calibration filters", () => {
+  // The search filter matches on agentName (case-insensitive) and walletAddress.
+  // It runs after the category filter and before calibrationFilter in the chain,
+  // so the combined result must be the intersection of all three predicates.
+
+  it("search + category returns only entries matching both name and category", async () => {
+    const alphaFinance = makeEntry("Finance", null, { agentName: "Alpha Finance Bot" });
+    const alphaHealth = makeEntry("Healthcare", null, { agentName: "Alpha Health Bot" });
+    const betaFinance = makeEntry("Finance", null, { agentName: "Beta Finance Bot" });
+    const noName = makeEntry("Finance", null, { agentName: null });
+
+    _setLeaderboardCacheForTesting([alphaFinance, alphaHealth, betaFinance, noName]);
+
+    const result = await getLeaderboard({ category: "Finance", search: "alpha" });
+
+    expect(result.entries).toHaveLength(1);
+    expect(result.entries[0].walletAddress).toBe(alphaFinance.walletAddress);
+    expect(result.total).toBe(1);
+  });
+
+  it("search + category: wrong category silently returns 0 even if name matches", async () => {
+    const alphaFinance = makeEntry("Finance", null, { agentName: "Alpha Bot" });
+
+    _setLeaderboardCacheForTesting([alphaFinance]);
+
+    const result = await getLeaderboard({ category: "Healthcare", search: "alpha" });
+
+    expect(result.entries).toHaveLength(0);
+    expect(result.total).toBe(0);
+    expect(result.totalPages).toBe(1);
+  });
+
+  it("search + category: search term matches walletAddress, not only agentName", async () => {
+    // walletAddress contains "specwlt"; agentName does not contain "specwlt"
+    const entry = makeEntry("Finance", null, {
+      walletAddress: "erd1specwlt0000000001",
+      agentName: "Generic Agent",
+    });
+    const other = makeEntry("Finance", null, { agentName: "Unrelated Agent" });
+
+    _setLeaderboardCacheForTesting([entry, other]);
+
+    const result = await getLeaderboard({ category: "Finance", search: "specwlt" });
+
+    expect(result.entries).toHaveLength(1);
+    expect(result.entries[0].walletAddress).toBe("erd1specwlt0000000001");
+  });
+
+  it("search + calibrationFilter returns only entries matching both name and label", async () => {
+    const alphaCalib = makeEntry("Finance", "calibrated", { agentName: "Alpha Bot" });
+    const alphaOver = makeEntry("Finance", "overconfident", { agentName: "Alpha Bot 2" });
+    const betaCalib = makeEntry("Finance", "calibrated", { agentName: "Beta Bot" });
+    const alphaNoLabel = makeEntry("Finance", null, { agentName: "Alpha Unlabelled" });
+
+    _setLeaderboardCacheForTesting([alphaCalib, alphaOver, betaCalib, alphaNoLabel]);
+
+    const result = await getLeaderboard({
+      calibrationFilter: "calibrated",
+      search: "alpha",
+    });
+
+    expect(result.entries).toHaveLength(1);
+    expect(result.entries[0].walletAddress).toBe(alphaCalib.walletAddress);
+    expect(result.total).toBe(1);
+  });
+
+  it("search + calibrationFilter: label mismatch silently returns 0 even if name matches", async () => {
+    const alphaOver = makeEntry("Finance", "overconfident", { agentName: "Alpha Bot" });
+
+    _setLeaderboardCacheForTesting([alphaOver]);
+
+    const result = await getLeaderboard({
+      calibrationFilter: "calibrated",
+      search: "alpha",
+    });
+
+    expect(result.entries).toHaveLength(0);
+    expect(result.total).toBe(0);
+    expect(result.totalPages).toBe(1);
+  });
+
+  it("all three: search + category + calibrationFilter returns the single correct intersection", async () => {
+    // Only alphaFinanceCalib should survive all three predicates:
+    //   search="alpha", category="Finance", calibrationFilter="calibrated"
+    const alphaFinanceCalib = makeEntry("Finance", "calibrated", { agentName: "Alpha Agent" });
+    const alphaHealthCalib = makeEntry("Healthcare", "calibrated", { agentName: "Alpha Health" });
+    const betaFinanceCalib = makeEntry("Finance", "calibrated", { agentName: "Beta Finance" });
+    const alphaFinanceOver = makeEntry("Finance", "overconfident", { agentName: "Alpha Over" });
+    const alphaFinanceNone = makeEntry("Finance", null, { agentName: "Alpha No Label" });
+
+    _setLeaderboardCacheForTesting([
+      alphaFinanceCalib,
+      alphaHealthCalib,
+      betaFinanceCalib,
+      alphaFinanceOver,
+      alphaFinanceNone,
+    ]);
+
+    const result = await getLeaderboard({
+      category: "Finance",
+      calibrationFilter: "calibrated",
+      search: "alpha",
+    });
+
+    expect(result.entries).toHaveLength(1);
+    expect(result.entries[0].walletAddress).toBe(alphaFinanceCalib.walletAddress);
+    expect(result.total).toBe(1);
+  });
+
+  it("all three: returns multiple entries when several satisfy all predicates", async () => {
+    const a = makeEntry("Finance", "calibrated", { agentName: "Alpha One" });
+    const b = makeEntry("Finance", "calibrated", { agentName: "Alpha Two" });
+    const c = makeEntry("Finance", "calibrated", { agentName: "Beta Three" });      // name mismatch
+    const d = makeEntry("Healthcare", "calibrated", { agentName: "Alpha Four" });  // category mismatch
+    const e = makeEntry("Finance", "overconfident", { agentName: "Alpha Five" }); // label mismatch
+
+    _setLeaderboardCacheForTesting([a, b, c, d, e]);
+
+    const result = await getLeaderboard({
+      category: "Finance",
+      calibrationFilter: "calibrated",
+      search: "alpha",
+    });
+
+    expect(result.entries).toHaveLength(2);
+    const wallets = result.entries.map((en) => en.walletAddress);
+    expect(wallets).toContain(a.walletAddress);
+    expect(wallets).toContain(b.walletAddress);
+  });
+
+  it("search is case-insensitive when combined with other filters", async () => {
+    const entry = makeEntry("Finance", "calibrated", { agentName: "ALPHA UPPER" });
+
+    _setLeaderboardCacheForTesting([entry]);
+
+    const result = await getLeaderboard({
+      category: "Finance",
+      calibrationFilter: "calibrated",
+      search: "alpha upper",
+    });
+
+    expect(result.entries).toHaveLength(1);
+    expect(result.entries[0].walletAddress).toBe(entry.walletAddress);
+  });
+
+  it("search + calibratedOnly returns only entries matching name that also have any non-null label", async () => {
+    const alphaCalib = makeEntry("Finance", "calibrated", { agentName: "Alpha A" });
+    const alphaOver = makeEntry("Finance", "overconfident", { agentName: "Alpha B" });
+    const alphaNone = makeEntry("Finance", null, { agentName: "Alpha C" });
+    const betaCalib = makeEntry("Finance", "calibrated", { agentName: "Beta D" });
+
+    _setLeaderboardCacheForTesting([alphaCalib, alphaOver, alphaNone, betaCalib]);
+
+    const result = await getLeaderboard({
+      calibratedOnly: true,
+      search: "alpha",
+    });
+
+    expect(result.entries).toHaveLength(2);
+    const wallets = result.entries.map((en) => en.walletAddress);
+    expect(wallets).toContain(alphaCalib.walletAddress);
+    expect(wallets).toContain(alphaOver.walletAddress);
+    expect(wallets).not.toContain(alphaNone.walletAddress);
+    expect(wallets).not.toContain(betaCalib.walletAddress);
+  });
+});
+
+// ─── 4. Edge cases ────────────────────────────────────────────────────────────
 
 describe("combined filter edge cases", () => {
   it("calibrationFilter takes precedence over calibratedOnly even when category is also set", async () => {
