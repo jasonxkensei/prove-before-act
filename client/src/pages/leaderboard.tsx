@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatDistanceToNow } from "date-fns";
+import { SHORTLIST_KEY, readShortlist, writeShortlist, clearShortlist } from "@/lib/compare-shortlist";
 
 interface LeaderboardEntry {
   walletAddress: string;
@@ -200,17 +201,7 @@ export default function Leaderboard() {
     return isNaN(p) || p < 1 ? 1 : p;
   });
   const limit = 50;
-  const SHORTLIST_KEY = "xproof_compare_shortlist";
-  const [selectedWallets, setSelectedWallets] = useState<Set<string>>(() => {
-    try {
-      const raw = sessionStorage.getItem("xproof_compare_shortlist");
-      if (raw) {
-        const arr = JSON.parse(raw);
-        if (Array.isArray(arr)) return new Set(arr as string[]);
-      }
-    } catch {}
-    return new Set();
-  });
+  const [selectedWallets, setSelectedWallets] = useState<Set<string>>(() => readShortlist());
 
   const debouncedSearch = useDebounce(search, 300);
 
@@ -236,9 +227,7 @@ export default function Leaderboard() {
   }, []);
 
   useEffect(() => {
-    try {
-      sessionStorage.setItem(SHORTLIST_KEY, JSON.stringify(Array.from(selectedWallets)));
-    } catch {}
+    writeShortlist(selectedWallets);
   }, [selectedWallets]);
 
   const { data, isLoading } = useQuery<LeaderboardResponse>({
@@ -264,7 +253,7 @@ export default function Leaderboard() {
 
   const handleCompare = () => {
     const wallets = Array.from(selectedWallets).join(",");
-    try { sessionStorage.removeItem(SHORTLIST_KEY); } catch {}
+    clearShortlist();
     navigate(`/compare?wallets=${wallets}`);
   };
 
@@ -686,7 +675,7 @@ export default function Leaderboard() {
               data-testid="button-clear-compare"
               variant="ghost"
               size="sm"
-              onClick={() => { try { sessionStorage.removeItem(SHORTLIST_KEY); } catch {} setSelectedWallets(new Set()); }}
+              onClick={() => { clearShortlist(); setSelectedWallets(new Set()); }}
             >
               Clear
             </Button>
