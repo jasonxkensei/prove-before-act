@@ -142,7 +142,95 @@ describe("previous window uses only the 31st gap when there are exactly 31 outco
   });
 });
 
-// ── 5. Previous window grows correctly beyond 31 ──────────────────────────────
+// ── 5. Extreme gap values at the 31st outcome ─────────────────────────────────
+
+describe("extreme gap values at the 31st outcome", () => {
+  it("direction is improving and delta is coherent when 31st gap is +1.0 (maximum overconfidence)", () => {
+    // recent (first 30): small positive gap → well-calibrated recently
+    // 31st gap: +1.0 → worst-case overconfidence in the past
+    const gaps = split(30, 0.05, 1, 1.0);
+    const trend = computeCalibrationTrend(gaps);
+    expect(trend).not.toBeNull();
+    expect(trend?.direction).toBe("improving");
+    expect(trend?.previous_mean_gap).toBe(1.0);
+    expect(trend?.recent_mean_gap).toBe(0.05);
+    expect(trend?.delta).toBe(-0.95);
+  });
+
+  it("direction is improving and delta is coherent when 31st gap is -1.0 (maximum underconfidence)", () => {
+    // recent (first 30): small positive gap
+    // 31st gap: -1.0 → worst-case underconfidence in the past
+    // |recentAbs|=0.05 < |-1.0|-0.01=0.99 → improving
+    const gaps = split(30, 0.05, 1, -1.0);
+    const trend = computeCalibrationTrend(gaps);
+    expect(trend).not.toBeNull();
+    expect(trend?.direction).toBe("improving");
+    expect(trend?.previous_mean_gap).toBe(-1.0);
+    expect(trend?.recent_mean_gap).toBe(0.05);
+    expect(trend?.delta).toBe(1.05);
+  });
+
+  it("direction is worsening and delta is coherent when 31st gap is +1.0 and recent is 0.0", () => {
+    // recent: perfectly calibrated; 31st is also +1.0 but now recent is worse
+    // This case: recent=1.0, previous=0.05 → worsening
+    const gaps = split(30, 1.0, 1, 0.05);
+    const trend = computeCalibrationTrend(gaps);
+    expect(trend).not.toBeNull();
+    expect(trend?.direction).toBe("worsening");
+    expect(trend?.recent_mean_gap).toBe(1.0);
+    expect(trend?.previous_mean_gap).toBe(0.05);
+    expect(trend?.delta).toBe(0.95);
+  });
+
+  it("direction is stable when both windows have extreme equal values (+1.0)", () => {
+    const gaps = uniform(31, 1.0);
+    const trend = computeCalibrationTrend(gaps);
+    expect(trend).not.toBeNull();
+    expect(trend?.direction).toBe("stable");
+    expect(trend?.delta).toBe(0);
+  });
+
+  it("direction is stable when both windows have extreme equal values (-1.0)", () => {
+    const gaps = uniform(31, -1.0);
+    const trend = computeCalibrationTrend(gaps);
+    expect(trend).not.toBeNull();
+    expect(trend?.direction).toBe("stable");
+    expect(trend?.delta).toBe(0);
+  });
+});
+
+// ── 6. NaN gap values are handled gracefully ──────────────────────────────────
+
+describe("NaN gap values are handled gracefully", () => {
+  it("returns null when all gaps are NaN (never throws)", () => {
+    expect(() => computeCalibrationTrend(Array(31).fill(NaN))).not.toThrow();
+    expect(computeCalibrationTrend(Array(31).fill(NaN))).toBeNull();
+  });
+
+  it("returns null when the array has 31 entries but the 31st is NaN (leaving only 30 clean gaps)", () => {
+    const gaps = [...uniform(30, 0.1), NaN];
+    expect(() => computeCalibrationTrend(gaps)).not.toThrow();
+    expect(computeCalibrationTrend(gaps)).toBeNull();
+  });
+
+  it("returns a valid trend when NaN gaps are scattered but 31+ clean gaps remain", () => {
+    // 30 clean recent gaps + 1 NaN + 1 clean previous gap = 31 clean after filtering
+    const gaps = [...uniform(30, 0.1), NaN, 0.5];
+    expect(() => computeCalibrationTrend(gaps)).not.toThrow();
+    const trend = computeCalibrationTrend(gaps);
+    expect(trend).not.toBeNull();
+    expect(trend?.direction).toBe("improving");
+    expect(trend?.previous_mean_gap).toBe(0.5);
+  });
+
+  it("does not throw and returns null when the entire input is a mix of NaN and Infinity", () => {
+    const gaps = Array(31).fill(NaN).map((_, i) => (i % 2 === 0 ? NaN : Infinity));
+    expect(() => computeCalibrationTrend(gaps)).not.toThrow();
+    expect(computeCalibrationTrend(gaps)).toBeNull();
+  });
+});
+
+// ── 7. Previous window grows correctly beyond 31 ──────────────────────────────
 
 describe("previous window grows normally when there are more than 31 outcomes", () => {
   it("previous_mean_gap is the mean of all gaps beyond index 30 when total is 60", () => {

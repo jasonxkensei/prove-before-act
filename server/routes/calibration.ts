@@ -48,10 +48,11 @@ const TREND_RECENT_WINDOW = 30;
 const TREND_STABLE_THRESHOLD = 0.01;
 
 export function computeCalibrationTrend(gaps: number[]): CalibrationTrend | null {
-  if (gaps.length < TREND_RECENT_WINDOW + 1) return null;
+  const cleanGaps = gaps.filter((g) => Number.isFinite(g));
+  if (cleanGaps.length < TREND_RECENT_WINDOW + 1) return null;
 
-  const recentGaps = gaps.slice(0, TREND_RECENT_WINDOW);
-  const previousGaps = gaps.slice(TREND_RECENT_WINDOW);
+  const recentGaps = cleanGaps.slice(0, TREND_RECENT_WINDOW);
+  const previousGaps = cleanGaps.slice(TREND_RECENT_WINDOW);
   const recentMean = recentGaps.reduce((s, g) => s + g, 0) / recentGaps.length;
   const previousMean = previousGaps.reduce((s, g) => s + g, 0) / previousGaps.length;
   const recentAbs = Math.abs(recentMean);
