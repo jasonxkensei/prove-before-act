@@ -21,8 +21,9 @@
  *   2. csvAnonStore              (namespace "pub_csv")
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { pool } from "../server/db";
+import { logger } from "../server/logger";
 import { eligibleProofsIpAnonStore, csvAnonStore } from "../server/reliability";
 
 // A deliberately unusual IP that will never appear in real traffic or other
@@ -115,6 +116,155 @@ describe("PgRateLimitStore.decrement — eligibleProofsIpAnonStore", () => {
     const afterDecrements = await readCount(NS, UNIT_TEST_IP);
     // A no-op decrement leaves count at 3; a working decrement brings it to 0.
     expect(afterDecrements).toBe(0);
+  });
+});
+
+// ── DB-failure resilience ─────────────────────────────────────────────────────
+//
+// These tests confirm that when the pool throws during a decrement call the
+// store's catch block absorbs the error and the awaited call resolves without
+// rejecting.  The surrounding handlers (eligible-proofs, CSV export) therefore
+// never see the exception and cannot propagate a 500.
+
+describe("PgRateLimitStore.decrement — DB unavailable (eligibleProofsIpAnonStore)", () => {
+  it("resolves without throwing when pool.query rejects", async () => {
+    const poolSpy = vi.spyOn(pool, "query").mockRejectedValueOnce(
+      new Error("simulated DB outage"),
+    );
+    try {
+      await expect(
+        eligibleProofsIpAnonStore.decrement(UNIT_TEST_IP),
+      ).resolves.toBeUndefined();
+    } finally {
+      poolSpy.mockRestore();
+    }
+  });
+
+  it("emits a logger.warn with component and error fields when pool.query rejects", async () => {
+    const poolSpy = vi.spyOn(pool, "query").mockRejectedValueOnce(
+      new Error("simulated DB outage for warn check"),
+    );
+    const warnSpy = vi.spyOn(logger, "warn");
+    try {
+      await eligibleProofsIpAnonStore.decrement(UNIT_TEST_IP);
+      const call = warnSpy.mock.calls.find(
+        ([, meta]) => (meta as Record<string, unknown>)?.component === "pgRateLimit",
+      );
+      expect(call).toBeDefined();
+      const meta = call![1] as Record<string, unknown>;
+      expect(meta.component).toBe("pgRateLimit");
+      expect(typeof meta.error).toBe("string");
+      expect(meta.error as string).toContain("simulated DB outage for warn check");
+    } finally {
+      poolSpy.mockRestore();
+      warnSpy.mockRestore();
+    }
+  });
+
+  it("does not propagate an error to the caller when pool.query throws synchronously", async () => {
+    const poolSpy = vi.spyOn(pool, "query").mockImplementationOnce(() => {
+      throw new Error("simulated sync DB throw");
+    });
+    try {
+      await expect(
+        eligibleProofsIpAnonStore.decrement(UNIT_TEST_IP),
+      ).resolves.toBeUndefined();
+    } finally {
+      poolSpy.mockRestore();
+    }
+  });
+
+  it("handler-continuation: code after await decrement() still executes when pool.query fails", async () => {
+    // Mirrors the eligible-proofs handler pattern:
+    //   await eligibleProofsIpAnonStore.decrement(ip);
+    //   // … fetch proofs and return 200 …
+    // If decrement() propagated the error, handlerCompleted would stay false.
+    const poolSpy = vi.spyOn(pool, "query").mockRejectedValueOnce(
+      new Error("simulated DB outage"),
+    );
+    let handlerCompleted = false;
+    let caughtError: unknown;
+    try {
+      await eligibleProofsIpAnonStore.decrement(UNIT_TEST_IP);
+      handlerCompleted = true;
+    } catch (err) {
+      caughtError = err;
+    } finally {
+      poolSpy.mockRestore();
+    }
+    expect(handlerCompleted).toBe(true);
+    expect(caughtError).toBeUndefined();
+  });
+});
+
+describe("PgRateLimitStore.decrement — DB unavailable (csvAnonStore)", () => {
+  it("resolves without throwing when pool.query rejects", async () => {
+    const poolSpy = vi.spyOn(pool, "query").mockRejectedValueOnce(
+      new Error("simulated DB outage"),
+    );
+    try {
+      await expect(
+        csvAnonStore.decrement(UNIT_TEST_IP),
+      ).resolves.toBeUndefined();
+    } finally {
+      poolSpy.mockRestore();
+    }
+  });
+
+  it("emits a logger.warn with component and error fields when pool.query rejects", async () => {
+    const poolSpy = vi.spyOn(pool, "query").mockRejectedValueOnce(
+      new Error("simulated DB outage for warn check"),
+    );
+    const warnSpy = vi.spyOn(logger, "warn");
+    try {
+      await csvAnonStore.decrement(UNIT_TEST_IP);
+      const call = warnSpy.mock.calls.find(
+        ([, meta]) => (meta as Record<string, unknown>)?.component === "pgRateLimit",
+      );
+      expect(call).toBeDefined();
+      const meta = call![1] as Record<string, unknown>;
+      expect(meta.component).toBe("pgRateLimit");
+      expect(typeof meta.error).toBe("string");
+      expect(meta.error as string).toContain("simulated DB outage for warn check");
+    } finally {
+      poolSpy.mockRestore();
+      warnSpy.mockRestore();
+    }
+  });
+
+  it("does not propagate an error to the caller when pool.query throws synchronously", async () => {
+    const poolSpy = vi.spyOn(pool, "query").mockImplementationOnce(() => {
+      throw new Error("simulated sync DB throw");
+    });
+    try {
+      await expect(
+        csvAnonStore.decrement(UNIT_TEST_IP),
+      ).resolves.toBeUndefined();
+    } finally {
+      poolSpy.mockRestore();
+    }
+  });
+
+  it("handler-continuation: code after await decrement() still executes when pool.query fails", async () => {
+    // Mirrors the CSV-export handler pattern:
+    //   await csvAnonStore.decrement(ip);
+    //   // … apply owner rate limit and stream CSV …
+    // If decrement() propagated the error, handlerCompleted would stay false.
+    const poolSpy = vi.spyOn(pool, "query").mockRejectedValueOnce(
+      new Error("simulated DB outage"),
+    );
+    let handlerCompleted = false;
+    let caughtError: unknown;
+    try {
+      await csvAnonStore.decrement(UNIT_TEST_IP);
+      handlerCompleted = true;
+    } catch (err) {
+      caughtError = err;
+    } finally {
+      poolSpy.mockRestore();
+    }
+    expect(handlerCompleted).toBe(true);
+    expect(caughtError).toBeUndefined();
   });
 });
 

@@ -194,8 +194,12 @@ export class PgRateLimitStore {
         `UPDATE rate_limit_counters SET count = GREATEST(0, count - 1) WHERE bucket = $1`,
         [bucket],
       );
-    } catch {
-      // non-fatal
+    } catch (err) {
+      logger.warn("PgRateLimitStore.decrement: DB error, refund lost", {
+        component: "pgRateLimit",
+        namespace: this.namespace,
+        error: String(err),
+      });
     }
   }
 
