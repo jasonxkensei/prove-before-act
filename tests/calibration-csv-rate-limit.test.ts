@@ -136,7 +136,82 @@ describe("GET /api/agent/calibration/:agentId/export.csv", () => {
     );
   });
 
-  // ── 2. Unauthenticated callers — bounded at the 5 req/min IP cap ────────────
+  // ── 2. Owner-tier limiter fires on request 31 ──────────────────────────────
+  describe("Owner-tier rate limit — 30/min per API key (Layer 2)", () => {
+    it(
+      "requests 1–30 (authenticated owner) all return 200 text/csv; request 31 returns 429 from the owner-tier limiter",
+      async () => {
+        // Wipe owner-tier and IP-tier counters immediately before sending
+        // requests — not in beforeAll — so the wipe runs after the IP-token-
+        // refund describe block has already consumed and committed its 7 owner-
+        // tier increments.  Moving the wipe inside the test body guarantees
+        // sequential ordering relative to sibling describe-block tests.
+        //
+        // Use the broad pub_csv_owner:% pattern to catch all possible owner-
+        // key formats (UUID, IP, wallet address) — the owner bucket key depends
+        // on which of apiKey.id / sessionWallet / clientIp resolves first.
+        await pool.query(
+          `DELETE FROM rate_limit_counters WHERE bucket LIKE 'pub_csv_owner:%'`,
+        );
+
+        const url     = `${BASE_URL}/api/agent/calibration/${csvTestUserId}/export.csv`;
+        const headers = { Authorization: `Bearer ${CSV_TEST_RAW_KEY}` };
+
+        // ── Within the owner budget: first 30 requests ────────────────────────
+        for (let i = 0; i < 30; i++) {
+          const res = await fetch(url, { headers });
+          expect(
+            res.status,
+            `request ${i + 1}: owner tier must allow up to ${30} requests per window`,
+          ).toBe(200);
+          const contentType = res.headers.get("content-type") ?? "";
+          expect(
+            contentType,
+            `request ${i + 1}: response must be CSV, not a JSON error`,
+          ).toContain("text/csv");
+          // The owner-tier handler sets X-RateLimit-Limit on every 200 response.
+          expect(
+            res.headers.get("x-ratelimit-limit"),
+            `request ${i + 1}: X-RateLimit-Limit must reflect the owner cap (${30})`,
+          ).toBe("30");
+          await res.text();
+        }
+
+        // ── Owner-tier limit: the 31st request must be blocked ────────────────
+        const limited     = await fetch(url, { headers });
+        const limitedBody = await limited.json() as Record<string, unknown>;
+
+        expect(limited.status).toBe(429);
+        expect(limitedBody.error).toBe("TOO_MANY_REQUESTS");
+
+        // Two structural proofs that this 429 originates from the owner-tier
+        // pgCheckRateLimit block in calibration.ts and NOT from the IP-cap
+        // middleware (calibrationCsvExportRateLimiter):
+        //
+        // 1. The 30 preceding 200 responses each carried X-RateLimit-Limit: 30
+        //    (set by the owner-tier handler at lines 674-676 of calibration.ts).
+        //    This header is ONLY set by the owner-tier path; the IP-cap
+        //    middleware does not set it.  Because requests 1-30 all returned
+        //    200 (exceeding the 5/min IP cap), the IP-cap middleware was
+        //    successfully bypassed for every one — proving the refund mechanism
+        //    is active.  At request 31 the owner budget is exhausted.
+        //
+        // 2. The owner-tier 429 carries Retry-After (set at line 671 of
+        //    calibration.ts).  The IP-tier middleware may also set Retry-After
+        //    via express-rate-limit's standardHeaders, but the combination of
+        //    30 successful owner-tier responses followed by a 429 makes the
+        //    source unambiguous.
+        expect(
+          limited.headers.get("retry-after"),
+          "owner-tier 429 must carry a Retry-After header (set at calibration.ts:671)",
+        ).not.toBeNull();
+      },
+      // 31 sequential fetches; allow 60 s to complete in slow CI environments.
+      60_000,
+    );
+  });
+
+  // ── 3. Unauthenticated callers — bounded at the 5 req/min IP cap ────────────
   describe("IP pre-check fires for unauthenticated callers — max 5 req/min", () => {
     beforeAll(async () => {
       // Wipe all IP-tier counters so this test starts with a clean window
