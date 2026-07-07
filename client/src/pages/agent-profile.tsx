@@ -1343,6 +1343,8 @@ export default function AgentProfilePage() {
       return r.json();
     }),
     enabled: !!wallet,
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: true,
   });
 
   function copyWallet() {
