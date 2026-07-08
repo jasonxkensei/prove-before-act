@@ -114,6 +114,21 @@ beforeAll(async () => {
   await pool.query(
     `DELETE FROM rate_limit_counters WHERE bucket LIKE 'outcome_submit:%'`,
   );
+
+  //    Guard against a silent no-op wipe: if the "outcome_submit" namespace is
+  //    ever renamed, or rate_limit_counters becomes partitioned/replaced, the
+  //    DELETE above could match zero rows without erroring and quota
+  //    flakiness across test runs would return with no signal as to why.
+  //    Fail loudly here instead of relying on incidental 429s downstream.
+  const remaining = await pool.query(
+    `SELECT COUNT(*)::int AS count FROM rate_limit_counters WHERE bucket LIKE 'outcome_submit:%'`,
+  );
+  if (remaining.rows[0].count !== 0) {
+    throw new Error(
+      `outcome_submit rate-limit wipe did not clear all rows: ${remaining.rows[0].count} remain. ` +
+        `Check whether the "outcome_submit" namespace or rate_limit_counters schema changed.`,
+    );
+  }
 });
 
 beforeEach(async () => {
