@@ -214,3 +214,54 @@ describe("GET /api/agent/calibration/:agentId/eligible-proofs — API shape cont
     10_000,
   );
 });
+
+describe("GET /api/agent/calibration/:agentId/eligible-proofs — excludes resolved proofs", () => {
+  afterAll(async () => {
+    // Clean up the outcome so it doesn't leak into other test runs.
+    await pool.query(`DELETE FROM agent_outcomes WHERE certification_id = $1`, [certAId]);
+  });
+
+  it(
+    "a certification disappears from the eligible list once an outcome is submitted for it",
+    async () => {
+      const url = `${BASE_URL}/api/agent/calibration/${epTestUserId}/eligible-proofs`;
+      const authHeaders = { Authorization: `Bearer ${EP_TEST_RAW_KEY}` };
+
+      // Sanity check: cert A is eligible before any outcome exists.
+      const before = await fetch(url, { headers: authHeaders });
+      expect(before.status).toBe(200);
+      const beforeBody = await before.json() as { proofs: Array<Record<string, unknown>> };
+      expect(
+        beforeBody.proofs.some((p) => p.id === certAId),
+        "cert A must appear in the eligible list before an outcome is submitted",
+      ).toBe(true);
+
+      // Insert an agent_outcomes row for cert A directly (mirrors what the
+      // outcome-submit endpoint would persist) — this is the LEFT JOIN ...
+      // IS NULL exclusion condition the endpoint relies on.
+      await pool.query(
+        `INSERT INTO agent_outcomes
+           (certification_id, user_id, anchored_confidence, outcome_score, confidence_gap, visibility)
+         VALUES ($1, $2, 0.85, 0.80, 0.05, 'public')
+         ON CONFLICT (certification_id) DO NOTHING`,
+        [certAId, epTestUserId],
+      );
+
+      // Re-fetch: cert A must now be excluded, while cert B (still unresolved)
+      // remains present.
+      const after = await fetch(url, { headers: authHeaders });
+      expect(after.status).toBe(200);
+      const afterBody = await after.json() as { proofs: Array<Record<string, unknown>> };
+
+      expect(
+        afterBody.proofs.some((p) => p.id === certAId),
+        "cert A must no longer appear in the eligible list after an outcome is submitted for it",
+      ).toBe(false);
+      expect(
+        afterBody.proofs.some((p) => p.id === certBId),
+        "cert B must still appear in the eligible list — it has no linked outcome",
+      ).toBe(true);
+    },
+    15_000,
+  );
+});
