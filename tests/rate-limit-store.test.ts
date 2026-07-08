@@ -25,6 +25,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { pool } from "../server/db";
 import { logger } from "../server/logger";
 import { eligibleProofsIpAnonStore, csvAnonStore } from "../server/reliability";
+import { pgCheckRateLimit } from "../server/pgRateLimit";
 
 // A deliberately unusual IP that will never appear in real traffic or other
 // test fixtures — avoids any cross-test bucket collision.
@@ -609,5 +610,126 @@ describe("PgRateLimitStore.resetKey — DB unavailable (eligibleProofsIpAnonStor
     expect(await readCount(NS, UNIT_TEST_IP)).toBe(2);
 
     await deleteBuckets(NS, UNIT_TEST_IP);
+  });
+});
+
+// ── pgCheckRateLimit() sustained DB outage ─────────────────────────────────
+//
+// pgCheckRateLimit() is a separate standalone helper (used directly by
+// server/routes/calibration.ts, server/routes/agents.ts, server/mcp.ts, and
+// server/routes/helpers.ts) with its own try/catch fail-open block — it does
+// NOT go through PgRateLimitStore/express-rate-limit at all. It has the same
+// "fail open" design intent as increment() above, but until now nothing
+// exercised it across several consecutive failures, and nothing asserted
+// what `remaining`/`resetAt` it reports while the DB is down.
+//
+// Accepted risk (documented here, consistent with the increment() block
+// above): during a sustained outage, every pgCheckRateLimit() call reports
+// `allowed: true` no matter how many consecutive calls fail — rate limiting
+// is fully unenforced for the duration of the outage, with no compensating
+// catch-up once the DB recovers. `remaining` is deliberately reported as the
+// full `limit` (not decremented) during an outage, since no real count is
+// available; callers must not treat `remaining` as authoritative while
+// failing open. `resetAt` during an outage is computed locally from
+// `Date.now()` and the window size — not read from any row — so it stays
+// a sane, monotonically-sensible value even though it does not reflect a
+// real persisted bucket.
+describe("pgCheckRateLimit — sustained DB outage then recovery", () => {
+  const NS = "unit_test_check_rl";
+  const KEY = "sustained-outage-key";
+  const LIMIT = 5;
+  const WINDOW_MS = 60_000;
+
+  beforeAll(async () => {
+    await ensureTable();
+    await deleteBuckets(NS, KEY);
+  });
+
+  afterAll(async () => {
+    await deleteBuckets(NS, KEY);
+  });
+
+  it("stays allowed: true with remaining === limit across several consecutive DB failures, and reports a sane resetAt", async () => {
+    const OUTAGE_CALLS = 5;
+    const poolSpy = vi
+      .spyOn(pool, "query")
+      .mockRejectedValue(new Error("simulated sustained DB outage (pgCheckRateLimit)"));
+
+    const before = Date.now();
+    const outageResults: { allowed: boolean; remaining: number; resetAt: number }[] = [];
+    for (let i = 0; i < OUTAGE_CALLS; i++) {
+      outageResults.push(await pgCheckRateLimit(NS, KEY, LIMIT, WINDOW_MS));
+    }
+    const after = Date.now();
+    poolSpy.mockRestore();
+
+    // Every call during the outage must be allowed — no matter how many
+    // consecutive calls fail, none of them may ever block a caller.
+    for (const result of outageResults) {
+      expect(result.allowed).toBe(true);
+      expect(result.remaining).toBe(LIMIT);
+      // resetAt must fall on a sane window boundary within [now, now + windowMs]
+      // of when the call was made — never in the past, never further out
+      // than one full window.
+      expect(result.resetAt).toBeGreaterThanOrEqual(before);
+      expect(result.resetAt).toBeLessThanOrEqual(after + WINDOW_MS);
+    }
+
+    // No row was ever written for this key while the DB was "down" — there
+    // is nothing to catch up on once it recovers.
+    const duringOutage = await readCount(NS, KEY);
+    expect(duringOutage).toBeNull();
+
+    // DB recovers: the next call hits the real table and starts counting at
+    // 1, not OUTAGE_CALLS + 1 — the failed calls left no trace.
+    const recovered = await pgCheckRateLimit(NS, KEY, LIMIT, WINDOW_MS);
+    expect(recovered.allowed).toBe(true);
+    expect(recovered.remaining).toBe(LIMIT - 1);
+
+    const afterRecovery = await readCount(NS, KEY);
+    expect(afterRecovery).toBe(1);
+  });
+
+  it("logs a warn with component 'pgRateLimit' for every failed call during the outage", async () => {
+    await deleteBuckets(NS, KEY);
+    const OUTAGE_CALLS = 3;
+    const poolSpy = vi
+      .spyOn(pool, "query")
+      .mockRejectedValue(new Error("simulated sustained DB outage for logging check (pgCheckRateLimit)"));
+    const warnSpy = vi.spyOn(logger, "warn");
+
+    for (let i = 0; i < OUTAGE_CALLS; i++) {
+      await pgCheckRateLimit(NS, KEY, LIMIT, WINDOW_MS);
+    }
+
+    const matchingWarnCalls = warnSpy.mock.calls.filter(
+      ([, meta]) => (meta as Record<string, unknown>)?.component === "pgRateLimit"
+        && (meta as Record<string, unknown>)?.namespace === NS,
+    );
+    expect(matchingWarnCalls.length).toBe(OUTAGE_CALLS);
+
+    poolSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
+
+  it("does not falsely block once the limit would normally be exceeded, if every intervening call failed open", async () => {
+    // Simulate: LIMIT is 5, but 10 consecutive requests arrive during an
+    // outage. Because every failure returns allowed:true and writes no row,
+    // none of the 10 are blocked — the limit is not retroactively enforced.
+    await deleteBuckets(NS, KEY);
+    const poolSpy = vi
+      .spyOn(pool, "query")
+      .mockRejectedValue(new Error("simulated sustained outage exceeding nominal limit"));
+
+    const results = [];
+    for (let i = 0; i < LIMIT * 2; i++) {
+      results.push(await pgCheckRateLimit(NS, KEY, LIMIT, WINDOW_MS));
+    }
+    poolSpy.mockRestore();
+
+    expect(results.every((r) => r.allowed === true)).toBe(true);
+    expect(await readCount(NS, KEY)).toBeNull();
+
+    await deleteBuckets(NS, KEY);
   });
 });
