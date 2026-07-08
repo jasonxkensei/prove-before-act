@@ -94,3 +94,15 @@ npx playwright install chromium
   dev server workflow after adding a new server route before running the
   test against it — an already-running dev process won't pick up new
   Express routes without a restart.
+- The individual public agent page (`/agent/:wallet`, backed by
+  `/api/agents/:wallet`) has its own cache/fallback chain, separate from the
+  leaderboard's `leaderboardCache`: an in-memory per-wallet `trustCache`
+  falling back to the `trust_score_snapshots` table, both populated only by
+  the same `runTrustRefreshCycle` background worker. See
+  `agent-profile-trust-refresh.spec.ts`: it seeds a brand-new public agent
+  with a confirmed certification and no snapshot row, confirms `/agent/:wallet`
+  shows "Profile not found" (a real 404, not a loading state), calls
+  `POST /api/admin/trust/refresh`, then reloads and confirms the profile,
+  trust score, and cert count now render. When a feature has multiple public
+  read paths backed by different caches, don't assume proving one path's
+  refresh behavior covers the others — check each cache's population source.
