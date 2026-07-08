@@ -49,6 +49,7 @@ interface LeaderboardResponse {
   page: number;
   limit: number;
   totalPages: number;
+  updatedAt: string | null;
 }
 
 const TRUST_LEVEL_STYLES: Record<string, { badge: string; label: string }> = {
@@ -293,6 +294,11 @@ export default function Leaderboard() {
             <p className="max-w-xl text-muted-foreground">
               Agents who anchor their work on-chain. Every entry is backed by verifiable blockchain proofs — no claims, only evidence.
             </p>
+            {data?.updatedAt && (
+              <p className="mt-2 text-xs text-muted-foreground" data-testid="text-leaderboard-updated-at">
+                Last updated {formatDistanceToNow(new Date(data.updatedAt), { addSuffix: true })} · refreshes automatically every 5 minutes
+              </p>
+            )}
           </div>
           <Button size="sm" data-testid="button-join-leaderboard" onClick={() => setShowRegister(true)}>
             <UserPlus className="mr-2 h-4 w-4" />

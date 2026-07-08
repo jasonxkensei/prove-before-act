@@ -415,6 +415,14 @@ export interface LeaderboardResult {
   page: number;
   limit: number;
   totalPages: number;
+  // ISO timestamp of when the underlying leaderboard snapshot was actually
+  // computed by the scheduled background refresh cycle (NOT when this
+  // particular request was served). Lets the public UI show "Last updated
+  // X minutes ago" so the 5-minute refresh cadence reads as intentional
+  // caching rather than a stale/broken page. Null only if no snapshot has
+  // ever been computed yet (e.g. brand-new deployment before the first
+  // scheduled cycle runs).
+  updatedAt: string | null;
 }
 
 // ─── Leaderboard in-memory cache ─────────────────────────────────────────────
@@ -424,7 +432,7 @@ export interface LeaderboardResult {
 // refresh worker (runLeaderboardRefreshCycle).  Public reads go:
 //   in-memory cache → leaderboard_snapshot table → empty list.
 //
-let leaderboardCache: { allEntries: LeaderboardEntry[]; cachedAt: number } | null = null;
+let leaderboardCache: { allEntries: LeaderboardEntry[]; cachedAt: number; computedAt: number } | null = null;
 
 async function computeAllLeaderboardEntries(): Promise<LeaderboardEntry[]> {
   const cutoff30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -512,7 +520,7 @@ async function computeAllLeaderboardEntries(): Promise<LeaderboardEntry[]> {
   entries.sort((a, b) => b.trustScore - a.trustScore);
   entries.forEach((e, i) => { e.rank = i + 1; });
 
-  leaderboardCache = { allEntries: entries, cachedAt: Date.now() };
+  leaderboardCache = { allEntries: entries, cachedAt: Date.now(), computedAt: Date.now() };
   return entries;
 }
 
@@ -619,6 +627,7 @@ export async function runLeaderboardRefreshCycle(): Promise<void> {
   const cycleStart = Date.now();
   try {
     const entries = await computeAllLeaderboardEntries();
+    const computedAt = Date.now();
     await pool.query(
       `INSERT INTO leaderboard_snapshot (id, entries, computed_at)
        VALUES (1, $1::jsonb, NOW())
@@ -627,7 +636,7 @@ export async function runLeaderboardRefreshCycle(): Promise<void> {
              computed_at = EXCLUDED.computed_at`,
       [JSON.stringify(entries)],
     );
-    leaderboardCache = { allEntries: entries, cachedAt: Date.now() };
+    leaderboardCache = { allEntries: entries, cachedAt: Date.now(), computedAt };
     logger.info("Leaderboard refresh cycle complete", {
       component: "trust-scheduler",
       entries: entries.length,
@@ -650,7 +659,12 @@ export async function warmCachesFromSnapshots(): Promise<void> {
       `SELECT entries, computed_at FROM leaderboard_snapshot WHERE id = 1`,
     );
     if (snap.rows.length > 0) {
-      leaderboardCache = { allEntries: snap.rows[0].entries, cachedAt: Date.now() };
+      const computedAt = new Date(snap.rows[0].computed_at).getTime();
+      leaderboardCache = {
+        allEntries: snap.rows[0].entries,
+        cachedAt: Date.now(),
+        computedAt: Number.isFinite(computedAt) ? computedAt : Date.now(),
+      };
       logger.info("Leaderboard cache warmed from snapshot", {
         component: "trust-scheduler",
         entries: snap.rows[0].entries.length,
@@ -697,11 +711,16 @@ export async function getLeaderboard(filters: LeaderboardFilters = {}): Promise<
     // Do a single bounded read from the precomputed snapshot table.
     // This NEVER calls computeAllLeaderboardEntries().
     try {
-      const snap = await pool.query<{ entries: LeaderboardEntry[] }>(
-        `SELECT entries FROM leaderboard_snapshot WHERE id = 1`,
+      const snap = await pool.query<{ entries: LeaderboardEntry[]; computed_at: string }>(
+        `SELECT entries, computed_at FROM leaderboard_snapshot WHERE id = 1`,
       );
       if (snap.rows.length > 0) {
-        leaderboardCache = { allEntries: snap.rows[0].entries, cachedAt: Date.now() };
+        const computedAt = new Date(snap.rows[0].computed_at).getTime();
+        leaderboardCache = {
+          allEntries: snap.rows[0].entries,
+          cachedAt: Date.now(),
+          computedAt: Number.isFinite(computedAt) ? computedAt : Date.now(),
+        };
         allEntries = leaderboardCache.allEntries;
       } else {
         // No snapshot yet — first scheduled refresh hasn't run.
@@ -762,7 +781,9 @@ export async function getLeaderboard(filters: LeaderboardFilters = {}): Promise<
   const start = (page - 1) * limit;
   const paged = entries.slice(start, start + limit);
 
-  return { entries: paged, total, page, limit, totalPages };
+  const updatedAt = leaderboardCache ? new Date(leaderboardCache.computedAt).toISOString() : null;
+
+  return { entries: paged, total, page, limit, totalPages, updatedAt };
 }
 
 // Thresholds match calibration.ts constants (no import to avoid circular dep)
@@ -1001,7 +1022,7 @@ export function generateTrustBadgeSvg(level: TrustLevel, score: number, attestat
 // in-memory cache without hitting the database.  Never call this in production
 // code paths.
 export function _setLeaderboardCacheForTesting(entries: LeaderboardEntry[]): void {
-  leaderboardCache = { allEntries: entries, cachedAt: Date.now() };
+  leaderboardCache = { allEntries: entries, cachedAt: Date.now(), computedAt: Date.now() };
 }
 
 function adjustColor(hex: string, amount: number): string {
