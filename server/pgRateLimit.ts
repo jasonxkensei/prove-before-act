@@ -210,8 +210,13 @@ export class PgRateLimitStore {
         `DELETE FROM rate_limit_counters WHERE bucket LIKE $1`,
         [`${this.namespace}:${key}:%`],
       );
-    } catch {
-      // non-fatal
+    } catch (err) {
+      logger.warn("PgRateLimitStore.resetKey: DB error, reset lost", {
+        component: "pgRateLimit",
+        namespace: this.namespace,
+        key_hash: crypto.createHash("sha256").update(key).digest("hex").slice(0, 8),
+        error: String(err),
+      });
     }
   }
 }

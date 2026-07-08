@@ -384,3 +384,137 @@ describe("PgRateLimitStore.decrement — csvAnonStore", () => {
     expect(afterDecrements).toBe(0);
   });
 });
+
+// ── PgRateLimitStore.resetKey ─────────────────────────────────────────────────
+//
+// resetKey() deletes all buckets for a key — e.g. after a plan upgrade or an
+// admin override that should immediately clear a caller's rate-limit state.
+// Unlike decrement(), it previously had a bare `catch {}` with no logging and
+// no test coverage at all. These tests confirm the happy path actually
+// deletes matching buckets, that a DB failure resolves without throwing
+// (matching decrement()'s resilience contract), and that the failure is now
+// observable via logger.warn.
+
+describe("PgRateLimitStore.resetKey — eligibleProofsIpAnonStore", () => {
+  const NS = "eligible_proofs_ip";
+
+  beforeAll(async () => {
+    await ensureTable();
+    await deleteBuckets(NS, UNIT_TEST_IP);
+  });
+
+  afterAll(async () => {
+    await deleteBuckets(NS, UNIT_TEST_IP);
+  });
+
+  it("deletes the matching bucket(s) on success", async () => {
+    await eligibleProofsIpAnonStore.increment(UNIT_TEST_IP);
+    await eligibleProofsIpAnonStore.increment(UNIT_TEST_IP);
+    const before = await readCount(NS, UNIT_TEST_IP);
+    expect(before).toBe(2);
+
+    await eligibleProofsIpAnonStore.resetKey(UNIT_TEST_IP);
+
+    const after = await readCount(NS, UNIT_TEST_IP);
+    // A no-op resetKey would leave the bucket row (and its count) in place.
+    // A working resetKey deletes the row entirely, so readCount finds nothing.
+    expect(after).toBeNull();
+  });
+
+  it("is a no-op (does not throw) when there is no existing bucket to delete", async () => {
+    await deleteBuckets(NS, UNIT_TEST_IP);
+    await expect(
+      eligibleProofsIpAnonStore.resetKey(UNIT_TEST_IP),
+    ).resolves.toBeUndefined();
+    const after = await readCount(NS, UNIT_TEST_IP);
+    expect(after).toBeNull();
+  });
+
+  it("a subsequent increment after resetKey starts a fresh count at 1", async () => {
+    await eligibleProofsIpAnonStore.increment(UNIT_TEST_IP);
+    await eligibleProofsIpAnonStore.increment(UNIT_TEST_IP);
+    await eligibleProofsIpAnonStore.increment(UNIT_TEST_IP);
+    expect(await readCount(NS, UNIT_TEST_IP)).toBe(3);
+
+    await eligibleProofsIpAnonStore.resetKey(UNIT_TEST_IP);
+
+    const { totalHits } = await eligibleProofsIpAnonStore.increment(UNIT_TEST_IP);
+    expect(totalHits).toBe(1);
+  });
+});
+
+describe("PgRateLimitStore.resetKey — DB unavailable (eligibleProofsIpAnonStore)", () => {
+  it("resolves without throwing when pool.query rejects", async () => {
+    const poolSpy = vi.spyOn(pool, "query").mockRejectedValueOnce(
+      new Error("simulated DB outage"),
+    );
+    try {
+      await expect(
+        eligibleProofsIpAnonStore.resetKey(UNIT_TEST_IP),
+      ).resolves.toBeUndefined();
+    } finally {
+      poolSpy.mockRestore();
+    }
+  });
+
+  it("does not propagate an error to the caller when pool.query throws synchronously", async () => {
+    const poolSpy = vi.spyOn(pool, "query").mockImplementationOnce(() => {
+      throw new Error("simulated sync DB throw");
+    });
+    try {
+      await expect(
+        eligibleProofsIpAnonStore.resetKey(UNIT_TEST_IP),
+      ).resolves.toBeUndefined();
+    } finally {
+      poolSpy.mockRestore();
+    }
+  });
+
+  it("emits a logger.warn with component and error fields when pool.query rejects", async () => {
+    const poolSpy = vi.spyOn(pool, "query").mockRejectedValueOnce(
+      new Error("simulated DB outage for resetKey warn check"),
+    );
+    const warnSpy = vi.spyOn(logger, "warn");
+    try {
+      await eligibleProofsIpAnonStore.resetKey(UNIT_TEST_IP);
+      const call = warnSpy.mock.calls.find(
+        ([msg, meta]) =>
+          typeof msg === "string" &&
+          msg.includes("resetKey") &&
+          (meta as Record<string, unknown>)?.component === "pgRateLimit",
+      );
+      expect(call).toBeDefined();
+      const meta = call![1] as Record<string, unknown>;
+      expect(meta.component).toBe("pgRateLimit");
+      expect(typeof meta.error).toBe("string");
+      expect(meta.error as string).toContain("simulated DB outage for resetKey warn check");
+    } finally {
+      poolSpy.mockRestore();
+      warnSpy.mockRestore();
+    }
+  });
+
+  it("does not leave the counter unexpectedly cleared when the DB call fails (orphaned counter is preserved, not silently wiped)", async () => {
+    const NS = "eligible_proofs_ip";
+    await deleteBuckets(NS, UNIT_TEST_IP);
+    await eligibleProofsIpAnonStore.increment(UNIT_TEST_IP);
+    await eligibleProofsIpAnonStore.increment(UNIT_TEST_IP);
+    expect(await readCount(NS, UNIT_TEST_IP)).toBe(2);
+
+    const poolSpy = vi.spyOn(pool, "query").mockRejectedValueOnce(
+      new Error("simulated DB outage during resetKey"),
+    );
+    await expect(
+      eligibleProofsIpAnonStore.resetKey(UNIT_TEST_IP),
+    ).resolves.toBeUndefined();
+    poolSpy.mockRestore();
+
+    // The DELETE never landed, so the counter row is still present with its
+    // original count — the caller's rate limit was NOT actually cleared, but
+    // the failure is now observable via the logger.warn above instead of
+    // silently pretending the reset succeeded.
+    expect(await readCount(NS, UNIT_TEST_IP)).toBe(2);
+
+    await deleteBuckets(NS, UNIT_TEST_IP);
+  });
+});
