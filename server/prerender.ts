@@ -478,114 +478,224 @@ function renderProofNotFound(baseUrl: string): string {
 
 async function renderAgentsPage(baseUrl: string): Promise<string> {
   const priceUsd = await getCertificationPriceUsd();
-  const title = "Agent Integrations — xproof";
-  const description = `xproof works everywhere agents work. MCP, x402, ACP, MX-8004, OpenClaw, GitHub Action. One proof layer, every protocol. $${priceUsd.toFixed(2)} per proof.`;
+  const title = "MCP + xProof — Prove Before Act for AI Agents";
+  const description = `xproof works everywhere agents work. MCP, x402, ACP, REST. Prove Before Act: anchor reasoning before execution, $${priceUsd.toFixed(2)} per proof, no account needed via x402.`;
 
   return `${commonHead(title, description, `${baseUrl}/agents`)}
 <body>
 <header>
   <nav>
-    <a href="${baseUrl}"><strong>xproof</strong></a>
+    <a href="${baseUrl}"><strong>xproof</strong></a> |
+    <a href="${baseUrl}/agent-context">Agent Context</a> |
+    <a href="${baseUrl}/leaderboard">Leaderboard</a>
   </nav>
 </header>
 
 <main>
-  <h1>xproof for AI Agents</h1>
-  <p>The deterministic, blockchain-backed proof-of-existence API designed for autonomous systems. No human interaction required.</p>
+  <h1>xproof for AI Agents — Prove Before Act</h1>
+  <p><strong>xproof is the accountability layer for autonomous agents.</strong> Instead of being a black box, your agent becomes transparent, auditable, and verifiable. Anchor your reasoning (WHY) + planned action (WHAT) on-chain <em>before</em> executing — then anchor the result after. Full 4W audit trail on MultiversX. $${priceUsd.toFixed(2)}/proof. No API key needed via x402.</p>
 
   <section>
-    <h2>What xproof guarantees</h2>
+    <h2>Why MCP + xProof?</h2>
     <ul>
-      <li>Immutable SHA-256 anchoring on MultiversX</li>
-      <li>Deterministic (same input = same output)</li>
-      <li>Verifiable without xproof (on-chain)</li>
-      <li>Non-custodial (files never leave client)</li>
-      <li>$${priceUsd.toFixed(2)} per certification in EGLD</li>
+      <li><strong>Native tool integration</strong> — Claude, Cursor, Codex, OpenClaw call <code>certify_file</code> or <code>audit_agent_session</code> directly, no custom code needed</li>
+      <li><strong>Prove Before Act enforced by the protocol</strong> — <code>audit_agent_session</code> blocks execution until a proof_id is returned</li>
+      <li><strong>x402 compatible</strong> — autonomous agents pay $${priceUsd.toFixed(2)}/proof via USDC on Base, no API key, no account, no human in the loop</li>
+      <li><strong>Immutable on-chain trail</strong> — SHA-256 hash anchored on MultiversX, verifiable without xproof</li>
+      <li><strong>Free trial</strong> — 10 free proofs via REST, no wallet: <code>POST ${baseUrl}/api/agent/register</code></li>
     </ul>
   </section>
 
   <section>
-    <h2>Simplest Integration: POST /api/proof</h2>
-    <p>One API call to certify a file. No checkout flow, no transaction management. Just send a hash and get a proof.</p>
-    <code>POST ${baseUrl}/api/proof</code>
-    <p>Request: { "file_hash": "sha256...", "filename": "document.pdf" }</p>
-    <p>Response: { "proof_id": "...", "verify_url": "...", "certificate_url": "...", "blockchain": "MultiversX" }</p>
-    <p>Authentication: Bearer token with pm_ prefix API key.</p>
+    <h2>Quick Start — MCP in 30 seconds</h2>
+
+    <h3>Step 1 — Add xproof to your MCP client</h3>
+    <pre><code>{
+  "mcpServers": {
+    "xproof": {
+      "url": "${baseUrl}/mcp",
+      "headers": { "Authorization": "Bearer pm_YOUR_KEY" }
+    }
+  }
+}</code></pre>
+    <p>Works with Claude Desktop, Cursor, Codex, OpenClaw. Get a free key (10 proofs): <code>POST ${baseUrl}/api/agent/register</code> with <code>{"agent_name":"my-agent"}</code>.</p>
+
+    <h3>Step 2 — List available tools</h3>
+    <pre><code>curl -X POST ${baseUrl}/mcp \\
+  -H "Content-Type: application/json" \\
+  -H "Accept: application/json, text/event-stream" \\
+  -H "Authorization: Bearer pm_YOUR_KEY" \\
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'</code></pre>
+
+    <h3>Step 3 — Certify before acting (Prove Before Act)</h3>
+    <pre><code>curl -X POST ${baseUrl}/mcp \\
+  -H "Content-Type: application/json" \\
+  -H "Accept: application/json, text/event-stream" \\
+  -H "Authorization: Bearer pm_YOUR_KEY" \\
+  -d '{
+    "jsonrpc": "2.0", "id": 2, "method": "tools/call",
+    "params": {
+      "name": "audit_agent_session",
+      "arguments": {
+        "who": "my-agent-v1",
+        "what": "BUY BTC 0.5",
+        "why": "RSI=38, below 40 threshold; allocation within 3% cap",
+        "session_id": "sess_001"
+      }
+    }
+  }'
+# → { "proof_id": "prf_...", "verify_url": "/proof/...", "status": "pending" }
+# → Execute your action ONLY after receiving proof_id</code></pre>
+    <p><strong>Critical:</strong> always include <code>Accept: application/json, text/event-stream</code> or the server returns "Not Acceptable".</p>
   </section>
 
   <section>
-    <h2>Batch Certification: POST /api/batch</h2>
-    <p>Certify up to 50 files in a single API call. Ideal for agents that generate multiple outputs.</p>
-    <code>POST ${baseUrl}/api/batch</code>
-    <p>Request: { "files": [{ "file_hash": "...", "filename": "..." }, ...], "author_name": "optional" }</p>
-    <p>Response: { "batch_id": "...", "total": N, "created": X, "results": [...] }</p>
-    <p>Authentication: Bearer token with pm_ prefix API key.</p>
+    <h2>End-to-end example — Certify a decision before acting</h2>
+    <p>Full Python example: anchor reasoning via MCP, execute only after proof is confirmed.</p>
+    <pre><code>import hashlib, json, requests
+
+MCP_URL = "${baseUrl}/mcp"
+API_KEY = "pm_YOUR_KEY"
+HEADERS = {
+    "Content-Type": "application/json",
+    "Accept": "application/json, text/event-stream",
+    "Authorization": f"Bearer {API_KEY}"
+}
+
+def certify_before_act(who: str, what: str, why: str, session_id: str) -> str:
+    """Prove Before Act — anchor reasoning via MCP, return proof_id. Block if anchoring fails."""
+    payload = {
+        "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+        "params": {
+            "name": "audit_agent_session",
+            "arguments": {"who": who, "what": what, "why": why, "session_id": session_id}
+        }
+    }
+    resp = requests.post(MCP_URL, headers=HEADERS, json=payload, timeout=15)
+    result = resp.json()
+    if "error" in result:
+        raise RuntimeError(f"Proof anchoring failed — action blocked: {result['error']['message']}")
+    content = result["result"]["content"][0]["text"]
+    data = json.loads(content)
+    return data["proof_id"]
+
+# Usage
+proof_id = certify_before_act(
+    who="trading-agent-v2",
+    what="BUY BTC 0.5",
+    why="RSI=38 (below 40 threshold); allocation=2.1% (below 3% cap)",
+    session_id="sess_001"
+)
+
+# Execute ONLY after proof_id returned
+execute_trade("BUY", "BTC", 0.5)
+print(f"Audit trail: {MCP_URL.replace('/mcp', '')}/proof/{proof_id}")</code></pre>
   </section>
 
   <section>
-    <h2>MCP Server (Model Context Protocol)</h2>
-    <p>Native MCP integration for Claude, GPT, Cursor, and any MCP-compatible agent.</p>
-    <code>POST ${baseUrl}/mcp</code>
-    <p>Transport: Streamable HTTP (JSON-RPC 2.0). Protocol version: 2025-03-26.</p>
-    <p>Tools: certify_file, verify_proof, get_proof, discover_services.</p>
-    <p>Authentication: Bearer token with pm_ prefix API key for certify_file. Other tools are public.</p>
+    <h2>Available MCP Tools</h2>
+    <table>
+      <thead><tr><th>Tool</th><th>Auth</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>audit_agent_session</code></td><td>API key</td><td>Anchor WHO + WHAT + WHY before execution — the Prove Before Act tool</td></tr>
+        <tr><td><code>certify_file</code></td><td>API key</td><td>Certify any SHA-256 hash on MultiversX</td></tr>
+        <tr><td><code>certify_with_confidence</code></td><td>API key</td><td>Staged certification with confidence score (initial → partial → pre-commitment → final)</td></tr>
+        <tr><td><code>verify_proof</code></td><td>none</td><td>Verify an existing certification by proof_id or file_hash</td></tr>
+        <tr><td><code>get_proof</code></td><td>none</td><td>Retrieve a proof in JSON or Markdown format</td></tr>
+        <tr><td><code>investigate_proof</code></td><td>API key or x402</td><td>Full 4W audit trail reconstruction for a proof</td></tr>
+        <tr><td><code>submit_outcome</code></td><td>API key</td><td>Record actual outcome against a confidence-anchored decision</td></tr>
+        <tr><td><code>get_calibration</code></td><td>none</td><td>Query an agent's calibration quality (bias, gap, variance)</td></tr>
+        <tr><td><code>check_attestations</code></td><td>none</td><td>Check third-party trust attestations for an agent wallet</td></tr>
+        <tr><td><code>discover_services</code></td><td>none</td><td>Discover services and pricing</td></tr>
+      </tbody>
+    </table>
   </section>
 
   <section>
-    <h2>ACP Flow - 3 API calls</h2>
-    <p>Agent Commerce Protocol for agents that manage their own transactions.</p>
+    <h2>REST API — Direct integration</h2>
+
+    <h3>POST /api/proof — Single certification</h3>
+    <p>One API call to certify a file hash. No checkout flow, no transaction management.</p>
+    <pre><code>curl -X POST ${baseUrl}/api/proof \\
+  -H "Authorization: Bearer pm_YOUR_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"file_hash":"sha256_64_hex","filename":"decision.json","metadata":{"who":"my-agent","what":"action","why":"reason"}}'
+# → { "proof_id": "prf_...", "verify_url": "...", "status": "pending" }</code></pre>
+
+    <h3>POST /api/batch — Up to 100 files per call</h3>
+    <p>50× fewer requests. Use in production when certifying multiple outputs per agent cycle.</p>
+    <pre><code>curl -X POST ${baseUrl}/api/batch \\
+  -H "Authorization: Bearer pm_YOUR_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"certifications":[{"file_hash":"hash1","filename":"action1.json"},{"file_hash":"hash2","filename":"action2.json"}]}'
+# → {"results":[{"proof_id":"prf_...","status":"pending"},{"proof_id":"prf_...","status":"pending"}]}</code></pre>
+  </section>
+
+  <section>
+    <h2>x402 — No API key, fully autonomous</h2>
+    <p>POST /api/proof without a key — receive a 402 with payment requirements — sign USDC payment on Base — resend with <code>X-PAYMENT</code> header. Flat $${priceUsd.toFixed(2)}/proof. No account needed.</p>
+    <pre><code># 1. Send without key — get 402 with payment info
+curl -X POST ${baseUrl}/api/proof -H "Content-Type: application/json" -d '{"file_hash":"...","filename":"..."}'
+# → 402 { "payment": { "network": "base", "token": "USDC", "amount": "${priceUsd.toFixed(2)}" } }
+
+# 2. Sign payment, resend with X-PAYMENT header
+curl -X POST ${baseUrl}/api/proof \\
+  -H "X-PAYMENT: &lt;base64-signed-payment&gt;" \\
+  -H "Content-Type: application/json" \\
+  -d '{"file_hash":"...","filename":"..."}'
+# → { "proof_id": "prf_...", "verify_url": "..." }</code></pre>
+    <p>x402 guide: <a href="${baseUrl}/agent-context#x402">${baseUrl}/agent-context#x402</a></p>
+  </section>
+
+  <section>
+    <h2>ACP Flow — 3 API calls</h2>
+    <p>Agent Commerce Protocol for agents that manage their own on-chain transactions.</p>
     <ol>
-      <li>
-        <h3>Discover</h3>
-        <p>Fetch available products and pricing.</p>
-        <code>GET ${baseUrl}/api/acp/products</code>
-      </li>
-      <li>
-        <h3>Certify</h3>
-        <p>Submit a file hash for blockchain anchoring.</p>
-        <code>POST ${baseUrl}/api/acp/checkout</code>
-      </li>
-      <li>
-        <h3>Confirm</h3>
-        <p>Finalize the certification with the transaction hash.</p>
-        <code>POST ${baseUrl}/api/acp/confirm</code>
-      </li>
+      <li><strong>Discover</strong> — <code>GET ${baseUrl}/api/acp/products</code> — fetch available products and pricing</li>
+      <li><strong>Checkout</strong> — <code>POST ${baseUrl}/api/acp/checkout</code> — reserve a certification slot, get payment address</li>
+      <li><strong>Confirm</strong> — <code>POST ${baseUrl}/api/acp/confirm</code> — finalize with transaction hash</li>
     </ol>
-  </section>
-
-  <section>
-    <h2>Discovery Endpoints</h2>
-    <ul>
-      <li><a href="${baseUrl}/llms.txt">llms.txt</a> - LLM-friendly summary</li>
-      <li><a href="${baseUrl}/llms-full.txt">llms-full.txt</a> - Extended documentation</li>
-      <li><a href="${baseUrl}/.well-known/mcp.json">mcp.json</a> - Model Context Protocol manifest</li>
-      <li><a href="${baseUrl}/.well-known/agent.json">agent.json</a> - Agent Protocol manifest</li>
-      <li><a href="${baseUrl}/.well-known/ai-plugin.json">ai-plugin.json</a> - OpenAI plugin manifest</li>
-      <li><a href="${baseUrl}/api/acp/openapi.json">openapi.json</a> - OpenAPI 3.0 specification</li>
-      <li><a href="${baseUrl}/api/acp/products">products</a> - Product discovery (JSON)</li>
-      <li><a href="${baseUrl}/api/acp/health">health</a> - Health check</li>
-    </ul>
-  </section>
-
-  <section>
-    <h2>Verification Badges</h2>
-    <p>Embed a dynamic verification badge in your README or documentation.</p>
-    <code>![xProof Verified](https://xproof.app/badge/{proof_id})</code>
-    <p>Badge links to the public proof page. Status updates automatically: Verified (green), Pending (yellow), Not Found (red).</p>
   </section>
 
   <section>
     <h2>Framework Integrations</h2>
     <ul>
-      <li>LangChain - Python tool for LangChain agent pipelines</li>
-      <li>CrewAI - Python tool for CrewAI multi-agent systems</li>
-      <li>Custom GPTs - OpenAPI actions schema for ChatGPT custom GPTs</li>
+      <li><strong>LangChain</strong> — <code>pip install xproof</code> then <code>from xproof.langchain import XProofTool</code></li>
+      <li><strong>CrewAI</strong> — <code>from xproof.crewai import XProofTool</code></li>
+      <li><strong>OpenAI Agents SDK</strong> — <code>from xproof.openai_agents import XProofTool</code></li>
+      <li><strong>Custom GPTs</strong> — OpenAPI actions schema: <a href="${baseUrl}/api/acp/openapi.json">openapi.json</a></li>
+      <li><strong>JavaScript / TypeScript</strong> — <code>npm install @xproof/xproof</code></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Discovery &amp; Machine Interfaces</h2>
+    <ul>
+      <li><a href="${baseUrl}/agent-context">Agent Context (10 questions agents ask)</a> — full integration guide</li>
+      <li><a href="${baseUrl}/agent-context.md">agent-context.md</a> — machine-readable markdown for LLM indexers</li>
+      <li><a href="${baseUrl}/.well-known/mcp.json">mcp.json</a> — Model Context Protocol manifest</li>
+      <li><a href="${baseUrl}/api/acp/openapi.json">openapi.json</a> — OpenAPI 3.0 specification</li>
+      <li><a href="${baseUrl}/llms.txt">llms.txt</a> — LLM-friendly summary</li>
+      <li><a href="${baseUrl}/llms-full.txt">llms-full.txt</a> — Extended documentation</li>
+      <li><a href="${baseUrl}/.well-known/ai-plugin.json">ai-plugin.json</a> — OpenAI plugin manifest</li>
+      <li><a href="${baseUrl}/api/acp/products">products</a> — Product discovery (JSON)</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>What xproof guarantees</h2>
+    <ul>
+      <li><strong>Privacy-first</strong> — only SHA-256 hash anchored on-chain, raw content stays local</li>
+      <li><strong>Immutable</strong> — anchored on MultiversX, verifiable without xproof</li>
+      <li><strong>Deterministic</strong> — same input always produces the same proof</li>
+      <li><strong>Non-custodial</strong> — files never leave the agent</li>
+      <li><strong>Flat pricing</strong> — $${priceUsd.toFixed(2)} per proof, no tiers</li>
     </ul>
   </section>
 </main>
 
 <footer>
-  <p>&copy; ${new Date().getFullYear()} xproof. Built on <a href="https://multiversx.com">MultiversX</a></p>
+  <p>&copy; ${new Date().getFullYear()} xproof. Built on <a href="https://multiversx.com">MultiversX</a> | <a href="${baseUrl}/agent-context">Full agent guide</a> | <a href="${baseUrl}/leaderboard">Agent leaderboard</a></p>
 </footer>
 </body>
 </html>`;
