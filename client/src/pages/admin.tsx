@@ -235,6 +235,81 @@ function RateLimitActivityCard({ data, isError }: { data: RateLimitStats | undef
   );
 }
 
+function TrafficSourcesCard({ data }: { data: TrafficSources | undefined }) {
+  const [expanded, setExpanded] = useState(true);
+  const rows = data?.rows || [];
+
+  return (
+    <Card data-testid="card-traffic-sources">
+      <CardHeader
+        className="flex flex-row items-center justify-between gap-2 space-y-0 cursor-pointer select-none"
+        onClick={() => setExpanded((v) => !v)}
+        data-testid="button-toggle-traffic-sources"
+      >
+        <div className="flex items-center gap-2">
+          {expanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+          <CardTitle className="text-sm font-medium">Traffic Sources</CardTitle>
+          {rows.length > 0 && (
+            <Badge variant="secondary" data-testid="badge-traffic-sources-count">
+              {rows.length} referrers
+            </Badge>
+          )}
+        </div>
+        <Globe className="h-4 w-4 text-muted-foreground" />
+      </CardHeader>
+
+      {expanded && (
+        <CardContent className="pt-0">
+          {!data && (
+            <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground" data-testid="traffic-sources-loading">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading traffic sources…
+            </div>
+          )}
+          {data && rows.length === 0 && (
+            <p className="py-4 text-sm text-muted-foreground" data-testid="traffic-sources-empty">
+              No referred visits recorded yet.
+            </p>
+          )}
+          {data && rows.length > 0 && (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm" data-testid="table-traffic-sources">
+                  <thead>
+                    <tr className="border-b text-left">
+                      <th className="pb-2 pr-4 font-medium text-muted-foreground">Source</th>
+                      <th className="pb-2 pr-4 font-medium text-muted-foreground">Referrer</th>
+                      <th className="pb-2 pr-4 font-medium text-muted-foreground text-right">Visits</th>
+                      <th className="pb-2 font-medium text-muted-foreground text-right">Unique IPs</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row) => (
+                      <tr
+                        key={row.referrer_host}
+                        className="border-b last:border-0"
+                        data-testid={`row-traffic-source-${row.referrer_host}`}
+                      >
+                        <td className="py-2 pr-4">{row.source_label}</td>
+                        <td className="py-2 pr-4 font-mono text-xs text-muted-foreground">{row.referrer_host}</td>
+                        <td className="py-2 pr-4 text-right tabular-nums">{row.visits.toLocaleString()}</td>
+                        <td className="py-2 text-right tabular-nums">{row.unique_ips.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground">
+                Top {rows.length} referrers · auto-refreshes every 60s · as of {new Date(data.generated_at).toLocaleTimeString()}
+              </p>
+            </>
+          )}
+        </CardContent>
+      )}
+    </Card>
+  );
+}
+
 function StatCard({ title, value, subtitle, icon: Icon }: { title: string; value: string | number; subtitle?: string; icon: any }) {
   return (
     <Card data-testid={`stat-card-${title.toLowerCase().replace(/\s+/g, '-')}`}>
@@ -317,6 +392,7 @@ export default function AdminDashboard() {
     queryKey: ["/api/admin/traffic-sources"],
     refetchInterval: 60000,
     retry: false,
+    enabled: isAdmin,
   });
 
   const { data: rateLimitStats, isError: rateLimitError } = useQuery<RateLimitStats>({
@@ -632,7 +708,8 @@ export default function AdminDashboard() {
 
 
             {isAdmin && (
-              <div className="mb-6">
+              <div className="mb-6 space-y-6">
+                <TrafficSourcesCard data={trafficSources} />
                 <RateLimitActivityCard data={rateLimitStats} isError={rateLimitError} />
               </div>
             )}
