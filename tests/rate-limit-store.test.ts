@@ -331,6 +331,99 @@ describe("PgRateLimitStore.decrement — DB recovers mid-window (eligibleProofsI
   });
 });
 
+// ── increment() sustained DB outage ──────────────────────────────────────────
+//
+// PgRateLimitStore.increment() fails open on any DB error: it returns
+// { totalHits: 0, resetTime: now + windowMs } without writing a row. This is
+// a deliberate availability tradeoff (see server/pgRateLimit.ts), but it has
+// never been exercised for a *sustained* outage spanning several consecutive
+// calls, only a single dropped call. Two questions this block answers:
+//
+//   1. During the outage, is every call treated as hit #0 (i.e. unlimited,
+//      uncounted traffic gets through for as long as the DB stays down)?
+//   2. When the DB recovers mid-window, do any of the failed calls "catch up"
+//      and land as a burst against the real counter, or does the counter
+//      simply pick up at 1 as if the outage never happened?
+//
+// Accepted risk (documented here, not just asserted): rate limiting is
+// completely unenforced for the duration of a DB outage. Every request made
+// while pool.query is failing is allowed through with totalHits reported as
+// 0, regardless of how many such requests occur. There is no compensating
+// catch-up once the DB recovers — the failed calls leave no trace in the
+// table, so the first successful call after recovery starts a fresh count of
+// 1 rather than N+1. This means an outage cannot be exploited to inflate a
+// *future* window's counter, but it also means no record of the skipped
+// requests is ever recovered; the availability tradeoff is total amnesty for
+// the outage window, not deferred enforcement.
+describe("PgRateLimitStore.increment — sustained DB outage then recovery", () => {
+  const NS = "eligible_proofs_ip";
+
+  beforeAll(async () => {
+    await ensureTable();
+    await deleteBuckets(NS, UNIT_TEST_IP);
+  });
+
+  afterAll(async () => {
+    await deleteBuckets(NS, UNIT_TEST_IP);
+  });
+
+  it("allows unlimited requests (totalHits: 0 every time) across several consecutive failures, then resumes normal counting from 1 on recovery", async () => {
+    const OUTAGE_CALLS = 5;
+    const poolSpy = vi
+      .spyOn(pool, "query")
+      .mockRejectedValue(new Error("simulated sustained DB outage"));
+
+    const outageResults: { totalHits: number }[] = [];
+    for (let i = 0; i < OUTAGE_CALLS; i++) {
+      outageResults.push(await eligibleProofsIpAnonStore.increment(UNIT_TEST_IP));
+    }
+    poolSpy.mockRestore();
+
+    // Every call during the outage is reported as the caller's first-ever
+    // hit — express-rate-limit will never block any of them, no matter how
+    // many requests arrive while the DB is down.
+    for (const result of outageResults) {
+      expect(result.totalHits).toBe(0);
+    }
+
+    // Confirm none of the failed calls left a row behind: no catch-up spike
+    // is possible on recovery because there is nothing to catch up on.
+    const duringOutage = await readCount(NS, UNIT_TEST_IP);
+    expect(duringOutage).toBeNull();
+
+    // DB recovers. The next increment() call hits the real table and must
+    // start counting at 1 — not OUTAGE_CALLS + 1 — because the outage calls
+    // were never recorded.
+    const { totalHits: firstRecoveredHit } =
+      await eligibleProofsIpAnonStore.increment(UNIT_TEST_IP);
+    expect(firstRecoveredHit).toBe(1);
+
+    const afterRecovery = await readCount(NS, UNIT_TEST_IP);
+    expect(afterRecovery).toBe(1);
+  });
+
+  it("logs a warn for every failed call during the outage so the blast radius is observable", async () => {
+    await deleteBuckets(NS, UNIT_TEST_IP);
+    const OUTAGE_CALLS = 3;
+    const poolSpy = vi
+      .spyOn(pool, "query")
+      .mockRejectedValue(new Error("simulated sustained DB outage for logging check"));
+    const warnSpy = vi.spyOn(logger, "warn");
+
+    for (let i = 0; i < OUTAGE_CALLS; i++) {
+      await eligibleProofsIpAnonStore.increment(UNIT_TEST_IP);
+    }
+
+    const matchingWarnCalls = warnSpy.mock.calls.filter(
+      ([, meta]) => (meta as Record<string, unknown>)?.component === "pgRateLimit",
+    );
+    expect(matchingWarnCalls.length).toBe(OUTAGE_CALLS);
+
+    poolSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
+});
+
 // ── csvAnonStore ──────────────────────────────────────────────────────────────
 
 describe("PgRateLimitStore.decrement — csvAnonStore", () => {
