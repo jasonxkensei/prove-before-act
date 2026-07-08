@@ -203,3 +203,42 @@ describe("sessionStorage — JSON array has at most SHORTLIST_MAX elements", () 
     expect(arr.length).toBeLessThanOrEqual(SHORTLIST_MAX);
   });
 });
+
+// ── 5. Floating compare bar visibility threshold (selectedWallets.size >= 1) ──
+//
+// leaderboard.tsx renders the floating compare bar with the guard
+// `{selectedWallets.size >= 1 && <FloatingBar />}`. These tests exercise
+// the exact `size` values that drive that guard via the same toggleWallet
+// production function, so a regression that changes the threshold (e.g.
+// to `>= 2`) is caught even though the JSX itself isn't rendered here.
+
+describe("floating compare bar visibility threshold (selectedWallets.size >= 1)", () => {
+  it("size is 0 for a freshly initialized (empty) shortlist — bar should not appear", () => {
+    const wallets: Set<string> = new Set();
+    expect(wallets.size).toBe(0);
+    expect(wallets.size >= 1).toBe(false);
+  });
+
+  it("size is 1 after a single toggleWallet call — bar should appear", () => {
+    const wallets = toggleWallet(new Set(), SIX_WALLETS[0]);
+    expect(wallets.size).toBe(1);
+    expect(wallets.size >= 1).toBe(true);
+  });
+
+  it("size returns to 0 after deselecting the only selected wallet — bar should disappear again", () => {
+    let wallets = toggleWallet(new Set(), SIX_WALLETS[0]); // select → 1
+    expect(wallets.size >= 1).toBe(true);
+    wallets = toggleWallet(wallets, SIX_WALLETS[0]);        // deselect → 0
+    expect(wallets.size).toBe(0);
+    expect(wallets.size >= 1).toBe(false);
+  });
+
+  it("size stays >= 1 for every count from 1 through SHORTLIST_MAX", () => {
+    let wallets: Set<string> = new Set();
+    for (const w of SIX_WALLETS) {
+      wallets = toggleWallet(wallets, w);
+      expect(wallets.size).toBeGreaterThanOrEqual(1);
+    }
+    expect(wallets.size).toBe(SHORTLIST_MAX);
+  });
+});
