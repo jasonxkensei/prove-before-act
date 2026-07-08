@@ -228,6 +228,45 @@ describe("NaN gap values are handled gracefully", () => {
     expect(() => computeCalibrationTrend(gaps)).not.toThrow();
     expect(computeCalibrationTrend(gaps)).toBeNull();
   });
+
+  it("returns null for an array of 31 Infinity values without throwing (no Infinity-mean leakage)", () => {
+    const gaps = Array(31).fill(Infinity);
+    expect(() => computeCalibrationTrend(gaps)).not.toThrow();
+    expect(computeCalibrationTrend(gaps)).toBeNull();
+  });
+
+  it("returns null for a mix of -Infinity, Infinity and valid values with fewer than 31 finite entries", () => {
+    // 20 finite gaps + 11 Infinity/-Infinity gaps = 31 total, but only 20 clean.
+    const gaps = [
+      ...uniform(20, 0.2),
+      ...Array(6).fill(Infinity),
+      ...Array(5).fill(-Infinity),
+    ];
+    expect(gaps.length).toBe(31);
+    expect(() => computeCalibrationTrend(gaps)).not.toThrow();
+    expect(computeCalibrationTrend(gaps)).toBeNull();
+  });
+
+  it("returns a coherent trend using only the finite values when Infinity is mixed with 31+ valid entries", () => {
+    // 30 finite recent gaps + 1 finite previous gap + scattered Infinity noise
+    // that must be filtered out before the trend is computed, leaving exactly
+    // 31 clean gaps (the same activation boundary as the non-Infinity cases).
+    const gaps = [
+      ...uniform(30, 0.1),
+      Infinity,
+      0.5,
+      -Infinity,
+    ];
+    expect(() => computeCalibrationTrend(gaps)).not.toThrow();
+    const trend = computeCalibrationTrend(gaps);
+    expect(trend).not.toBeNull();
+    expect(Number.isFinite(trend!.delta)).toBe(true);
+    expect(Number.isFinite(trend!.recent_mean_gap)).toBe(true);
+    expect(Number.isFinite(trend!.previous_mean_gap)).toBe(true);
+    expect(trend?.recent_mean_gap).toBe(0.1);
+    expect(trend?.previous_mean_gap).toBe(0.5);
+    expect(trend?.direction).toBe("improving");
+  });
 });
 
 // ── 7. Previous window grows correctly beyond 31 ──────────────────────────────
