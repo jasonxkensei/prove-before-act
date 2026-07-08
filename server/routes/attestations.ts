@@ -695,7 +695,14 @@ export function registerAttestationsRoutes(app: Express) {
 })();`;
 
       res.setHeader("Content-Type", "application/javascript; charset=utf-8");
-      res.setHeader("Cache-Control", "public, max-age=300");
+      // Must be "private" — this script body embeds is_public_profile-gated
+      // calibration data (see the isPublicProfile check above). "public" would
+      // let shared intermediaries/CDNs cache and re-serve one wallet's response
+      // to every caller for up to max-age, so a profile flipped to private would
+      // keep leaking its stale calibration payload to new requesters for up to
+      // 5 minutes. "private" still allows a single browser to cache its own
+      // fetch, which is the only caching this endpoint should provide.
+      res.setHeader("Cache-Control", "private, max-age=300");
       res.send(js);
     } catch (err: any) {
       res.status(500).send(`/* internal error */`);
