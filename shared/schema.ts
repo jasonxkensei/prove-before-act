@@ -512,8 +512,9 @@ export const trustScoreSnapshots = pgTable("trust_score_snapshots", {
   // Stores the complete TrustScore object so public reads never need live computation.
   fullTrustData: jsonb("full_trust_data"),
 }, (table) => [
-  // Covers getOldScoreBatch / getPreviousLevelBatch queries (per-wallet, sorted by date).
-  index("idx_snapshots_wallet_date").on(table.walletAddress, table.snapshotDate),
+  // UNIQUE on (wallet_address, snapshot_date) — required for the ON CONFLICT upsert
+  // in server/trust.ts, server/index.ts, and server/routes/admin.ts.
+  uniqueIndex("idx_snapshots_wallet_date").on(table.walletAddress, table.snapshotDate),
 ]);
 
 // leaderboard_snapshot — single-row table holding the latest leaderboard entries

@@ -24,6 +24,7 @@ import {
   Lock,
   TrendingUp,
   Star,
+  Cog,
 } from "lucide-react";
 
 function CopyButton({ text }: { text: string }) {
@@ -64,6 +65,7 @@ type Section = {
 
 export default function AgentContextPage() {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    production: true,
     x402: true,
     latency: true,
     retry: true,
@@ -85,6 +87,107 @@ export default function AgentContextPage() {
   const [exampleLang, setExampleLang] = useState<"python" | "typescript">("python");
 
   const sections: Section[] = [
+    {
+      id: "production",
+      icon: Cog,
+      title: "How to run xProof in production? Batch, monitoring, and policies.",
+      badge: "Production ready",
+      content: (
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            Four patterns every production deployment should have: batch anchoring, proof-count monitoring, a clear error policy, and a "no proof = no action" gate.
+          </p>
+
+          {/* Batch */}
+          <div>
+            <p className="text-xs font-semibold mb-2">1. Batch anchoring — up to 100 files per call</p>
+            <p className="text-xs text-muted-foreground mb-2">
+              Instead of one HTTP call per action, group up to 100 file hashes in a single <code className="font-mono bg-muted px-1 rounded">POST /api/batch</code>. Reduces overhead for high-volume fleets from 50× calls to 1 call.
+            </p>
+            <CodeBlock lang="python" code={`import hashlib, requests
+
+actions = [
+    {"file_hash": hashlib.sha256(a.encode()).hexdigest(),
+     "filename": f"action-{i}.json",
+     "metadata": {"who": agent_id, "what": a}}
+    for i, a in enumerate(agent_actions)
+]
+
+# One call — up to 100 items
+resp = requests.post(
+    "https://xproof.app/api/batch",
+    headers={"Authorization": f"Bearer {api_key}"},
+    json={"certifications": actions},
+    timeout=30
+).json()
+
+# resp["results"] = [{"proof_id": "prf_...", "status": "pending"}, ...]
+proof_ids = [r["proof_id"] for r in resp["results"]]`} />
+          </div>
+
+          {/* Monitoring */}
+          <div>
+            <p className="text-xs font-semibold mb-2">2. Monitoring — proofs anchored per day</p>
+            <p className="text-xs text-muted-foreground mb-2">
+              Use <code className="font-mono bg-muted px-1 rounded">GET /api/certifications?limit=1</code> headers to get your total count, or poll daily and alert if volume drops unexpectedly.
+            </p>
+            <CodeBlock lang="python" code={`import requests, datetime
+
+def daily_proof_count(api_key: str) -> int:
+    """Count proofs anchored today."""
+    today = datetime.date.today().isoformat()
+    resp = requests.get(
+        "https://xproof.app/api/certifications",
+        headers={"Authorization": f"Bearer {api_key}"},
+        params={"limit": 1},
+    )
+    return int(resp.headers.get("X-Total-Count", 0))
+
+count = daily_proof_count(api_key)
+if count < EXPECTED_DAILY_MIN:
+    alert(f"xProof volume anomaly: {count} proofs today (expected ≥{EXPECTED_DAILY_MIN})")`} />
+          </div>
+
+          {/* No proof = no action */}
+          <div>
+            <p className="text-xs font-semibold mb-2">3. Policy gate — "no proof = no action"</p>
+            <p className="text-xs text-muted-foreground mb-2">
+              For high-stakes agents (trading, legal, medical), make the proof a hard prerequisite. The action <em>does not proceed</em> if anchoring fails.
+            </p>
+            <CodeBlock lang="python" code={`def prove_before_act(reasoning: dict, action_fn, api_key: str):
+    """Execute action only after proof is anchored."""
+    proof = anchor_with_retry(
+        file_hash=sha256(reasoning),
+        filename="reasoning.json",
+        api_key=api_key
+    )
+    if proof is None:
+        raise PolicyError(
+            "Proof anchoring failed after 3 retries. "
+            "Action blocked — no proof = no action."
+        )
+    # Proof anchored — safe to proceed
+    result = action_fn()
+    return {"result": result, "proof_id": proof["proof_id"]}`} />
+          </div>
+
+          {/* Error handling */}
+          <div className="rounded-md border border-amber-500/20 bg-amber-500/5 p-3">
+            <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 mb-1">4. Error handling summary</p>
+            <ul className="text-xs text-muted-foreground space-y-1 ml-2">
+              <li>• <code className="font-mono bg-muted px-1 rounded">200</code> — proof anchored, proceed</li>
+              <li>• <code className="font-mono bg-muted px-1 rounded">409</code> — already anchored, retrieve existing <code className="font-mono bg-muted px-1 rounded">proof_id</code></li>
+              <li>• <code className="font-mono bg-muted px-1 rounded">429</code> — rate limited, wait <code className="font-mono bg-muted px-1 rounded">Retry-After</code> seconds</li>
+              <li>• <code className="font-mono bg-muted px-1 rounded">5xx / timeout</code> — retry up to 3× with exponential backoff (1s → 2s → 4s)</li>
+              <li>• After 3 failures: log locally, block action (high-stakes) or proceed with local log (best-effort)</li>
+            </ul>
+            <p className="text-xs text-muted-foreground mt-2">
+              Full retry implementation: see the <strong className="text-foreground">retry policy</strong> section below.
+            </p>
+          </div>
+        </div>
+      ),
+    },
     {
       id: "x402",
       icon: Zap,

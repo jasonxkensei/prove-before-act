@@ -38,6 +38,107 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 
+const QUICKSTART_SNIPPETS = {
+  python: `import hashlib, requests
+
+# 1. Hash your content locally — nothing leaves your machine
+file_hash = hashlib.sha256(open("decision.md", "rb").read()).hexdigest()
+
+# 2. Anchor — one API call, proof_id returned in ~1 second
+proof = requests.post(
+    "https://xproof.app/api/proof",
+    headers={"Authorization": "Bearer YOUR_PM_KEY"},
+    json={"file_hash": file_hash, "filename": "decision.md"}
+).json()
+
+print(proof["verify_url"])  # → https://xproof.app/proof/prf_...`,
+
+  typescript: `import crypto from "crypto";
+
+// 1. Hash locally
+const content = await fs.readFile("decision.md");
+const fileHash = crypto.createHash("sha256").update(content).digest("hex");
+
+// 2. Anchor — one fetch call
+const proof = await fetch("https://xproof.app/api/proof", {
+  method: "POST",
+  headers: { Authorization: "Bearer YOUR_PM_KEY",
+             "Content-Type": "application/json" },
+  body: JSON.stringify({ file_hash: fileHash, filename: "decision.md" }),
+}).then(r => r.json());
+
+console.log(proof.verify_url); // → https://xproof.app/proof/prf_...`,
+
+  curl: `# 1. Compute SHA-256 locally
+FILE_HASH=$(sha256sum decision.md | awk '{print $1}')
+
+# 2. Anchor — one curl call
+curl -s -X POST https://xproof.app/api/proof \\
+  -H "Authorization: Bearer YOUR_PM_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d "{\\"file_hash\\": \\"$FILE_HASH\\", \\"filename\\": \\"decision.md\\"}" \\
+  | jq .verify_url
+# → "https://xproof.app/proof/prf_..."`,
+};
+
+function QuickStartCode({ onGetKey }: { onGetKey: () => void }) {
+  const [lang, setLang] = useState<"python" | "typescript" | "curl">("python");
+  const [copied, setCopied] = useState(false);
+  const code = QUICKSTART_SNIPPETS[lang];
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="rounded-md border border-border/60 overflow-hidden" data-testid="section-quickstart-code">
+      {/* Header */}
+      <div className="flex items-center gap-0 border-b border-border/60 bg-muted/30 px-1">
+        {(["python", "typescript", "curl"] as const).map((l) => (
+          <button
+            key={l}
+            onClick={() => setLang(l)}
+            className={`px-4 py-2 text-xs font-mono font-medium transition-colors ${
+              lang === l
+                ? "text-foreground border-b-2 border-primary -mb-px"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            data-testid={`tab-quickstart-${l}`}
+          >
+            {l}
+          </button>
+        ))}
+        <div className="ml-auto flex items-center gap-2 pr-2">
+          <button
+            onClick={onGetKey}
+            className="text-xs text-primary hover:text-primary/80 font-medium transition-colors"
+            data-testid="button-quickstart-get-key"
+          >
+            Get free key →
+          </button>
+          <button
+            onClick={handleCopy}
+            className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            data-testid="button-quickstart-copy"
+          >
+            {copied ? (
+              <><CheckCircle className="h-3.5 w-3.5 text-primary" /> Copied</>
+            ) : (
+              <><Copy className="h-3.5 w-3.5" /> Copy</>
+            )}
+          </button>
+        </div>
+      </div>
+      {/* Code */}
+      <pre className="p-4 text-xs font-mono leading-relaxed overflow-x-auto whitespace-pre text-foreground/85 bg-muted/20">
+        {code}
+      </pre>
+    </div>
+  );
+}
+
 export default function Landing() {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const { data: pricing } = useQuery<{
@@ -698,77 +799,141 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
           </div>
         </div>
       </section>
-      {/* Quick Start for Developers/Agents */}
+      {/* Quick Start — code first */}
       <section className="py-16 md:py-20">
         <div className="container">
-          <div className="mx-auto max-w-4xl">
-            <div className="mb-10 text-center">
+          <div className="mx-auto max-w-3xl">
+            <div className="mb-8 text-center">
               <Badge variant="outline" className="mb-4">Quick Start</Badge>
-              <h2 className="mb-3 text-2xl md:text-3xl font-bold">
-                Integrate in minutes
-              </h2>
-              <p className="text-muted-foreground max-w-xl mx-auto">
-                Three ways to start anchoring proofs, whether you're a developer, an AI agent, or a no-code user.
-              </p>
+              <h2 className="mb-2 text-2xl md:text-3xl font-bold">Integrate in 2 minutes</h2>
+              <p className="text-muted-foreground text-sm">Copy-paste ready. Python · TypeScript · curl.</p>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
-              <Card data-testid="card-quickstart-api">
-                <CardContent className="pt-6 pb-5">
-                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                    <Cog className="h-5 w-5 text-primary" />
-                  </div>
-                  <h3 className="font-semibold mb-2">REST API</h3>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    POST a file hash to <code className="text-xs bg-muted px-1.5 py-0.5 rounded">/api/proof</code> with your API key. Get a blockchain-anchored proof in seconds.
-                  </p>
-                  <Button asChild variant="outline" size="sm" data-testid="button-quickstart-docs">
-                    <a href="/docs">
-                      Read the docs
-                      <ArrowRight className="ml-1 h-3 w-3" />
-                    </a>
-                  </Button>
-                </CardContent>
-              </Card>
+            {/* Tab selector + code block */}
+            <QuickStartCode onGetKey={() => {
+              const el = document.getElementById("free-trial");
+              if (el) el.scrollIntoView({ behavior: "smooth" });
+            }} />
 
-              <Card data-testid="card-quickstart-agent">
-                <CardContent className="pt-6 pb-5">
-                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                    <Bot className="h-5 w-5 text-primary" />
-                  </div>
-                  <h3 className="font-semibold mb-2">AI Agent (MCP / x402)</h3>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Connect via MCP or pay per proof with x402 — no account needed. Answers to the 10 questions agents ask before integrating.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <Button asChild variant="outline" size="sm" data-testid="button-quickstart-agent-context">
-                      <a href="/agent-context">
-                        Agent context
-                        <ArrowRight className="ml-1 h-3 w-3" />
-                      </a>
-                    </Button>
-                    <Button asChild variant="ghost" size="sm" data-testid="button-quickstart-agents">
-                      <a href="/agents">Integrations</a>
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+            {/* Three integration paths */}
+            <div className="mt-6 grid gap-3 md:grid-cols-3">
+              <div className="rounded-md border bg-muted/20 p-4" data-testid="card-quickstart-api">
+                <div className="flex items-center gap-2 mb-2">
+                  <Cog className="h-4 w-4 text-primary shrink-0" />
+                  <span className="text-sm font-semibold">REST API</span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">POST a SHA-256 hash with your <code className="bg-muted px-1 rounded">pm_</code> key.</p>
+                <Button asChild variant="outline" size="sm" data-testid="button-quickstart-docs">
+                  <a href="/docs">Full docs <ArrowRight className="ml-1 h-3 w-3" /></a>
+                </Button>
+              </div>
+              <div className="rounded-md border bg-muted/20 p-4" data-testid="card-quickstart-agent">
+                <div className="flex items-center gap-2 mb-2">
+                  <Bot className="h-4 w-4 text-primary shrink-0" />
+                  <span className="text-sm font-semibold">MCP / x402</span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">No account needed. Discover, pay, anchor — one session.</p>
+                <Button asChild variant="outline" size="sm" data-testid="button-quickstart-agent-context">
+                  <a href="/agent-context">Agent guide <ArrowRight className="ml-1 h-3 w-3" /></a>
+                </Button>
+              </div>
+              <div className="rounded-md border bg-muted/20 p-4" data-testid="card-quickstart-ui">
+                <div className="flex items-center gap-2 mb-2">
+                  <Upload className="h-4 w-4 text-primary shrink-0" />
+                  <span className="text-sm font-semibold">Web UI</span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">Connect wallet, drag a file, get a proof. No code.</p>
+                <Button variant="outline" size="sm" onClick={handleConnect} data-testid="button-quickstart-connect">
+                  Connect wallet <ArrowRight className="ml-1 h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
-              <Card data-testid="card-quickstart-ui">
-                <CardContent className="pt-6 pb-5">
-                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                    <Upload className="h-5 w-5 text-primary" />
-                  </div>
-                  <h3 className="font-semibold mb-2">Web Interface</h3>
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Connect your wallet, drag a file, and get a verifiable proof. No code required.
-                  </p>
-                  <Button variant="outline" size="sm" onClick={handleConnect} data-testid="button-quickstart-connect">
-                    Connect wallet
-                    <ArrowRight className="ml-1 h-3 w-3" />
-                  </Button>
-                </CardContent>
-              </Card>
+      {/* Use-cases */}
+      <section className="border-t py-16 md:py-20">
+        <div className="container">
+          <div className="mx-auto max-w-5xl">
+            <div className="mb-10 text-center">
+              <Badge variant="outline" className="mb-4">Use cases</Badge>
+              <h2 className="mb-2 text-2xl md:text-3xl font-bold">One pattern, every agent type</h2>
+              <p className="text-sm text-muted-foreground max-w-lg mx-auto">Hash → anchor → act. The same loop works for trading, research, support, and orchestration fleets.</p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              {/* Trading */}
+              <div className="rounded-md border bg-muted/20 p-5" data-testid="card-usecase-trading">
+                <div className="flex items-center gap-2 mb-1">
+                  <BarChart3 className="h-4 w-4 text-primary shrink-0" />
+                  <span className="text-sm font-bold">Trading Agent</span>
+                  <Badge variant="secondary" className="text-xs ml-auto">High value</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">Prove the reasoning behind every trade <em>before</em> execution — non-repudiable audit trail for regulators.</p>
+                <pre className="rounded bg-muted/60 border border-border/40 p-3 text-xs font-mono leading-relaxed overflow-x-auto whitespace-pre">{`# Anchor before executing the trade
+proof = xproof.certify(
+  file_hash=sha256(strategy_json),
+  metadata={"why": "RSI=38, risk approved",
+            "what": "BUY BTC 0.5 @ $67k"}
+)
+if not proof: raise PolicyError("no proof = no trade")`}</pre>
+              </div>
+              {/* Research */}
+              <div className="rounded-md border bg-muted/20 p-5" data-testid="card-usecase-research">
+                <div className="flex items-center gap-2 mb-1">
+                  <Terminal className="h-4 w-4 text-primary shrink-0" />
+                  <span className="text-sm font-bold">Research Agent</span>
+                  <Badge variant="secondary" className="text-xs ml-auto">Attribution</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">Anchor reasoning + sources before publishing — readers can verify the report hasn't been altered.</p>
+                <pre className="rounded bg-muted/60 border border-border/40 p-3 text-xs font-mono leading-relaxed overflow-x-auto whitespace-pre">{`# Anchor before publishing the report
+proof = xproof.certify(
+  file_hash=sha256(report_json),
+  metadata={"why": "12 peer-reviewed sources",
+            "what": "Climate model v3 — final"}
+)
+report.set_verify_url(proof["verify_url"])`}</pre>
+              </div>
+              {/* Support */}
+              <div className="rounded-md border bg-muted/20 p-5" data-testid="card-usecase-support">
+                <div className="flex items-center gap-2 mb-1">
+                  <Zap className="h-4 w-4 text-primary shrink-0" />
+                  <span className="text-sm font-bold">Customer Support Agent</span>
+                  <Badge variant="secondary" className="text-xs ml-auto">Compliance</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">Every AI response anchored — full audit trail for disputes, GDPR requests, or quality review.</p>
+                <pre className="rounded bg-muted/60 border border-border/40 p-3 text-xs font-mono leading-relaxed overflow-x-auto whitespace-pre">{`# One line per response in your support loop
+for response in agent_responses:
+  xproof.certify(
+    file_hash=sha256(response),
+    metadata={"session": session_id,
+              "model": "gpt-4o"}
+  )`}</pre>
+              </div>
+              {/* Fleet */}
+              <div className="rounded-md border bg-muted/20 p-5" data-testid="card-usecase-fleet">
+                <div className="flex items-center gap-2 mb-1">
+                  <Network className="h-4 w-4 text-primary shrink-0" />
+                  <span className="text-sm font-bold">Multi-agent Orchestration</span>
+                  <Badge variant="secondary" className="text-xs ml-auto">Fleet</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">One proof layer for 50+ agents. Batch up to 100 actions per call — $10 per 1,000 anchors.</p>
+                <pre className="rounded bg-muted/60 border border-border/40 p-3 text-xs font-mono leading-relaxed overflow-x-auto whitespace-pre">{`# Batch: up to 100 actions per call
+proofs = xproof.certify_batch([
+  {"file_hash": sha256(action1),
+   "filename": "agent-01-trade.json"},
+  {"file_hash": sha256(action2),
+   "filename": "agent-02-report.json"},
+])  # → [{"proof_id": "prf_..."}, ...]`}</pre>
+              </div>
+            </div>
+            <div className="mt-6 text-center">
+              <Button asChild variant="outline" size="sm" data-testid="button-usecases-agent-context">
+                <a href="/agent-context">
+                  Full integration guide + production patterns
+                  <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                </a>
+              </Button>
             </div>
           </div>
         </div>
