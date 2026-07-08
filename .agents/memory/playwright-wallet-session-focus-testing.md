@@ -63,3 +63,28 @@ fixture value across runs/tests — a re-run within the cache TTL can read a
 previous run's already-mutated cached state and produce flaky failures
 that look like a product bug but are just cache-key reuse. Generate a
 fresh random identifier per test run instead.
+
+## Proving a scheduled background refresh cycle actually updates a live cache
+
+Some in-memory caches (e.g. the leaderboard cache in `server/trust.ts`) are
+by design populated ONLY by a scheduled background worker
+(`setInterval`), never by the request path. To test that such a cache
+turns over, don't wait out the real interval and don't import the
+scheduler's functions into the test process — that runs in a separate
+Node module instance from the live dev server and never touches its
+actual in-memory cache. Instead, add (or reuse) a legitimate admin-only
+endpoint that invokes the exact same scheduler function in the live
+server process, and drive it from the test via an authenticated fetch.
+This is a real feature (manual admin refresh), not a test-only bypass,
+and it proves an actual background-cycle code path ran.
+
+**Why:** the alternative (calling `runXRefreshCycle()` straight from a
+Playwright/vitest test file) silently no-ops against the wrong process's
+memory, giving a false-positive "passing" test that doesn't verify
+anything about the real server.
+
+**Gotcha:** after adding a new server route for this purpose, the dev
+workflow must be restarted before the route is reachable — hitting an
+unregistered `/api/...` path returns HTTP 200 with the SPA's `index.html`
+(not a 404), which can be mistaken for a working JSON endpoint if you only
+assert on status code.

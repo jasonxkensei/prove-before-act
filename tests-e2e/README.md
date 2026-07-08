@@ -75,3 +75,22 @@ npx playwright install chromium
   `page.clock` can fake), let real wall-clock time elapse instead of faking
   the client's timers, and give a generous combined timeout so both the
   client interval and the server cache have room to independently expire.
+- Some server-side caches are populated ONLY by a scheduled background
+  worker, never by the request path itself (e.g. the leaderboard's
+  in-memory cache in `server/trust.ts`, refreshed by a 5-minute
+  `setInterval` calling `runLeaderboardRefreshCycle`/
+  `runTrustRefreshCycle`). To prove such a cache actually turns over
+  without waiting out the real interval or importing the scheduler's
+  functions into the test process (which would run in a separate module
+  instance from the live server and never touch its real in-memory cache),
+  trigger the same functions in the live server process through a genuine
+  admin-only endpoint instead of a test-only shortcut. See
+  `leaderboard-trust-refresh.spec.ts`: it seeds real trust-affecting state
+  (a new public agent with a confirmed certification), confirms the public
+  leaderboard does NOT show it yet (proving the assertion after the
+  refresh is a real before/after change), calls
+  `POST /api/admin/trust/refresh` with a seeded admin session, then
+  reloads and confirms the agent now appears. Remember to also restart the
+  dev server workflow after adding a new server route before running the
+  test against it — an already-running dev process won't pick up new
+  Express routes without a restart.

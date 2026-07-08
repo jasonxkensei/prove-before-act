@@ -6,7 +6,7 @@ import { logger } from "../logger";
 import { certifications, users, apiKeys, visits, txQueue as txQueueTable } from "@shared/schema";
 import { eq, desc, sql, and, gte, gt, count } from "drizzle-orm";
 import { isWalletAuthenticated } from "../walletAuth";
-import { computeTrustScoreByWallet } from "../trust";
+import { computeTrustScoreByWallet, runLeaderboardRefreshCycle, runTrustRefreshCycle } from "../trust";
 import { getAlertConfig } from "../txAlerts";
 import { getRateLimitAlertConfig } from "../rateLimitAlerts";
 import { getMetrics } from "../metrics";
@@ -858,6 +858,25 @@ export function registerAdminRoutes(app: Express) {
     } catch (err: any) {
       logger.error("Failed to fetch trial funnel", { component: "admin", error: err.message });
       return res.status(500).json({ error: "INTERNAL_ERROR", message: err.message });
+    }
+  });
+
+  // ============================================
+  // POST /api/admin/trust/refresh
+  // Manually triggers the background trust/leaderboard refresh cycles
+  // (normally run on a 5-minute interval — see server/trust.ts). Useful for
+  // ops to force-refresh after a data fix, and for tests that need to
+  // observe a real refresh cycle without waiting for the interval. This
+  // calls the exact same functions the scheduler calls; it does not bypass
+  // or simulate any part of the recomputation.
+  // ============================================
+  app.post("/api/admin/trust/refresh", isWalletAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      await runLeaderboardRefreshCycle();
+      await runTrustRefreshCycle();
+      res.json({ success: true, message: "Trust and leaderboard refresh cycles completed" });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
     }
   });
 
