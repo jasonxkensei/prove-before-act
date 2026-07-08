@@ -1,6 +1,30 @@
 import crypto from "crypto";
 import { pool } from "./db";
 import { logger } from "./logger";
+import { recordRateLimitFailOpen } from "./metrics";
+
+// ── Shared fail-open logging/metrics helper ─────────────────────────────────
+// Every write path below (check/increment/decrement/resetKey) degrades to a
+// safe default when the DB is unreachable rather than blocking traffic. This
+// helper guarantees the log line has consistent fields and increments a
+// counter so a sustained DB outage is alertable via getMetrics() instead of
+// only visible as scattered log lines.
+function logRateLimitFailOpen(
+  op: "check" | "increment" | "decrement" | "resetKey",
+  message: string,
+  fields: { namespace: string; key?: string; error: unknown },
+): void {
+  logger.warn(message, {
+    component: "pgRateLimit",
+    op,
+    namespace: fields.namespace,
+    ...(fields.key !== undefined
+      ? { key_hash: crypto.createHash("sha256").update(fields.key).digest("hex").slice(0, 8) }
+      : {}),
+    error: String(fields.error),
+  });
+  recordRateLimitFailOpen(op);
+}
 
 // ── Table DDL ──────────────────────────────────────────────────────────────
 // Bucket key format: "{namespace}:{key}:{window_start_unix_ms}"
@@ -94,10 +118,9 @@ export async function pgCheckRateLimit(
     };
   } catch (err) {
     // Fail open: a DB outage should not block all traffic; log and allow.
-    logger.warn("pgCheckRateLimit: DB error, failing open", {
-      component: "pgRateLimit",
+    logRateLimitFailOpen("check", "pgCheckRateLimit: DB error, failing open", {
       namespace,
-      error: String(err),
+      error: err,
     });
     const resetAt = Math.floor(Date.now() / windowMs) * windowMs + windowMs;
     return { allowed: true, remaining: limit, resetAt };
@@ -176,10 +199,9 @@ export class PgRateLimitStore {
       const { count, resetAt } = await pgIncrement(this.namespace, key, this.windowMs);
       return { totalHits: count, resetTime: resetAt };
     } catch (err) {
-      logger.warn("PgRateLimitStore.increment: DB error, failing open", {
-        component: "pgRateLimit",
+      logRateLimitFailOpen("increment", "PgRateLimitStore.increment: DB error, failing open", {
         namespace: this.namespace,
-        error: String(err),
+        error: err,
       });
       // Fail open: return totalHits=0 so no request is blocked during an outage.
       return { totalHits: 0, resetTime: new Date(Date.now() + this.windowMs) };
@@ -195,11 +217,10 @@ export class PgRateLimitStore {
         [bucket],
       );
     } catch (err) {
-      logger.warn("PgRateLimitStore.decrement: DB error, refund lost", {
-        component: "pgRateLimit",
+      logRateLimitFailOpen("decrement", "PgRateLimitStore.decrement: DB error, refund lost", {
         namespace: this.namespace,
-        key_hash: crypto.createHash("sha256").update(key).digest("hex").slice(0, 8),
-        error: String(err),
+        key,
+        error: err,
       });
     }
   }
@@ -211,11 +232,10 @@ export class PgRateLimitStore {
         [`${this.namespace}:${key}:%`],
       );
     } catch (err) {
-      logger.warn("PgRateLimitStore.resetKey: DB error, reset lost", {
-        component: "pgRateLimit",
+      logRateLimitFailOpen("resetKey", "PgRateLimitStore.resetKey: DB error, reset lost", {
         namespace: this.namespace,
-        key_hash: crypto.createHash("sha256").update(key).digest("hex").slice(0, 8),
-        error: String(err),
+        key,
+        error: err,
       });
     }
   }

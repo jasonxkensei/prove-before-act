@@ -18,6 +18,25 @@ let totalFailed = 0;
 let totalRetries = 0;
 let mx8004QueueSize = 0;
 
+// ── Rate limit fail-open tracking ───────────────────────────────────────────
+// Counts how often PgRateLimitStore/pgCheckRateLimit degrade to "allow" mode
+// because the DB was unreachable, broken down by the operation that failed.
+// A sustained DB outage shows up here as a rapidly growing counter, which is
+// easier to alert on than scattered log lines.
+type RateLimitFailOpenOp = "check" | "increment" | "decrement" | "resetKey";
+const rateLimitFailOpenCounts: Record<RateLimitFailOpenOp, number> = {
+  check: 0,
+  increment: 0,
+  decrement: 0,
+  resetKey: 0,
+};
+let lastRateLimitFailOpenAt: number | null = null;
+
+export function recordRateLimitFailOpen(op: RateLimitFailOpenOp): void {
+  rateLimitFailOpenCounts[op]++;
+  lastRateLimitFailOpenAt = Date.now();
+}
+
 function pruneOldRecords(): void {
   const cutoff = Date.now() - ROLLING_WINDOW_MS;
   while (recentTransactions.length > 0 && recentTransactions[0].timestamp < cutoff) {
@@ -81,6 +100,19 @@ export function getLatencyPercentiles(): {
   };
 }
 
+export function getRateLimitFailOpenStats(): {
+  total: number;
+  by_op: Record<RateLimitFailOpenOp, number>;
+  last_fail_open_at: string | null;
+} {
+  const total = Object.values(rateLimitFailOpenCounts).reduce((s, v) => s + v, 0);
+  return {
+    total,
+    by_op: { ...rateLimitFailOpenCounts },
+    last_fail_open_at: lastRateLimitFailOpenAt ? new Date(lastRateLimitFailOpenAt).toISOString() : null,
+  };
+}
+
 export function getMetrics() {
   pruneOldRecords();
   const now = Date.now();
@@ -113,6 +145,7 @@ export function getMetrics() {
     mx8004: {
       queue_size: mx8004QueueSize,
     },
+    rate_limit_fail_open: getRateLimitFailOpenStats(),
   };
 }
 
