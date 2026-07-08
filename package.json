@@ -15,7 +15,7 @@
     "@jridgewell/trace-mapping": "^0.3.25",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@multiversx/sdk-core": "^15.2.1",
-    "@multiversx/sdk-dapp": "^5.2.8",
+    "@multiversx/sdk-dapp": "^5.6.23",
     "@multiversx/sdk-dapp-ui": "^0.0.35",
     "@multiversx/sdk-native-auth-server": "^2.1.0",
     "@multiversx/sdk-network-providers": "^2.9.3",
@@ -86,6 +86,7 @@
     "passport": "^0.7.0",
     "passport-local": "^1.0.0",
     "pdfkit": "^0.17.2",
+    "protobufjs": "^7.6.3",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-day-picker": "^8.10.1",
@@ -102,7 +103,7 @@
     "vaul": "^1.1.2",
     "vitest": "^4.1.6",
     "wouter": "^3.3.5",
-    "ws": "^8.18.0",
+    "ws": "^8.21.0",
     "zod": "^3.24.2",
     "zod-validation-error": "^3.4.0"
   },
@@ -124,10 +125,10 @@
     "@vitejs/plugin-react": "^4.7.0",
     "autoprefixer": "^10.4.23",
     "drizzle-kit": "^0.31.4",
-    "esbuild": "^0.25.12",
+    "esbuild": "^0.28.1",
     "postcss": "^8.5.13",
     "tailwindcss": "^3.4.19",
-    "tsx": "^4.20.5",
+    "tsx": "^4.23.0",
     "typescript": "5.6.3",
     "vite": "^6.4.2"
   },
@@ -137,11 +138,18 @@
   "overrides": {
     "qs": ">=6.14.2",
     "hono": ">=4.12.14",
-    "protobufjs": "7.5.5",
     "lodash.trimend": ">=4.18.0",
     "uuid": ">=9.0.0",
     "@esbuild-kit/core-utils": {
       "esbuild": ">=0.25.0"
-    }
+    },
+    "tsup": {
+      "esbuild": "^0.28.1"
+    },
+    "tsx": {
+      "esbuild": "^0.28.1"
+    },
+    "socket.io-client": "^4.8.1",
+    "@ledgerhq/devices": "8.8.0"
   }
 }

@@ -4,3 +4,5 @@
 - [Drizzle schema vs raw-SQL drift](drizzle-schema-raw-sql-drift.md) — any table/column/index/constraint created via raw SQL MUST also be declared in shared/schema.ts or drizzle-kit push will DROP it in production
 - [Playwright wallet-session + focus testing](playwright-wallet-session-focus-testing.md) — how to seed a real owner session for e2e tests without weakening auth, and why FocusManager needs `visibilitychange` not `focus`
 - [ACP checkout squatting mitigation](acp-checkout-squatting-mitigation.md) — window rate limits don't stop squatting; use a per-(hash,identity) real-time renewal cooldown, and beware AND/OR precedence + delete-while-FK-referenced traps
+- [npm overrides require clean reinstall](npm-overrides-cascade.md) — `overrides` changes can silently leave stale nested versions unless node_modules + lockfile are deleted before reinstall
+- [@noble/ed25519 v3 breaking change](noble-ed25519-v3-breaking.md) — v3 freezes `etc`, breaking old `ed.etc.sha512Sync = ...` monkeypatches; use `signAsync`/`verifyAsync` instead

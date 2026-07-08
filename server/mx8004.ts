@@ -49,7 +49,7 @@ async function signAndSubmit(tx: Transaction): Promise<string> {
   const computer = new TransactionComputer();
   const serializedTx = computer.computeBytesForSigning(tx);
   const ed = await import("@noble/ed25519");
-  const signature = await ed.sign(serializedTx, privateKeyBuffer.slice(0, 32));
+  const signature = await ed.signAsync(serializedTx, privateKeyBuffer.slice(0, 32));
   tx.signature = Buffer.from(signature);
 
   const txStart = Date.now();

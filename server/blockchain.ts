@@ -191,8 +191,6 @@ export async function recordOnBlockchain(
     const serializedTx = computer.computeBytesForSigning(transaction);
     
     const ed = await import("@noble/ed25519");
-    const { sha512 } = await import("@noble/hashes/sha512");
-    ed.etc.sha512Sync = (...m: Uint8Array[]) => sha512(ed.etc.concatBytes(...m));
     const signature = await ed.signAsync(serializedTx, privateKeyBuffer.slice(0, 32));
     transaction.signature = Buffer.from(signature);
 
