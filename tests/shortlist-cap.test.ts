@@ -279,3 +279,55 @@ describe("isCompareEnabled vs shouldShowCompareBar — the 1-selected 'bar visib
     expect(isCompareEnabled(wallets)).toBe(false);
   });
 });
+
+// ── 7. Compare button disabled-state guard (task #355) ───────────────────────
+//
+// leaderboard.tsx renders the floating bar's Compare button disabled state
+// via `disabled={!isCompareEnabled(selectedWallets)}` (compare-shortlist.ts).
+// These tests don't render the component; they exercise the exact same
+// `toggleWallet` state machine the component uses to build
+// `selectedWallets`, then assert on `isCompareEnabled` the way the JSX
+// `disabled` expression evaluates it. A regression that changes
+// toggleWallet's counting behavior (e.g. double-adds, fails to dedupe) or
+// SHORTLIST_COMPARE_MIN would flip the disabled state at the wrong times
+// and would be caught here.
+
+describe("Compare button disabled guard — isCompareEnabled(selectedWallets)", () => {
+  it("0 selections: isCompareEnabled is false (Compare disabled)", () => {
+    const wallets: Set<string> = new Set();
+    expect(wallets.size).toBe(0);
+    expect(isCompareEnabled(wallets)).toBe(false);
+  });
+
+  it("1 toggle: isCompareEnabled is still false (Compare still disabled)", () => {
+    let wallets: Set<string> = new Set();
+    wallets = toggleWallet(wallets, "erd1walletA");
+    expect(wallets.size).toBe(1);
+    expect(isCompareEnabled(wallets)).toBe(false);
+  });
+
+  it("2 toggles of distinct wallets: isCompareEnabled is true (Compare enabled)", () => {
+    let wallets: Set<string> = new Set();
+    wallets = toggleWallet(wallets, "erd1walletA");
+    wallets = toggleWallet(wallets, "erd1walletB");
+    expect(wallets.size).toBe(2);
+    expect(isCompareEnabled(wallets)).toBe(true);
+  });
+
+  it("toggling the same wallet twice (select then deselect) keeps isCompareEnabled false", () => {
+    let wallets: Set<string> = new Set();
+    wallets = toggleWallet(wallets, "erd1walletA");
+    wallets = toggleWallet(wallets, "erd1walletA");
+    expect(wallets.size).toBe(0);
+    expect(isCompareEnabled(wallets)).toBe(false);
+  });
+
+  it("selecting 2 then deselecting 1 drops isCompareEnabled back to false", () => {
+    let wallets: Set<string> = new Set();
+    wallets = toggleWallet(wallets, "erd1walletA");
+    wallets = toggleWallet(wallets, "erd1walletB");
+    wallets = toggleWallet(wallets, "erd1walletA"); // deselect
+    expect(wallets.size).toBe(1);
+    expect(isCompareEnabled(wallets)).toBe(false);
+  });
+});
