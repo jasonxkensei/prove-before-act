@@ -1,0 +1,33 @@
+name: Certify Agent Decision
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 * * * *'
+
+jobs:
+  certify-agent-output:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run agent and export output
+        run: node ./scripts/run-agent.js > agent-output.json
+
+      - name: Certify agent output on-chain
+        id: certify
+        uses: jasonxkensei/xProof-Action@v1
+        with:
+          api_key: ${{ secrets.XPROOF_API_KEY }}
+          files: 'agent-output.json'
+          author_name: 'trading-agent-v3'
+          metadata: >-
+            {"model_hash":"sha256:abc123...","strategy_hash":"sha256:def456...",
+            "confidence_level":0.92,"decision_id":"trade-${{ github.run_id }}",
+            "threshold_stage":"final"}
+
+      - name: Fail fast if certification failed
+        if: steps.certify.outputs.failed_count != '0'
+        run: |
+          echo "Agent decision was not certified — treat as untrusted."
+          exit 1

@@ -1,0 +1,25 @@
+name: Certify Release
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: npm run build && zip -r build.zip dist/
+
+      - name: Certify with xProof
+        id: certify
+        uses: jasonxkensei/xProof-Action@v1
+        with:
+          api_key: ${{ secrets.XPROOF_API_KEY }}
+          files: 'build.zip'
+          author_name: 'CI Bot'
+
+      - name: Show proof
+        run: echo "Verified at ${{ steps.certify.outputs.proof_urls }}"

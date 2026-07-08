@@ -1,10 +1,18 @@
 # xProof Certify — GitHub Action
 
-> **Every build you ship without proof is a build anyone can claim.**
+[![Marketplace](https://img.shields.io/badge/Marketplace-xProof%20Certify-blue?logo=github)](https://github.com/marketplace/actions/xproof-certify)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![Release](https://img.shields.io/github/v/release/jasonxkensei/xProof-Action)](https://github.com/jasonxkensei/xProof-Action/releases)
 
-Certify your build artifacts on MultiversX blockchain. SHA-256 hash locally, anchor on-chain, verify forever. Supply chain attestation for your CI/CD pipeline.
+> Anchor a verifiable, on-chain proof of your build artifacts and AI agent outputs — in 3 lines of YAML.
 
-## Quick Start
+Certify build artifacts (or anything hashable) on the MultiversX blockchain directly from your CI/CD pipeline. Files are hashed locally with SHA-256 and never leave your runner — only the hash is sent to xProof. Get back a permanent, publicly verifiable proof, a status badge, and a JSON attestation you can attach to releases.
+
+## Get started in 2 minutes
+
+1. Grab an API key: sign in at [xproof.app](https://xproof.app), connect a wallet, and create a key under **Settings → API Keys** ([direct link](https://xproof.app/settings)).
+2. Add it to your repo as a secret named `XPROOF_API_KEY` (**Settings → Secrets and variables → Actions**).
+3. Drop this into any workflow:
 
 ```yaml
 name: Certify Release
@@ -22,19 +30,26 @@ jobs:
         run: npm run build && zip -r build.zip dist/
 
       - name: Certify with xProof
-        uses: xproof-app/certify-action@v1
+        uses: jasonxkensei/xProof-Action@v1
         with:
           api_key: ${{ secrets.XPROOF_API_KEY }}
           files: 'build.zip'
 ```
 
+That's it — every push to `main` now anchors a tamper-evident proof of your build artifact on-chain.
+
+> **No API key yet, or building an autonomous agent instead of a CI pipeline?** xProof also supports pay-per-call certification with no account via the **x402** protocol (USDC on Base), through the [`@xproof/xproof` npm SDK](https://www.npmjs.com/package/@xproof/xproof) or [`xproof` PyPI SDK](https://pypi.org/project/xproof/). This GitHub Action always uses an API key because CI runners need a stable, revocable credential rather than a per-call wallet signature.
+
 ## Inputs
 
 | Input | Required | Default | Description |
 |-------|----------|---------|-------------|
-| `api_key` | Yes | — | xProof API key (`pm_xxx`). Store as GitHub secret. |
+| `api_key` | Yes | — | xProof API key (`pm_xxx`). Store as a GitHub secret. |
 | `files` | Yes | — | Files or glob patterns to certify (space-separated). |
-| `author_name` | No | `''` | Author name to attach to certification. |
+| `author_name` | No | `''` | Author name to attach to the certification. |
+| `metadata` | No | `''` | JSON object merged into the certification metadata. Use this for AI-agent context, e.g. `{"model_hash":"...","strategy_hash":"...","confidence_level":0.8}`. |
+| `fail_on_error` | No | `'true'` | Fail the step if any file could not be certified. Set to `'false'` to only warn and keep the job green. |
+| `max_retries` | No | `'3'` | Retry attempts per file on transient errors (HTTP 429 or 5xx). |
 | `api_url` | No | `https://xproof.app` | API URL (override for testing). |
 
 ## Outputs
@@ -44,8 +59,11 @@ jobs:
 | `proof_ids` | Comma-separated proof IDs |
 | `proof_urls` | Comma-separated verification URLs |
 | `badge_urls` | Comma-separated badge SVG URLs |
+| `badge_markdown` | Ready-to-paste Markdown badge snippets, one per line |
 | `proof_json` | Path to JSON attestation file — attach to GitHub Releases for provenance |
 | `summary` | Human-readable summary |
+| `certified_count` | Number of files successfully certified |
+| `failed_count` | Number of files that failed to certify |
 
 ## Examples
 
@@ -53,7 +71,7 @@ jobs:
 
 ```yaml
 - name: Certify
-  uses: xproof-app/certify-action@v1
+  uses: jasonxkensei/xProof-Action@v1
   with:
     api_key: ${{ secrets.XPROOF_API_KEY }}
     files: 'release.tar.gz'
@@ -64,7 +82,7 @@ jobs:
 ```yaml
 - name: Certify
   id: certify
-  uses: xproof-app/certify-action@v1
+  uses: jasonxkensei/xProof-Action@v1
   with:
     api_key: ${{ secrets.XPROOF_API_KEY }}
     files: 'build.zip package.json contracts/main.sol'
@@ -74,12 +92,51 @@ jobs:
   run: echo "Proofs: ${{ steps.certify.outputs.proof_urls }}"
 ```
 
+### Certify an AI agent's output (reasoning + decision context)
+
+Any file can be certified — including a JSON dump of an agent's reasoning trace or final answer. Attach `metadata` so the proof carries model and decision provenance, not just a hash:
+
+```yaml
+- name: Export agent output
+  run: node ./scripts/export-agent-output.js > agent-output.json
+
+- name: Certify agent output
+  uses: jasonxkensei/xProof-Action@v1
+  with:
+    api_key: ${{ secrets.XPROOF_API_KEY }}
+    files: 'agent-output.json'
+    author_name: 'trading-agent-v3'
+    metadata: '{"model_hash":"sha256:abc123...","strategy_hash":"sha256:def456...","confidence_level":0.92,"decision_id":"trade-2026-07-08-001","threshold_stage":"final"}'
+```
+
+### Certify only on release tags (conditional usage)
+
+```yaml
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm run build && zip -r build.zip dist/
+
+      - name: Certify with xProof
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: jasonxkensei/xProof-Action@v1
+        with:
+          api_key: ${{ secrets.XPROOF_API_KEY }}
+          files: 'build.zip'
+```
+
 ### Attach attestation to GitHub Release
 
 ```yaml
 - name: Certify
   id: certify
-  uses: xproof-app/certify-action@v1
+  uses: jasonxkensei/xProof-Action@v1
   with:
     api_key: ${{ secrets.XPROOF_API_KEY }}
     files: 'build.zip'
@@ -117,23 +174,50 @@ The attestation JSON contains full provenance data:
 }
 ```
 
-### Add badge to README
+### Add a badge to your README
+
+Use the `badge_markdown` output directly, or build it manually:
 
 ```markdown
-[![xProof Verified](https://xproof.app/badge/{proof_id})](https://explorer.multiversx.com/transactions/{tx_hash})
+[![xProof Verified](https://xproof.app/badge/{proof_id})](https://xproof.app/proof/{proof_id})
 ```
+
+### Keep the job green even if certification fails
+
+By default the step fails the job if any file couldn't be certified (`fail_on_error: 'true'`). To only warn instead:
+
+```yaml
+- name: Certify with xProof
+  uses: jasonxkensei/xProof-Action@v1
+  with:
+    api_key: ${{ secrets.XPROOF_API_KEY }}
+    files: 'build.zip'
+    fail_on_error: 'false'
+```
+
+## Error handling & reliability
+
+- **Transient errors (HTTP 429 or 5xx):** retried automatically with exponential backoff, up to `max_retries` (default 3) attempts per file.
+- **Non-retryable errors (e.g. 400, 401, 402, 403):** reported immediately via `::error::` and not retried, since retrying wouldn't change the outcome (bad request, invalid key, insufficient credits, or access denied).
+- **Job outcome:** with the default `fail_on_error: 'true'`, the step exits non-zero if any file fails, so downstream steps (releases, deploys) don't run against an uncertified build. Set `fail_on_error: 'false'` to opt out.
+- **Rate limits:** if you hit rate limits certifying many files in one run, increase `max_retries` or split files across multiple steps/jobs.
+- **Network/API outage:** files are still hashed and attempted independently — one failing file doesn't stop the others from being certified.
 
 ## How it works
 
 1. Calculates SHA-256 hash of each file locally (files never leave your runner)
-2. Sends only the hash + filename to xProof API
-3. xProof anchors the hash on MultiversX blockchain
+2. Sends only the hash, filename, and optional metadata to the xProof API
+3. xProof anchors the hash on the MultiversX blockchain
 4. Returns verification URLs, badges, and a JSON attestation file
 
-**Cost:** Starting at $0.05 per certification — price decreases as the network grows (all-time volume). Current pricing: https://xproof.app/api/pricing
+**Cost:** $0.01 per certification — flat rate, no tiers. Current pricing: https://xproof.app/api/pricing
 
-**Get an API key:** Visit [xproof.app](https://xproof.app) and connect your wallet.
+**Get an API key:** Visit [xproof.app/settings](https://xproof.app/settings) and connect your wallet.
+
+## More examples
+
+See the [`examples/`](./examples) folder for complete, runnable workflow files.
 
 ## License
 
-All Rights Reserved. See [xproof.app](https://xproof.app) for terms.
+MIT — see [LICENSE](./LICENSE).

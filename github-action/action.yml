@@ -16,6 +16,18 @@ inputs:
     description: 'Author name to attach to the certification (optional).'
     required: false
     default: ''
+  metadata:
+    description: 'Optional JSON object merged into the certification metadata. Use this for AI-agent context such as {"model_hash":"...","strategy_hash":"...","confidence_level":0.8,"decision_id":"...","threshold_stage":"final"}.'
+    required: false
+    default: ''
+  fail_on_error:
+    description: 'If "true" (default), the step fails (non-zero exit) when any file could not be certified. Set to "false" to only warn and keep the job green.'
+    required: false
+    default: 'true'
+  max_retries:
+    description: 'Number of retry attempts per file on transient errors (HTTP 429 or 5xx) before giving up.'
+    required: false
+    default: '3'
   api_url:
     description: 'xProof API URL (override for testing).'
     required: false
@@ -28,10 +40,16 @@ outputs:
     description: 'Comma-separated list of proof verification URLs'
   badge_urls:
     description: 'Comma-separated list of badge SVG URLs'
+  badge_markdown:
+    description: 'Newline-separated Markdown snippets ready to paste into a README, one per certified file'
   proof_json:
     description: 'Path to JSON attestation file containing all proof details (suitable for GitHub Releases)'
   summary:
     description: 'Human-readable summary of all certifications'
+  certified_count:
+    description: 'Number of files successfully certified'
+  failed_count:
+    description: 'Number of files that failed to certify'
 
 runs:
   using: 'composite'
@@ -42,17 +60,30 @@ runs:
         XPROOF_API_KEY: ${{ inputs.api_key }}
         XPROOF_FILES: ${{ inputs.files }}
         XPROOF_AUTHOR: ${{ inputs.author_name }}
+        XPROOF_METADATA: ${{ inputs.metadata }}
+        XPROOF_FAIL_ON_ERROR: ${{ inputs.fail_on_error }}
+        XPROOF_MAX_RETRIES: ${{ inputs.max_retries }}
         XPROOF_API_URL: ${{ inputs.api_url }}
       run: |
-        set -euo pipefail
+        set -uo pipefail
 
         PROOF_IDS=""
         PROOF_URLS=""
         BADGE_URLS=""
+        BADGE_MARKDOWN=""
         SUMMARY=""
         COUNT=0
+        FAILED=0
         JSON_ARTIFACTS="[]"
         ATTESTATION_FILE="${RUNNER_TEMP:-/tmp}/xproof-attestation.json"
+
+        # Validate optional metadata is well-formed JSON before we touch any file.
+        if [ -n "$XPROOF_METADATA" ]; then
+          if ! echo "$XPROOF_METADATA" | jq empty 2>/dev/null; then
+            echo "::error::'metadata' input is not valid JSON: $XPROOF_METADATA"
+            exit 1
+          fi
+        fi
 
         # Expand glob patterns
         FILES=$(eval echo $XPROOF_FILES)
@@ -69,22 +100,51 @@ runs:
 
           echo "Certifying: $FILE_NAME ($FILE_HASH)"
 
-          # Build JSON payload
-          PAYLOAD="{\"file_hash\": \"$FILE_HASH\", \"filename\": \"$FILE_NAME\""
-          if [ -n "$XPROOF_AUTHOR" ]; then
-            PAYLOAD="$PAYLOAD, \"author_name\": \"$XPROOF_AUTHOR\""
-          fi
-          PAYLOAD="$PAYLOAD}"
+          # Build JSON payload safely with jq (avoids breakage/injection from
+          # quotes or backslashes in filenames/author names).
+          PAYLOAD=$(jq -n \
+            --arg fh "$FILE_HASH" \
+            --arg fn "$FILE_NAME" \
+            --arg author "$XPROOF_AUTHOR" \
+            --argjson metadata "${XPROOF_METADATA:-null}" \
+            '{file_hash: $fh, filename: $fn}
+             + (if $author != "" then {author_name: $author} else {} end)
+             + (if $metadata != null then {metadata: $metadata} else {} end)')
 
-          # Call xProof API
-          RESPONSE=$(curl -s -w "\n%{http_code}" \
-            -X POST "${XPROOF_API_URL}/api/proof" \
-            -H "Authorization: Bearer $XPROOF_API_KEY" \
-            -H "Content-Type: application/json" \
-            -d "$PAYLOAD")
+          # Call xProof API with bounded retries on transient errors
+          # (429 rate limit or 5xx). Client errors (4xx other than 429) are
+          # not retried since retrying won't change the outcome.
+          ATTEMPT=0
+          HTTP_CODE=0
+          BODY=""
+          while :; do
+            ATTEMPT=$((ATTEMPT + 1))
+            RESPONSE=$(curl -s --max-time 30 -w "\n%{http_code}" \
+              -X POST "${XPROOF_API_URL}/api/proof" \
+              -H "Authorization: Bearer $XPROOF_API_KEY" \
+              -H "Content-Type: application/json" \
+              -d "$PAYLOAD")
+            HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+            BODY=$(echo "$RESPONSE" | sed '$d')
 
-          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
-          BODY=$(echo "$RESPONSE" | head -n -1)
+            if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+              break
+            fi
+
+            if [ "$HTTP_CODE" = "429" ] || [ "$HTTP_CODE" -ge 500 ]; then
+              if [ "$ATTEMPT" -ge "$XPROOF_MAX_RETRIES" ]; then
+                echo "::warning::Giving up on ${FILE_NAME} after ${ATTEMPT} attempts (HTTP ${HTTP_CODE})"
+                break
+              fi
+              WAIT=$((ATTEMPT * 2))
+              echo "::warning::Transient error certifying ${FILE_NAME} (HTTP ${HTTP_CODE}), retrying in ${WAIT}s (attempt ${ATTEMPT}/${XPROOF_MAX_RETRIES})"
+              sleep "$WAIT"
+              continue
+            fi
+
+            # Non-retryable client error (e.g. 400/401/402/403)
+            break
+          done
 
           if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
             PROOF_ID=$(echo "$BODY" | jq -r '.proof_id // .id // empty')
@@ -105,6 +165,8 @@ runs:
               [ -n "$BADGE_URLS" ] && BADGE_URLS="${BADGE_URLS},"
               BADGE_URLS="${BADGE_URLS}${BADGE_URL}"
 
+              BADGE_MARKDOWN="${BADGE_MARKDOWN}[![xProof Verified](${BADGE_URL})](${VERIFY_URL})"$'\n'
+
               SUMMARY="${SUMMARY}${FILE_NAME}: ${VERIFY_URL}\n"
 
               JSON_ARTIFACTS=$(echo "$JSON_ARTIFACTS" | jq \
@@ -119,9 +181,11 @@ runs:
 
               echo "::notice::Certified ${FILE_NAME} -> ${VERIFY_URL}"
             else
+              FAILED=$((FAILED + 1))
               echo "::warning::Unexpected response for ${FILE_NAME}: ${BODY}"
             fi
           else
+            FAILED=$((FAILED + 1))
             echo "::error::Failed to certify ${FILE_NAME} (HTTP ${HTTP_CODE}): ${BODY}"
           fi
         done
@@ -130,7 +194,14 @@ runs:
         echo "proof_ids=${PROOF_IDS}" >> $GITHUB_OUTPUT
         echo "proof_urls=${PROOF_URLS}" >> $GITHUB_OUTPUT
         echo "badge_urls=${BADGE_URLS}" >> $GITHUB_OUTPUT
+        echo "certified_count=${COUNT}" >> $GITHUB_OUTPUT
+        echo "failed_count=${FAILED}" >> $GITHUB_OUTPUT
         echo "summary=${COUNT} file(s) certified on MultiversX blockchain via xProof" >> $GITHUB_OUTPUT
+        {
+          echo "badge_markdown<<XPROOF_EOF"
+          echo -n "$BADGE_MARKDOWN"
+          echo "XPROOF_EOF"
+        } >> $GITHUB_OUTPUT
 
         # Write attestation JSON only when files were certified
         if [ $COUNT -gt 0 ]; then
@@ -162,7 +233,7 @@ runs:
           echo ""
           echo "=== xProof Certification Summary ==="
           echo -e "$SUMMARY"
-          echo "Total: $COUNT file(s) certified"
+          echo "Total: $COUNT file(s) certified, $FAILED failed"
 
           # Add to GitHub Step Summary
           echo "## xProof Certification" >> $GITHUB_STEP_SUMMARY
@@ -177,4 +248,9 @@ runs:
           echo "Powered by [xProof](https://xproof.app)" >> $GITHUB_STEP_SUMMARY
         else
           echo "::warning::No files were certified"
+        fi
+
+        if [ "$FAILED" -gt 0 ] && [ "$XPROOF_FAIL_ON_ERROR" = "true" ]; then
+          echo "::error::${FAILED} file(s) failed to certify and fail_on_error is 'true'"
+          exit 1
         fi

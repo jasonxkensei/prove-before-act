@@ -1,0 +1,29 @@
+name: Certify on Release Tag
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  certify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build
+        run: npm run build && zip -r build.zip dist/
+
+      - name: Certify with xProof
+        if: startsWith(github.ref, 'refs/tags/v')
+        id: certify
+        uses: jasonxkensei/xProof-Action@v1
+        with:
+          api_key: ${{ secrets.XPROOF_API_KEY }}
+          files: 'build.zip'
+          fail_on_error: 'true'
+
+      - name: Upload attestation to Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.certify.outputs.proof_json }}
