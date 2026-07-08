@@ -188,3 +188,9 @@ Required guarantees:
 - Current MCP review found `investigate_proof` read-only for x402 callers and subject/admin-gated before recording violations for API-key callers; keep MCP governance writes as review anchors only if auth or audit-trail mutation logic changes.
 - Wallet-backed certification and ACP issuance must cryptographically bind every public-facing attribution field that downstream proof JSON/PDF treats as part of the proof context, at minimum filename and claimed author identity. Hash-only payment binding is insufficient when off-chain metadata is displayed as trustworthy certification evidence.
 - `/widget/trust/:wallet.js` is a public non-`/api` route and therefore sits outside the generic `/api` limiter. Keep it as an anonymous DoS review anchor until it has route-specific throttling and cached or precomputed calibration data.
+
+## Scan Notes — 2026-07-08 Production Security Scan
+
+- `/widget/trust/:wallet.js` is a visibility-gated public artifact whose JavaScript body embeds profile-dependent calibration data. Shared-cache headers such as `Cache-Control: public` can preserve a previously public widget payload after the owner disables `is_public_profile`.
+- ACP checkout still allows unpaid reservation of arbitrary `file_hash` values after API-key auth plus payer-wallet signature proof. Other paid routes can displace those reservations, but the ACP path itself still blocks later ACP buyers with `DUPLICATE_PENDING_CHECKOUT` until the reservation expires.
+- `file_hash` uniqueness and reservation decisions remain exact-string based across REST, MCP, ACP, and ACP-displacement helpers. SHA-256 digests must be canonicalized consistently, or enforced with a canonical unique index, so case variants cannot create duplicate proofs or bypass reservation conflicts for the same content.
