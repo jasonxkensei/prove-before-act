@@ -268,6 +268,69 @@ describe("PgRateLimitStore.decrement — DB unavailable (csvAnonStore)", () => {
   });
 });
 
+// ── DB recovery mid-window ────────────────────────────────────────────────────
+//
+// The DB-unavailable tests above only confirm that a single failed decrement()
+// call resolves without throwing. They don't confirm what happens to the
+// counter itself when the pool comes back and a second decrement fires in the
+// same rate-limit window. If the first refund is silently swallowed (as
+// designed, to fail open), the expected degradation is "lose at most one
+// token" — not "lose the whole window's worth of refunds" and not "double
+// count" once the pool recovers. This block exercises that end-to-end against
+// the real counter row, mocking only the first pool.query call so the second
+// decrement hits the live DB.
+
+describe("PgRateLimitStore.decrement — DB recovers mid-window (eligibleProofsIpAnonStore)", () => {
+  const NS = "eligible_proofs_ip";
+
+  beforeAll(async () => {
+    await ensureTable();
+    await deleteBuckets(NS, UNIT_TEST_IP);
+  });
+
+  afterAll(async () => {
+    await deleteBuckets(NS, UNIT_TEST_IP);
+  });
+
+  it("loses at most one token when the first decrement fails and the pool recovers before the second", async () => {
+    // Build up a counter of 3 (simulating 3 consumed tokens in this window).
+    await eligibleProofsIpAnonStore.increment(UNIT_TEST_IP);
+    await eligibleProofsIpAnonStore.increment(UNIT_TEST_IP);
+    await eligibleProofsIpAnonStore.increment(UNIT_TEST_IP);
+    const startCount = await readCount(NS, UNIT_TEST_IP);
+    expect(startCount).toBe(3);
+
+    // First decrement: DB is down, refund is silently lost (fail-open design).
+    const poolSpy = vi.spyOn(pool, "query").mockRejectedValueOnce(
+      new Error("simulated DB outage — first decrement lost"),
+    );
+    await expect(
+      eligibleProofsIpAnonStore.decrement(UNIT_TEST_IP),
+    ).resolves.toBeUndefined();
+    poolSpy.mockRestore();
+
+    // Pool has recovered. Confirm the lost refund did not silently persist as
+    // an unrecovered N (i.e. the mock only intercepted the first call).
+    const afterFirstDecrement = await readCount(NS, UNIT_TEST_IP);
+    expect(afterFirstDecrement).toBe(3);
+
+    // Second decrement in the same window: DB is back up, this one must land.
+    await eligibleProofsIpAnonStore.decrement(UNIT_TEST_IP);
+
+    const finalCount = await readCount(NS, UNIT_TEST_IP);
+    // Degradation guarantee: at most one token is silently lost per DB
+    // outage. If both decrements had been lost, finalCount would still be 3
+    // (startCount) and the owner would hit their IP cap one request early.
+    // If the store double-applied a refund on recovery, finalCount would be
+    // 1. The only correct outcome is startCount - 1 = 2: the failed
+    // decrement's token is gone for good, but the counter does not drift any
+    // further once the pool is back.
+    expect(finalCount).toBe(startCount - 1);
+    expect(finalCount).toBeLessThanOrEqual(startCount - 1);
+    expect(finalCount).not.toBe(startCount);
+  });
+});
+
 // ── csvAnonStore ──────────────────────────────────────────────────────────────
 
 describe("PgRateLimitStore.decrement — csvAnonStore", () => {
