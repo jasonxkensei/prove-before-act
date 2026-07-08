@@ -36,6 +36,32 @@ export function toggleWallet(prev: Set<string>, wallet: string): Set<string> {
 }
 
 /**
+ * Minimum number of selected wallets required for the floating compare bar
+ * to render. leaderboard.tsx must use this constant in its JSX guard
+ * (`selectedWallets.size >= SHORTLIST_BAR_MIN && <FloatingBar />`) rather
+ * than a hardcoded literal, so tests can assert against the exact value the
+ * component renders with.
+ */
+export const SHORTLIST_BAR_MIN = 1;
+
+/**
+ * Minimum number of selected wallets required to enable the "Compare"
+ * button inside the floating bar. leaderboard.tsx must use this constant
+ * in its `disabled={...}` prop rather than a hardcoded literal.
+ */
+export const SHORTLIST_COMPARE_MIN = 2;
+
+/** True when the floating compare bar should be visible. */
+export function shouldShowCompareBar(selectedWallets: Set<string>): boolean {
+  return selectedWallets.size >= SHORTLIST_BAR_MIN;
+}
+
+/** True when the "Compare" button inside the floating bar should be enabled. */
+export function isCompareEnabled(selectedWallets: Set<string>): boolean {
+  return selectedWallets.size >= SHORTLIST_COMPARE_MIN;
+}
+
+/**
  * Read the shortlist from storage.
  * Mirrors the useState lazy initializer in leaderboard.tsx.
  * Returns an empty Set on any error (missing key, malformed JSON, non-array).

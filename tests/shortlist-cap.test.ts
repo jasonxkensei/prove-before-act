@@ -23,9 +23,13 @@ import { describe, it, expect, beforeEach } from "vitest";
 import {
   SHORTLIST_KEY,
   SHORTLIST_MAX,
+  SHORTLIST_BAR_MIN,
+  SHORTLIST_COMPARE_MIN,
   toggleWallet,
   writeShortlist,
   readShortlist,
+  shouldShowCompareBar,
+  isCompareEnabled,
 } from "../client/src/lib/compare-shortlist";
 
 // ─── Minimal storage mock ──────────────────────────────────────────────────────
@@ -204,41 +208,74 @@ describe("sessionStorage — JSON array has at most SHORTLIST_MAX elements", () 
   });
 });
 
-// ── 5. Floating compare bar visibility threshold (selectedWallets.size >= 1) ──
+// ── 5. Floating compare bar visibility threshold ─────────────────────────────
 //
-// leaderboard.tsx renders the floating compare bar with the guard
-// `{selectedWallets.size >= 1 && <FloatingBar />}`. These tests exercise
-// the exact `size` values that drive that guard via the same toggleWallet
-// production function, so a regression that changes the threshold (e.g.
-// to `>= 2`) is caught even though the JSX itself isn't rendered here.
+// leaderboard.tsx renders the floating compare bar via
+// `{shouldShowCompareBar(selectedWallets) && <FloatingBar />}` and disables
+// the "Compare" button via `disabled={!isCompareEnabled(selectedWallets)}`.
+// Both leaderboard.tsx and these tests import the SAME shouldShowCompareBar /
+// isCompareEnabled functions (and SHORTLIST_BAR_MIN / SHORTLIST_COMPARE_MIN
+// constants) from compare-shortlist.ts, so a regression that changes either
+// threshold (e.g. bumping SHORTLIST_BAR_MIN to 2) is caught here because it
+// would also change what the production component renders.
 
-describe("floating compare bar visibility threshold (selectedWallets.size >= 1)", () => {
-  it("size is 0 for a freshly initialized (empty) shortlist — bar should not appear", () => {
+describe("SHORTLIST_BAR_MIN / SHORTLIST_COMPARE_MIN constants", () => {
+  it("bar threshold is 1 and compare threshold is 2", () => {
+    expect(SHORTLIST_BAR_MIN).toBe(1);
+    expect(SHORTLIST_COMPARE_MIN).toBe(2);
+  });
+});
+
+describe("shouldShowCompareBar — floating bar visibility (used directly by leaderboard.tsx)", () => {
+  it("is false for a freshly initialized (empty) shortlist — bar should not appear", () => {
     const wallets: Set<string> = new Set();
     expect(wallets.size).toBe(0);
-    expect(wallets.size >= 1).toBe(false);
+    expect(shouldShowCompareBar(wallets)).toBe(false);
   });
 
-  it("size is 1 after a single toggleWallet call — bar should appear", () => {
+  it("is true after a single toggleWallet call — bar should appear", () => {
     const wallets = toggleWallet(new Set(), SIX_WALLETS[0]);
     expect(wallets.size).toBe(1);
-    expect(wallets.size >= 1).toBe(true);
+    expect(shouldShowCompareBar(wallets)).toBe(true);
   });
 
-  it("size returns to 0 after deselecting the only selected wallet — bar should disappear again", () => {
+  it("becomes false again after deselecting the only selected wallet — bar should disappear", () => {
     let wallets = toggleWallet(new Set(), SIX_WALLETS[0]); // select → 1
-    expect(wallets.size >= 1).toBe(true);
+    expect(shouldShowCompareBar(wallets)).toBe(true);
     wallets = toggleWallet(wallets, SIX_WALLETS[0]);        // deselect → 0
     expect(wallets.size).toBe(0);
-    expect(wallets.size >= 1).toBe(false);
+    expect(shouldShowCompareBar(wallets)).toBe(false);
   });
 
-  it("size stays >= 1 for every count from 1 through SHORTLIST_MAX", () => {
+  it("stays true for every count from 1 through SHORTLIST_MAX", () => {
     let wallets: Set<string> = new Set();
     for (const w of SIX_WALLETS) {
       wallets = toggleWallet(wallets, w);
-      expect(wallets.size).toBeGreaterThanOrEqual(1);
+      expect(shouldShowCompareBar(wallets)).toBe(true);
     }
     expect(wallets.size).toBe(SHORTLIST_MAX);
+  });
+});
+
+describe("isCompareEnabled vs shouldShowCompareBar — the 1-selected 'bar visible but compare disabled' state", () => {
+  it("at size 1: bar is visible AND compare button is disabled", () => {
+    const wallets = toggleWallet(new Set(), SIX_WALLETS[0]);
+    expect(wallets.size).toBe(1);
+    expect(shouldShowCompareBar(wallets)).toBe(true);
+    expect(isCompareEnabled(wallets)).toBe(false);
+  });
+
+  it("at size 2: bar is visible AND compare button is enabled", () => {
+    let wallets = toggleWallet(new Set(), SIX_WALLETS[0]);
+    wallets = toggleWallet(wallets, SIX_WALLETS[1]);
+    expect(wallets.size).toBe(2);
+    expect(shouldShowCompareBar(wallets)).toBe(true);
+    expect(isCompareEnabled(wallets)).toBe(true);
+  });
+
+  it("at size 0: bar is hidden AND compare button would be disabled", () => {
+    const wallets: Set<string> = new Set();
+    expect(shouldShowCompareBar(wallets)).toBe(false);
+    expect(isCompareEnabled(wallets)).toBe(false);
   });
 });

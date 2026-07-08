@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { formatDistanceToNow } from "date-fns";
-import { SHORTLIST_KEY, SHORTLIST_MAX, readShortlist, writeShortlist, clearShortlist, toggleWallet } from "@/lib/compare-shortlist";
+import { SHORTLIST_KEY, SHORTLIST_MAX, readShortlist, writeShortlist, clearShortlist, toggleWallet, shouldShowCompareBar, isCompareEnabled } from "@/lib/compare-shortlist";
 
 interface LeaderboardEntry {
   walletAddress: string;
@@ -657,7 +657,7 @@ export default function Leaderboard() {
         </p>
       </div>
 
-      {selectedWallets.size >= 1 && (
+      {shouldShowCompareBar(selectedWallets) && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50" data-testid="compare-floating-container">
           <div className="flex items-center gap-3 rounded-lg border bg-background/95 px-4 py-2.5 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/80">
             <span className="text-sm text-muted-foreground tabular-nums" data-testid="text-compare-selection-count">
@@ -674,7 +674,7 @@ export default function Leaderboard() {
             <Button
               data-testid="button-compare-agents"
               onClick={handleCompare}
-              disabled={selectedWallets.size < 2}
+              disabled={!isCompareEnabled(selectedWallets)}
               size="sm"
               className="gap-1.5"
             >
