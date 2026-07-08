@@ -106,3 +106,21 @@ npx playwright install chromium
   trust score, and cert count now render. When a feature has multiple public
   read paths backed by different caches, don't assume proving one path's
   refresh behavior covers the others — check each cache's population source.
+- Not every "does this reflect fresh state" question is about the 5-minute
+  trust/leaderboard scheduler. `/api/agents/:wallet/timeline`
+  (`server/routes/trust.ts`) has no cache at all — it queries `certifications`
+  live on every request, so its real "refresh" is the certification's
+  pending → confirmed transition itself. `/api/agent/calibration/:agentId`
+  (`server/routes/calibration.ts`) uses its own 30-second `calibrationCache`,
+  independently busted the instant `POST /api/agent/outcome` persists a new
+  outcome for that agent — not by any scheduler tick. See
+  `agent-calibration-timeline-refresh.spec.ts`: it seeds a certification as
+  `blockchain_status = 'pending'`, confirms the timeline excludes it and the
+  calibration page shows its empty state, marks the certification confirmed
+  (no cache to bust — the row appears immediately) and confirms the timeline
+  now includes it, then submits a real outcome via the agent's own wallet
+  session and confirms the calibration page renders the resulting stats after
+  a reload. Before writing a "seed → assert stale → trigger refresh → assert
+  fresh" test, identify each read path's actual freshness mechanism first —
+  it may be a scheduler-populated cache, a write-triggered cache bust, or no
+  cache at all.
