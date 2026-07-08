@@ -232,6 +232,26 @@ function HistoryTableBody({ snapshots }: { snapshots: TrustSnapshot[] }) {
   );
 }
 
+// The server caps GET /api/trust/:wallet/history to 90 days (server/routes/attestations.ts),
+// so a single wallet can never hand this component more than ~90 points today. At that size,
+// an SVG polyline plus one hover-target <rect> per point is negligible (well under 100 DOM
+// nodes) and renders/interacts fine. MAX_CHART_POINTS is a forward-looking guard, not a fix for
+// a current problem: if the lookback window is ever extended (e.g. to a year), this evenly
+// downsamples the *plotted* series so the chart stays cheap to render and legible, while the
+// score/rank delta, "N data points" count, and hover hint below still reflect the true history
+// length rather than the downsampled point count.
+const MAX_CHART_POINTS = 180;
+
+function downsampleSnapshots(snapshots: TrustSnapshot[], maxPoints: number): TrustSnapshot[] {
+  if (snapshots.length <= maxPoints) return snapshots;
+  const result: TrustSnapshot[] = [];
+  const stride = (snapshots.length - 1) / (maxPoints - 1);
+  for (let i = 0; i < maxPoints; i++) {
+    result.push(snapshots[Math.round(i * stride)]);
+  }
+  return result;
+}
+
 function TrustHistoryChart({ snapshots, tableExpanded }: { snapshots: TrustSnapshot[]; tableExpanded: boolean }) {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
@@ -244,6 +264,8 @@ function TrustHistoryChart({ snapshots, tableExpanded }: { snapshots: TrustSnaps
     );
   }
 
+  const plotted = downsampleSnapshots(snapshots, MAX_CHART_POINTS);
+
   const W = 600;
   const H = 160;
   const PAD_TOP = 16;
@@ -251,29 +273,31 @@ function TrustHistoryChart({ snapshots, tableExpanded }: { snapshots: TrustSnaps
   const PAD_LEFT = 40;
   const PAD_RIGHT = 12;
 
-  const scores = snapshots.map((s) => s.score);
+  const scores = plotted.map((s) => s.score);
   const rawMin = Math.min(...scores);
   const rawMax = Math.max(...scores);
   const chartMin = Math.max(0, rawMin - 20);
   const chartMax = rawMax + 30;
   const range = chartMax - chartMin || 1;
 
-  const xScale = (i: number) => PAD_LEFT + (i / (snapshots.length - 1)) * (W - PAD_LEFT - PAD_RIGHT);
+  const xScale = (i: number) => PAD_LEFT + (i / (plotted.length - 1)) * (W - PAD_LEFT - PAD_RIGHT);
   const yScale = (score: number) => H - PAD_BOTTOM - ((score - chartMin) / range) * (H - PAD_TOP - PAD_BOTTOM);
 
-  const points = snapshots.map((s, i) => ({ x: xScale(i), y: yScale(s.score) }));
+  const points = plotted.map((s, i) => ({ x: xScale(i), y: yScale(s.score) }));
   const polyline = points.map((p) => `${p.x},${p.y}`).join(" ");
   const areaPoints = [`${points[0].x},${H - PAD_BOTTOM}`, ...points.map((p) => `${p.x},${p.y}`), `${points[points.length - 1].x},${H - PAD_BOTTOM}`].join(" ");
 
   const levelChanges: { idx: number; from: string; to: string }[] = [];
-  for (let i = 1; i < snapshots.length; i++) {
-    if (snapshots[i].level !== snapshots[i - 1].level) {
-      levelChanges.push({ idx: i, from: snapshots[i - 1].level, to: snapshots[i].level });
+  for (let i = 1; i < plotted.length; i++) {
+    if (plotted[i].level !== plotted[i - 1].level) {
+      levelChanges.push({ idx: i, from: plotted[i - 1].level, to: plotted[i].level });
     }
   }
 
-  const lastScore = scores[scores.length - 1];
-  const firstScore = scores[0];
+  // Delta/rank stats intentionally use the full, non-downsampled `snapshots` array so
+  // downsampling (when it kicks in above MAX_CHART_POINTS) never distorts the reported trend.
+  const lastScore = snapshots[snapshots.length - 1].score;
+  const firstScore = snapshots[0].score;
   const delta = lastScore - firstScore;
   const lastRank = snapshots[snapshots.length - 1].rank;
   const firstRank = snapshots[0].rank;
@@ -282,13 +306,13 @@ function TrustHistoryChart({ snapshots, tableExpanded }: { snapshots: TrustSnaps
   const visibleThresholds = LEVEL_THRESHOLDS.filter((t) => t.score >= chartMin && t.score <= chartMax);
 
   const dateLabels: { idx: number; label: string }[] = [];
-  const step = Math.max(1, Math.floor(snapshots.length / 5));
-  for (let i = 0; i < snapshots.length; i += step) dateLabels.push({ idx: i, label: snapshots[i].snapshot_date.slice(5, 10) });
-  if (dateLabels[dateLabels.length - 1]?.idx !== snapshots.length - 1) {
-    dateLabels.push({ idx: snapshots.length - 1, label: snapshots[snapshots.length - 1].snapshot_date.slice(5, 10) });
+  const step = Math.max(1, Math.floor(plotted.length / 5));
+  for (let i = 0; i < plotted.length; i += step) dateLabels.push({ idx: i, label: plotted[i].snapshot_date.slice(5, 10) });
+  if (dateLabels[dateLabels.length - 1]?.idx !== plotted.length - 1) {
+    dateLabels.push({ idx: plotted.length - 1, label: plotted[plotted.length - 1].snapshot_date.slice(5, 10) });
   }
 
-  const hovered = hoveredIdx !== null ? snapshots[hoveredIdx] : null;
+  const hovered = hoveredIdx !== null ? plotted[hoveredIdx] : null;
 
   return (
     <div className="space-y-4" data-testid="card-trust-history-chart">
@@ -362,9 +386,9 @@ function TrustHistoryChart({ snapshots, tableExpanded }: { snapshots: TrustSnaps
           {points.map((p, i) => (
             <rect
               key={i}
-              x={p.x - (W / snapshots.length) / 2}
+              x={p.x - (W / plotted.length) / 2}
               y={PAD_TOP}
-              width={W / snapshots.length}
+              width={W / plotted.length}
               height={H - PAD_TOP - PAD_BOTTOM}
               fill="transparent"
               onMouseEnter={(e) => {
