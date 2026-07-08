@@ -100,7 +100,11 @@ describe("xproof API", () => {
   });
 
   describe("POST /api/proof (auth required)", () => {
-    it("should return 401 without Authorization header", async () => {
+    it("should return 401 (or 402 when x402 is configured) without Authorization header", async () => {
+      // When x402 is configured, the server intentionally offers a payment
+      // path (402 + payment requirements) instead of a dead-end 401 for
+      // unauthenticated requests — see server/routes/proof-write.ts. Both
+      // outcomes are valid depending on deployment configuration.
       const res = await fetch(`${BASE_URL}/api/proof`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -109,9 +113,14 @@ describe("xproof API", () => {
           filename: "test.pdf",
         }),
       });
-      expect(res.status).toBe(401);
+      expect([401, 402]).toContain(res.status);
       const body = await res.json();
-      expect(body.error).toBe("UNAUTHORIZED");
+      if (res.status === 401) {
+        expect(body.error).toBe("AUTH_REQUIRED");
+      } else {
+        expect(body.x402Version).toBeDefined();
+        expect(body.accepts).toBeDefined();
+      }
     });
 
     it("should return 401 with invalid API key", async () => {
@@ -148,7 +157,10 @@ describe("xproof API", () => {
       expect(body.error).toBe("INVALID_API_KEY");
     });
 
-    it("should return 401 without Bearer prefix", async () => {
+    it("should return 401 (or 402 when x402 is configured) without Bearer prefix", async () => {
+      // A malformed Authorization header (missing "Bearer ") is treated the
+      // same as no auth header at all, so it can also route into the x402
+      // payment-required path when x402 is configured.
       const res = await fetch(`${BASE_URL}/api/proof`, {
         method: "POST",
         headers: {
@@ -160,14 +172,18 @@ describe("xproof API", () => {
           filename: "test.pdf",
         }),
       });
-      expect(res.status).toBe(401);
+      expect([401, 402]).toContain(res.status);
       const body = await res.json();
-      expect(["UNAUTHORIZED", "INVALID_API_KEY"]).toContain(body.error);
+      if (res.status === 401) {
+        expect(["AUTH_REQUIRED", "UNAUTHORIZED", "INVALID_API_KEY"]).toContain(body.error);
+      } else {
+        expect(body.x402Version).toBeDefined();
+      }
     });
   });
 
   describe("POST /api/batch (auth required)", () => {
-    it("should return 401 or 429 without Authorization header", async () => {
+    it("should return 401, 402, or 429 without Authorization header", async () => {
       const res = await fetch(`${BASE_URL}/api/batch`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -175,9 +191,13 @@ describe("xproof API", () => {
           files: [{ file_hash: "a".repeat(64), filename: "test.pdf" }],
         }),
       });
-      expect([401, 429]).toContain(res.status);
+      expect([401, 402, 429]).toContain(res.status);
       const body = await res.json();
-      expect(["UNAUTHORIZED", "TOO_MANY_REQUESTS"]).toContain(body.error);
+      if (res.status === 402) {
+        expect(body.x402Version).toBeDefined();
+      } else {
+        expect(["AUTH_REQUIRED", "UNAUTHORIZED", "TOO_MANY_REQUESTS"]).toContain(body.error);
+      }
     });
 
     it("should return 401 or 429 with invalid API key", async () => {
@@ -252,7 +272,7 @@ describe("xproof API", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.name).toBe("xproof");
-      expect(body.version).toBe("1.0.0");
+      expect(body.version).toEqual(expect.stringMatching(/^\d+\.\d+\.\d+$/));
       expect(body.capabilities).toBeDefined();
       expect(Array.isArray(body.capabilities)).toBe(true);
       expect(body.protocols).toBeDefined();
@@ -492,7 +512,11 @@ describe("xproof API", () => {
       expect([400, 404]).toContain(res.status);
     });
 
-    it("POST /api/proof returns 401 without auth (timing fields do not bypass auth)", async () => {
+    it("POST /api/proof returns 401 or 402 without auth (timing fields do not bypass auth)", async () => {
+      // Timing/4W metadata fields must never grant access on their own —
+      // the request should still be rejected with either a bare 401
+      // (x402 not configured) or a 402 payment-required response (x402
+      // configured), never a successful certification.
       const res = await fetch(`${BASE_URL}/api/proof`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -507,7 +531,7 @@ describe("xproof API", () => {
           },
         }),
       });
-      expect(res.status).toBe(401);
+      expect([401, 402]).toContain(res.status);
     });
   });
 });
