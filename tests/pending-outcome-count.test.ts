@@ -31,6 +31,17 @@
  * never conflated.  The sentinel key consumes at most one token per test (≤5
  * across all tests in this file); the test key consumes at most 8 across all
  * test bodies — both well under the per-key limit.
+ *
+ * 4. Restart-survival of the outcome-submit quota — outcomeSubmitRateLimiter
+ *    now uses PgRateLimitStore("outcome_submit"), so its counters live in the
+ *    rate_limit_counters table instead of an in-memory Map. That means the
+ *    quota is NOT reset just because the Express process restarts (e.g. on
+ *    deploy). This describe block simulates a near-exhausted budget by
+ *    writing directly into rate_limit_counters (bypassing the running
+ *    process entirely, the same way a restarted process would find the row
+ *    already there), then asserts the very next POST both (a) increments the
+ *    persisted counter rather than starting over from 0/1, and (b) returns
+ *    429 at the exact count where the 10-per-5-min budget is exceeded.
  */
 
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
@@ -412,5 +423,115 @@ describe("pending_outcome_count — cache-invalidation path", () => {
       const stillCached = await getCalibration(otherUserId);
       expect(stillCached.pending_outcome_count).toBe(1);
     });
+  });
+});
+
+// ─── 4. Outcome-submit quota survives a server restart ───────────────────────
+//
+// outcomeSubmitRateLimiter is backed by PgRateLimitStore("outcome_submit"),
+// so the current window's counter lives in the rate_limit_counters table,
+// not an in-memory Map on the Express process. A server restart therefore
+// must NOT grant a fresh budget mid-window: the very next request after a
+// restart has to pick up exactly where the persisted counter left off.
+//
+// We simulate "the counter already existed before this process started" by
+// writing the bucket row directly via SQL (bypassing the app entirely — the
+// same effective state a restarted process would observe), then drive real
+// HTTP requests through the running server and confirm:
+//   (a) the persisted count is not reset to 0/1 — it keeps incrementing, and
+//   (b) a 429 fires at exactly the point the 10-per-5-min budget is exceeded.
+
+describe("outcome-submit rate limit — survives restart (PgRateLimitStore)", () => {
+  const OUTCOME_SUBMIT_WINDOW_MS = 5 * 60 * 1000;
+  const OUTCOME_SUBMIT_MAX = 10;
+
+  let testApiKeyId = "";
+
+  beforeAll(async () => {
+    const keyRow = await pool.query<{ id: string }>(
+      `SELECT id FROM api_keys WHERE key_hash = $1`,
+      [TEST_KEY_HASH],
+    );
+    if (keyRow.rows.length === 0) {
+      throw new Error("TEST_KEY api_keys row not found — fixture setup must run first");
+    }
+    testApiKeyId = keyRow.rows[0].id;
+  });
+
+  afterAll(async () => {
+    // Clean up the bucket this describe block wrote so it can't leak quota
+    // into other test files/workers sharing the same DB.
+    await pool.query(
+      `DELETE FROM rate_limit_counters WHERE bucket LIKE $1`,
+      [`outcome_submit:${testApiKeyId}:%`],
+    );
+  });
+
+  it("keeps incrementing a pre-seeded counter instead of resetting it, and 429s at the exact limit", async () => {
+    // ── Simulate a near-exhausted budget that existed BEFORE this process
+    // started (e.g. written by a prior server instance right before a
+    // restart). Directly upsert the current window's bucket row to
+    // count = MAX - 1 (9), bypassing the app/middleware entirely.
+    const windowStart = Math.floor(Date.now() / OUTCOME_SUBMIT_WINDOW_MS) * OUTCOME_SUBMIT_WINDOW_MS;
+    const resetAt = new Date(windowStart + OUTCOME_SUBMIT_WINDOW_MS);
+    const bucket = `outcome_submit:${testApiKeyId}:${windowStart}`;
+    const preSeededCount = OUTCOME_SUBMIT_MAX - 1; // 9
+
+    await pool.query(
+      `INSERT INTO rate_limit_counters (bucket, count, reset_at)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (bucket) DO UPDATE SET count = EXCLUDED.count, reset_at = EXCLUDED.reset_at`,
+      [bucket, preSeededCount, resetAt],
+    );
+
+    // Sanity check: the row really holds the pre-seeded count before any
+    // HTTP request is made — proves the "restart" state was set up correctly
+    // and isn't an artifact of requests made earlier in this test run.
+    const seeded = await pool.query<{ count: number }>(
+      `SELECT count FROM rate_limit_counters WHERE bucket = $1`,
+      [bucket],
+    );
+    expect(seeded.rows[0].count).toBe(preSeededCount);
+
+    // ── Request #1 (this would be the 10th submission overall): the
+    // persisted counter must increment from 9 -> 10, which is still within
+    // the max of 10, so the request must be ALLOWED (not blocked, and not
+    // treated as if the counter had reset to 0/1 after a restart).
+    const certForTenth = await insertPendingCert(0.66);
+    const tenthRes = await submitOutcome(certForTenth, 0.6);
+    expect(
+      tenthRes.status,
+      "the 10th submission in the window (count 9 -> 10) must still be allowed",
+    ).toBe(201);
+
+    const afterTenth = await pool.query<{ count: number }>(
+      `SELECT count FROM rate_limit_counters WHERE bucket = $1`,
+      [bucket],
+    );
+    expect(
+      afterTenth.rows[0].count,
+      "counter must increment from the pre-seeded value, not reset to 1",
+    ).toBe(10);
+
+    // ── Request #2 (this would be the 11th submission overall): the
+    // persisted counter increments to 11, which exceeds max=10, so the
+    // request must be rejected with 429. If the counter had been reset by
+    // the restart (regression to MemoryStore-like behavior), this request
+    // would incorrectly succeed with 201.
+    const certForEleventh = await insertPendingCert(0.44);
+    const eleventhRes = await submitOutcome(certForEleventh, 0.6);
+    expect(
+      eleventhRes.status,
+      "the 11th submission in the window (count 10 -> 11) must be rate-limited",
+    ).toBe(429);
+
+    const afterEleventh = await pool.query<{ count: number }>(
+      `SELECT count FROM rate_limit_counters WHERE bucket = $1`,
+      [bucket],
+    );
+    expect(
+      afterEleventh.rows[0].count,
+      "the bucket row must persist the incremented count, not disappear or reset",
+    ).toBe(11);
   });
 });
