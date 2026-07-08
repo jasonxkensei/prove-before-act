@@ -48,6 +48,20 @@ npx playwright install chromium
 - Two independent browser contexts (`browser.newContext()`) simulate two
   separate tabs/sessions — each gets its own cookies/localStorage/
   sessionStorage. See `cross-tab-compare.spec.ts` for the pattern.
+- Two `Page`s (tabs) inside the SAME context simulate two tabs of one real,
+  already-logged-in browser — they share cookies but still have independent
+  `sessionStorage`/focus state. See `calibration-cross-tab-badge.spec.ts`
+  for the pattern, including how it seeds a real wallet session (signed
+  `connect.sid` cookie + `sessions` table row) without touching or
+  weakening any server auth code, and how it uses `page.clock` plus a
+  manually dispatched `visibilitychange` event to deterministically trigger
+  TanStack Query's window-focus refetch (note: the default FocusManager
+  listens for `visibilitychange`, not `focus`).
+- Server-side response caches keyed by an identifier you control (e.g. a
+  wallet address) should use a fresh random identifier per test run, not a
+  fixed fixture value — otherwise a re-run within the cache TTL can read a
+  previous run's cached state and produce flaky failures unrelated to the
+  behavior under test.
 - Prefer `page.getByTestId(...)` (matches this repo's `data-testid`
   convention) over CSS selectors tied to styling.
 - Keep e2e tests focused on things vitest genuinely cannot verify (real
