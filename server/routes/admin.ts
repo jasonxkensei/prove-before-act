@@ -78,6 +78,7 @@ function labelForReferrerHost(host: string): string {
 // serialize on the database. We serve a cached payload for STATS_CACHE_TTL_MS
 // and fold concurrent first-fetches into a single in-flight promise.
 const STATS_CACHE_TTL_MS = 60_000;
+const TRAFFIC_SOURCES_WINDOW_DAYS = 30;
 let statsCache: { body: object; cachedAt: number } | null = null;
 let statsInflight: Promise<object> | null = null;
 
@@ -482,6 +483,13 @@ export function registerAdminRoutes(app: Express) {
   // Traffic Sources from HTTP Referer (real visits, not just UTM-tagged).
   // Maps referrer hostnames to friendly source labels (Google, Twitter/X,
   // LinkedIn, Reddit, etc.) so the admin sees where humans actually come from.
+  //
+  // Bounded to a rolling window (TRAFFIC_SOURCES_WINDOW_DAYS) rather than
+  // aggregating all-time history. Without a window, a single long-running
+  // spam/bot referrer with a huge historical visit count would permanently
+  // occupy the top of the LIMIT 100 rows and crowd out newer, currently
+  // relevant sources as the visits table grows — the list would stop being
+  // "top sources right now" and become "top source ever, once, forever".
   app.get("/api/admin/traffic-sources", isWalletAuthenticated, requireAdmin, async (req: any, res) => {
     try {
       const rows = await db.execute(sql`
@@ -495,6 +503,7 @@ export function registerAdminRoutes(app: Express) {
           MAX(created_at) AS last_seen
         FROM visits
         WHERE referrer_host IS NOT NULL
+          AND created_at >= NOW() - (INTERVAL '1 day' * ${TRAFFIC_SOURCES_WINDOW_DAYS})
         GROUP BY referrer_host
         ORDER BY visits DESC
         LIMIT 100
@@ -510,10 +519,12 @@ export function registerAdminRoutes(app: Express) {
           COUNT(*) AS total_visits,
           COUNT(DISTINCT ip_hash) AS total_unique_ips
         FROM visits
+        WHERE created_at >= NOW() - (INTERVAL '1 day' * ${TRAFFIC_SOURCES_WINDOW_DAYS})
       `);
 
       const s = (summary.rows[0] as Record<string, string>) || {};
       res.json({
+        window_days: TRAFFIC_SOURCES_WINDOW_DAYS,
         rows: (rows.rows as Array<Record<string, string | null>>).map(r => ({
           referrer_host: r.referrer_host,
           source_label: labelForReferrerHost(r.referrer_host || ""),

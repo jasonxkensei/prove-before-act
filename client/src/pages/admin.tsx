@@ -106,6 +106,7 @@ interface TrafficSourceRow {
 }
 
 interface TrafficSources {
+  window_days: number;
   rows: TrafficSourceRow[];
   summary: {
     referred_visits: number;
@@ -324,7 +325,7 @@ function TrafficSourcesCard({ data }: { data: TrafficSources | undefined }) {
                 </table>
               </div>
               <p className="mt-3 text-xs text-muted-foreground">
-                Top {rows.length} referrers · auto-refreshes every 60s · as of {new Date(data.generated_at).toLocaleTimeString()}
+                Top {rows.length} referrers · last {data.window_days} days · auto-refreshes every 60s · as of {new Date(data.generated_at).toLocaleTimeString()}
               </p>
             </>
           )}
