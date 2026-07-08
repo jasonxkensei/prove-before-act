@@ -79,4 +79,35 @@ describe("GET /widget/trust/:wallet.js caching", () => {
     // A private profile must never embed calibration data in the script body.
     expect(body).toContain("var cal=null");
   });
+
+  it("reflects a public -> private profile flip on the very next request, without waiting for the cache TTL", async () => {
+    const wallet = makeTestWallet("widgettestflip");
+    const userRow = await pool.query<{ id: string }>(
+      `INSERT INTO users (wallet_address, is_public_profile)
+       VALUES ($1, TRUE)
+       ON CONFLICT (wallet_address) DO UPDATE SET is_public_profile = TRUE
+       RETURNING id`,
+      [wallet],
+    );
+    const userId = userRow.rows[0].id;
+
+    try {
+      // First request while public: warms any in-process visibility cache.
+      const firstRes = await fetch(`${BASE_URL}/widget/trust/${wallet}.js`);
+      expect(firstRes.status).toBe(200);
+
+      // Owner flips their profile to private immediately afterward.
+      await pool.query(`UPDATE users SET is_public_profile = FALSE WHERE id = $1`, [userId]);
+
+      // The very next request (well within any 5-minute cache TTL) must
+      // already reflect the new, private state — no cached "public" result
+      // should keep embedding gated calibration data.
+      const secondRes = await fetch(`${BASE_URL}/widget/trust/${wallet}.js`);
+      expect(secondRes.status).toBe(200);
+      const secondBody = await secondRes.text();
+      expect(secondBody).toContain("var cal=null");
+    } finally {
+      await pool.query(`DELETE FROM users WHERE id = $1`, [userId]);
+    }
+  });
 });

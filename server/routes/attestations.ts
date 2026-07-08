@@ -631,13 +631,20 @@ export function registerAttestationsRoutes(app: Express) {
 
       // Fail-fast: check public profile visibility BEFORE running the expensive
       // calibration aggregate. Only fetch calibration if the profile is public.
-      // The result is cached for WIDGET_PROFILE_CACHE_TTL_MS to prevent every
-      // anonymous widget hit from performing a live DB lookup (a distributed
-      // attacker bypassing the shared HTTP cache via query-string nonces would
-      // otherwise drive continuous DB work even after calibration is cached).
+      //
+      // Security note: this cache is fail-closed with respect to visibility —
+      // it only ever serves a cached "not public" (false/null) result, never a
+      // cached "public" (true) result. If it cached "true", an owner flipping
+      // their profile to private could still have gated calibration data
+      // embedded and served for up to WIDGET_PROFILE_CACHE_TTL_MS afterward,
+      // independent of (and in addition to) the response's own Cache-Control
+      // header. Caching only the negative result still gives the intended DoS
+      // protection (repeated hits against a private/nonexistent wallet never
+      // re-query the DB), while keeping visibility opt-out effective on the
+      // very next request.
       let isPublicProfile: boolean | null = null;
       const cachedProfile = widgetProfileCache.get(wallet);
-      if (cachedProfile && Date.now() - cachedProfile.cachedAt < WIDGET_PROFILE_CACHE_TTL_MS) {
+      if (cachedProfile && !cachedProfile.isPublicProfile && Date.now() - cachedProfile.cachedAt < WIDGET_PROFILE_CACHE_TTL_MS) {
         isPublicProfile = cachedProfile.isPublicProfile;
       } else {
         const userCheck = await db.select({ isPublicProfile: users.isPublicProfile })
@@ -645,7 +652,11 @@ export function registerAttestationsRoutes(app: Express) {
           .where(eq(users.walletAddress, wallet))
           .then((rows) => rows[0] ?? null);
         isPublicProfile = userCheck?.isPublicProfile ?? null;
-        widgetProfileCache.set(wallet, { isPublicProfile, cachedAt: Date.now() });
+        if (!isPublicProfile) {
+          widgetProfileCache.set(wallet, { isPublicProfile, cachedAt: Date.now() });
+        } else {
+          widgetProfileCache.delete(wallet);
+        }
       }
 
       const calibration = isPublicProfile
