@@ -748,7 +748,12 @@ export async function getLeaderboard(filters: LeaderboardFilters = {}): Promise<
       const aOrder = a.calibrationLabel !== null ? (CALIBRATION_ORDER[a.calibrationLabel] ?? 3) : 3;
       const bOrder = b.calibrationLabel !== null ? (CALIBRATION_ORDER[b.calibrationLabel] ?? 3) : 3;
       if (aOrder !== bOrder) return aOrder - bOrder;
-      return b.trustScore - a.trustScore;
+      // Guard against NaN/undefined trustScore (e.g. a partially hydrated cache
+      // entry) — an unguarded subtraction can return NaN, which makes
+      // Array.sort's behavior engine-dependent and non-deterministic.
+      const aScore = Number.isFinite(a.trustScore) ? a.trustScore : 0;
+      const bScore = Number.isFinite(b.trustScore) ? b.trustScore : 0;
+      return bScore - aScore;
     });
   }
 

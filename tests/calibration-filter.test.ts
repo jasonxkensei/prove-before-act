@@ -386,7 +386,74 @@ describe('sortBy: "calibration" — tie-break and null placement', () => {
   });
 });
 
-// ─── 7. Unknown calibration query param (HTTP integration) ───────────────────
+// ─── 7. NaN / undefined trustScore in the calibration sort tie-break ─────────
+
+describe('sortBy: "calibration" — NaN/undefined trustScore guard', () => {
+  it("does not throw when a trustScore is NaN", async () => {
+    const valid = makeEntry("calibrated", { trustScore: 500 });
+    const nanScore = makeEntry("calibrated", { trustScore: NaN });
+
+    _setLeaderboardCacheForTesting([valid, nanScore]);
+
+    let result: Awaited<ReturnType<typeof getLeaderboard>>;
+    expect(async () => {
+      result = await getLeaderboard({ sortBy: "calibration" });
+    }).not.toThrow();
+
+    result = await getLeaderboard({ sortBy: "calibration" });
+    expect(result.entries).toHaveLength(2);
+  });
+
+  it("treats a NaN trustScore as 0 and places it after positive-scored entries in the same calibration group", async () => {
+    const positive = makeEntry("calibrated", { trustScore: 50 });
+    const nanScore = makeEntry("calibrated", { trustScore: NaN });
+
+    _setLeaderboardCacheForTesting([nanScore, positive]);
+
+    const result = await getLeaderboard({ sortBy: "calibration" });
+
+    expect(result.entries.map((e) => e.walletAddress)).toEqual([
+      positive.walletAddress,
+      nanScore.walletAddress,
+    ]);
+  });
+
+  it("treats an undefined trustScore as 0 without throwing or corrupting order of valid entries", async () => {
+    const high = makeEntry("calibrated", { trustScore: 300 });
+    const undefinedScore = makeEntry("calibrated", {
+      trustScore: undefined as unknown as number,
+    });
+    const low = makeEntry("calibrated", { trustScore: 10 });
+
+    _setLeaderboardCacheForTesting([undefinedScore, high, low]);
+
+    const result = await getLeaderboard({ sortBy: "calibration" });
+
+    // Valid entries must keep their correct relative order; the undefined
+    // entry (coerced to 0) must sort after both positive-scored entries.
+    expect(result.entries.map((e) => e.walletAddress)).toEqual([
+      high.walletAddress,
+      low.walletAddress,
+      undefinedScore.walletAddress,
+    ]);
+  });
+
+  it("two NaN-scored entries in the same group do not throw and both remain in the result", async () => {
+    const nanA = makeEntry("overconfident", { trustScore: NaN });
+    const nanB = makeEntry("overconfident", { trustScore: NaN });
+
+    _setLeaderboardCacheForTesting([nanA, nanB]);
+
+    const result = await getLeaderboard({ sortBy: "calibration" });
+
+    expect(result.entries).toHaveLength(2);
+    const wallets = result.entries.map((e) => e.walletAddress);
+    expect(wallets).toContain(nanA.walletAddress);
+    expect(wallets).toContain(nanB.walletAddress);
+  });
+});
+
+// ─── 8. Unknown calibration query param (HTTP integration) ───────────────────
 
 describe("unknown calibration= query param on /api/leaderboard", () => {
   it("returns 200 (not 400) for an unknown calibration= value", async () => {
