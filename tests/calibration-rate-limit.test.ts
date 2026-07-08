@@ -32,6 +32,15 @@ import { pool } from "../server/db";
 
 const BASE_URL = "http://localhost:5000";
 
+// This suite asserts the eligible-proofs limiters' real enforcement
+// boundaries (exact request counts triggering 429). The dev server bypasses
+// IP-keyed rate limiters for same-machine loopback traffic from the
+// automated test suite (see isTestSuiteLoopbackTraffic in
+// server/reliability.ts) so unrelated test files don't exhaust shared
+// buckets — this header opts these specific requests back into real
+// enforcement.
+const FORCE_RL_HEADERS = { "x-test-force-rate-limit": "1" };
+
 // ── Stable test fixtures ──────────────────────────────────────────────────────
 // Unique wallet address and raw key that will never collide with real data.
 const TEST_WALLET    = "erd1ratetest000000000000000000000000000000000000000000000000";
@@ -151,11 +160,11 @@ describe("GET /api/agent/calibration/:agentId/eligible-proofs", () => {
       "requests 1–30 return 200; the 31st request in the same window returns HTTP 429 TOO_MANY_REQUESTS",
       async () => {
         const url     = `${BASE_URL}/api/agent/calibration/${testUserId}/eligible-proofs`;
-        const headers = { Authorization: `Bearer ${TEST_RAW_KEY}` };
+        const headers = { Authorization: `Bearer ${TEST_RAW_KEY}`, ...FORCE_RL_HEADERS };
 
         // ── Baseline: unauthenticated within the limit returns 401, not 429 ──
         // Proves the rate limiter only blocks exhausted callers, not all traffic.
-        const unauthRes  = await fetch(url);
+        const unauthRes  = await fetch(url, { headers: FORCE_RL_HEADERS });
         const unauthBody = await unauthRes.json() as Record<string, unknown>;
         expect(unauthRes.status).toBe(401);
         expect(unauthBody.error).toBe("UNAUTHORIZED");
@@ -199,7 +208,7 @@ describe("GET /api/agent/calibration/:agentId/eligible-proofs", () => {
         // then eligibleProofsRateLimiter (IP-keyed, also within limit), and
         // finally the handler which returns 401 because there is no owner.
         for (let i = 0; i < 10; i++) {
-          const res  = await fetch(url);
+          const res  = await fetch(url, { headers: FORCE_RL_HEADERS });
           const body = await res.json() as Record<string, unknown>;
           // The auth check fires — confirms the IP limiter passed the request.
           expect(res.status, `request ${i + 1} must pass the IP limiter and be auth-blocked`).toBe(401);
@@ -212,7 +221,7 @@ describe("GET /api/agent/calibration/:agentId/eligible-proofs", () => {
         // returns 429.  The response must carry the IP-limiter error message
         // ("eligible-proofs"), NOT the auth error ("UNAUTHORIZED"), proving
         // the rejection happens at the middleware layer, not in the handler.
-        const limited     = await fetch(url);
+        const limited     = await fetch(url, { headers: FORCE_RL_HEADERS });
         const limitedBody = await limited.json() as Record<string, unknown>;
         expect(limited.status).toBe(429);
         expect(limitedBody.error).toBe("TOO_MANY_REQUESTS");
@@ -238,7 +247,7 @@ describe("GET /api/agent/calibration/:agentId/eligible-proofs", () => {
       "12 consecutive authenticated owner requests all return 200, proving the IP token is refunded per request",
       async () => {
         const url     = `${BASE_URL}/api/agent/calibration/${testUserId}/eligible-proofs`;
-        const headers = { Authorization: `Bearer ${TEST_RAW_KEY}` };
+        const headers = { Authorization: `Bearer ${TEST_RAW_KEY}`, ...FORCE_RL_HEADERS };
 
         // Send 12 requests — two beyond the 10/min IP cap.
         // Without the eligibleProofsIpAnonStore.decrement() call in the
@@ -288,7 +297,7 @@ describe("GET /api/agent/calibration/:agentId/eligible-proofs", () => {
         // Target: the OWNER agent's endpoint.
         // Caller:  the NON-OWNER key — valid credential, wrong owner.
         const url     = `${BASE_URL}/api/agent/calibration/${testUserId}/eligible-proofs`;
-        const headers = { Authorization: `Bearer ${NON_OWNER_RAW_KEY}` };
+        const headers = { Authorization: `Bearer ${NON_OWNER_RAW_KEY}`, ...FORCE_RL_HEADERS };
 
         // ── Requests 1–10: handler auth-blocks; IP counter increments each time.
         // The handler resolves the agent, finds the caller is not the owner,
@@ -342,7 +351,7 @@ describe("GET /api/agent/calibration/:agentId/eligible-proofs", () => {
         // Target: owner's endpoint addressed by WALLET ADDRESS, not UUID.
         // Caller: the NON-OWNER key — valid credential, wrong owner.
         const url     = `${BASE_URL}/api/agent/calibration/${TEST_WALLET}/eligible-proofs`;
-        const headers = { Authorization: `Bearer ${NON_OWNER_RAW_KEY}` };
+        const headers = { Authorization: `Bearer ${NON_OWNER_RAW_KEY}`, ...FORCE_RL_HEADERS };
 
         // ── Requests 1–10: handler resolves agent by wallet address, confirms
         // the caller is not the owner, and returns 401 without decrement().

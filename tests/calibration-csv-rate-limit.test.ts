@@ -21,6 +21,14 @@ import { pool } from "../server/db";
 
 const BASE_URL = "http://localhost:5000";
 
+// This suite asserts the CSV export limiter's real enforcement boundaries
+// (exact request counts triggering 429). The dev server bypasses IP-keyed
+// rate limiters for same-machine loopback traffic from the automated test
+// suite (see isTestSuiteLoopbackTraffic in server/reliability.ts) so
+// unrelated test files don't exhaust shared buckets — this header opts
+// these specific requests back into real enforcement.
+const FORCE_RL_HEADERS = { "x-test-force-rate-limit": "1" };
+
 // ── Stable test fixtures ──────────────────────────────────────────────────────
 // Unique wallet and key that will never collide with real data.
 const CSV_TEST_WALLET   = "erd1csvtest000000000000000000000000000000000000000000000000";
@@ -113,7 +121,7 @@ describe("GET /api/agent/calibration/:agentId/export.csv", () => {
         // All 7 returning 200 proves the handler refunds the IP token for every
         // confirmed owner so they are governed only by Layer 2 (30/min).
         const url     = `${BASE_URL}/api/agent/calibration/${csvTestUserId}/export.csv`;
-        const headers = { Authorization: `Bearer ${CSV_TEST_RAW_KEY}` };
+        const headers = { Authorization: `Bearer ${CSV_TEST_RAW_KEY}`, ...FORCE_RL_HEADERS };
 
         for (let i = 0; i < 7; i++) {
           const res = await fetch(url, { headers });
@@ -155,7 +163,7 @@ describe("GET /api/agent/calibration/:agentId/export.csv", () => {
         );
 
         const url     = `${BASE_URL}/api/agent/calibration/${csvTestUserId}/export.csv`;
-        const headers = { Authorization: `Bearer ${CSV_TEST_RAW_KEY}` };
+        const headers = { Authorization: `Bearer ${CSV_TEST_RAW_KEY}`, ...FORCE_RL_HEADERS };
 
         // ── Within the owner budget: first 30 requests ────────────────────────
         for (let i = 0; i < 30; i++) {
@@ -178,7 +186,7 @@ describe("GET /api/agent/calibration/:agentId/export.csv", () => {
         }
 
         // ── Owner-tier limit: the 31st request must be blocked ────────────────
-        const limited     = await fetch(url, { headers });
+        const limited     = await fetch(url, { headers: { ...headers, ...FORCE_RL_HEADERS } });
         const limitedBody = await limited.json() as Record<string, unknown>;
 
         expect(limited.status).toBe(429);
@@ -229,7 +237,7 @@ describe("GET /api/agent/calibration/:agentId/export.csv", () => {
 
         // ── Within the IP limit: first 5 unauthenticated requests ─────────────
         for (let i = 0; i < 5; i++) {
-          const res = await fetch(url);
+          const res = await fetch(url, { headers: FORCE_RL_HEADERS });
           expect(
             res.status,
             `request ${i + 1} must pass the IP limiter and return a CSV`,
@@ -244,7 +252,7 @@ describe("GET /api/agent/calibration/:agentId/export.csv", () => {
         // optionalApiKey and before any DB work — and returns 429.
         // The response body must be JSON with the IP-limiter error, NOT a CSV
         // body, proving the rejection happened at the middleware layer.
-        const limited     = await fetch(url);
+        const limited     = await fetch(url, { headers: FORCE_RL_HEADERS });
         const limitedBody = await limited.json() as Record<string, unknown>;
         expect(limited.status).toBe(429);
         expect(limitedBody.error).toBe("TOO_MANY_REQUESTS");

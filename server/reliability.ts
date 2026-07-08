@@ -19,6 +19,74 @@ import { getClientIp } from "./routes/helpers";
 // address. See server/routes/helpers.ts for the full rationale.
 const ipKeyGenerator = (req: Request) => getClientIp(req);
 
+// Loopback addresses a direct (non-proxied) TCP connection to this process
+// can present. Real internet traffic always arrives through Replit's edge
+// proxy, which appends the true client IP to X-Forwarded-For — getClientIp()
+// only ever returns a bare loopback address when a caller on the SAME
+// machine connected directly (e.g. `fetch("http://localhost:5000/...")`
+// from the vitest suite), never for a real remote client, in production or
+// otherwise.
+const LOOPBACK_IPS = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
+
+// A test file that wants to exercise a limiter's REAL enforcement (e.g.
+// asserting the exact request that gets a 429) sets this header so its
+// requests are never silently bypassed below.
+const FORCE_RATE_LIMIT_HEADER = "x-test-force-rate-limit";
+
+// TEST-ONLY escape hatch for the automated test suite: vitest fires ~325
+// tests against this same dev server. Every IP-keyed, Postgres-backed
+// limiter here shares one persistent bucket per (namespace, loopback IP)
+// across the WHOLE test run, so unrelated test files piling up ordinary
+// requests exhaust budgets meant for a single scenario, producing 429s in
+// tests that never intended to exercise rate-limiting at all. This bypass
+// is deliberately narrow and cannot affect production:
+//   - process.env.NODE_ENV === "production" makes this always `false`, so a
+//     deployed instance never takes this branch (see server/replitAuth.ts,
+//     server/blockchain.ts, server/routes/proof-write.ts for the same
+//     production-gating pattern used elsewhere in this codebase).
+//   - Even outside production, it only applies to direct loopback
+//     connections — real users (including via the Replit preview iframe)
+//     always arrive through the edge proxy with a real forwarded IP, never
+//     a bare loopback address.
+//   - Any test that DOES want to assert real 429 behavior for one of these
+//     limiters (see tests/calibration-csv-rate-limit.test.ts,
+//     tests/calibration-rate-limit.test.ts, and the outcome-submit block of
+//     tests/pending-outcome-count.test.ts) sends the FORCE_RATE_LIMIT_HEADER
+//     header, which always defeats the bypass and restores real enforcement
+//     — including in production, so the header itself grants no bypass.
+export function isTestSuiteLoopbackTraffic(req: Request): boolean {
+  if (req.headers[FORCE_RATE_LIMIT_HEADER]) return false;
+  if (process.env.NODE_ENV === "production") return false;
+  return LOOPBACK_IPS.has(getClientIp(req));
+}
+
+// Unconditional loopback bypass — deliberately does NOT consult
+// FORCE_RATE_LIMIT_HEADER. globalRateLimiter is a blanket per-IP catch-all
+// that runs on nearly every /api request, and it is never itself the target
+// of a force-header test (only eligibleProofsIpRateLimiter/
+// eligibleProofsRateLimiter, calibrationCsvExportRateLimiter/csvAnonStore,
+// and outcomeSubmitRateLimiter are). If globalRateLimiter honored the force
+// header, ANY scoped-limiter test's force-headered requests would ALSO count
+// against the shared global bucket. Because several such test files
+// legitimately send dozens of force-headered requests within the same
+// 60-second window, their combined volume tripped the global 100/min cap and
+// produced spurious 429s in unrelated scoped-limiter tests (observed as
+// tests/calibration-rate-limit.test.ts failing only when run as part of the
+// full suite, never in isolation). Gated by the same NODE_ENV==="production"
+// check used everywhere else in this file, so this can never affect
+// production traffic.
+function isLoopbackRegardlessOfForceHeader(req: Request): boolean {
+  if (process.env.NODE_ENV === "production") return false;
+  return LOOPBACK_IPS.has(getClientIp(req));
+}
+
+// Shared skip predicate for the general-purpose/high-volume limiters below.
+// Route- and feature-specific limiters that already have their own
+// case-specific `skip` (e.g. globalRateLimiter's /api/acp/health carve-out,
+// attestationIssuanceRateLimiter's no-wallet carve-out) fold this check in
+// alongside their existing condition instead of using this constant.
+const skipForTestSuite = (req: Request) => isTestSuiteLoopbackTraffic(req);
+
 export const globalRateLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 100,
@@ -28,7 +96,7 @@ export const globalRateLimiter = rateLimit({
   store: new PgRateLimitStore("global"),
   message: { error: "TOO_MANY_REQUESTS", message: "Too many requests, please try again later" },
   skip: (req) => {
-    return req.path === "/api/acp/health";
+    return req.path === "/api/acp/health" || isLoopbackRegardlessOfForceHeader(req);
   },
 });
 
@@ -40,6 +108,7 @@ export const healthRateLimiter = rateLimit({
   keyGenerator: ipKeyGenerator,
   store: new PgRateLimitStore("health"),
   message: { error: "TOO_MANY_REQUESTS", message: "Too many health check requests, please try again later" },
+  skip: skipForTestSuite,
 });
 
 export const authRateLimiter = rateLimit({
@@ -50,6 +119,7 @@ export const authRateLimiter = rateLimit({
   keyGenerator: ipKeyGenerator,
   store: new PgRateLimitStore("auth"),
   message: { error: "TOO_MANY_REQUESTS", message: "Too many authentication attempts, please try again later" },
+  skip: skipForTestSuite,
 });
 
 export const paymentRateLimiter = rateLimit({
@@ -60,6 +130,7 @@ export const paymentRateLimiter = rateLimit({
   keyGenerator: ipKeyGenerator,
   store: new PgRateLimitStore("payment"),
   message: { error: "TOO_MANY_REQUESTS", message: "Too many payment requests, please try again later" },
+  skip: skipForTestSuite,
 });
 
 export const apiKeyCreationRateLimiter = rateLimit({
@@ -70,6 +141,7 @@ export const apiKeyCreationRateLimiter = rateLimit({
   keyGenerator: ipKeyGenerator,
   store: new PgRateLimitStore("apikey_create"),
   message: { error: "TOO_MANY_REQUESTS", message: "Too many API key operations, please try again later" },
+  skip: skipForTestSuite,
 });
 
 export const attestationIssuanceRateLimiter = rateLimit({
@@ -78,7 +150,7 @@ export const attestationIssuanceRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req: any) => (req.walletAddress as string) ?? "unknown",
-  skip: (req: any) => !req.walletAddress,
+  skip: (req: any) => !req.walletAddress || isTestSuiteLoopbackTraffic(req),
   store: new PgRateLimitStore("attest"),
   message: { error: "TOO_MANY_REQUESTS", message: "Attestation rate limit exceeded: max 20 per hour per issuer" },
 });
@@ -91,6 +163,7 @@ export const publicReadRateLimiter = rateLimit({
   keyGenerator: ipKeyGenerator,
   store: new PgRateLimitStore("pub_read"),
   message: { error: "TOO_MANY_REQUESTS", message: "Too many requests, please try again later" },
+  skip: skipForTestSuite,
 });
 
 export const publicSearchRateLimiter = rateLimit({
@@ -101,6 +174,7 @@ export const publicSearchRateLimiter = rateLimit({
   keyGenerator: ipKeyGenerator,
   store: new PgRateLimitStore("pub_search"),
   message: { error: "TOO_MANY_REQUESTS", message: "Too many search requests, please try again later" },
+  skip: skipForTestSuite,
 });
 
 export const publicCompareRateLimiter = rateLimit({
@@ -111,6 +185,7 @@ export const publicCompareRateLimiter = rateLimit({
   keyGenerator: ipKeyGenerator,
   store: new PgRateLimitStore("pub_compare"),
   message: { error: "TOO_MANY_REQUESTS", message: "Too many comparison requests, please try again later" },
+  skip: skipForTestSuite,
 });
 
 export const publicPdfRateLimiter = rateLimit({
@@ -121,6 +196,7 @@ export const publicPdfRateLimiter = rateLimit({
   keyGenerator: ipKeyGenerator,
   store: new PgRateLimitStore("pub_pdf"),
   message: { error: "TOO_MANY_REQUESTS", message: "Too many PDF requests, please try again later" },
+  skip: skipForTestSuite,
 });
 
 // GET /api/agent/calibration/:agentId/export.csv — two-tier rate limiting.
@@ -150,6 +226,7 @@ export const calibrationCsvExportRateLimiter = rateLimit({
   keyGenerator: ipKeyGenerator,
   store: csvAnonStore,
   message: { error: "TOO_MANY_REQUESTS", message: "Too many CSV export requests, please try again later" },
+  skip: skipForTestSuite,
 });
 
 // Owner-tier config constants — single authoritative source shared with the inline
@@ -177,6 +254,7 @@ export const publicCalibrationRateLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: ipKeyGenerator,
   message: { error: "TOO_MANY_REQUESTS", message: "Too many calibration requests, please try again later" },
+  skip: skipForTestSuite,
 });
 
 // POST /api/agent/outcome is authenticated but writes to the DB on every call.
@@ -196,6 +274,7 @@ export const outcomeSubmitRateLimiter = rateLimit({
   //  b) test beforeAll hooks can wipe counters via SQL DELETE without needing
   //     a 5-minute wait between consecutive test invocations
   store: new PgRateLimitStore("outcome_submit"),
+  skip: skipForTestSuite,
 });
 
 // GET /api/agent/calibration/:agentId/eligible-proofs — two-tier rate limiting.
@@ -226,6 +305,7 @@ export const eligibleProofsIpRateLimiter = rateLimit({
   keyGenerator: ipKeyGenerator,
   store: eligibleProofsIpAnonStore,
   message: { error: "TOO_MANY_REQUESTS", message: "Too many eligible-proofs requests, please try again later" },
+  skip: skipForTestSuite,
 });
 
 // Layer 2 — owner-tier limiter. Keyed on req.apiKey.id (per-key bucket) when
@@ -240,6 +320,7 @@ export const eligibleProofsRateLimiter = rateLimit({
   keyGenerator: (req: any) => (req.apiKey?.id as string) ?? getClientIp(req),
   store: new PgRateLimitStore("eligible_proofs"),
   message: { error: "TOO_MANY_REQUESTS", message: "Eligible-proofs rate limit exceeded: max 30 per minute per API key" },
+  skip: skipForTestSuite,
 });
 
 // /api/stats runs ~15 unauthenticated full-table aggregates per call. The
@@ -254,6 +335,7 @@ export const publicStatsRateLimiter = rateLimit({
   keyGenerator: ipKeyGenerator,
   store: new PgRateLimitStore("pub_stats"),
   message: { error: "TOO_MANY_REQUESTS", message: "Too many stats requests, please try again later" },
+  skip: skipForTestSuite,
 });
 
 let commitSha = "unknown";

@@ -99,20 +99,27 @@ async function optionalApiKey(req: Request, res: Response, next: NextFunction) {
   try {
     const keyHash = crypto.createHash("sha256").update(rawKey).digest("hex");
     let [key] = await db
-      .select({ userId: apiKeys.userId, isActive: apiKeys.isActive })
+      .select({ id: apiKeys.id, userId: apiKeys.userId, isActive: apiKeys.isActive })
       .from(apiKeys)
       .where(eq(apiKeys.keyHash, keyHash))
       .limit(1);
     // Rotated-key fallback: check previousKeyHash within its grace period
     if (!key) {
       const [rotated] = await db
-        .select({ userId: apiKeys.userId, isActive: apiKeys.isActive })
+        .select({ id: apiKeys.id, userId: apiKeys.userId, isActive: apiKeys.isActive })
         .from(apiKeys)
         .where(and(eq(apiKeys.previousKeyHash, keyHash), gte(apiKeys.previousKeyExpiresAt, new Date())))
         .limit(1);
       if (rotated) key = rotated;
     }
-    if (key?.isActive) (req as any).optionalUserId = key.userId;
+    if (key?.isActive) {
+      (req as any).optionalUserId = key.userId;
+      // Also expose the API-key PK so downstream per-key rate limiting (e.g. the
+      // CSV export owner-tier limiter) can key on the API key itself instead of
+      // silently falling back to the caller's IP address, which would collapse
+      // every API-key owner behind the same NAT/IP into one shared bucket.
+      (req as any).apiKey = { id: key.id, userId: key.userId };
+    }
   } catch {
     // silent — optional auth, keep going
   }

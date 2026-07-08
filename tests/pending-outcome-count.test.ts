@@ -213,16 +213,26 @@ async function insertPendingCert(confidenceLevel = 0.8): Promise<string> {
  * POST /api/agent/outcome using the TEST_KEY (not the sentinel key).
  * Returns the raw fetch Response so callers can inspect the status code.
  */
-function submitOutcome(proofId: string, outcomeScore = 0.7): Promise<Response> {
+function submitOutcome(
+  proofId: string,
+  outcomeScore = 0.7,
+  extraHeaders: Record<string, string> = {},
+): Promise<Response> {
   return fetch(`${BASE_URL}/api/agent/outcome`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${TEST_RAW_KEY}`,
+      ...extraHeaders,
     },
     body: JSON.stringify({ proof_id: proofId, outcome_score: outcomeScore }),
   });
 }
+
+// Opt-in header that forces real rate-limit enforcement even for loopback
+// test-suite traffic. Used only by the describe block below, which is
+// specifically testing PgRateLimitStore's persisted-counter behavior.
+const FORCE_RL_HEADERS = { "x-test-force-rate-limit": "1" };
 
 /**
  * GET /api/agent/calibration/:agentId and return the parsed body.
@@ -498,7 +508,7 @@ describe("outcome-submit rate limit — survives restart (PgRateLimitStore)", ()
     // the max of 10, so the request must be ALLOWED (not blocked, and not
     // treated as if the counter had reset to 0/1 after a restart).
     const certForTenth = await insertPendingCert(0.66);
-    const tenthRes = await submitOutcome(certForTenth, 0.6);
+    const tenthRes = await submitOutcome(certForTenth, 0.6, FORCE_RL_HEADERS);
     expect(
       tenthRes.status,
       "the 10th submission in the window (count 9 -> 10) must still be allowed",
@@ -519,7 +529,7 @@ describe("outcome-submit rate limit — survives restart (PgRateLimitStore)", ()
     // the restart (regression to MemoryStore-like behavior), this request
     // would incorrectly succeed with 201.
     const certForEleventh = await insertPendingCert(0.44);
-    const eleventhRes = await submitOutcome(certForEleventh, 0.6);
+    const eleventhRes = await submitOutcome(certForEleventh, 0.6, FORCE_RL_HEADERS);
     expect(
       eleventhRes.status,
       "the 11th submission in the window (count 10 -> 11) must be rate-limited",
