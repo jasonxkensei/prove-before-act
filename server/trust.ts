@@ -1025,6 +1025,27 @@ export function _setLeaderboardCacheForTesting(entries: LeaderboardEntry[]): voi
   leaderboardCache = { allEntries: entries, cachedAt: Date.now(), computedAt: Date.now() };
 }
 
+// Test-only helper: force the in-memory leaderboard cache back to "cold"
+// (as it is on a brand-new deployment before the first scheduled refresh
+// cycle has run). Lets tests exercise the leaderboard_snapshot-only cold
+// read path in getLeaderboard() without needing to restart the process.
+// Never call this in production code paths.
+export function _resetLeaderboardCacheForTesting(): void {
+  leaderboardCache = null;
+}
+
+// Test-only helper: evict one (or, if omitted, all) entries from the
+// per-wallet trust cache. Lets tests exercise the trust_score_snapshots-only
+// cold read path in computeTrustScoreByWallet() without needing to restart
+// the process. Never call this in production code paths.
+export function _resetTrustCacheForTesting(walletAddress?: string): void {
+  if (walletAddress) {
+    trustCache.delete(walletAddress);
+  } else {
+    trustCache.clear();
+  }
+}
+
 function adjustColor(hex: string, amount: number): string {
   const num = parseInt(hex.replace("#", ""), 16);
   const r = Math.max(0, Math.min(255, (num >> 16) + amount));
