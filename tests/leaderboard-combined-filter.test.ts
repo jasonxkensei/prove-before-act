@@ -436,6 +436,38 @@ describe("search combined with category and/or calibration filters", () => {
     expect(result.entries[0].walletAddress).toBe(entry.walletAddress);
   });
 
+  it("empty string search combined with category is ignored, returning all entries in that category", async () => {
+    const financeA = makeEntry("Finance", null, { agentName: "Zulu Agent" });
+    const financeB = makeEntry("Finance", null, { agentName: "Yankee Agent" });
+    const health = makeEntry("Healthcare", null, { agentName: "Xray Agent" });
+
+    _setLeaderboardCacheForTesting([financeA, financeB, health]);
+
+    const result = await getLeaderboard({ category: "Finance", search: "" });
+
+    expect(result.entries).toHaveLength(2);
+    const wallets = result.entries.map((e) => e.walletAddress);
+    expect(wallets).toContain(financeA.walletAddress);
+    expect(wallets).toContain(financeB.walletAddress);
+    expect(result.total).toBe(2);
+  });
+
+  it("empty string search combined with calibrationFilter is ignored, returning all calibrated entries", async () => {
+    const calibA = makeEntry("Finance", "calibrated", { agentName: "Zulu Agent" });
+    const calibB = makeEntry("Healthcare", "calibrated", { agentName: "Yankee Agent" });
+    const overconfident = makeEntry("Finance", "overconfident", { agentName: "Xray Agent" });
+
+    _setLeaderboardCacheForTesting([calibA, calibB, overconfident]);
+
+    const result = await getLeaderboard({ calibrationFilter: "calibrated", search: "" });
+
+    expect(result.entries).toHaveLength(2);
+    const wallets = result.entries.map((e) => e.walletAddress);
+    expect(wallets).toContain(calibA.walletAddress);
+    expect(wallets).toContain(calibB.walletAddress);
+    expect(result.total).toBe(2);
+  });
+
   it("search + calibratedOnly returns only entries matching name that also have any non-null label", async () => {
     const alphaCalib = makeEntry("Finance", "calibrated", { agentName: "Alpha A" });
     const alphaOver = makeEntry("Finance", "overconfident", { agentName: "Alpha B" });
