@@ -347,4 +347,70 @@ describe("pending_outcome_count — cache-invalidation path", () => {
     const fresh = await res2.json() as { pending_outcome_count: number };
     expect(fresh.pending_outcome_count).toBe(0);
   });
+
+  // ── Unrelated-agent isolation ────────────────────────────────────────────
+  // The POST handler only deletes cache keys prefixed with the SUBMITTING
+  // agent's own userId/walletAddress. A completely unrelated agent's cached
+  // 30-second entry must survive untouched — otherwise every outcome
+  // submission anywhere would force a full cache flush, defeating the point
+  // of the 30-second cache for non-owning callers browsing other profiles.
+  describe("unrelated-agent cache entries are preserved", () => {
+    const OTHER_WALLET = "erd1pendcountother0000000000000000000000000000000000000000000";
+    let otherUserId = "";
+    let otherCertId = "";
+
+    beforeAll(async () => {
+      const otherUserRow = await pool.query<{ id: string }>(
+        `INSERT INTO users (wallet_address)
+         VALUES ($1)
+         ON CONFLICT (wallet_address)
+         DO UPDATE SET wallet_address = EXCLUDED.wallet_address
+         RETURNING id`,
+        [OTHER_WALLET],
+      );
+      otherUserId = otherUserRow.rows[0].id;
+
+      await pool.query(`DELETE FROM certifications WHERE user_id = $1`, [otherUserId]);
+
+      const uniqueHash = crypto.randomBytes(16).toString("hex");
+      const certRow = await pool.query<{ id: string }>(
+        `INSERT INTO certifications
+           (user_id, file_name, file_hash, blockchain_status, metadata)
+         VALUES ($1, 'other-agent-pending.txt', $2, 'confirmed',
+                 jsonb_build_object('confidence_level', 0.6::float))
+         RETURNING id`,
+        [otherUserId, uniqueHash],
+      );
+      otherCertId = certRow.rows[0].id;
+    });
+
+    afterAll(async () => {
+      await pool.query(`DELETE FROM users WHERE wallet_address = $1`, [OTHER_WALLET]);
+    });
+
+    it("submitting an outcome for one agent does not bust another agent's cached calibration response", async () => {
+      // Warm the cache for the unrelated agent — stores a cache entry keyed
+      // on otherUserId with pending_outcome_count: 1 (from otherCertId).
+      const warmedOther = await getCalibration(otherUserId);
+      expect(warmedOther.pending_outcome_count).toBe(1);
+
+      // Mutate the unrelated agent's DB state directly, bypassing the cache
+      // (raw SQL does not bust the in-memory cache, as documented above).
+      // If the cache is still warm, the next GET must return the STALE
+      // value (1), proving the submission below did not wipe it.
+      await pool.query(`DELETE FROM certifications WHERE id = $1`, [otherCertId]);
+
+      // Submit an outcome for the main test agent (a completely different
+      // user/wallet) — this must only bust TEST_WALLET/testUserId-prefixed
+      // cache keys, not otherUserId's.
+      const cert = await insertPendingCert(0.5);
+      const postRes = await submitOutcome(cert, 0.5);
+      expect(postRes.status).toBe(201);
+
+      // The unrelated agent's cached response must be unaffected: still 1,
+      // even though the underlying DB row was deleted above.
+      const stillCached = await getCalibration(otherUserId);
+      expect(stillCached.pending_outcome_count).toBe(1);
+    });
+  });
 });
