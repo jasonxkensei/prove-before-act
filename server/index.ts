@@ -519,21 +519,35 @@ app.use((req, res, next) => {
       //   • the checkout's expiry timestamp has passed
       //   • the checkout has a linked certificationId (new-style checkouts only)
       //   • the linked certification is still pending with no on-chain tx
+      //
+      // The `targets` CTE captures the certification_id BEFORE it is nulled out, because the
+      // acp_checkouts.certification_id FK has no ON DELETE behavior: deleting a certifications
+      // row that a checkout still references throws a foreign-key violation. Both the
+      // `updated` CTE (which detaches the reference) and the final DELETE read from the same
+      // `targets` snapshot, so the detach and the delete are correctly ordered within one
+      // transaction regardless of CTE execution order. Without this, the sweeper's DELETE
+      // always fails, silently defeating the entire safety-net that is supposed to auto-release
+      // squatted file hashes after an abandoned checkout expires.
       const result = await pool.query(`
-        WITH expired_checkouts AS (
-          UPDATE acp_checkouts
-          SET status = 'expired'
+        WITH targets AS (
+          SELECT id, certification_id
+          FROM acp_checkouts
           WHERE status = 'pending'
             AND expires_at < NOW() - INTERVAL '2 minutes'
             AND certification_id IS NOT NULL
-          RETURNING certification_id, id
+        ),
+        updated AS (
+          UPDATE acp_checkouts
+          SET status = 'expired', certification_id = NULL
+          WHERE id IN (SELECT id FROM targets)
+          RETURNING id
         )
         DELETE FROM certifications c
-        USING expired_checkouts ec
-        WHERE c.id = ec.certification_id
+        USING targets t
+        WHERE c.id = t.certification_id
           AND c.blockchain_status = 'pending'
           AND c.transaction_hash IS NULL
-        RETURNING c.id, ec.id AS checkout_id
+        RETURNING c.id, t.id AS checkout_id
       `);
       if (result.rowCount && result.rowCount > 0) {
         logger.info("Swept expired ACP checkout reservations", {

@@ -11,6 +11,28 @@ import { recordOnBlockchain } from "../blockchain";
 import { isMX8004Configured, recordCertificationAsJob } from "../mx8004";
 import { isAdminWallet, getApiKeyOwnerWallet, getNetworkLabel, buildCanonicalId, validateApiKey } from "./helpers";
 import { Address } from "@multiversx/sdk-core";
+import { pgCheckRateLimit } from "../pgRateLimit";
+
+// Bounds how many unpaid ACP checkouts a single proven payer wallet may create within the
+// window. Deliberately independent of the generic per-API-key rate limiter, since the DoS
+// this defends against (squatting one file_hash indefinitely by recreating the checkout the
+// instant it expires) is driven by wallet identity, not request volume.
+const ACP_CHECKOUT_WALLET_RATE_LIMIT_MAX = 5;
+const ACP_CHECKOUT_WALLET_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+
+// Bounds how many unpaid checkouts a single API key may create within the window. API keys
+// are a scarcer resource than wallets (issuance is itself IP-rate-limited via trial
+// registration), making this the primary throttle on sustained file_hash squatting.
+const ACP_CHECKOUT_APIKEY_RATE_LIMIT_MAX = 8;
+const ACP_CHECKOUT_APIKEY_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
+
+// Minimum real elapsed time (wall-clock, not a rate-limit window) an identity (proven payer
+// wallet OR the API-key-owning user) must wait before creating another checkout for the SAME
+// file_hash it previously attempted. This is the control that actually makes indefinite
+// single-actor squatting impossible: it is several multiples of the checkout TTL, so a gap
+// during which a different buyer can claim the hash always exists, and — unlike a fixed-window
+// counter — it cannot be defeated by bursting across a window boundary.
+const ACP_CHECKOUT_HASH_RENEWAL_COOLDOWN_MS = 45 * 60 * 1000;
 
 export function registerAcpRoutes(app: Express) {
   // ============================================
@@ -118,6 +140,29 @@ export function registerAcpRoutes(app: Express) {
         }
       }
 
+      // Rate-limit unpaid checkout creation per API key. The generic per-key limiter
+      // (100 req/min, server/routes/helpers.ts) is far too permissive to stop squatting:
+      // creating a checkout costs nothing until payment, so a caller could otherwise
+      // recreate an expired reservation on the same file_hash as fast as the 15-minute TTL
+      // allows, indefinitely blocking legitimate ACP buyers for that hash. API keys are a
+      // scarcer resource than wallets (trial registration is itself IP-rate-limited), so
+      // bounding creation here meaningfully raises the cost of sustained squatting.
+      if (!acpAdminExempt && acpApiKey?.id) {
+        const apiKeyCheckoutLimit = await pgCheckRateLimit(
+          "acp_checkout_apikey",
+          acpApiKey.id,
+          ACP_CHECKOUT_APIKEY_RATE_LIMIT_MAX,
+          ACP_CHECKOUT_APIKEY_RATE_LIMIT_WINDOW_MS,
+        );
+        if (!apiKeyCheckoutLimit.allowed) {
+          return res.status(429).json({
+            error: "RATE_LIMIT_EXCEEDED",
+            message: "Too many ACP checkout attempts for this API key. Complete or wait out an existing checkout before creating another.",
+            retry_after: Math.ceil((apiKeyCheckoutLimit.resetAt - Date.now()) / 1000),
+          });
+        }
+      }
+
       // Resolve the userId that will own the certification reservation.
       // This must be done before the transaction so we can insert the certification row inside it.
       let checkoutOwnerUserId: string | null = requestingUserId;
@@ -142,8 +187,12 @@ export function registerAcpRoutes(app: Express) {
       // Get current EGLD price and calculate payment
       const pricing = await getCertificationPriceEgld();
       
-      // Create checkout session (expires in 1 hour)
-      const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+      // Create checkout session. Kept short (15 min, vs. the previous 1 hour) so that
+      // an unpaid reservation created without any real entitlement check (see
+      // ACP_CHECKOUT_WALLET_RATE_LIMIT below) blocks a given file_hash for a much
+      // shorter window before a legitimate buyer can reclaim the slot.
+      const ACP_CHECKOUT_TTL_MS = 15 * 60 * 1000;
+      const expiresAt = new Date(Date.now() + ACP_CHECKOUT_TTL_MS);
       
       const chainId = process.env.MULTIVERSX_CHAIN_ID || "1"; // 1 = Mainnet
 
@@ -243,6 +292,28 @@ export function registerAcpRoutes(app: Express) {
         }
 
         payerWallet = raw;
+
+        // Rate-limit unpaid checkout creation per proven wallet identity. Without this, a
+        // single API key + single wallet can indefinitely squat a target file_hash by
+        // recreating the checkout the instant the previous one expires — each request costs
+        // nothing (no payment is required to create a checkout), so the only way to bound
+        // the DoS is to bound how often a given wallet may claim a *new* unpaid reservation.
+        // This is scoped to the proven payer_wallet (not the API key) because a signature
+        // proving control of the wallet is required above, so this cannot be bypassed by
+        // rotating API keys alone — a fresh wallet is still required for each burst.
+        const walletCheckoutLimit = await pgCheckRateLimit(
+          "acp_checkout_wallet",
+          payerWallet,
+          ACP_CHECKOUT_WALLET_RATE_LIMIT_MAX,
+          ACP_CHECKOUT_WALLET_RATE_LIMIT_WINDOW_MS,
+        );
+        if (!walletCheckoutLimit.allowed) {
+          return res.status(429).json({
+            error: "RATE_LIMIT_EXCEEDED",
+            message: "Too many unpaid checkout attempts for this payer wallet. Complete or wait out an existing checkout before creating another.",
+            retry_after: Math.ceil((walletCheckoutLimit.resetAt - Date.now()) / 1000),
+          });
+        }
       }
 
       // Deduplication via DB-level advisory lock + serialized check-then-insert.
@@ -294,9 +365,14 @@ export function registerAcpRoutes(app: Express) {
             }
 
             // Stale reservation: clean it up so this checkout can claim the slot.
-            if (linkedCheckout && linkedCheckout.status === "pending") {
+            // The certificationId FK has no ON DELETE behavior, so the linking checkout row
+            // must be detached (certificationId set to NULL) before the reservation row can
+            // be deleted — otherwise the delete fails with a foreign-key violation and the
+            // stale reservation can never actually be cleared, defeating this entire cleanup
+            // path and letting the original squat persist indefinitely.
+            if (linkedCheckout) {
               await tx.update(acpCheckouts)
-                .set({ status: "expired" })
+                .set({ status: linkedCheckout.status === "pending" ? "expired" : linkedCheckout.status, certificationId: null })
                 .where(eq(acpCheckouts.id, linkedCheckout.id));
             }
             await tx.delete(certifications).where(eq(certifications.id, existingCert.id));
@@ -323,6 +399,44 @@ export function registerAcpRoutes(app: Express) {
 
           if (pendingLegacyCheckout && pendingLegacyCheckout.userId !== requestingUserId) {
             throw Object.assign(new Error("DUPLICATE_PENDING_CHECKOUT"), { code: "DUPLICATE_PENDING_CHECKOUT" });
+          }
+
+          // Per-hash renewal cooldown: the fixed-window rate limits above bound *overall*
+          // checkout volume, but a fixed window alone cannot prevent a single identity from
+          // indefinitely squatting one specific file_hash — since the checkout TTL (15 min)
+          // divides evenly into the rate-limit window, an identity can always recreate the
+          // checkout for the same hash the instant it expires while staying under the
+          // window's request quota (e.g. 4 renewals/hour comfortably fits under an 8/hour
+          // cap). To close this gap we require a real elapsed-time gap, anchored to the
+          // actual timestamp of this identity's most recent attempt at *this* file_hash
+          // (immune to rate-limit window-boundary bursting), before the same wallet or the
+          // same API-key-owning user may create another checkout for it. The cooldown is
+          // several multiples of the checkout TTL so a real gap always exists during which a
+          // different buyer can claim the hash.
+          if (!acpAdminExempt) {
+            const [lastAttempt] = await tx
+              .select({ createdAt: acpCheckouts.createdAt })
+              .from(acpCheckouts)
+              .where(
+                and(
+                  eq(acpCheckouts.fileHash, data.inputs.file_hash),
+                  payerWallet
+                    ? sql`((${acpCheckouts.metadata} ->> 'expectedSender') = ${payerWallet} OR ${acpCheckouts.userId} = ${requestingUserId})`
+                    : eq(acpCheckouts.userId, requestingUserId as string),
+                )
+              )
+              .orderBy(sql`${acpCheckouts.createdAt} DESC`)
+              .limit(1);
+
+            if (lastAttempt?.createdAt) {
+              const cooldownEndsAt = new Date(lastAttempt.createdAt.getTime() + ACP_CHECKOUT_HASH_RENEWAL_COOLDOWN_MS);
+              if (cooldownEndsAt > nowTx) {
+                throw Object.assign(new Error("CHECKOUT_RENEWAL_COOLDOWN"), {
+                  code: "CHECKOUT_RENEWAL_COOLDOWN",
+                  retryAfterSeconds: Math.ceil((cooldownEndsAt.getTime() - nowTx.getTime()) / 1000),
+                });
+              }
+            }
           }
 
           // Insert a pending certification reservation to block other routes from claiming
@@ -400,6 +514,13 @@ export function registerAcpRoutes(app: Express) {
             message: "This file hash is already being certified through another payment path. It cannot be reserved for ACP checkout.",
           });
         }
+        if (txErr.code === "CHECKOUT_RENEWAL_COOLDOWN") {
+          return res.status(429).json({
+            error: "CHECKOUT_RENEWAL_COOLDOWN",
+            message: "You (this wallet or API key) recently created a checkout for this file_hash. Wait for the cooldown to pass before creating another, so other buyers have a fair chance to claim it.",
+            retry_after: txErr.retryAfterSeconds,
+          });
+        }
         throw txErr;
       }
 
@@ -434,7 +555,7 @@ export function registerAcpRoutes(app: Express) {
           details: error.errors 
         });
       }
-      logger.withRequest(req).error("ACP checkout failed");
+      logger.withRequest(req).error("ACP checkout failed", { error: (error as any)?.message });
       res.status(500).json({ 
         error: "CHECKOUT_FAILED",
         message: "Failed to create checkout" 

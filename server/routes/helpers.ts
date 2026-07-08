@@ -14,7 +14,9 @@ import { pgCheckRateLimit } from "../pgRateLimit";
  * reserve the unique fileHash slot before payment. An attacker holding only an
  * API key (no payment) can therefore squat on arbitrary high-value hashes and
  * block legitimate paid certifications via /api/proof, /api/batch, or
- * /api/certifications until the 1-hour expiry — and renew indefinitely.
+ * /api/certifications until the checkout's short expiry (15 min, see
+ * server/routes/acp.ts) — renewal is bounded by per-wallet and per-API-key
+ * rate limits on unpaid checkout creation.
  *
  * Mitigation: any caller arriving with a *real* entitlement (consumed credit,
  * x402 payment, or a wallet-signed transaction) is allowed to atomically
@@ -34,6 +36,10 @@ import { pgCheckRateLimit } from "../pgRateLimit";
 export async function tryDisplaceAcpReservation(
   fileHash: string,
 ): Promise<"displaced" | "not_acp_reservation" | "no_row"> {
+  // Defense-in-depth: callers should already pass a canonicalized (lowercase) hash via
+  // sha256HexSchema, but normalize here too so a case-variant lookup can never miss an
+  // existing reservation and silently skip displacement.
+  fileHash = fileHash.toLowerCase();
   return await db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${fileHash}))`);
 

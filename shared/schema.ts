@@ -125,6 +125,11 @@ export const certifications = pgTable("certifications", {
   index("idx_cert_meta_strategy_hash")
     .on(sql`(metadata->>'strategy_hash')`)
     .where(sql`metadata ? 'strategy_hash'`),
+  // Defense-in-depth: reject any row whose file_hash is not already lowercase.
+  // All application write paths canonicalize to lowercase via sha256HexSchema before
+  // insert; this constraint fails closed if a future code path forgets to, instead of
+  // silently letting "ABCD..." and "abcd..." coexist as two "unique" rows for one hash.
+  check("certifications_file_hash_lowercase", sql`file_hash = lower(file_hash)`),
 ]);
 
 export const certificationsRelations = relations(certifications, ({ one }) => ({
@@ -218,11 +223,23 @@ export interface ACPProduct {
 export const MAX_ONCHAIN_FILENAME_LEN = 255;   // POSIX NAME_MAX
 export const MAX_ONCHAIN_AUTHOR_LEN = 128;
 
+// Canonical SHA-256 hex validator/normalizer shared by every write path that accepts a
+// caller-supplied file hash (/api/proof, /api/batch, ACP checkout, MCP tools). SHA-256 hex
+// digests are case-insensitive, but the database's uniqueness rule and every advisory-lock /
+// reservation-conflict check operate on the raw string, so "ABCD..." and "abcd..." must be
+// canonicalized to the same value BEFORE any lookup, lock, or insert or they are treated as
+// two different files — breaking the one-hash-one-proof guarantee.
+export const sha256HexSchema = z
+  .string()
+  .length(64, "SHA-256 hash must be exactly 64 hex characters")
+  .regex(/^[a-fA-F0-9]+$/, "Must be a valid hex string")
+  .transform((v) => v.toLowerCase());
+
 // ACP Checkout Request - what an agent sends to start certification
 export const acpCheckoutRequestSchema = z.object({
   product_id: z.string(),
   inputs: z.object({
-    file_hash: z.string().min(1, "SHA-256 hash is required"),
+    file_hash: sha256HexSchema,
     filename: z.string().min(1, "Filename is required").max(MAX_ONCHAIN_FILENAME_LEN, `Filename must be at most ${MAX_ONCHAIN_FILENAME_LEN} characters`),
     author_name: z.string().max(MAX_ONCHAIN_AUTHOR_LEN, `author_name must be at most ${MAX_ONCHAIN_AUTHOR_LEN} characters`).optional(),
     metadata: z.record(z.any()).optional(),
@@ -305,7 +322,10 @@ export const acpCheckouts = pgTable("acp_checkouts", {
   expiresAt: timestamp("expires_at").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   confirmedAt: timestamp("confirmed_at"),
-});
+}, (table) => [
+  // Same canonicalization guarantee as certifications.file_hash — see comment there.
+  check("acp_checkouts_file_hash_lowercase", sql`file_hash = lower(file_hash)`),
+]);
 
 export type ACPCheckout = typeof acpCheckouts.$inferSelect;
 export type InsertACPCheckout = typeof acpCheckouts.$inferInsert;

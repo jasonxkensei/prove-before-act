@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import crypto from "crypto";
 import { db, pool } from "./db";
-import { certifications, apiKeys, users, agentOutcomes, MAX_ONCHAIN_FILENAME_LEN, MAX_ONCHAIN_AUTHOR_LEN } from "@shared/schema";
+import { certifications, apiKeys, users, agentOutcomes, MAX_ONCHAIN_FILENAME_LEN, MAX_ONCHAIN_AUTHOR_LEN, sha256HexSchema } from "@shared/schema";
 import { eq, sql, and, or } from "drizzle-orm";
 import { recordOnBlockchain } from "./blockchain";
 import { getCertificationPriceUsd } from "./pricing";
@@ -56,7 +56,7 @@ export async function createMcpServer(ctx: McpContext) {
     "certify_file",
     `Create a blockchain certification for a file. Records the SHA-256 hash on MultiversX blockchain as immutable proof of existence and ownership. Cost: $${currentPriceUsd} per certification, paid in EGLD.`,
     {
-      file_hash: z.string().length(64).regex(/^[a-fA-F0-9]+$/).describe("SHA-256 hash of the file (64 hex characters)"),
+      file_hash: sha256HexSchema.describe("SHA-256 hash of the file (64 hex characters)"),
       // filename and author_name end up embedded in the on-chain MultiversX
       // data field; bounding them here caps the server-paid gas cost.
       filename: z.string().min(1).max(MAX_ONCHAIN_FILENAME_LEN).describe(`Original filename with extension (max ${MAX_ONCHAIN_FILENAME_LEN} chars)`),
@@ -310,7 +310,7 @@ export async function createMcpServer(ctx: McpContext) {
     "certify_with_confidence",
     `Create a staged blockchain certification with a confidence score. Use this when your decision builds progressively — certify at 60% (initial assessment), 80% (pre-commitment), and 100% (final decision). Each stage shares the same decision_id, creating an on-chain audit trail of the decision process. Governance: set reversibility_class='irreversible' for actions that cannot be undone — xproof will flag a policy violation if confidence_level < 0.95. Cost: $${currentPriceUsd} per certification.`,
     {
-      file_hash: z.string().length(64).regex(/^[a-fA-F0-9]+$/).describe("SHA-256 hash of the decision or output file (64 hex characters)"),
+      file_hash: sha256HexSchema.describe("SHA-256 hash of the decision or output file (64 hex characters)"),
       filename: z.string().min(1).max(MAX_ONCHAIN_FILENAME_LEN).describe(`Original filename with extension (e.g. decision.json, max ${MAX_ONCHAIN_FILENAME_LEN} chars)`),
       decision_id: z.string().min(1).describe("Shared UUID linking all confidence stages for the same decision. Generate once and reuse across all stages."),
       confidence_level: z.number().min(0).max(1).describe("Confidence score from 0.0 to 1.0. Typical values: 0.6 (initial), 0.8 (pre-commitment), 1.0 (final)."),

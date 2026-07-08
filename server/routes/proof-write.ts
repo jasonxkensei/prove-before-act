@@ -2,7 +2,7 @@ import { type Express } from "express";
 import crypto from "crypto";
 import { db, pool } from "../db";
 import { logger } from "../logger";
-import { certifications, users, apiKeys, MAX_ONCHAIN_FILENAME_LEN, MAX_ONCHAIN_AUTHOR_LEN } from "@shared/schema";
+import { certifications, users, apiKeys, MAX_ONCHAIN_FILENAME_LEN, MAX_ONCHAIN_AUTHOR_LEN, sha256HexSchema } from "@shared/schema";
 import { eq, desc, sql, and, count, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { paymentRateLimiter, publicSearchRateLimiter } from "../reliability";
@@ -221,7 +221,7 @@ export function registerProofWriteRoutes(app: Express) {
   const VALID_THRESHOLD_STAGES = ["initial", "partial", "pre-commitment", "final"] as const;
 
   const proofRequestSchema = z.object({
-    file_hash: z.string().length(64, "SHA-256 hash must be exactly 64 hex characters").regex(/^[a-fA-F0-9]+$/, "Must be a valid hex string"),
+    file_hash: sha256HexSchema,
     // filename and author_name are embedded in the on-chain MultiversX data
     // field; their length directly drives the server-paid gas cost. Bound
     // them here at ingress (defense-in-depth cap also enforced in
@@ -1194,7 +1194,7 @@ export function registerProofWriteRoutes(app: Express) {
   // ============================================
   const batchRequestSchema = z.object({
     files: z.array(z.object({
-      file_hash: z.string().length(64, "SHA-256 hash must be exactly 64 hex characters").regex(/^[a-fA-F0-9]+$/, "Must be a valid hex string"),
+      file_hash: sha256HexSchema,
       filename: z.string().min(1, "Filename is required").max(MAX_ONCHAIN_FILENAME_LEN, `Filename must be at most ${MAX_ONCHAIN_FILENAME_LEN} characters`),
       metadata: z.record(z.any()).optional(),
     })).min(1, "At least one file is required").max(50, "Maximum 50 files per batch"),
