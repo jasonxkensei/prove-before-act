@@ -384,6 +384,37 @@ describe('sortBy: "calibration" — tie-break and null placement', () => {
       none2.walletAddress,  // null, trustScore 1
     ]);
   });
+
+  it("reflects updated trust scores for the same wallets after a cache refresh mid-session", async () => {
+    const walletA = makeEntry("calibrated", { trustScore: 100 });
+    const walletB = makeEntry("calibrated", { trustScore: 500 });
+    const walletC = makeEntry("calibrated", { trustScore: 300 });
+
+    _setLeaderboardCacheForTesting([walletA, walletB, walletC]);
+
+    const initial = await getLeaderboard({ sortBy: "calibration" });
+    expect(initial.entries.map((e) => e.walletAddress)).toEqual([
+      walletB.walletAddress,
+      walletC.walletAddress,
+      walletA.walletAddress,
+    ]);
+
+    // Simulate a cache refresh mid-session: same wallets, new trust scores
+    // that should flip the sort order entirely.
+    const refreshedA = { ...walletA, trustScore: 900 };
+    const refreshedB = { ...walletB, trustScore: 50 };
+    const refreshedC = { ...walletC, trustScore: 200 };
+
+    _setLeaderboardCacheForTesting([refreshedA, refreshedB, refreshedC]);
+
+    const refreshed = await getLeaderboard({ sortBy: "calibration" });
+    expect(refreshed.entries.map((e) => e.walletAddress)).toEqual([
+      refreshedA.walletAddress,
+      refreshedC.walletAddress,
+      refreshedB.walletAddress,
+    ]);
+    expect(refreshed.entries.map((e) => e.trustScore)).toEqual([900, 200, 50]);
+  });
 });
 
 // ─── 7. NaN / undefined trustScore in the calibration sort tie-break ─────────
