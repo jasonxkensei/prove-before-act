@@ -198,6 +198,7 @@ export class PgRateLimitStore {
       logger.warn("PgRateLimitStore.decrement: DB error, refund lost", {
         component: "pgRateLimit",
         namespace: this.namespace,
+        key_hash: crypto.createHash("sha256").update(key).digest("hex").slice(0, 8),
         error: String(err),
       });
     }
