@@ -8,6 +8,7 @@ import { eq, desc, sql, and, gte, gt, count } from "drizzle-orm";
 import { isWalletAuthenticated } from "../walletAuth";
 import { computeTrustScoreByWallet } from "../trust";
 import { getAlertConfig } from "../txAlerts";
+import { getRateLimitAlertConfig } from "../rateLimitAlerts";
 import { getMetrics } from "../metrics";
 import { getTxQueueStats } from "../txQueue";
 import { requireAdmin, EXCLUDED_IP_HASHES, getClientIp } from "./helpers";
@@ -370,6 +371,10 @@ export function registerAdminRoutes(app: Express) {
           last_failed_at: metrics.transactions.last_failed_at,
         },
         txAlerts: getAlertConfig(),
+        rateLimitFailOpen: {
+          ...metrics.rate_limit_fail_open,
+          alert_config: getRateLimitAlertConfig(),
+        },
         generated_at: now.toISOString(),
       });
     } catch (error) {

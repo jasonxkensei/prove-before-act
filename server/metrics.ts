@@ -32,9 +32,48 @@ const rateLimitFailOpenCounts: Record<RateLimitFailOpenOp, number> = {
 };
 let lastRateLimitFailOpenAt: number | null = null;
 
+// Rolling event log (timestamp + op) so callers can ask "how many fail-opens
+// happened in the last N minutes" — the cumulative counters above answer
+// "how many ever", which can't distinguish a brief blip from a sustained
+// outage. Capped and pruned the same way recentTransactions is.
+interface RateLimitFailOpenEvent {
+  timestamp: number;
+  op: RateLimitFailOpenOp;
+}
+const rateLimitFailOpenEvents: RateLimitFailOpenEvent[] = [];
+const FAIL_OPEN_EVENTS_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour is plenty for any alert window
+const FAIL_OPEN_EVENTS_SAFETY_CAP = 10000;
+
 export function recordRateLimitFailOpen(op: RateLimitFailOpenOp): void {
   rateLimitFailOpenCounts[op]++;
   lastRateLimitFailOpenAt = Date.now();
+
+  rateLimitFailOpenEvents.push({ timestamp: lastRateLimitFailOpenAt, op });
+  const cutoff = lastRateLimitFailOpenAt - FAIL_OPEN_EVENTS_MAX_AGE_MS;
+  while (rateLimitFailOpenEvents.length > 0 && rateLimitFailOpenEvents[0].timestamp < cutoff) {
+    rateLimitFailOpenEvents.shift();
+  }
+  if (rateLimitFailOpenEvents.length > FAIL_OPEN_EVENTS_SAFETY_CAP) {
+    rateLimitFailOpenEvents.splice(0, rateLimitFailOpenEvents.length - FAIL_OPEN_EVENTS_SAFETY_CAP / 2);
+  }
+}
+
+// Returns fail-open events within the last `windowMs`, broken down by op, for
+// alerting logic that needs to distinguish a sustained outage from a blip.
+export function getRateLimitFailOpenEventsInWindow(windowMs: number): {
+  total: number;
+  by_op: Record<RateLimitFailOpenOp, number>;
+} {
+  const cutoff = Date.now() - windowMs;
+  const byOp: Record<RateLimitFailOpenOp, number> = { check: 0, increment: 0, decrement: 0, resetKey: 0 };
+  let total = 0;
+  for (let i = rateLimitFailOpenEvents.length - 1; i >= 0; i--) {
+    const ev = rateLimitFailOpenEvents[i];
+    if (ev.timestamp < cutoff) break;
+    byOp[ev.op]++;
+    total++;
+  }
+  return { total, by_op: byOp };
 }
 
 function pruneOldRecords(): void {

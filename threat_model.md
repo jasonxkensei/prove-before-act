@@ -176,6 +176,12 @@ Required guarantees:
 - `/api/certificates/:id.pdf` must mirror the same proof-plus-profile visibility gate used by `/api/proof/:id`, prerendered proof HTML, and the JSON/Markdown proof artifacts. Treat "proof `isPublic` alone is consent" as insufficient for public certificate download.
 - `transactionUrl` should not be treated as a generic user-controlled hyperlink when downstream surfaces label it as a blockchain explorer destination. Scheme allowlisting prevents XSS, but public proof integrity still requires either a trusted explorer allowlist or server-derived explorer URLs bound to the verified transaction hash.
 
+## Scan Notes — 2026-07-08 Rate-Limit Outage Alerting
+
+- `server/rateLimitAlerts.ts` adds a threshold-based operational alert (mirroring `server/txAlerts.ts`) for sustained rate-limiter DB fail-opens. It fires a webhook when `getRateLimitFailOpenEventsInWindow()` (rolling event log in `server/metrics.ts`) shows `total >= RL_FAIL_OPEN_ALERT_THRESHOLD` (default 10) fail-opens within `RL_FAIL_OPEN_ALERT_WINDOW_MINUTES` (default 5), escalating to `critical` severity at 3x threshold. A `RL_FAIL_OPEN_ALERT_COOLDOWN_MINUTES` (default 30) cooldown prevents repeated alerts during one sustained outage. Alerting is a no-op (fail-closed to "no alert", not "no fail-open protection") when `RL_FAIL_OPEN_ALERT_WEBHOOK_URL` is unset, matching the existing tx-alert pattern.
+- The check is invoked from `logRateLimitFailOpen()` in `server/pgRateLimit.ts` on every fail-open event; the cooldown check runs first so this stays cheap even under a hot-path outage (one webhook POST per cooldown window, not per request).
+- Config and last-alert timestamp are surfaced (webhook URL itself is never exposed) via `getRateLimitAlertConfig()` in the `rateLimitFailOpen.alert_config` field of `/api/admin/stats` (admin-authenticated only), alongside the existing `rate_limit_fail_open` counters.
+
 ## Scan Notes — 2026-06-22
 
 - Current auth/admin review found no production-reachable wallet spoofing or fail-open admin path; keep the auth/admin anchors in scope only if Native Auth verification, session creation, or admin-wallet authorization logic changes.
