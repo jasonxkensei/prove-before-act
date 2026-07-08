@@ -44,6 +44,17 @@ test does nothing; use
 a query's `staleTime` before dispatching the event, instead of using a real
 `waitForTimeout`.
 
+## Time-based (`refetchInterval`) staleness, as opposed to window-focus
+
+Not every query's "staleness contract" is `refetchOnWindowFocus`-driven. A
+query can instead use `refetchInterval` (plain polling). For those, faking
+only the client clock isn't enough if the same endpoint also has its own
+server-side in-memory response cache keyed off real `Date.now()` — a faked
+client timer won't advance that server cache, so a "refetch" would just
+re-read stale cached data. In that case, don't use `page.clock`; let real
+wall-clock time elapse and give a combined timeout generous enough to cover
+both the client interval and the server cache TTL independently expiring.
+
 ## Cache-key collisions across test runs
 
 If a server endpoint has an in-memory response cache keyed by an

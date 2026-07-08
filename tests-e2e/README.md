@@ -67,3 +67,11 @@ npx playwright install chromium
 - Keep e2e tests focused on things vitest genuinely cannot verify (real
   paint/DOM, multi-tab isolation, focus/visibility events). Prefer the
   faster vitest suite for logic-only assertions.
+- Not every "staleness contract" is window-focus based. Some queries (e.g.
+  admin.tsx's `refetchInterval: 30000` on the rate-limit activity card) claim
+  a plain time-based auto-refresh instead. See
+  `admin-rate-limit-autorefresh.spec.ts` for that pattern: when the server
+  side of the same feature also has its own real-time cache (not something
+  `page.clock` can fake), let real wall-clock time elapse instead of faking
+  the client's timers, and give a generous combined timeout so both the
+  client interval and the server cache have room to independently expire.
