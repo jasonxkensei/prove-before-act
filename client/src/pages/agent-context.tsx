@@ -1334,12 +1334,9 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
           <h1 className="text-3xl sm:text-4xl font-bold mb-3 tracking-tight">
             xProof Agent Context
           </h1>
-          <p className="text-muted-foreground text-base leading-relaxed max-w-2xl mb-1">
+          <p className="text-muted-foreground text-base leading-relaxed max-w-2xl mb-4">
             <strong className="text-foreground">Anchor intent before execution.</strong>{" "}
-            Prove <code className="font-mono text-sm bg-muted px-1 rounded">intent_preceded_execution: true</code> on MultiversX — with a public 4W audit trail and zero-account x402 payments.
-          </p>
-          <p className="text-xs text-muted-foreground max-w-2xl mb-4">
-            Production-proven: <strong className="text-foreground">4,418 proofs</strong>, 100% on-chain confirmation rate, 16-week streak — <a href="/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9" className="text-primary underline">Moltbook case study</a>. No marketing — just what you need to decide and integrate.
+            Hash locally → certify on MultiversX → proceed with <code className="font-mono text-sm bg-muted px-1 rounded">proof_id</code>. Production-proven: <strong className="text-foreground">4,418 proofs</strong>, 16-week streak, 100% on-chain. <a href="/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9" className="text-primary underline">Moltbook case study</a>.
           </p>
           {/* x402 — first thing agents see */}
           <div className="mt-2 rounded-md border border-primary/30 bg-primary/5 px-4 py-3 flex items-center gap-3" data-testid="badge-x402-top">
@@ -1351,12 +1348,12 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
 
           {/* Quick Start — visible before accordion */}
           <div className="mt-6 rounded-md border border-border bg-muted/10 p-4" data-testid="section-quickstart">
-            <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+            <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
               <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Quick Start — 3 steps</p>
               <div className="flex gap-2 flex-wrap">
                 <Button asChild size="sm" data-testid="button-quickstart-trial">
                   <a href="/#free-trial">
-                    Get 10 free certs — no wallet
+                    Get 10 free proofs
                     <ArrowRight className="ml-1.5 h-3 w-3" />
                   </a>
                 </Button>
@@ -1365,24 +1362,19 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
                 </Button>
               </div>
             </div>
-            <p className="text-xs text-muted-foreground mb-3">30 seconds to your first <code className="font-mono bg-muted px-1 rounded">api_key</code>. First certification confirmed on-chain in under 4 minutes.</p>
-            <CodeBlock lang="bash" code={`# 1. Get 10 free proofs — no wallet, no card
-curl -X POST https://xproof.app/api/agent/register \\
-  -H "Content-Type: application/json" \\
+            <CodeBlock lang="bash" code={`# 1. Get API key — no wallet, no card (10 free proofs)
+curl -X POST https://xproof.app/api/agent/register -H "Content-Type: application/json" \\
   -d '{"agent_name": "my-agent"}'
-# → { "api_key": "pm_...", "trial": { "quota": 10, "remaining": 10 } }
+# → { "api_key": "pm_...", "trial": { "quota": 10 } }
 
-# 2. Hash your reasoning locally — nothing leaves your machine
-python3 -c "import hashlib,json; d={'why':'RSI=38, below threshold','what':'BUY BTC 0.5'}; print(hashlib.sha256(json.dumps(d,sort_keys=True).encode()).hexdigest())"
-# → a1b2c3...64hex
+# 2. Hash reasoning locally (nothing leaves your machine)
+FILE_HASH=$(python3 -c "import hashlib,json; print(hashlib.sha256(json.dumps({'why':'RSI=38','what':'BUY BTC'},sort_keys=True).encode()).hexdigest())")
 
-# 3. Anchor proof BEFORE executing the action (Prove Before Act)
-curl -X POST https://xproof.app/api/proof \\
-  -H "Authorization: Bearer pm_YOUR_KEY" \\
+# 3. Anchor BEFORE executing — Prove Before Act
+curl -X POST https://xproof.app/api/proof -H "Authorization: Bearer pm_YOUR_KEY" \\
   -H "Content-Type: application/json" \\
-  -d '{"file_hash":"a1b2c3...64hex","filename":"reasoning.json","metadata":{"who":"my-agent","what":"BUY BTC 0.5","why":"RSI=38"}}'
-# → { "proof_id": "...", "verify_url": "/proof/...", "status": "pending" }
-# → Execute your action only AFTER receiving proof_id`} />
+  -d "{\"file_hash\":\"$FILE_HASH\",\"filename\":\"reasoning.json\",\"metadata\":{\"who\":\"my-agent\",\"what\":\"BUY BTC\",\"why\":\"RSI=38\"}}"
+# → { "proof_id": "prf_...", "verify_url": "/proof/...", "status": "pending" }`} />
           </div>
 
           {/* Use-case examples */}
@@ -1401,6 +1393,23 @@ curl -X POST https://xproof.app/api/proof \\
                   data-testid="button-lang-typescript"
                 >TypeScript</button>
               </div>
+            </div>
+            {/* Use-case overview cards */}
+            <div className="grid gap-3 sm:grid-cols-3">
+              {[
+                { id: "trading", icon: TrendingUp, label: "Trading agent", context: "Finance · High-value decisions", desc: "Prove a BUY/SELL decision before executing. Full 4W audit trail on-chain." },
+                { id: "research", icon: Eye, label: "Research agent", context: "Content · Reports · Analysis", desc: "Anchor reasoning + sources before publishing. Verifiable provenance for readers." },
+                { id: "support", icon: Shield, label: "Support agent", context: "Customer service · Compliance", desc: "Certify decision before sending response. Dispute-proof audit record." },
+              ].map((uc) => (
+                <div key={uc.id} className="rounded-md border bg-background p-3">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <uc.icon className="h-3.5 w-3.5 text-primary shrink-0" />
+                    <span className="text-sm font-semibold">{uc.label}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-1">{uc.context}</p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{uc.desc}</p>
+                </div>
+              ))}
             </div>
             {[
               {
@@ -1557,6 +1566,26 @@ await sendToCustomer(ticketId, responseText, { audit_ref: proof_id });`,
               </div>
             ))}
           </div>
+        </div>
+
+        {/* Production Ready callout */}
+        <div className="mb-8 rounded-md border border-amber-500/25 bg-amber-500/5 p-4" data-testid="section-production-callout">
+          <div className="flex items-start gap-3 mb-3">
+            <Cog className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold">Going to production?</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Four patterns your deployment needs before going live.</p>
+            </div>
+            <Button asChild variant="outline" size="sm" className="ml-auto shrink-0" data-testid="button-production-section">
+              <a href="#production">See examples <ArrowRight className="ml-1 h-3 w-3" /></a>
+            </Button>
+          </div>
+          <ul className="grid gap-1.5 sm:grid-cols-2 text-xs text-muted-foreground">
+            <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-amber-500" /><span><strong className="text-foreground">Batch anchoring</strong> — up to 100 files per call, 50× fewer requests</span></li>
+            <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-amber-500" /><span><strong className="text-foreground">Retry policy</strong> — exponential backoff, 409 dedup, Retry-After support</span></li>
+            <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-amber-500" /><span><strong className="text-foreground">Monitoring</strong> — alert if daily proof volume drops unexpectedly</span></li>
+            <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-amber-500" /><span><strong className="text-foreground">No proof = no action</strong> — hard gate for high-stakes decisions</span></li>
+          </ul>
         </div>
 
         {/* Table of contents */}

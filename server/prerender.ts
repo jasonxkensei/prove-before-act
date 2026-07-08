@@ -600,33 +600,46 @@ function renderAgentContextPage(baseUrl: string): string {
 <header><nav><a href="${baseUrl}"><strong>xproof</strong></a> | <a href="${baseUrl}/agent-context.md">Machine-readable (.md)</a></nav></header>
 <main>
   <h1>xProof Agent Context</h1>
-  <p><strong>Anchor intent before execution.</strong> Prove <code>intent_preceded_execution: true</code> on MultiversX — with a public 4W audit trail and zero-account x402 payments.</p>
-  <p><strong>LLM-optimized document.</strong> No API key needed. Any agent can anchor a proof and pay per call via x402 — one HTTP request, no account, no setup.</p>
-  <p><strong>Discoverable by agents via llms.txt + /.well-known/xproof.json</strong> — machine-readable discovery endpoints serve this document in plain text and JSON for autonomous crawlers and orchestrators.</p>
-  <p><strong>Production-proven on Moltbook:</strong> xproof_agent_verify — 4,418 on-chain proofs, 100% confirmation rate, 16-week streak, trust score 43,326. ~$2.76/week for a continuously accountable AI agent. <a href="${baseUrl}/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9">View live agent profile →</a></p>
+  <p><strong>Anchor intent before execution.</strong> Hash locally → certify on MultiversX → proceed with <code>proof_id</code>. Production-proven: 4,418 proofs, 16-week streak, 100% on-chain. <a href="${baseUrl}/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9">Moltbook case study</a>.</p>
+  <p>No API key needed. Any agent can pay per call via x402 (USDC on Base) — one HTTP request, no account, no setup. Discoverable via <a href="${baseUrl}/llms.txt">llms.txt</a> and <a href="${baseUrl}/.well-known/xproof.json">/.well-known/xproof.json</a>.</p>
 
   <section>
     <h2>Quick Start — 3 steps</h2>
-    <pre><code># 1. Get 10 free certs — no wallet, no card
-curl -X POST ${baseUrl}/api/agent/register \\
-  -H "Content-Type: application/json" \\
-  -d '{"agent_name": "my-agent"}'
-# Response: { "api_key": "pm_...", "trial": { "quota": 10, "remaining": 10 } }
+    <pre><code># 1. Get API key — no wallet, no card (10 free proofs)
+curl -X POST ${baseUrl}/api/agent/register -H "Content-Type: application/json" -d '{"agent_name": "my-agent"}'
+# → { "api_key": "pm_...", "trial": { "quota": 10 } }
 
-# 2. Hash your reasoning locally (nothing sensitive leaves your machine)
-python3 -c "import hashlib,json; d={'why':'RSI=38, below threshold','what':'BUY BTC 0.5'}; print(hashlib.sha256(json.dumps(d,sort_keys=True).encode()).hexdigest())"
-# → a1b2c3...64hex
+# 2. Hash reasoning locally (nothing leaves your machine)
+FILE_HASH=$(python3 -c "import hashlib,json; print(hashlib.sha256(json.dumps({'why':'RSI=38','what':'BUY BTC'},sort_keys=True).encode()).hexdigest())")
 
-# 3. Anchor proof BEFORE executing the action (Prove Before Act)
-curl -X POST ${baseUrl}/api/proof \\
-  -H "Authorization: Bearer pm_YOUR_KEY" \\
+# 3. Anchor BEFORE executing — Prove Before Act
+curl -X POST ${baseUrl}/api/proof -H "Authorization: Bearer pm_YOUR_KEY" -H "Content-Type: application/json" \\
+  -d "{\"file_hash\":\"$FILE_HASH\",\"filename\":\"reasoning.json\",\"metadata\":{\"who\":\"my-agent\",\"what\":\"BUY BTC\",\"why\":\"RSI=38\"}}"
+# → { "proof_id": "prf_...", "verify_url": "/proof/...", "status": "pending" }</code></pre>
+  </section>
+
+  <section id="production">
+    <h2>Going to production? — 4 required patterns</h2>
+    <ul>
+      <li><strong>Batch anchoring</strong> — POST /api/batch, up to 100 files per call, 50× fewer requests than one-by-one</li>
+      <li><strong>Retry policy</strong> — exponential backoff (1s→2s→4s), handle 409 dedup, respect Retry-After on 429</li>
+      <li><strong>Monitoring</strong> — alert if daily proof volume drops below expected minimum</li>
+      <li><strong>No proof = no action</strong> — for high-stakes agents (trading, legal, medical): block action if anchoring fails after 3 retries</li>
+    </ul>
+    <pre><code># Batch anchoring — 1 call instead of 100
+curl -X POST ${baseUrl}/api/batch -H "Authorization: Bearer pm_YOUR_KEY" \\
   -H "Content-Type: application/json" \\
-  -d '{"file_hash":"YOUR_HASH","filename":"reasoning.json","metadata":{"who":"my-agent","what":"BUY BTC 0.5","why":"RSI=38, below threshold","confidence_score":0.87,"reversibility_class":"costly","intent_preceded_execution":true}}'
-# Response: { "proof_id": "...", "verify_url": "/proof/...", "blockchain_status": "confirmed" }</code></pre>
+  -d '{"certifications":[{"file_hash":"hash1","filename":"action1.json"},{"file_hash":"hash2","filename":"action2.json"}]}'
+# → {"results":[{"proof_id":"prf_...","status":"pending"},...]}</code></pre>
   </section>
 
   <section id="use-cases">
     <h2>Use-case examples — copy-paste ready</h2>
+    <ul>
+      <li><strong>Trading agent</strong> (Finance · High-value decisions) — Prove a BUY/SELL decision before executing. Full 4W audit trail on-chain.</li>
+      <li><strong>Research agent</strong> (Content · Reports · Analysis) — Anchor reasoning + sources before publishing. Verifiable provenance for readers.</li>
+      <li><strong>Support agent</strong> (Customer service · Compliance) — Certify decision before sending response. Dispute-proof audit record.</li>
+    </ul>
 
     <h3>Trading agent — Finance · High-value decisions</h3>
     <p>Prove a BUY/SELL decision before executing — full 4W audit trail anchored on-chain.</p>
