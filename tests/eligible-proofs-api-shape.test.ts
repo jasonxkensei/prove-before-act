@@ -33,10 +33,21 @@ const EP_TEST_KEY_PREFIX  = EP_TEST_RAW_KEY.slice(0, 8);
 const CERT_A_HASH = crypto.createHash("sha256").update("ep-contract-test-cert-a").digest("hex");
 const CERT_B_HASH = crypto.createHash("sha256").update("ep-contract-test-cert-b").digest("hex");
 
+// Certification with metadata present but missing the confidence_level key
+// entirely — must NOT appear in the eligible list (SQL WHERE filters it out).
+const CERT_C_HASH = crypto.createHash("sha256").update("ep-contract-test-cert-c").digest("hex");
+
+// Certification whose metadata carries the value under an alternate key name
+// ("confidence" instead of "confidence_level") — must also NOT appear, proving
+// the SQL predicate matches the exact key and does not fall back to lookalikes.
+const CERT_D_HASH = crypto.createHash("sha256").update("ep-contract-test-cert-d").digest("hex");
+
 let epTestUserId    = "";
 let epTestApiKeyId  = "";
 let certAId         = "";
 let certBId         = "";
+let certCId         = "";
+let certDId         = "";
 
 // ── Setup / teardown ──────────────────────────────────────────────────────────
 beforeAll(async () => {
@@ -100,11 +111,49 @@ beforeAll(async () => {
   );
   certBId = certB.rows[0].id;
 
-  // 4. Ensure neither certification has a linked agent_outcome (would exclude
-  //    them from the eligible-proofs query).
+  // 4. Seed a certification whose metadata has NO confidence_level key at all.
+  const certC = await pool.query<{ id: string }>(
+    `INSERT INTO certifications
+       (user_id, file_name, file_hash, metadata, created_at)
+     VALUES
+       ($1, 'no-confidence.json', $2,
+        '{"other_field": "value"}'::jsonb,
+        NOW() - INTERVAL '3 days')
+     ON CONFLICT (file_hash)
+     DO UPDATE SET
+       user_id   = EXCLUDED.user_id,
+       file_name = EXCLUDED.file_name,
+       metadata  = EXCLUDED.metadata
+     RETURNING id`,
+    [epTestUserId, CERT_C_HASH],
+  );
+  certCId = certC.rows[0].id;
+
+  // 5. Seed a certification whose metadata carries the value under an
+  //    alternate key name ("confidence" instead of "confidence_level").
+  const certD = await pool.query<{ id: string }>(
+    `INSERT INTO certifications
+       (user_id, file_name, file_hash, metadata, created_at)
+     VALUES
+       ($1, 'wrong-key-name.json', $2,
+        '{"confidence": 0.9}'::jsonb,
+        NOW() - INTERVAL '4 days')
+     ON CONFLICT (file_hash)
+     DO UPDATE SET
+       user_id   = EXCLUDED.user_id,
+       file_name = EXCLUDED.file_name,
+       metadata  = EXCLUDED.metadata
+     RETURNING id`,
+    [epTestUserId, CERT_D_HASH],
+  );
+  certDId = certD.rows[0].id;
+
+  // 6. Ensure none of the four certifications has a linked agent_outcome
+  //    (would exclude them from the eligible-proofs query for a different
+  //    reason than the one under test).
   await pool.query(
     `DELETE FROM agent_outcomes WHERE certification_id = ANY($1::varchar[])`,
-    [[certAId, certBId]],
+    [[certAId, certBId, certCId, certDId]],
   );
 });
 
@@ -212,6 +261,44 @@ describe("GET /api/agent/calibration/:agentId/eligible-proofs — API shape cont
       expect(res.status).toBe(401);
     },
     10_000,
+  );
+
+  it(
+    "excludes a certification whose metadata has no confidence_level key at all",
+    async () => {
+      const url = `${BASE_URL}/api/agent/calibration/${epTestUserId}/eligible-proofs`;
+      const res  = await fetch(url, {
+        headers: { Authorization: `Bearer ${EP_TEST_RAW_KEY}` },
+      });
+      expect(res.status).toBe(200);
+
+      const body = await res.json() as { proofs: Array<Record<string, unknown>> };
+      const found = body.proofs.find((p) => p.id === certCId);
+      expect(
+        found,
+        "a certification without metadata.confidence_level must not appear in the eligible-proofs response",
+      ).toBeUndefined();
+    },
+    15_000,
+  );
+
+  it(
+    "excludes a certification whose confidence value is stored under an alternate key name",
+    async () => {
+      const url = `${BASE_URL}/api/agent/calibration/${epTestUserId}/eligible-proofs`;
+      const res  = await fetch(url, {
+        headers: { Authorization: `Bearer ${EP_TEST_RAW_KEY}` },
+      });
+      expect(res.status).toBe(200);
+
+      const body = await res.json() as { proofs: Array<Record<string, unknown>> };
+      const found = body.proofs.find((p) => p.id === certDId);
+      expect(
+        found,
+        "a certification storing its value as metadata.confidence (not confidence_level) must not appear — the SQL predicate is exact-key-sensitive",
+      ).toBeUndefined();
+    },
+    15_000,
   );
 });
 
