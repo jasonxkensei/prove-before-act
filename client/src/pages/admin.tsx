@@ -119,6 +119,30 @@ interface TrafficSources {
   generated_at: string;
 }
 
+interface UtmSourceRow {
+  utm_source: string | null;
+  visits: number;
+  unique_ips: number;
+  conversions: number;
+  first_seen: string | null;
+  last_seen: string | null;
+}
+
+interface UtmStats {
+  rows: UtmSourceRow[];
+  summary: {
+    total_utm_visits: number;
+    total_utm_unique_ips: number;
+    total_sources: number;
+    total_conversions: number;
+    direct_visits: number;
+    direct_unique_ips: number;
+    total_all_visits: number;
+    total_all_unique_ips: number;
+  };
+  generated_at: string;
+}
+
 interface RateLimitStatRow {
   namespace: string;
   key_hash: string;
@@ -310,6 +334,99 @@ function TrafficSourcesCard({ data }: { data: TrafficSources | undefined }) {
   );
 }
 
+function UtmCampaignCard({ data }: { data: UtmStats | undefined }) {
+  const [expanded, setExpanded] = useState(true);
+  const rows = data?.rows || [];
+
+  return (
+    <Card data-testid="card-utm-campaigns">
+      <CardHeader
+        className="flex flex-row items-center justify-between gap-2 space-y-0 cursor-pointer select-none"
+        onClick={() => setExpanded((v) => !v)}
+        data-testid="button-toggle-utm-campaigns"
+      >
+        <div className="flex items-center gap-2">
+          {expanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+          <CardTitle className="text-sm font-medium">UTM Campaign Traffic</CardTitle>
+          {rows.length > 0 && (
+            <Badge variant="secondary" data-testid="badge-utm-campaigns-count">
+              {rows.length} campaigns
+            </Badge>
+          )}
+        </div>
+        <Target className="h-4 w-4 text-muted-foreground" />
+      </CardHeader>
+
+      {expanded && (
+        <CardContent className="pt-0">
+          {!data && (
+            <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground" data-testid="utm-campaigns-loading">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading UTM campaign data…
+            </div>
+          )}
+          {data && rows.length === 0 && (
+            <p className="py-4 text-sm text-muted-foreground" data-testid="utm-campaigns-empty">
+              No UTM-tagged campaign visits recorded yet.
+            </p>
+          )}
+          {data && rows.length > 0 && (
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                <div data-testid="utm-summary-visits">
+                  <p className="text-xs text-muted-foreground">Total UTM visits</p>
+                  <p className="text-lg font-semibold tabular-nums">{data.summary.total_utm_visits.toLocaleString()}</p>
+                </div>
+                <div data-testid="utm-summary-unique-ips">
+                  <p className="text-xs text-muted-foreground">Unique IPs</p>
+                  <p className="text-lg font-semibold tabular-nums">{data.summary.total_utm_unique_ips.toLocaleString()}</p>
+                </div>
+                <div data-testid="utm-summary-conversions">
+                  <p className="text-xs text-muted-foreground">Conversions</p>
+                  <p className="text-lg font-semibold tabular-nums">{data.summary.total_conversions.toLocaleString()}</p>
+                </div>
+                <div data-testid="utm-summary-direct">
+                  <p className="text-xs text-muted-foreground">Direct (no UTM)</p>
+                  <p className="text-lg font-semibold tabular-nums">{data.summary.direct_visits.toLocaleString()}</p>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm" data-testid="table-utm-campaigns">
+                  <thead>
+                    <tr className="border-b text-left">
+                      <th className="pb-2 pr-4 font-medium text-muted-foreground">Campaign (utm_source)</th>
+                      <th className="pb-2 pr-4 font-medium text-muted-foreground text-right">Visits</th>
+                      <th className="pb-2 pr-4 font-medium text-muted-foreground text-right">Unique IPs</th>
+                      <th className="pb-2 font-medium text-muted-foreground text-right">Conversions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row) => (
+                      <tr
+                        key={row.utm_source}
+                        className="border-b last:border-0"
+                        data-testid={`row-utm-campaign-${row.utm_source}`}
+                      >
+                        <td className="py-2 pr-4 font-mono text-xs">{row.utm_source}</td>
+                        <td className="py-2 pr-4 text-right tabular-nums">{row.visits.toLocaleString()}</td>
+                        <td className="py-2 pr-4 text-right tabular-nums">{row.unique_ips.toLocaleString()}</td>
+                        <td className="py-2 text-right tabular-nums">{row.conversions.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground">
+                Top {rows.length} campaigns · auto-refreshes every 60s · as of {new Date(data.generated_at).toLocaleTimeString()}
+              </p>
+            </>
+          )}
+        </CardContent>
+      )}
+    </Card>
+  );
+}
+
 function StatCard({ title, value, subtitle, icon: Icon }: { title: string; value: string | number; subtitle?: string; icon: any }) {
   return (
     <Card data-testid={`stat-card-${title.toLowerCase().replace(/\s+/g, '-')}`}>
@@ -390,6 +507,13 @@ export default function AdminDashboard() {
 
   const { data: trafficSources } = useQuery<TrafficSources>({
     queryKey: ["/api/admin/traffic-sources"],
+    refetchInterval: 60000,
+    retry: false,
+    enabled: isAdmin,
+  });
+
+  const { data: utmStats } = useQuery<UtmStats>({
+    queryKey: ["/api/admin/utm-stats"],
     refetchInterval: 60000,
     retry: false,
     enabled: isAdmin,
@@ -710,6 +834,7 @@ export default function AdminDashboard() {
             {isAdmin && (
               <div className="mb-6 space-y-6">
                 <TrafficSourcesCard data={trafficSources} />
+                <UtmCampaignCard data={utmStats} />
                 <RateLimitActivityCard data={rateLimitStats} isError={rateLimitError} />
               </div>
             )}
