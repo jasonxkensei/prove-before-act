@@ -197,6 +197,32 @@ describe("extreme gap values at the 31st outcome", () => {
     expect(trend?.direction).toBe("stable");
     expect(trend?.delta).toBe(0);
   });
+
+  it("direction is worsening and delta is coherent when all 30 recent gaps are +1.0 (saturated overconfidence) and previous is moderate", () => {
+    // recent (all 30): +1.0 → maximum overconfidence sustained across the whole window
+    // previous (31st): +0.2 → moderate overconfidence historically
+    // recentAbs=1.0 > previousAbs=0.2 + 0.01 → worsening
+    const gaps = split(30, 1.0, 1, 0.2);
+    const trend = computeCalibrationTrend(gaps);
+    expect(trend).not.toBeNull();
+    expect(trend?.direction).toBe("worsening");
+    expect(trend?.recent_mean_gap).toBe(1.0);
+    expect(trend?.previous_mean_gap).toBe(0.2);
+    expect(trend?.delta).toBe(0.8);
+  });
+
+  it("direction is worsening and delta is coherent when all 30 recent gaps are -1.0 (saturated underconfidence) and previous is moderate", () => {
+    // recent (all 30): -1.0 → maximum underconfidence sustained across the whole window
+    // previous (31st): -0.2 → moderate underconfidence historically
+    // recentAbs=1.0 > previousAbs=0.2 + 0.01 → worsening
+    const gaps = split(30, -1.0, 1, -0.2);
+    const trend = computeCalibrationTrend(gaps);
+    expect(trend).not.toBeNull();
+    expect(trend?.direction).toBe("worsening");
+    expect(trend?.recent_mean_gap).toBe(-1.0);
+    expect(trend?.previous_mean_gap).toBe(-0.2);
+    expect(trend?.delta).toBe(-0.8);
+  });
 });
 
 // ── 6. NaN gap values are handled gracefully ──────────────────────────────────
