@@ -494,6 +494,16 @@ async function renderAgentsPage(baseUrl: string): Promise<string> {
 <main>
   <h1>xproof for AI Agents — Prove Before Act</h1>
   <p><strong>xproof is the accountability layer for autonomous agents.</strong> Instead of being a black box, your agent becomes transparent, auditable, and verifiable. Anchor your reasoning (WHY) + planned action (WHAT) on-chain <em>before</em> executing — then anchor the result after. Full 4W audit trail on MultiversX. $${priceUsd.toFixed(2)}/proof. No API key needed via x402.</p>
+  <p><a href="${baseUrl}/agents/zh">中文版 →</a></p>
+
+  <section>
+    <h2>Quick Start — 30 seconds</h2>
+    <p>1. Get a free key (10 proofs, no wallet): <code>POST ${baseUrl}/api/agent/register</code> → <code>{"agent_name":"my-agent"}</code></p>
+    <p>2. Add to Claude / Cursor / Codex / OpenClaw:</p>
+    <pre><code>{ "mcpServers": { "xproof": { "url": "${baseUrl}/mcp", "headers": { "Authorization": "Bearer pm_YOUR_KEY" } } } }</code></pre>
+    <p>3. Call <code>audit_agent_session</code> before any action — get a <code>proof_id</code> — execute only after.</p>
+    <p><em>Note: always include <code>Accept: application/json, text/event-stream</code> in raw HTTP calls.</em></p>
+  </section>
 
   <section>
     <h2>Why MCP + xProof?</h2>
@@ -504,15 +514,6 @@ async function renderAgentsPage(baseUrl: string): Promise<string> {
       <li><strong>Immutable on-chain trail</strong> — SHA-256 hash anchored on MultiversX, verifiable without xproof</li>
       <li><strong>Free trial</strong> — 10 free proofs via REST, no wallet: <code>POST ${baseUrl}/api/agent/register</code></li>
     </ul>
-  </section>
-
-  <section>
-    <h2>Quick Start — 30 seconds</h2>
-    <p>1. Get a free key (10 proofs, no wallet): <code>POST ${baseUrl}/api/agent/register</code> → <code>{"agent_name":"my-agent"}</code></p>
-    <p>2. Add to Claude / Cursor / Codex / OpenClaw:</p>
-    <pre><code>{ "mcpServers": { "xproof": { "url": "${baseUrl}/mcp", "headers": { "Authorization": "Bearer pm_YOUR_KEY" } } } }</code></pre>
-    <p>3. Call <code>audit_agent_session</code> before any action — get a <code>proof_id</code> — execute only after.</p>
-    <p><em>Note: always include <code>Accept: application/json, text/event-stream</code> in raw HTTP calls.</em></p>
   </section>
 
   <section>
@@ -539,6 +540,27 @@ proof_id = json.loads(resp.json()["result"]["content"][0]["text"])["proof_id"]
 # 4. Act — only after proof confirmed
 execute_trade("BUY", "BTC", 0.5)
 print(f"Audit trail: ${baseUrl}/proof/{proof_id}")</code></pre>
+  </section>
+
+  <section>
+    <h2>Fleet example — 1,000+ decisions/day</h2>
+    <p>Running a fleet of agents (support, pricing, logistics)? Batch certifications instead of one call per decision.</p>
+    <pre><code>import hashlib, json, requests
+
+decisions = [...]  # up to 100 decisions per batch call
+
+batch = [{
+    "file_hash": hashlib.sha256(json.dumps(d, sort_keys=True).encode()).hexdigest(),
+    "filename": f"{d['agent_id']}_{d['session_id']}.json",
+    "metadata": d
+} for d in decisions]
+
+resp = requests.post("${baseUrl}/api/batch",
+    headers={"Authorization": "Bearer pm_YOUR_KEY", "Content-Type": "application/json"},
+    json={"certifications": batch})
+# → 1,000 decisions/day ≈ 10 batch calls instead of 1,000 single calls
+# → each proof_id is independently verifiable at /proof/{id} for compliance audits</code></pre>
+    <p>Same pattern works via MCP (<code>certify_file</code> per item) if your fleet already runs on an MCP client.</p>
   </section>
 
   <section>
@@ -602,6 +624,160 @@ print(f"Audit trail: ${baseUrl}/proof/{proof_id}")</code></pre>
 
 <footer>
   <p>&copy; ${new Date().getFullYear()} xproof. Built on <a href="https://multiversx.com">MultiversX</a> | <a href="${baseUrl}/agent-context">Full agent guide</a> | <a href="${baseUrl}/leaderboard">Agent leaderboard</a></p>
+</footer>
+</body>
+</html>`;
+}
+
+async function renderAgentsPageZh(baseUrl: string): Promise<string> {
+  const priceUsd = await getCertificationPriceUsd();
+  const title = "MCP + xProof — AI 智能体的链上存证与合规审计";
+  const description = `xproof 支持所有主流智能体协议：MCP、x402、ACP、REST。Prove Before Act：在执行前锚定推理过程，每次存证 $${priceUsd.toFixed(2)}，通过 x402 无需账户即可使用。`;
+
+  return `${commonHead(title, description, `${baseUrl}/agents/zh`)}
+<body>
+<header>
+  <nav>
+    <a href="${baseUrl}"><strong>xproof</strong></a> |
+    <a href="${baseUrl}/agent-context/zh">智能体接入指南</a> |
+    <a href="${baseUrl}/leaderboard">信任排行榜</a> |
+    <a href="${baseUrl}/agents">English</a>
+  </nav>
+</header>
+
+<main>
+  <h1>xproof：AI 智能体的链上存证层 — Prove Before Act（先证明，后行动）</h1>
+  <p><strong>xproof 是自主智能体的问责基础设施。</strong>让你的智能体不再是黑箱，而是透明、可审计、可验证的系统。在执行前锚定你的推理过程（WHY）和计划行动（WHAT），执行后再锚定结果。完整的 4W（Who/What/When/Why）审计留痕，基于 MultiversX 区块链。每次存证 $${priceUsd.toFixed(2)}，通过 x402 无需 API key 即可使用。</p>
+  <p>适用于合规存证（如《生成式人工智能服务管理暂行办法》）、风控留痕、以及多智能体舰队的审计追溯需求。</p>
+
+  <section>
+    <h2>快速开始 — 30 秒接入</h2>
+    <p>1. 获取免费密钥（10 次免费存证，无需钱包）：<code>POST ${baseUrl}/api/agent/register</code> → <code>{"agent_name":"my-agent"}</code></p>
+    <p>2. 添加到 Claude / Cursor / Codex / OpenClaw：</p>
+    <pre><code>{ "mcpServers": { "xproof": { "url": "${baseUrl}/mcp", "headers": { "Authorization": "Bearer pm_YOUR_KEY" } } } }</code></pre>
+    <p>3. 在每次行动前调用 <code>audit_agent_session</code> — 获得 <code>proof_id</code> 后才执行行动。</p>
+    <p><em>注意：原始 HTTP 调用必须包含 <code>Accept: application/json, text/event-stream</code>，否则服务器会返回 "Not Acceptable"。</em></p>
+  </section>
+
+  <section>
+    <h2>为什么选择 MCP + xProof？</h2>
+    <ul>
+      <li><strong>原生工具集成</strong> — Claude、Cursor、Codex、OpenClaw 可直接调用 <code>certify_file</code> 或 <code>audit_agent_session</code>，无需额外开发</li>
+      <li><strong>协议层强制 Prove Before Act</strong> — <code>audit_agent_session</code> 会阻塞执行，直到返回 proof_id</li>
+      <li><strong>兼容 x402</strong> — 自主智能体通过 Base 链上的 USDC 支付每次 $${priceUsd.toFixed(2)}，无需 API key、无需账户、无需人工介入</li>
+      <li><strong>不可篡改的链上留痕</strong> — SHA-256 哈希锚定在 MultiversX 上，无需依赖 xproof 即可独立验证</li>
+      <li><strong>免费试用</strong> — 通过 REST 获得 10 次免费存证，无需钱包：<code>POST ${baseUrl}/api/agent/register</code></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>完整示例 — 推理 → 哈希 → 存证 → 行动</h2>
+    <pre><code>import hashlib, json, requests
+
+# 1. 记录推理过程
+reasoning = {"who": "my-agent", "what": "BUY BTC 0.5", "why": "RSI=38, below threshold"}
+
+# 2. 本地哈希计算 — 原始数据不会离开本机
+file_hash = hashlib.sha256(json.dumps(reasoning, sort_keys=True).encode()).hexdigest()
+
+# 3. 通过 MCP 在行动前完成存证
+resp = requests.post("${baseUrl}/mcp",
+    headers={"Content-Type": "application/json",
+             "Accept": "application/json, text/event-stream",
+             "Authorization": "Bearer pm_YOUR_KEY"},
+    json={"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+          "params": {"name": "certify_file",
+                     "arguments": {"file_hash": file_hash, "filename": "decision.json",
+                                   "metadata": reasoning}}})
+proof_id = json.loads(resp.json()["result"]["content"][0]["text"])["proof_id"]
+
+# 4. 只有在存证确认后才执行行动
+execute_trade("BUY", "BTC", 0.5)
+print(f"审计链接: ${baseUrl}/proof/{proof_id}")</code></pre>
+  </section>
+
+  <section>
+    <h2>舰队 / 批量示例 — 每日 1,000+ 决策</h2>
+    <p>如果你管理一个智能体舰队（客服、动态定价、物流调度等），应使用批量存证接口，而不是逐条调用。</p>
+    <pre><code>import hashlib, json, requests
+
+decisions = [...]  # 每批最多 100 条决策
+
+batch = [{
+    "file_hash": hashlib.sha256(json.dumps(d, sort_keys=True).encode()).hexdigest(),
+    "filename": f"{d['agent_id']}_{d['session_id']}.json",
+    "metadata": d
+} for d in decisions]
+
+resp = requests.post("${baseUrl}/api/batch",
+    headers={"Authorization": "Bearer pm_YOUR_KEY", "Content-Type": "application/json"},
+    json={"certifications": batch})
+# → 每日 1,000 条决策 ≈ 10 次批量调用，而不是 1,000 次单独调用
+# → 每个 proof_id 均可在 /proof/{id} 独立验证，便于合规审计</code></pre>
+    <p>如果你的舰队已运行在 MCP 客户端上，同样的模式也适用于逐条调用 <code>certify_file</code>。</p>
+  </section>
+
+  <section>
+    <h2>可用的 MCP 工具</h2>
+    <table>
+      <thead><tr><th>工具</th><th>认证方式</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>audit_agent_session</code></td><td>API key</td><td>在执行前锚定 WHO + WHAT + WHY — 实现 Prove Before Act 的核心工具</td></tr>
+        <tr><td><code>certify_file</code></td><td>API key</td><td>在 MultiversX 上存证任意 SHA-256 哈希</td></tr>
+        <tr><td><code>certify_with_confidence</code></td><td>API key</td><td>带置信度分级的存证（初始 → 部分 → 预承诺 → 最终）</td></tr>
+        <tr><td><code>verify_proof</code></td><td>无</td><td>通过 proof_id 或 file_hash 验证已有存证</td></tr>
+        <tr><td><code>get_proof</code></td><td>无</td><td>以 JSON 或 Markdown 格式获取存证</td></tr>
+        <tr><td><code>investigate_proof</code></td><td>API key 或 x402</td><td>完整的 4W 审计链重建</td></tr>
+        <tr><td><code>submit_outcome</code></td><td>API key</td><td>记录某个置信度存证决策的实际结果</td></tr>
+        <tr><td><code>get_calibration</code></td><td>无</td><td>查询智能体的校准质量（偏差、差距、方差）</td></tr>
+        <tr><td><code>check_attestations</code></td><td>无</td><td>查询智能体钱包的第三方信任认证</td></tr>
+        <tr><td><code>discover_services</code></td><td>无</td><td>发现可用服务及价格</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>其他接入方式</h2>
+
+    <h3>REST API</h3>
+    <ul>
+      <li><strong>单次存证</strong> — <code>POST /api/proof</code>，传入 <code>file_hash</code> + <code>filename</code> → 返回 <code>proof_id</code></li>
+      <li><strong>批量（最多 100 条）</strong> — <code>POST /api/batch</code> → 生产环境请求数减少 50 倍</li>
+      <li><strong>认证</strong> — <code>Authorization: Bearer pm_YOUR_KEY</code></li>
+    </ul>
+
+    <h3>x402 — 无需 API key</h3>
+    <p>不带密钥调用 POST /api/proof → 收到 402 响应 → 在 Base 链上签署 USDC 支付 → 携带 <code>X-PAYMENT</code> 头重新请求。每次固定 $${priceUsd.toFixed(2)}，无需账户。<a href="${baseUrl}/agent-context#x402">完整 x402 指南 →</a></p>
+
+    <h3>ACP — 链上智能体交易流程</h3>
+    <p>3 次调用完成：<code>GET /api/acp/products</code> → <code>POST /api/acp/checkout</code> → <code>POST /api/acp/confirm</code></p>
+
+    <h3>SDK 与框架</h3>
+    <ul>
+      <li>Python：<code>pip install xproof</code> — 支持 LangChain、CrewAI、AutoGen、LlamaIndex、OpenAI Agents SDK</li>
+      <li>JavaScript：<code>npm install @xproof/xproof</code> — 支持 Vercel AI、LangChain JS</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>保证与相关链接</h2>
+    <ul>
+      <li>隐私优先 — 仅将 SHA-256 哈希上链，原始内容始终保留在本地</li>
+      <li>不可篡改 — 锚定在 MultiversX 上，无需 xproof 即可独立验证</li>
+      <li>固定价格 — 每次存证 $${priceUsd.toFixed(2)}，无分级收费</li>
+    </ul>
+    <p>
+      <a href="${baseUrl}/agent-context/zh">完整智能体接入指南</a> ·
+      <a href="${baseUrl}/agent-context.md">agent-context.md（机器可读）</a> ·
+      <a href="${baseUrl}/.well-known/mcp.json">mcp.json</a> ·
+      <a href="${baseUrl}/api/acp/openapi.json">openapi.json</a> ·
+      <a href="${baseUrl}/llms.txt">llms.txt</a>
+    </p>
+  </section>
+</main>
+
+<footer>
+  <p>&copy; ${new Date().getFullYear()} xproof. Built on <a href="https://multiversx.com">MultiversX</a> | <a href="${baseUrl}/agent-context/zh">智能体接入指南</a> | <a href="${baseUrl}/leaderboard">信任排行榜</a></p>
 </footer>
 </body>
 </html>`;
@@ -965,6 +1141,16 @@ export function prerenderMiddleware() {
         .set("Cache-Control", "public, max-age=300")
         .set("Link", agentLinksHeader)
         .send(renderAgentContextPage(baseUrl));
+    }
+
+    // /agents/zh is a dedicated MCP doc page for Chinese-speaking agents —
+    // always serve prerendered HTML to every visitor, same rationale as /agent-context
+    if (path === "/agents/zh") {
+      return res.status(200)
+        .set("Content-Type", "text/html; charset=utf-8")
+        .set("Cache-Control", "public, max-age=300")
+        .set("Link", agentLinksHeader)
+        .send(await renderAgentsPageZh(baseUrl));
     }
 
     const userAgent = req.get("user-agent") || "";
