@@ -498,7 +498,11 @@ async function renderAgentsPage(baseUrl: string): Promise<string> {
 
   <section>
     <h2>Quick Start — 30 seconds</h2>
-    <p>1. Get a free key (10 proofs, no wallet): <code>POST ${baseUrl}/api/agent/register</code> → <code>{"agent_name":"my-agent"}</code></p>
+    <p>1. Get a free key — two ways:</p>
+    <ul>
+      <li><strong>From MCP directly (fastest)</strong>: call <code>register_trial</code> with <code>{"agent_name":"my-agent"}</code> — returns a <code>pm_</code> key instantly, no auth required.</li>
+      <li><strong>Via REST</strong>: <code>POST ${baseUrl}/api/agent/register</code> → <code>{"agent_name":"my-agent"}</code></li>
+    </ul>
     <p>2. Add to Claude / Cursor / Codex / OpenClaw:</p>
     <pre><code>{ "mcpServers": { "xproof": { "url": "${baseUrl}/mcp", "headers": { "Authorization": "Bearer pm_YOUR_KEY" } } } }</code></pre>
     <p>3. Call <code>audit_agent_session</code> before any action — get a <code>proof_id</code> — execute only after.</p>
@@ -512,7 +516,7 @@ async function renderAgentsPage(baseUrl: string): Promise<string> {
       <li><strong>Prove Before Act enforced by the protocol</strong> — <code>audit_agent_session</code> blocks execution until a proof_id is returned</li>
       <li><strong>x402 compatible</strong> — autonomous agents pay $${priceUsd.toFixed(2)}/proof via USDC on Base, no API key, no account, no human in the loop</li>
       <li><strong>Immutable on-chain trail</strong> — SHA-256 hash anchored on MultiversX, verifiable without xproof</li>
-      <li><strong>Free trial</strong> — 10 free proofs via REST, no wallet: <code>POST ${baseUrl}/api/agent/register</code></li>
+      <li><strong>Free trial</strong> — 10 free proofs, no wallet: call MCP tool <code>register_trial</code> (no auth needed) or <code>POST ${baseUrl}/api/agent/register</code> via REST</li>
     </ul>
   </section>
 
@@ -652,7 +656,11 @@ async function renderAgentsPageZh(baseUrl: string): Promise<string> {
 
   <section>
     <h2>快速开始 — 30 秒接入</h2>
-    <p>1. 获取免费密钥（10 次免费存证，无需钱包）：<code>POST ${baseUrl}/api/agent/register</code> → <code>{"agent_name":"my-agent"}</code></p>
+    <p>1. 获取免费密钥 — 两种方式：</p>
+    <ul>
+      <li><strong>直接通过 MCP（最快）</strong>：调用 <code>register_trial</code>，传入 <code>{"agent_name":"my-agent"}</code> — 无需任何认证，立即返回 <code>pm_</code> 密钥。</li>
+      <li><strong>通过 REST</strong>：<code>POST ${baseUrl}/api/agent/register</code> → <code>{"agent_name":"my-agent"}</code></li>
+    </ul>
     <p>2. 添加到 Claude / Cursor / Codex / OpenClaw：</p>
     <pre><code>{ "mcpServers": { "xproof": { "url": "${baseUrl}/mcp", "headers": { "Authorization": "Bearer pm_YOUR_KEY" } } } }</code></pre>
     <p>3. 在每次行动前调用 <code>audit_agent_session</code> — 获得 <code>proof_id</code> 后才执行行动。</p>
@@ -666,7 +674,7 @@ async function renderAgentsPageZh(baseUrl: string): Promise<string> {
       <li><strong>协议层强制 Prove Before Act</strong> — <code>audit_agent_session</code> 会阻塞执行，直到返回 proof_id</li>
       <li><strong>兼容 x402</strong> — 自主智能体通过 Base 链上的 USDC 支付每次 $${priceUsd.toFixed(2)}，无需 API key、无需账户、无需人工介入</li>
       <li><strong>不可篡改的链上留痕</strong> — SHA-256 哈希锚定在 MultiversX 上，无需依赖 xproof 即可独立验证</li>
-      <li><strong>免费试用</strong> — 通过 REST 获得 10 次免费存证，无需钱包：<code>POST ${baseUrl}/api/agent/register</code></li>
+      <li><strong>免费试用</strong> — 10 次免费存证，无需钱包：直接调用 MCP 工具 <code>register_trial</code>（无需认证）或通过 REST <code>POST ${baseUrl}/api/agent/register</code></li>
     </ul>
   </section>
 
