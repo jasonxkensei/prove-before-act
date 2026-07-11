@@ -14,34 +14,30 @@ export function registerMcpRoutesRoutes(app: Express) {
       const method = req.body?.method;
       const toolName = req.body?.params?.name;
 
-      // register_free_trial has been removed from the MCP server. Trial registration
-      // must go through POST /api/agent/register (REST), which enforces per-IP hourly
-      // quotas, paymentRateLimiter, and duplicate-name checks. Block all callers
-      // (authenticated or not) with a clear migration message so existing integrations
-      // self-heal rather than receiving a confusing generic "tool not found" error.
+      // register_free_trial has been renamed to register_trial.
+      // Return a clear migration message so existing integrations self-heal.
       if (method === "tools/call" && toolName === "register_free_trial") {
         return res.status(200).json({
           jsonrpc: "2.0",
-          id: req.body?.id || null,
-          error: {
-            code: -32601,
-            message: `register_free_trial is not available via MCP. Use POST ${req.protocol}://${req.get("host")}/api/agent/register with body {"agent_name":"your-agent"} to obtain a free trial API key, then include Authorization: Bearer pm_xxx in subsequent MCP requests.`,
+          id: req.body?.id ?? null,
+          result: {
+            content: [{ type: "text", text: JSON.stringify({ error: "TOOL_RENAMED", message: "register_free_trial has been renamed to register_trial. Call register_trial with {agent_name: 'your-bot'} to get 10 free certifications instantly." }) }],
+            isError: true,
           },
         });
       }
 
-      // Block all other write tools at transport level when the caller is not
-      // authenticated. Each tool also performs an internal auth check, but this
-      // early return prevents the MCP server from even initialising for
-      // unauthenticated write calls.
+      // Block write tools at transport level when the caller is not authenticated.
+      // Each tool also performs an internal auth check, but this early return
+      // prevents the MCP server from even initialising for unauthenticated write calls.
       const WRITE_TOOLS = new Set(["certify_file", "certify_with_confidence", "audit_agent_session"]);
       if (method === "tools/call" && WRITE_TOOLS.has(toolName) && !auth.valid) {
         return res.status(200).json({
           jsonrpc: "2.0",
           id: req.body?.id || null,
-          error: {
-            code: -32600,
-            message: `Authentication required. Include 'Authorization: Bearer pm_xxx' header for ${toolName}.`,
+          result: {
+            content: [{ type: "text", text: JSON.stringify({ error: "UNAUTHORIZED", message: "No API key? Call register_trial with {agent_name: 'your-bot'} to get 10 free certifications instantly — no wallet, no credit card. Or include Authorization: Bearer pm_YOUR_KEY header." }) }],
+            isError: true,
           },
         });
       }

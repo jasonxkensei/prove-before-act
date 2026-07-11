@@ -14,6 +14,7 @@ import {
   getTrialUser, getUserCreditBalance, consumeTrialCredit, consumeCredit,
   atomicConsumeCredit, atomicConsumeTrialCredit, refundCredit, refundTrialCredit,
   isAdminWallet, getApiKeyOwnerWallet, tryDisplaceAcpReservation,
+  TRIAL_QUOTA, REGISTER_RATE_LIMIT_MAX, REGISTER_RATE_LIMIT_WINDOW_MS,
 } from "./routes/helpers";
 import { pgCheckRateLimit } from "./pgRateLimit";
 
@@ -52,6 +53,114 @@ export async function createMcpServer(ctx: McpContext) {
 
   const { baseUrl, auth, xPaymentHeader, host, clientIp } = ctx;
 
+  // ── TOOL 1 : register_trial — START HERE, no key needed ──────────────────
+  // Implemented directly in the McpServer (not at transport level) so it
+  // appears in tools/list and is discoverable by every MCP client.
+  // Uses clientIp from McpContext (passed from the real Express request) for
+  // per-IP rate limiting — same security model as POST /api/agent/register.
+  server.tool(
+    "register_trial",
+    `START HERE if you have no API key. Get 10 free on-chain certifications instantly — no wallet, no credit card, no account required. Call this once with any agent_name, receive a pm_ key, then use certify_file or audit_agent_session immediately. Takes under 1 second.`,
+    {
+      agent_name: z.string().min(1).max(100).describe("A short identifier for your agent (e.g. 'trading-bot', 'my-langchain-agent'). Must be unique across the platform."),
+    },
+    async ({ agent_name }) => {
+      try {
+        const name = agent_name.trim();
+
+        // Per-IP rate limit — same constants as REST /api/agent/register
+        const ipHash = crypto.createHash("sha256").update(clientIp).digest("hex").slice(0, 16);
+        const regRl = await pgCheckRateLimit("register", ipHash, REGISTER_RATE_LIMIT_MAX, REGISTER_RATE_LIMIT_WINDOW_MS);
+        if (!regRl.allowed) {
+          return { content: [{ type: "text" as const, text: JSON.stringify({ error: "RATE_LIMIT_EXCEEDED", message: `Maximum ${REGISTER_RATE_LIMIT_MAX} trial registrations per hour per IP. Try again later.` }) }], isError: true };
+        }
+
+        // Duplicate-name guard — same logic as REST endpoint
+        const nameLower = name.toLowerCase();
+        const existingByUser = await db.select({ id: users.id })
+          .from(users)
+          .where(and(
+            sql`(LOWER(${users.companyName}) = ${nameLower} OR LOWER(${users.agentName}) = ${nameLower})`,
+            eq(users.isTrial, false),
+          ))
+          .limit(1);
+        const existingByKey = existingByUser.length === 0
+          ? await db.select({ id: apiKeys.id })
+              .from(apiKeys)
+              .innerJoin(users, eq(apiKeys.userId, users.id))
+              .where(and(
+                sql`LOWER(${apiKeys.name}) = ${nameLower}`,
+                eq(users.isTrial, false),
+                eq(apiKeys.isActive, true),
+              ))
+              .limit(1)
+          : [];
+        if (existingByUser.length > 0 || existingByKey.length > 0) {
+          const suggested = `${name}-${crypto.randomBytes(3).toString("hex")}`;
+          return { content: [{ type: "text" as const, text: JSON.stringify({ error: "DUPLICATE_AGENT_NAME", message: `An agent named "${name}" already exists. Try a unique name (e.g. "${suggested}").` }) }], isError: true };
+        }
+
+        // Create trial user + API key — identical flow to REST endpoint
+        const trialWallet = `erd1trial${crypto.randomBytes(24).toString("hex")}`;
+        const registrationIpHash = crypto.createHash("sha256").update(clientIp).digest("hex");
+
+        const [trialUser] = await db.insert(users).values({
+          walletAddress: trialWallet,
+          subscriptionTier: "free",
+          subscriptionStatus: "active",
+          isTrial: true,
+          trialQuota: TRIAL_QUOTA,
+          trialUsed: 0,
+          agentName: name,
+          companyName: name,
+          isPublicProfile: false,
+          registrationIpHash,
+        }).returning();
+
+        const rawKey = `pm_${crypto.randomBytes(32).toString("hex")}`;
+        const keyHash = crypto.createHash("sha256").update(rawKey).digest("hex");
+        const keyPrefix = rawKey.slice(0, 10);
+
+        await db.insert(apiKeys).values({
+          keyHash,
+          keyPrefix,
+          userId: trialUser.id,
+          name: `Trial: ${name}`,
+          isActive: true,
+        });
+
+        logger.info("Agent trial registered via MCP register_trial", {
+          agentName: name,
+          userId: trialUser.id,
+          ipHash,
+        });
+
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({
+              success: true,
+              api_key: rawKey,
+              agent_name: name,
+              trial_remaining: TRIAL_QUOTA,
+              message: `Your key is ready. You have ${TRIAL_QUOTA} free on-chain certifications.`,
+              next_step: `Include this header in every subsequent MCP call: Authorization: Bearer ${rawKey}`,
+              quick_start: {
+                mcp_certify: `Call certify_file with your file_hash + filename`,
+                mcp_audit: `Call audit_agent_session before any critical action`,
+                rest_alternative: `POST ${baseUrl}/api/proof — Authorization: Bearer ${rawKey}`,
+                batch: `POST ${baseUrl}/api/batch — certify up to 100 hashes per call`,
+              },
+            }),
+          }],
+        };
+      } catch (err) {
+        logger.error("register_trial MCP tool error", { error: String(err) });
+        return { content: [{ type: "text" as const, text: JSON.stringify({ error: "REGISTRATION_ERROR", message: String(err) }) }], isError: true };
+      }
+    }
+  );
+
   server.tool(
     "certify_file",
     `Create a blockchain certification for a file. Records the SHA-256 hash on MultiversX blockchain as immutable proof of existence and ownership. Cost: $${currentPriceUsd} per certification, paid in EGLD.`,
@@ -66,11 +175,11 @@ export async function createMcpServer(ctx: McpContext) {
     async ({ file_hash, filename, author_name, webhook_url }) => {
       try {
         if (!auth.valid || !auth.keyHash) {
-          return { content: [{ type: "text" as const, text: JSON.stringify({ error: "UNAUTHORIZED", message: "Valid API key required. Include Authorization: Bearer pm_xxx header." }) }], isError: true };
+          return { content: [{ type: "text" as const, text: JSON.stringify({ error: "UNAUTHORIZED", message: "No API key? Call register_trial (free, no wallet needed) to get 10 free certifications instantly. Or include Authorization: Bearer pm_YOUR_KEY header." }) }], isError: true };
         }
         // Every active API key must have an owner — reject rather than misattribute to system account
         if (!auth.userId) {
-          return { content: [{ type: "text" as const, text: JSON.stringify({ error: "UNAUTHORIZED", message: "API key has no associated account. Please re-register." }) }], isError: true };
+          return { content: [{ type: "text" as const, text: JSON.stringify({ error: "UNAUTHORIZED", message: "API key has no associated account. Call register_trial to get a fresh key." }) }], isError: true };
         }
 
         // Billing: enforce trial quota and prepaid-credit requirements
@@ -323,11 +432,11 @@ export async function createMcpServer(ctx: McpContext) {
     async ({ file_hash, filename, decision_id, confidence_level, threshold_stage, author_name, why, who, reversibility_class }) => {
       try {
         if (!auth.valid || !auth.keyHash) {
-          return { content: [{ type: "text" as const, text: JSON.stringify({ error: "UNAUTHORIZED", message: "Valid API key required. Include Authorization: Bearer pm_xxx header." }) }], isError: true };
+          return { content: [{ type: "text" as const, text: JSON.stringify({ error: "UNAUTHORIZED", message: "No API key? Call register_trial (free, no wallet needed) to get 10 free certifications instantly. Or include Authorization: Bearer pm_YOUR_KEY header." }) }], isError: true };
         }
         // Every active API key must have an owner — reject rather than misattribute to system account
         if (!auth.userId) {
-          return { content: [{ type: "text" as const, text: JSON.stringify({ error: "UNAUTHORIZED", message: "API key has no associated account. Please re-register." }) }], isError: true };
+          return { content: [{ type: "text" as const, text: JSON.stringify({ error: "UNAUTHORIZED", message: "API key has no associated account. Call register_trial to get a fresh key." }) }], isError: true };
         }
 
         // Billing: enforce trial quota and prepaid-credit requirements
@@ -736,6 +845,12 @@ export async function createMcpServer(ctx: McpContext) {
               mx8004_status: `${baseUrl}/api/mx8004/status`,
               specification: `${baseUrl}/.well-known/xproof.md`,
             },
+            getting_started: {
+              step1: "Call register_trial (MCP tool) — returns a pm_ key with 10 free certifications. No wallet, no credit card, takes <1 second.",
+              step2: "Add key to every request: Authorization: Bearer pm_YOUR_KEY",
+              step3: "Call certify_file or audit_agent_session",
+              rest_alternative: `POST ${baseUrl}/api/agent/register with {"agent_name":"your-bot"} — same free trial via REST`,
+            },
             authentication: { type: "bearer", prefix: "pm_", header: "Authorization: Bearer pm_YOUR_KEY" },
             x402_payment: {
               protocol: "x402 (HTTP 402 Payment Required)",
@@ -793,13 +908,13 @@ export async function createMcpServer(ctx: McpContext) {
       try {
         if (!auth.valid || !auth.keyHash) {
           return {
-            content: [{ type: "text" as const, text: JSON.stringify({ error: "UNAUTHORIZED", message: "Valid API key required for audit_agent_session. Include Authorization: Bearer pm_xxx header." }) }],
+            content: [{ type: "text" as const, text: JSON.stringify({ error: "UNAUTHORIZED", message: "No API key? Call register_trial (free, no wallet needed) to get 10 free certifications instantly. Or include Authorization: Bearer pm_YOUR_KEY header." }) }],
             isError: true,
           };
         }
         // Every active API key must have an owner — reject rather than misattribute to system account
         if (!auth.userId) {
-          return { content: [{ type: "text" as const, text: JSON.stringify({ error: "UNAUTHORIZED", message: "API key has no associated account. Please re-register." }) }], isError: true };
+          return { content: [{ type: "text" as const, text: JSON.stringify({ error: "UNAUTHORIZED", message: "API key has no associated account. Call register_trial to get a fresh key." }) }], isError: true };
         }
 
         // Billing: enforce trial quota and prepaid-credit requirements
@@ -1113,7 +1228,7 @@ export async function createMcpServer(ctx: McpContext) {
             }
           } else {
             return {
-              content: [{ type: "text" as const, text: JSON.stringify({ error: "UNAUTHORIZED", message: "API key required. Include Authorization: Bearer pm_xxx header.", incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` }) }],
+              content: [{ type: "text" as const, text: JSON.stringify({ error: "UNAUTHORIZED", message: "No API key? Call register_trial (free, no wallet needed) to get 10 free certifications instantly. Or include Authorization: Bearer pm_YOUR_KEY header.", incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` }) }],
               isError: true,
             };
           }
@@ -1268,7 +1383,7 @@ export async function createMcpServer(ctx: McpContext) {
     async ({ proof_id, outcome_score, visibility }) => {
       if (!auth.valid || !auth.userId) {
         return {
-          content: [{ type: "text" as const, text: JSON.stringify({ error: "UNAUTHORIZED", message: "API key required. Include Authorization: Bearer pm_xxx header." }) }],
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "UNAUTHORIZED", message: "No API key? Call register_trial (free, no wallet needed) to get 10 free certifications instantly. Or include Authorization: Bearer pm_YOUR_KEY header." }) }],
           isError: true,
         };
       }
