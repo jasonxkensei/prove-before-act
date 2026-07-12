@@ -141,7 +141,10 @@ async function renderHomePage(baseUrl: string): Promise<string> {
 <body>
 <header>
   <nav>
-    <a href="${baseUrl}"><strong>xproof</strong></a>
+    <a href="${baseUrl}"><strong>xproof</strong></a> |
+    <a href="${baseUrl}/agents">For AI Agents</a> |
+    <a href="${baseUrl}/certify">Certify</a> |
+    <a href="${baseUrl}/docs">API Docs</a>
   </nav>
 </header>
 
