@@ -393,10 +393,45 @@ export async function healthCheck(_req: Request, res: Response) {
     details: { configured: isMX8004Configured() },
   };
 
+  // EGLD signer balance check — low balance is the #1 silent cause of 100% certification failure
+  const signerAddress = process.env.MULTIVERSX_SENDER_ADDRESS;
+  if (signerAddress) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      const balResp = await fetch(`https://api.multiversx.com/accounts/${signerAddress}?fields=balance,nonce`, { signal: controller.signal });
+      clearTimeout(timeout);
+      if (balResp.ok) {
+        const balData = await balResp.json() as { balance?: string; nonce?: number };
+        const balanceRaw = BigInt(balData.balance ?? "0");
+        const balanceEgld = Number(balanceRaw) / 1e18;
+        const LOW_EGLD_WARN = 1.0;   // warn below 1 EGLD (~10 000 txs)
+        const LOW_EGLD_CRIT = 0.1;   // critical below 0.1 EGLD (~1 000 txs)
+        const balStatus = balanceEgld < LOW_EGLD_CRIT ? "critical_low_balance" : balanceEgld < LOW_EGLD_WARN ? "low_balance" : "ok";
+        checks.signer_balance = {
+          status: balStatus,
+          details: {
+            address: signerAddress,
+            balance_egld: Math.round(balanceEgld * 1e6) / 1e6,
+            balance_raw: balData.balance ?? "0",
+            nonce: balData.nonce ?? 0,
+            warning: balStatus !== "ok" ? `Signer wallet low on EGLD — certifications will fail below ~0.0001 EGLD. Top up: ${signerAddress}` : undefined,
+          },
+        };
+      } else {
+        checks.signer_balance = { status: "unknown", details: { address: signerAddress, error: `API returned ${balResp.status}` } };
+      }
+    } catch (e) {
+      checks.signer_balance = { status: "unknown", details: { address: signerAddress, error: e instanceof Error ? e.message : "fetch failed" } };
+    }
+  }
+
   const metrics = getMetrics();
 
   const statuses = Object.values(checks).map(c => c.status);
-  const overallStatus = statuses.includes("down") ? "degraded" : statuses.every(s => s === "ok" || s === "not_configured") ? "healthy" : "degraded";
+  const hasCritical = statuses.includes("down") || statuses.includes("critical_low_balance");
+  const hasWarning = statuses.includes("low_balance") || statuses.includes("degraded") || statuses.includes("unknown");
+  const overallStatus = hasCritical ? "degraded" : hasWarning ? "degraded" : statuses.every(s => s === "ok" || s === "not_configured") ? "healthy" : "degraded";
 
   const latencyPercentiles = getLatencyPercentiles();
   const failureRate = metrics.transactions.total_failed > 0 

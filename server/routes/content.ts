@@ -1526,9 +1526,16 @@ After certification, the proof is public and permanently verifiable.
 Any agent, human, or third party can verify the file was certified at that exact moment.
 
 ## Authentication — Free Trial (Start Here)
-No wallet. No browser. No payment. One HTTP call.
+No wallet. No browser. No payment.
 
-Step 1 — Register and get an API key:
+### Option A — MCP (fastest, if you are already in an MCP session)
+Call the \`register_trial\` MCP tool directly — no Authorization header needed:
+\`\`\`json
+{ "name": "register_trial", "arguments": { "agent_name": "your-agent-name" } }
+\`\`\`
+Returns: \`api_key\`, \`trial_remaining: 10\`, \`next_step\` with usage instructions.
+
+### Option B — REST (one HTTP call)
 \`\`\`bash
 curl -X POST ${baseUrl}/api/agent/register \\
   -H "Content-Type: application/json" \\
@@ -1784,7 +1791,7 @@ ${urls}
       schema_version: "1.0",
       name: "xproof",
       version: "1.5.0",
-      description: "xproof — the canonical proof layer for AI agents. Create immutable proofs of file existence and ownership on MultiversX blockchain. Live MCP server available at POST /mcp (JSON-RPC 2.0 over Streamable HTTP). Free trial: 10 free certifications via register_free_trial tool, no wallet, no card.",
+      description: "xproof — the canonical proof layer for AI agents. Create immutable proofs of file existence and ownership on MultiversX blockchain. Live MCP server available at POST /mcp (JSON-RPC 2.0 over Streamable HTTP). Free trial: 10 free certifications via register_trial MCP tool (no auth required), no wallet, no card.",
       homepage: baseUrl,
       endpoint: `${baseUrl}/mcp`,
       transport: "streamable-http",
@@ -1901,8 +1908,8 @@ ${urls}
           }
         },
         {
-          name: "register_free_trial",
-          description: "Get a free API key instantly — 10 free blockchain certifications included. No wallet, no payment, no credit card required. Call this FIRST before using any other tool that requires authentication. Returns a pm_ API key to include as: Authorization: Bearer pm_YOUR_KEY.",
+          name: "register_trial",
+          description: "START HERE — Get a free API key instantly — 10 free blockchain certifications included. No wallet, no payment, no credit card required. Call this FIRST before using any other tool that requires authentication. Returns a pm_ API key to include as: Authorization: Bearer pm_YOUR_KEY.",
           inputSchema: {
             type: "object",
             required: ["agent_name"],
@@ -1922,8 +1929,8 @@ ${urls}
       authentication: {
         type: "bearer",
         token_prefix: "pm_",
-        free_trial: "GET 10 FREE PROOFS INSTANTLY — use MCP tool register_free_trial, or POST /api/agent/register with {agent_name: 'my-agent'}. No wallet, no payment, no credit card.",
-        instructions: "Call register_free_trial MCP tool first to receive a pm_ key, then include it as: Authorization: Bearer pm_YOUR_KEY on all subsequent tool calls.",
+        free_trial: "GET 10 FREE PROOFS INSTANTLY — call MCP tool register_trial (no auth required), or POST /api/agent/register with {agent_name: 'my-agent'} via REST. No wallet, no payment, no credit card.",
+        instructions: "Call register_trial MCP tool first to receive a pm_ key, then include it as: Authorization: Bearer pm_YOUR_KEY on all subsequent tool calls.",
       },
       api: {
         openapi: `${baseUrl}/api/acp/openapi.json`,
@@ -2028,7 +2035,7 @@ curl -X POST https://xproof.app/mcp \\\\
 \\\`\\\`\\\`
 
 Available tools (auth: Bearer pm_YOUR_API_KEY except where noted):
-- \\\`register_free_trial\\\` — get 10 free certifications instantly, **no auth required**
+- \\\`register_trial\\\` — **START HERE** — get 10 free certifications instantly, **no auth required**
 - \\\`certify_file\\\` — certify a file hash on MultiversX blockchain
 - \\\`certify_with_confidence\\\` — staged certification with confidence score (initial/partial/pre-commitment/final), shared decision_id, reversibility governance
 - \\\`verify_proof\\\` — verify an existing certification
@@ -2483,7 +2490,7 @@ xproof exposes a native MCP server at \`POST ${baseUrl}/mcp\` using JSON-RPC 2.0
 
 | Tool | Auth required | Description |
 |------|--------------|-------------|
-| \`register_free_trial\` | No | Get 10 free certifications instantly — returns a pm_ API key with no wallet or payment |
+| \`register_trial\` | No | **START HERE** — Get 10 free certifications instantly — returns a pm_ API key with no wallet or payment |
 | \`certify_file\` | Yes | Certify a SHA-256 file hash on MultiversX blockchain (proof of existence, authorship, timestamp) |
 | \`certify_with_confidence\` | Yes | Staged certification with confidence score and decision_id. Supports reversibility governance. |
 | \`verify_proof\` | No | Verify any existing xproof certification by proof_id |
