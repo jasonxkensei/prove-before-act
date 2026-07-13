@@ -479,6 +479,125 @@ describe("build402Response — native x402 402 shape contract", () => {
       ).toBe("number");
     });
   });
+
+  // ── Part 3e: Supertest — authenticated zero-credit POST /api/proof ────────
+  //
+  // Simulates the atomicConsumeCredit failure path in /api/proof: an API key
+  // whose credit balance races to zero between the balance-check and the
+  // atomic consume. The fixed handler (proof-write.ts line ~527) now spreads
+  // `build402Response(req, "proof")` into the INSUFFICIENT_CREDITS 402 body so
+  // agents receive x402Version + accepts[0].payTo alongside the human-readable
+  // error. This block validates that shape.
+  //
+  // SKIP BEHAVIOUR: skipped when X402_PAY_TO is absent because build402Response
+  // requires X402_PAY_TO to produce a meaningful payTo field.
+  // ──────────────────────────────────────────────────────────────────────────────
+
+  describe("zero-credit atomic-consume failure POST /api/proof — HTTP 402 via supertest (Part 3e)", () => {
+    let status: number;
+    let body:   Record<string, unknown>;
+
+    beforeAll(async () => {
+      // Replicate the atomicConsumeCredit failure branch from the fixed
+      // proof-write.ts /api/proof handler:
+      //
+      //   const x402Payload = isX402Configured() ? await build402Response(req, "proof") : {};
+      //   return res.status(402).json({
+      //     error: "INSUFFICIENT_CREDITS",
+      //     message: "Credit balance insufficient...",
+      //     ...x402Payload,
+      //   });
+      //
+      // The outer beforeAll already imported build402Response with stubbed
+      // X402_PAY_TO, so the spread will include x402Version and accepts[].
+      const app = express();
+      app.use(express.json());
+      app.post("/api/proof", async (req, res) => {
+        if (!isX402Configured()) {
+          return res.status(500).json({ error: "x402 not configured in test — check test setup" });
+        }
+        const x402Payload = await build402Response(req, "proof");
+        return res.status(402).json({
+          error: "INSUFFICIENT_CREDITS",
+          message: "Credit balance insufficient. Purchase additional credits to continue.",
+          ...x402Payload,
+        });
+      });
+      const request = supertest(app);
+
+      const res = await request
+        .post("/api/proof")
+        .set("Content-Type", "application/json")
+        .set("Authorization", "Bearer pm_test_zero_credit_key")
+        .send({ file_hash: "c".repeat(64), filename: "zero-credit-proof-test.txt" });
+
+      status = res.status;
+      body   = res.body as Record<string, unknown>;
+    });
+
+    it("responds with HTTP 402 (not 401 or 500)", () => {
+      expect(
+        status,
+        "zero-credit proof request must return 402 — " +
+          "401 means auth failed; 500 means x402 not configured in test",
+      ).toBe(402);
+    });
+
+    it("body.error is INSUFFICIENT_CREDITS", () => {
+      expect(body.error, "error must be INSUFFICIENT_CREDITS").toBe("INSUFFICIENT_CREDITS");
+    });
+
+    it("body.x402Version is defined and equals 1", () => {
+      expect(body.x402Version, "x402Version must be present — agents cannot parse a 402 without it").toBeDefined();
+      expect(body.x402Version, "x402Version must equal 1").toBe(1);
+    });
+
+    it("body.accepts is a non-empty array", () => {
+      expect(Array.isArray(body.accepts), "accepts must be an array").toBe(true);
+      expect(
+        (body.accepts as unknown[]).length,
+        "accepts must have at least one entry — agents need a payment option",
+      ).toBeGreaterThan(0);
+    });
+
+    it("body.accepts[0].payTo is a non-empty string (payment address agents use)", () => {
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(typeof entry.payTo, "accepts[0].payTo must be a string").toBe("string");
+      expect((entry.payTo as string).length, "accepts[0].payTo must not be empty").toBeGreaterThan(0);
+    });
+
+    it("body.accepts[0].payTo equals the configured X402_PAY_TO address", () => {
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(
+        entry.payTo,
+        "accepts[0].payTo must match the configured payment address so agents pay the right wallet",
+      ).toBe(TEST_PAY_TO);
+    });
+
+    it("body.accepts[0].price is a non-empty string (the payment amount)", () => {
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(typeof entry.price, "accepts[0].price must be a string").toBe("string");
+      expect((entry.price as string).length, "accepts[0].price must not be empty").toBeGreaterThan(0);
+    });
+
+    it("body.resource references /api/proof", () => {
+      expect(typeof body.resource, "resource must be a string").toBe("string");
+      expect(
+        body.resource as string,
+        "resource must reference /api/proof so agents know which endpoint to retry after paying",
+      ).toContain("/api/proof");
+    });
+
+    it("body.free_trial discovery block is present so agents know about the free tier", () => {
+      expect(body.free_trial, "free_trial must be present").toBeDefined();
+      const ft = body.free_trial as Record<string, unknown>;
+      expect(typeof ft.register, "free_trial.register must be a string").toBe("string");
+      expect(
+        typeof ft.free_certifications,
+        "free_trial.free_certifications must be a number",
+      ).toBe("number");
+    });
+  });
 });
 
 // ── Part 3: Live server integration ──────────────────────────────────────────

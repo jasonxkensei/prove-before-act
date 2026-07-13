@@ -524,7 +524,8 @@ export function registerProofWriteRoutes(app: Express) {
       } else if (creditInfo) {
         const consumed = await atomicConsumeCredit(creditInfo.userId);
         if (!consumed) {
-          return res.status(402).json({ error: "INSUFFICIENT_CREDITS", message: "Credit balance insufficient. Purchase additional credits to continue." });
+          const x402Payload = isX402Configured() ? await build402Response(req, "proof") : {};
+          return res.status(402).json({ error: "INSUFFICIENT_CREDITS", message: "Credit balance insufficient. Purchase additional credits to continue.", ...x402Payload });
         }
       }
 
@@ -957,7 +958,8 @@ export function registerProofWriteRoutes(app: Express) {
       } else if (creditInfo) {
         const consumed = await atomicConsumeCredit(creditInfo.userId);
         if (!consumed) {
-          return res.status(402).json({ error: "INSUFFICIENT_CREDITS", message: "Credit balance insufficient. Purchase additional credits to continue." });
+          const x402Payload = isX402Configured() ? await build402Response(req, "proof") : {};
+          return res.status(402).json({ error: "INSUFFICIENT_CREDITS", message: "Credit balance insufficient. Purchase additional credits to continue.", ...x402Payload });
         }
       }
 
