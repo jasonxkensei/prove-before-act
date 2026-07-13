@@ -189,7 +189,8 @@ export async function createMcpServer(ctx: McpContext) {
         if (trialInfo && trialInfo.remaining <= 0) {
           const balance = await getUserCreditBalance(auth.userId);
           if (balance <= 0) {
-            return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl) }) }], isError: true };
+            const _x402cf0 = isX402Configured() ? await build402PayloadFromUrl(baseUrl, "proof") : {};
+            return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), prepaid_credits: buildPrepaidCreditsBlock(baseUrl), ..._x402cf0 }) }], isError: true };
           }
           mcpCreditInfo = { userId: auth.userId, balance };
         } else if (!trialInfo) {
@@ -220,7 +221,8 @@ export async function createMcpServer(ctx: McpContext) {
             if (trialInfo && !mcpCreditInfo) {
               const consumed = await atomicConsumeTrialCredit(trialInfo.userId);
               if (!consumed) {
-                return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl) }) }], isError: true };
+                const _x402cf1 = isX402Configured() ? await build402PayloadFromUrl(baseUrl, "proof") : {};
+                return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), prepaid_credits: buildPrepaidCreditsBlock(baseUrl), ..._x402cf1 }) }], isError: true };
               }
             } else if (mcpCreditInfo) {
               const consumed = await atomicConsumeCredit(mcpCreditInfo.userId);
@@ -293,7 +295,8 @@ export async function createMcpServer(ctx: McpContext) {
           if (trialInfo && !mcpCreditInfo) {
             const consumed = await atomicConsumeTrialCredit(trialInfo.userId);
             if (!consumed) {
-              return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl) }) }], isError: true };
+              const _x402cf2 = isX402Configured() ? await build402PayloadFromUrl(baseUrl, "proof") : {};
+              return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), prepaid_credits: buildPrepaidCreditsBlock(baseUrl), ..._x402cf2 }) }], isError: true };
             }
           } else if (mcpCreditInfo) {
             const consumed = await atomicConsumeCredit(mcpCreditInfo.userId);
