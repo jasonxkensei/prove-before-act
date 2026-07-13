@@ -213,3 +213,7 @@ Required guarantees:
 - `/widget/trust/:wallet.js` is a visibility-gated public artifact whose JavaScript body embeds profile-dependent calibration data. Shared-cache headers such as `Cache-Control: public` can preserve a previously public widget payload after the owner disables `is_public_profile`.
 - ACP checkout still allows unpaid reservation of arbitrary `file_hash` values after API-key auth plus payer-wallet signature proof. Other paid routes can displace those reservations, but the ACP path itself still blocks later ACP buyers with `DUPLICATE_PENDING_CHECKOUT` until the reservation expires.
 - `file_hash` uniqueness and reservation decisions remain exact-string based across REST, MCP, ACP, and ACP-displacement helpers. SHA-256 digests must be canonicalized consistently, or enforced with a canonical unique index, so case variants cannot create duplicate proofs or bypass reservation conflicts for the same content.
+
+## Scan Notes — 2026-07-13 Production Security Scan
+
+- Treat `server/routes/calibration.ts` as a first-class public disclosure surface alongside trust/profile routes. Public calibration summary and CSV export endpoints must enforce `users.isPublicProfile` before returning agent metadata or calibration history; "all outcomes are public" is not equivalent to profile consent.
