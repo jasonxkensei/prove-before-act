@@ -15,6 +15,7 @@ import {
   atomicConsumeCredit, atomicConsumeTrialCredit, refundCredit, refundTrialCredit,
   isAdminWallet, getApiKeyOwnerWallet, tryDisplaceAcpReservation,
   TRIAL_QUOTA, REGISTER_RATE_LIMIT_MAX, REGISTER_RATE_LIMIT_WINDOW_MS,
+  buildX402Block, buildPrepaidCreditsBlock, buildTrialExhaustedMessage, buildPaymentRequiredMessage,
 } from "./routes/helpers";
 import { pgCheckRateLimit } from "./pgRateLimit";
 
@@ -188,7 +189,7 @@ export async function createMcpServer(ctx: McpContext) {
         if (trialInfo && trialInfo.remaining <= 0) {
           const balance = await getUserCreditBalance(auth.userId);
           if (balance <= 0) {
-            return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: `Trial quota exhausted (5/5 used). Continue via x402 — no account needed: POST ${baseUrl}/api/proof without Authorization header → receive HTTP 402 with USDC payment address + amount → pay on Base → resend with X-PAYMENT header → certified. $0.01 USDC per cert.`, x402: { endpoint: `POST ${baseUrl}/api/proof`, price: "$0.01 USDC per cert", network: "Base (eip155:8453)", no_account_required: true, steps: ["1. POST /api/proof without auth", "2. Receive 402 with payment.address + payment.amount_usdc", "3. Send USDC on Base to payment.address", "4. Resend POST /api/proof with X-PAYMENT: <receipt> header"] }, prepaid_credits: { endpoint: `POST ${baseUrl}/api/credits/purchase`, packs: "100/$1 · 1000/$10 · 10000/$100 USDC on Base" } }) }], isError: true };
+            return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl) }) }], isError: true };
           }
           mcpCreditInfo = { userId: auth.userId, balance };
         } else if (!trialInfo) {
@@ -197,7 +198,7 @@ export async function createMcpServer(ctx: McpContext) {
           if (!ownerWallet || !isAdminWallet(ownerWallet)) {
             const balance = await getUserCreditBalance(auth.userId);
             if (balance <= 0) {
-              return { content: [{ type: "text" as const, text: JSON.stringify({ error: "PAYMENT_REQUIRED", message: `No prepaid credits. Use x402 — no account needed: POST ${baseUrl}/api/proof without Authorization header → receive HTTP 402 with USDC payment details → pay on Base → resend with X-PAYMENT header. $0.01 USDC per cert.`, x402: { endpoint: `POST ${baseUrl}/api/proof`, price: "$0.01 USDC per cert", network: "Base (eip155:8453)", no_account_required: true, steps: ["1. POST /api/proof without auth", "2. Receive 402 with payment.address + payment.amount_usdc", "3. Send USDC on Base to payment.address", "4. Resend with X-PAYMENT: <receipt> header"] }, prepaid_credits: { endpoint: `POST ${baseUrl}/api/credits/purchase`, packs: "100/$1 · 1000/$10 · 10000/$100 USDC on Base" } }) }], isError: true };
+              return { content: [{ type: "text" as const, text: JSON.stringify({ error: "PAYMENT_REQUIRED", message: buildPaymentRequiredMessage(baseUrl), x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl) }) }], isError: true };
             }
             mcpCreditInfo = { userId: auth.userId, balance };
           }
@@ -219,7 +220,7 @@ export async function createMcpServer(ctx: McpContext) {
             if (trialInfo && !mcpCreditInfo) {
               const consumed = await atomicConsumeTrialCredit(trialInfo.userId);
               if (!consumed) {
-                return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: `Trial quota exhausted (5/5 used). Continue via x402 — no account needed: POST ${baseUrl}/api/proof without Authorization header → receive HTTP 402 with USDC payment address + amount → pay on Base → resend with X-PAYMENT header → certified. $0.01 USDC per cert.`, x402: { endpoint: `POST ${baseUrl}/api/proof`, price: "$0.01 USDC per cert", network: "Base (eip155:8453)", no_account_required: true, steps: ["1. POST /api/proof without auth", "2. Receive 402 with payment.address + payment.amount_usdc", "3. Send USDC on Base to payment.address", "4. Resend POST /api/proof with X-PAYMENT: <receipt> header"] }, prepaid_credits: { endpoint: `POST ${baseUrl}/api/credits/purchase`, packs: "100/$1 · 1000/$10 · 10000/$100 USDC on Base" } }) }], isError: true };
+                return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl) }) }], isError: true };
               }
             } else if (mcpCreditInfo) {
               const consumed = await atomicConsumeCredit(mcpCreditInfo.userId);
@@ -292,7 +293,7 @@ export async function createMcpServer(ctx: McpContext) {
           if (trialInfo && !mcpCreditInfo) {
             const consumed = await atomicConsumeTrialCredit(trialInfo.userId);
             if (!consumed) {
-              return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: `Trial quota exhausted (5/5 used). Continue via x402 — no account needed: POST ${baseUrl}/api/proof without Authorization header → receive HTTP 402 with USDC payment address + amount → pay on Base → resend with X-PAYMENT header → certified. $0.01 USDC per cert.`, x402: { endpoint: `POST ${baseUrl}/api/proof`, price: "$0.01 USDC per cert", network: "Base (eip155:8453)", no_account_required: true, steps: ["1. POST /api/proof without auth", "2. Receive 402 with payment.address + payment.amount_usdc", "3. Send USDC on Base to payment.address", "4. Resend POST /api/proof with X-PAYMENT: <receipt> header"] }, prepaid_credits: { endpoint: `POST ${baseUrl}/api/credits/purchase`, packs: "100/$1 · 1000/$10 · 10000/$100 USDC on Base" } }) }], isError: true };
+              return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl) }) }], isError: true };
             }
           } else if (mcpCreditInfo) {
             const consumed = await atomicConsumeCredit(mcpCreditInfo.userId);
@@ -445,7 +446,7 @@ export async function createMcpServer(ctx: McpContext) {
         if (cwcTrialInfo && cwcTrialInfo.remaining <= 0) {
           const balance = await getUserCreditBalance(auth.userId);
           if (balance <= 0) {
-            return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: `Trial quota exhausted (5/5 used). Continue via x402 — no account needed: POST ${baseUrl}/api/proof without Authorization header → receive HTTP 402 with USDC payment address + amount → pay on Base → resend with X-PAYMENT header → certified. $0.01 USDC per cert.`, x402: { endpoint: `POST ${baseUrl}/api/proof`, price: "$0.01 USDC per cert", network: "Base (eip155:8453)", no_account_required: true, steps: ["1. POST /api/proof without auth", "2. Receive 402 with payment.address + payment.amount_usdc", "3. Send USDC on Base to payment.address", "4. Resend POST /api/proof with X-PAYMENT: <receipt> header"] }, prepaid_credits: { endpoint: `POST ${baseUrl}/api/credits/purchase`, packs: "100/$1 · 1000/$10 · 10000/$100 USDC on Base" } }) }], isError: true };
+            return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl) }) }], isError: true };
           }
           cwcCreditInfo = { userId: auth.userId, balance };
         } else if (!cwcTrialInfo) {
@@ -454,7 +455,7 @@ export async function createMcpServer(ctx: McpContext) {
           if (!ownerWallet || !isAdminWallet(ownerWallet)) {
             const balance = await getUserCreditBalance(auth.userId);
             if (balance <= 0) {
-              return { content: [{ type: "text" as const, text: JSON.stringify({ error: "PAYMENT_REQUIRED", message: `No prepaid credits. Use x402 — no account needed: POST ${baseUrl}/api/proof without Authorization header → receive HTTP 402 with USDC payment details → pay on Base → resend with X-PAYMENT header. $0.01 USDC per cert.`, x402: { endpoint: `POST ${baseUrl}/api/proof`, price: "$0.01 USDC per cert", network: "Base (eip155:8453)", no_account_required: true, steps: ["1. POST /api/proof without auth", "2. Receive 402 with payment.address + payment.amount_usdc", "3. Send USDC on Base to payment.address", "4. Resend with X-PAYMENT: <receipt> header"] }, prepaid_credits: { endpoint: `POST ${baseUrl}/api/credits/purchase`, packs: "100/$1 · 1000/$10 · 10000/$100 USDC on Base" } }) }], isError: true };
+              return { content: [{ type: "text" as const, text: JSON.stringify({ error: "PAYMENT_REQUIRED", message: buildPaymentRequiredMessage(baseUrl), x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl) }) }], isError: true };
             }
             cwcCreditInfo = { userId: auth.userId, balance };
           }
@@ -475,7 +476,7 @@ export async function createMcpServer(ctx: McpContext) {
             if (cwcTrialInfo && !cwcCreditInfo) {
               const consumed = await atomicConsumeTrialCredit(cwcTrialInfo.userId);
               if (!consumed) {
-                return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: `Trial quota exhausted (5/5 used). Continue via x402 — no account needed: POST ${baseUrl}/api/proof without Authorization header → receive HTTP 402 with USDC payment address + amount → pay on Base → resend with X-PAYMENT header → certified. $0.01 USDC per cert.`, x402: { endpoint: `POST ${baseUrl}/api/proof`, price: "$0.01 USDC per cert", network: "Base (eip155:8453)", no_account_required: true, steps: ["1. POST /api/proof without auth", "2. Receive 402 with payment.address + payment.amount_usdc", "3. Send USDC on Base to payment.address", "4. Resend POST /api/proof with X-PAYMENT: <receipt> header"] }, prepaid_credits: { endpoint: `POST ${baseUrl}/api/credits/purchase`, packs: "100/$1 · 1000/$10 · 10000/$100 USDC on Base" } }) }], isError: true };
+                return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl) }) }], isError: true };
               }
             } else if (cwcCreditInfo) {
               const consumed = await atomicConsumeCredit(cwcCreditInfo.userId);
@@ -553,7 +554,7 @@ export async function createMcpServer(ctx: McpContext) {
           if (cwcTrialInfo && !cwcCreditInfo) {
             const consumed = await atomicConsumeTrialCredit(cwcTrialInfo.userId);
             if (!consumed) {
-              return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: `Trial quota exhausted (5/5 used). Continue via x402 — no account needed: POST ${baseUrl}/api/proof without Authorization header → receive HTTP 402 with USDC payment address + amount → pay on Base → resend with X-PAYMENT header → certified. $0.01 USDC per cert.`, x402: { endpoint: `POST ${baseUrl}/api/proof`, price: "$0.01 USDC per cert", network: "Base (eip155:8453)", no_account_required: true, steps: ["1. POST /api/proof without auth", "2. Receive 402 with payment.address + payment.amount_usdc", "3. Send USDC on Base to payment.address", "4. Resend POST /api/proof with X-PAYMENT: <receipt> header"] }, prepaid_credits: { endpoint: `POST ${baseUrl}/api/credits/purchase`, packs: "100/$1 · 1000/$10 · 10000/$100 USDC on Base" } }) }], isError: true };
+              return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl) }) }], isError: true };
             }
           } else if (cwcCreditInfo) {
             const consumed = await atomicConsumeCredit(cwcCreditInfo.userId);
@@ -928,7 +929,7 @@ export async function createMcpServer(ctx: McpContext) {
         if (auditTrialInfo && auditTrialInfo.remaining <= 0) {
           const balance = await getUserCreditBalance(auth.userId);
           if (balance <= 0) {
-            return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: `Trial quota exhausted (5/5 used). Continue via x402 — no account needed: POST ${baseUrl}/api/proof without Authorization header → receive HTTP 402 with USDC payment address + amount → pay on Base → resend with X-PAYMENT header → certified. $0.01 USDC per cert.`, x402: { endpoint: `POST ${baseUrl}/api/proof`, price: "$0.01 USDC per cert", network: "Base (eip155:8453)", no_account_required: true, steps: ["1. POST /api/proof without auth", "2. Receive 402 with payment.address + payment.amount_usdc", "3. Send USDC on Base to payment.address", "4. Resend POST /api/proof with X-PAYMENT: <receipt> header"] }, prepaid_credits: { endpoint: `POST ${baseUrl}/api/credits/purchase`, packs: "100/$1 · 1000/$10 · 10000/$100 USDC on Base" } }) }], isError: true };
+            return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl) }) }], isError: true };
           }
           auditCreditInfo = { userId: auth.userId, balance };
         } else if (!auditTrialInfo) {
@@ -937,7 +938,7 @@ export async function createMcpServer(ctx: McpContext) {
           if (!ownerWallet || !isAdminWallet(ownerWallet)) {
             const balance = await getUserCreditBalance(auth.userId);
             if (balance <= 0) {
-              return { content: [{ type: "text" as const, text: JSON.stringify({ error: "PAYMENT_REQUIRED", message: `No prepaid credits. Use x402 — no account needed: POST ${baseUrl}/api/proof without Authorization header → receive HTTP 402 with USDC payment details → pay on Base → resend with X-PAYMENT header. $0.01 USDC per cert.`, x402: { endpoint: `POST ${baseUrl}/api/proof`, price: "$0.01 USDC per cert", network: "Base (eip155:8453)", no_account_required: true, steps: ["1. POST /api/proof without auth", "2. Receive 402 with payment.address + payment.amount_usdc", "3. Send USDC on Base to payment.address", "4. Resend with X-PAYMENT: <receipt> header"] }, prepaid_credits: { endpoint: `POST ${baseUrl}/api/credits/purchase`, packs: "100/$1 · 1000/$10 · 10000/$100 USDC on Base" } }) }], isError: true };
+              return { content: [{ type: "text" as const, text: JSON.stringify({ error: "PAYMENT_REQUIRED", message: buildPaymentRequiredMessage(baseUrl), x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl) }) }], isError: true };
             }
             auditCreditInfo = { userId: auth.userId, balance };
           }
@@ -1004,7 +1005,7 @@ export async function createMcpServer(ctx: McpContext) {
         if (auditTrialInfo && !auditCreditInfo) {
           const consumed = await atomicConsumeTrialCredit(auditTrialInfo.userId);
           if (!consumed) {
-            return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: `Trial quota exhausted (5/5 used). Continue via x402 — no account needed: POST ${baseUrl}/api/proof without Authorization header → receive HTTP 402 with USDC payment address + amount → pay on Base → resend with X-PAYMENT header → certified. $0.01 USDC per cert.`, x402: { endpoint: `POST ${baseUrl}/api/proof`, price: "$0.01 USDC per cert", network: "Base (eip155:8453)", no_account_required: true, steps: ["1. POST /api/proof without auth", "2. Receive 402 with payment.address + payment.amount_usdc", "3. Send USDC on Base to payment.address", "4. Resend POST /api/proof with X-PAYMENT: <receipt> header"] }, prepaid_credits: { endpoint: `POST ${baseUrl}/api/credits/purchase`, packs: "100/$1 · 1000/$10 · 10000/$100 USDC on Base" } }) }], isError: true };
+            return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl) }) }], isError: true };
           }
         } else if (auditCreditInfo) {
           const consumed = await atomicConsumeCredit(auditCreditInfo.userId);
@@ -1255,7 +1256,7 @@ export async function createMcpServer(ctx: McpContext) {
             const balance = await getUserCreditBalance(auth.userId);
             if (balance <= 0) {
               return {
-                content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: `Trial quota exhausted (5/5 used). Continue via x402 — no account needed: POST ${baseUrl}/api/proof without Authorization header → receive HTTP 402 with USDC payment address + amount → pay on Base → resend with X-PAYMENT header → certified. $0.01 USDC per cert. For investigation, the public incident report is available without payment.`, x402: { endpoint: `POST ${baseUrl}/api/proof`, price: "$0.01 USDC per cert", network: "Base (eip155:8453)", no_account_required: true, steps: ["1. POST /api/proof without auth", "2. Receive 402 with payment.address + payment.amount_usdc", "3. Send USDC on Base to payment.address", "4. Resend POST /api/proof with X-PAYMENT: <receipt> header"] }, prepaid_credits: { endpoint: `POST ${baseUrl}/api/credits/purchase`, packs: "100/$1 · 1000/$10 · 10000/$100 USDC on Base" }, incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` }) }],
+                content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA) + " For investigation, the public incident report is available without payment.", x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl), incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` }) }],
                 isError: true,
               };
             }
@@ -1267,7 +1268,7 @@ export async function createMcpServer(ctx: McpContext) {
               const balance = await getUserCreditBalance(auth.userId);
               if (balance <= 0) {
                 return {
-                  content: [{ type: "text" as const, text: JSON.stringify({ error: "PAYMENT_REQUIRED", message: `No prepaid credits. Use x402 — no account needed: POST ${baseUrl}/api/proof without Authorization header → receive HTTP 402 with USDC payment details → pay on Base → resend with X-PAYMENT header. $0.01 USDC per cert. For investigation, the public incident report is available without payment.`, x402: { endpoint: `POST ${baseUrl}/api/proof`, price: "$0.01 USDC per cert", network: "Base (eip155:8453)", no_account_required: true, steps: ["1. POST /api/proof without auth", "2. Receive 402 with payment.address + payment.amount_usdc", "3. Send USDC on Base to payment.address", "4. Resend with X-PAYMENT: <receipt> header"] }, prepaid_credits: { endpoint: `POST ${baseUrl}/api/credits/purchase`, packs: "100/$1 · 1000/$10 · 10000/$100 USDC on Base" }, incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` }) }],
+                  content: [{ type: "text" as const, text: JSON.stringify({ error: "PAYMENT_REQUIRED", message: buildPaymentRequiredMessage(baseUrl) + " For investigation, the public incident report is available without payment.", x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl), incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` }) }],
                   isError: true,
                 };
               }
@@ -1280,7 +1281,7 @@ export async function createMcpServer(ctx: McpContext) {
             const consumed = await atomicConsumeTrialCredit(invTrialInfo.userId);
             if (!consumed) {
               return {
-                content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: `Trial quota exhausted (5/5 used). Continue via x402 — no account needed: POST ${baseUrl}/api/proof without Authorization header → receive HTTP 402 with USDC payment address + amount → pay on Base → resend with X-PAYMENT header → certified. $0.01 USDC per cert.`, x402: { endpoint: `POST ${baseUrl}/api/proof`, price: "$0.01 USDC per cert", network: "Base (eip155:8453)", no_account_required: true }, prepaid_credits: `POST ${baseUrl}/api/credits/purchase`, incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` }) }],
+                content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA) + " For investigation, the public incident report is available without payment.", x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl), incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` }) }],
                 isError: true,
               };
             }

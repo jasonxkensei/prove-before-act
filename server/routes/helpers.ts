@@ -397,3 +397,65 @@ export function computeDrift(
     fields_absent: fieldsAbsent,
   };
 }
+
+// ── x402 Frictionless Adoption Helpers ───────────────────────────────────────
+// Single source of truth for all 402 error responses across MCP + REST.
+// Any change to wording, pricing, or curl examples propagates everywhere.
+
+/**
+ * Returns the canonical x402 object for 402 responses.
+ * Includes doc link and ready-to-copy curl examples for agent adoption.
+ */
+export function buildX402Block(baseUrl: string) {
+  return {
+    endpoint: `POST ${baseUrl}/api/proof`,
+    price: "$0.01 USDC per cert",
+    network: "Base (eip155:8453)",
+    no_account_required: true,
+    steps: [
+      "1. POST /api/proof without Authorization header",
+      "2. Receive HTTP 402 with payment.address + payment.amount_usdc",
+      "3. Send USDC on Base to payment.address",
+      "4. Resend POST /api/proof with X-PAYMENT: <receipt> header",
+    ],
+    doc: `${baseUrl}/llms.txt`,
+    curl_example: {
+      step1_get_payment_details: [
+        `curl -X POST ${baseUrl}/api/proof \\`,
+        `  -H "Content-Type: application/json" \\`,
+        `  -d '{"file_hash":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","filename":"myfile.pdf"}'`,
+      ].join("\n"),
+      step4_resend_with_payment: [
+        `curl -X POST ${baseUrl}/api/proof \\`,
+        `  -H "Content-Type: application/json" \\`,
+        `  -H "X-PAYMENT: <receipt-from-step3>" \\`,
+        `  -d '{"file_hash":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","filename":"myfile.pdf"}'`,
+      ].join("\n"),
+    },
+  };
+}
+
+/** Returns the canonical prepaid-credits upgrade block for 402 responses. */
+export function buildPrepaidCreditsBlock(baseUrl: string) {
+  return {
+    endpoint: `POST ${baseUrl}/api/credits/purchase`,
+    packs: { "100_proofs": "$1 USDC", "1000_proofs": "$10 USDC", "10000_proofs": "$100 USDC" },
+    network: "Base (USDC)",
+  };
+}
+
+/**
+ * Canonical TRIAL_EXHAUSTED message.
+ * Ends with doc link so agents can fetch full integration guide.
+ */
+export function buildTrialExhaustedMessage(baseUrl: string, quota: number): string {
+  return `Trial quota exhausted (${quota}/${quota} used). Continue via x402 — no account needed: POST ${baseUrl}/api/proof without Authorization header → receive HTTP 402 with USDC payment address + amount → pay on Base → resend with X-PAYMENT header → certified. $0.01 USDC per cert. Full guide: ${baseUrl}/llms.txt`;
+}
+
+/**
+ * Canonical PAYMENT_REQUIRED message (non-trial account, no credits).
+ * Ends with doc link so agents can fetch full integration guide.
+ */
+export function buildPaymentRequiredMessage(baseUrl: string): string {
+  return `No prepaid credits. Continue via x402 — no account needed: POST ${baseUrl}/api/proof without Authorization header → receive HTTP 402 with USDC payment address + amount → pay on Base → resend with X-PAYMENT header → certified. $0.01 USDC per cert. Full guide: ${baseUrl}/llms.txt`;
+}

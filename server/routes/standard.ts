@@ -10,7 +10,7 @@ import { isX402Configured, verifyX402Payment, send402Response } from "../x402";
 import { recordOnBlockchain, isMultiversXConfigured, computeOnchainPayloadBytes, MAX_ONCHAIN_PAYLOAD_BYTES } from "../blockchain";
 import { getCertificationPriceEgld, getCertificationPriceUsd } from "../pricing";
 import { isMX8004Configured, recordCertificationAsJob } from "../mx8004";
-import { isAdminWallet, getApiKeyOwnerWallet, getTrialUser, consumeTrialCredit, getUserCreditBalance, consumeCredit, atomicConsumeCredit, atomicConsumeTrialCredit, refundCredit, refundTrialCredit, TRIAL_QUOTA, buildCanonicalId, tryDisplaceAcpReservation } from "./helpers";
+import { isAdminWallet, getApiKeyOwnerWallet, getTrialUser, consumeTrialCredit, getUserCreditBalance, consumeCredit, atomicConsumeCredit, atomicConsumeTrialCredit, refundCredit, refundTrialCredit, TRIAL_QUOTA, buildCanonicalId, tryDisplaceAcpReservation, buildX402Block, buildPrepaidCreditsBlock, buildTrialExhaustedMessage, buildPaymentRequiredMessage } from "./helpers";
 
 export function registerStandardRoutes(app: Express) {
   const SHA256_REGEX = /^sha256:[a-fA-F0-9]{64}$/;
@@ -311,10 +311,10 @@ export function registerStandardRoutes(app: Express) {
               const baseUrl = `https://${req.get("host")}`;
               return res.status(402).json({
                 error: "TRIAL_EXHAUSTED",
-                message: `Trial quota exhausted (${TRIAL_QUOTA}/${TRIAL_QUOTA} used). Continue via x402 — no account needed: POST ${baseUrl}/api/proof without Authorization header → receive HTTP 402 with USDC payment address + amount → pay on Base → resend with X-PAYMENT header → certified. $0.01 USDC per cert.`,
+                message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA),
                 trial: { quota: TRIAL_QUOTA, used: TRIAL_QUOTA, remaining: 0 },
-                x402: { endpoint: `POST ${baseUrl}/api/proof`, price: "$0.01 USDC per cert", network: "Base (eip155:8453)", no_account_required: true, steps: ["1. POST /api/proof without Authorization header", "2. Receive HTTP 402 with payment.address + payment.amount_usdc", "3. Send USDC on Base to payment.address", "4. Resend POST /api/proof with X-PAYMENT: <receipt> header"] },
-                prepaid_credits: { endpoint: `POST ${baseUrl}/api/credits/purchase`, packs: "100/$1 · 1000/$10 · 10000/$100 USDC on Base" },
+                x402: buildX402Block(baseUrl),
+                prepaid_credits: buildPrepaidCreditsBlock(baseUrl),
               });
             }
           }
@@ -332,9 +332,9 @@ export function registerStandardRoutes(app: Express) {
                 const _b = `https://${req.get("host")}`;
                 return res.status(402).json({
                   error: "PAYMENT_REQUIRED",
-                  message: `No prepaid credits. Continue via x402 — no account needed: POST ${_b}/api/proof without Authorization header → receive HTTP 402 with USDC payment address + amount → pay on Base → resend with X-PAYMENT header → certified. $0.01 USDC per cert.`,
-                  x402: { endpoint: `POST ${_b}/api/proof`, price: "$0.01 USDC per cert", network: "Base (eip155:8453)", no_account_required: true, steps: ["1. POST /api/proof without Authorization header", "2. Receive HTTP 402 with payment.address + payment.amount_usdc", "3. Send USDC on Base to payment.address", "4. Resend POST /api/proof with X-PAYMENT: <receipt> header"] },
-                  prepaid_credits: { endpoint: `POST ${_b}/api/credits/purchase`, packs: "100/$1 · 1000/$10 · 10000/$100 USDC on Base" },
+                  message: buildPaymentRequiredMessage(_b),
+                  x402: buildX402Block(_b),
+                  prepaid_credits: buildPrepaidCreditsBlock(_b),
                 });
               }
             }
@@ -490,7 +490,7 @@ export function registerStandardRoutes(app: Express) {
           if (!consumed) {
             {
               const _b = `https://${req.get("host")}`;
-              return res.status(402).json({ error: "TRIAL_EXHAUSTED", message: `Trial quota exhausted (5/5 used). Continue via x402 — no account needed: POST ${_b}/api/proof without Authorization header → receive HTTP 402 with USDC payment address + amount → pay on Base → resend with X-PAYMENT header → certified. $0.01 USDC per cert.`, x402: { endpoint: `POST ${_b}/api/proof`, price: "$0.01 USDC per cert", network: "Base (eip155:8453)", no_account_required: true, steps: ["1. POST /api/proof without Authorization header", "2. Receive HTTP 402 with payment.address + payment.amount_usdc", "3. Send USDC on Base to payment.address", "4. Resend POST /api/proof with X-PAYMENT: <receipt> header"] }, prepaid_credits: { endpoint: `POST ${_b}/api/credits/purchase`, packs: "100/$1 · 1000/$10 · 10000/$100 USDC on Base" } });
+              return res.status(402).json({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(_b, TRIAL_QUOTA), x402: buildX402Block(_b), prepaid_credits: buildPrepaidCreditsBlock(_b) });
             }
           }
         } else if (standardCreditInfo) {
