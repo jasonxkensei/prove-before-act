@@ -572,8 +572,20 @@ export function registerAgentsRoutes(app: Express) {
       let next_action: Record<string, any>;
       if (isExhausted) {
         next_action = {
-          action: "purchase_credits",
-          description: "Trial exhausted. Purchase prepaid credits to continue.",
+          action: "purchase_credits_or_x402",
+          description: `Trial exhausted (5/5 used). Continue via x402 — no account needed: POST ${baseUrl}/api/proof without Authorization header → receive HTTP 402 with USDC payment address + amount → pay on Base → resend with X-PAYMENT header → certified. $0.01 USDC per cert.`,
+          x402: {
+            endpoint: `POST ${baseUrl}/api/proof`,
+            price: "$0.01 USDC per cert",
+            network: "Base (eip155:8453)",
+            no_account_required: true,
+            steps: [
+              "1. POST /api/proof without Authorization header",
+              "2. Receive HTTP 402 with payment.address + payment.amount_usdc",
+              "3. Send USDC on Base to payment.address",
+              "4. Resend POST /api/proof with X-PAYMENT: <receipt> header",
+            ],
+          },
           options: {
             credits: {
               method: "POST",

@@ -1255,7 +1255,7 @@ export async function createMcpServer(ctx: McpContext) {
             const balance = await getUserCreditBalance(auth.userId);
             if (balance <= 0) {
               return {
-                content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: "Trial quota exhausted. Purchase prepaid credits to use the investigation tool.", incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` }) }],
+                content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: `Trial quota exhausted (5/5 used). Continue via x402 — no account needed: POST ${baseUrl}/api/proof without Authorization header → receive HTTP 402 with USDC payment address + amount → pay on Base → resend with X-PAYMENT header → certified. $0.01 USDC per cert. For investigation, the public incident report is available without payment.`, x402: { endpoint: `POST ${baseUrl}/api/proof`, price: "$0.01 USDC per cert", network: "Base (eip155:8453)", no_account_required: true, steps: ["1. POST /api/proof without auth", "2. Receive 402 with payment.address + payment.amount_usdc", "3. Send USDC on Base to payment.address", "4. Resend POST /api/proof with X-PAYMENT: <receipt> header"] }, prepaid_credits: { endpoint: `POST ${baseUrl}/api/credits/purchase`, packs: "100/$1 · 1000/$10 · 10000/$100 USDC on Base" }, incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` }) }],
                 isError: true,
               };
             }
@@ -1267,7 +1267,7 @@ export async function createMcpServer(ctx: McpContext) {
               const balance = await getUserCreditBalance(auth.userId);
               if (balance <= 0) {
                 return {
-                  content: [{ type: "text" as const, text: JSON.stringify({ error: "PAYMENT_REQUIRED", message: "No credits available. Purchase prepaid credits to use the investigation tool.", incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` }) }],
+                  content: [{ type: "text" as const, text: JSON.stringify({ error: "PAYMENT_REQUIRED", message: `No prepaid credits. Use x402 — no account needed: POST ${baseUrl}/api/proof without Authorization header → receive HTTP 402 with USDC payment details → pay on Base → resend with X-PAYMENT header. $0.01 USDC per cert. For investigation, the public incident report is available without payment.`, x402: { endpoint: `POST ${baseUrl}/api/proof`, price: "$0.01 USDC per cert", network: "Base (eip155:8453)", no_account_required: true, steps: ["1. POST /api/proof without auth", "2. Receive 402 with payment.address + payment.amount_usdc", "3. Send USDC on Base to payment.address", "4. Resend with X-PAYMENT: <receipt> header"] }, prepaid_credits: { endpoint: `POST ${baseUrl}/api/credits/purchase`, packs: "100/$1 · 1000/$10 · 10000/$100 USDC on Base" }, incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` }) }],
                   isError: true,
                 };
               }
@@ -1280,7 +1280,7 @@ export async function createMcpServer(ctx: McpContext) {
             const consumed = await atomicConsumeTrialCredit(invTrialInfo.userId);
             if (!consumed) {
               return {
-                content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: "Trial quota exhausted. Purchase prepaid credits to use the investigation tool.", incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` }) }],
+                content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: `Trial quota exhausted (5/5 used). Continue via x402 — no account needed: POST ${baseUrl}/api/proof without Authorization header → receive HTTP 402 with USDC payment address + amount → pay on Base → resend with X-PAYMENT header → certified. $0.01 USDC per cert.`, x402: { endpoint: `POST ${baseUrl}/api/proof`, price: "$0.01 USDC per cert", network: "Base (eip155:8453)", no_account_required: true }, prepaid_credits: `POST ${baseUrl}/api/credits/purchase`, incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` }) }],
                 isError: true,
               };
             }
