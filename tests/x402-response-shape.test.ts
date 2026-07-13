@@ -1,0 +1,372 @@
+/**
+ * Contract tests for the x402 payment-required 402 response shape.
+ *
+ * WHY THIS EXISTS
+ * All TRIAL_EXHAUSTED and PAYMENT_REQUIRED 402 bodies are built by 4 central
+ * helpers in server/routes/helpers.ts:
+ *   buildX402Block, buildPrepaidCreditsBlock,
+ *   buildTrialExhaustedMessage, buildPaymentRequiredMessage
+ *
+ * AI agents that encounter a 402 parse these fields to self-serve the payment
+ * step.  A silent rename (e.g. "steps" → "payment_steps") would break every
+ * agent integration.  These tests catch that regression before it ships.
+ *
+ * COVERAGE
+ *  Part 1 — Unit tests: call each helper directly and assert the exact shape.
+ *  Part 2 — Integration tests: seed DB users whose state forces each error code
+ *            through POST /api/proof, then assert the full HTTP 402 body.
+ */
+
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import crypto from "crypto";
+import { pool } from "../server/db";
+import {
+  buildX402Block,
+  buildPrepaidCreditsBlock,
+  buildTrialExhaustedMessage,
+  buildPaymentRequiredMessage,
+  TRIAL_QUOTA,
+} from "../server/routes/helpers";
+
+const BASE_URL = "http://localhost:5000";
+
+// ─── Part 1 — Unit tests for the 4 builder helpers ───────────────────────────
+
+describe("buildX402Block — exact shape", () => {
+  const block = buildX402Block("https://example.com");
+
+  it("has a price field (string)", () => {
+    expect(typeof block.price).toBe("string");
+    expect(block.price.length).toBeGreaterThan(0);
+  });
+
+  it("has a network field (string)", () => {
+    expect(typeof block.network).toBe("string");
+    expect(block.network.length).toBeGreaterThan(0);
+  });
+
+  it("has a steps array with at least one entry", () => {
+    expect(Array.isArray(block.steps)).toBe(true);
+    expect(block.steps.length).toBeGreaterThan(0);
+    for (const step of block.steps) {
+      expect(typeof step).toBe("string");
+    }
+  });
+
+  it("has a doc field that is a URL string", () => {
+    expect(typeof block.doc).toBe("string");
+    expect(block.doc).toContain("https://example.com");
+  });
+
+  it("has a curl_example object with step1_get_payment_details and step4_resend_with_payment", () => {
+    expect(block.curl_example).toBeDefined();
+    expect(typeof block.curl_example.step1_get_payment_details).toBe("string");
+    expect(block.curl_example.step1_get_payment_details.length).toBeGreaterThan(0);
+    expect(typeof block.curl_example.step4_resend_with_payment).toBe("string");
+    expect(block.curl_example.step4_resend_with_payment.length).toBeGreaterThan(0);
+  });
+
+  it("curl_example strings reference the supplied baseUrl", () => {
+    expect(block.curl_example.step1_get_payment_details).toContain("https://example.com");
+    expect(block.curl_example.step4_resend_with_payment).toContain("https://example.com");
+  });
+
+  it("doc URL references the supplied baseUrl", () => {
+    const block2 = buildX402Block("https://other.example");
+    expect(block2.doc).toContain("https://other.example");
+  });
+});
+
+describe("buildPrepaidCreditsBlock — exact shape", () => {
+  const block = buildPrepaidCreditsBlock("https://example.com");
+
+  it("has an endpoint field that is a non-empty string", () => {
+    expect(typeof block.endpoint).toBe("string");
+    expect(block.endpoint.length).toBeGreaterThan(0);
+  });
+
+  it("endpoint references the supplied baseUrl", () => {
+    expect(block.endpoint).toContain("https://example.com");
+    const block2 = buildPrepaidCreditsBlock("https://other.example");
+    expect(block2.endpoint).toContain("https://other.example");
+  });
+
+  it("has a packs object with at least one entry", () => {
+    expect(block.packs).toBeDefined();
+    expect(typeof block.packs).toBe("object");
+    expect(Object.keys(block.packs).length).toBeGreaterThan(0);
+  });
+
+  it("has a network field (string)", () => {
+    expect(typeof block.network).toBe("string");
+    expect(block.network.length).toBeGreaterThan(0);
+  });
+});
+
+describe("buildTrialExhaustedMessage — exact shape", () => {
+  const msg = buildTrialExhaustedMessage("https://example.com", TRIAL_QUOTA);
+
+  it("returns a non-empty string", () => {
+    expect(typeof msg).toBe("string");
+    expect(msg.length).toBeGreaterThan(0);
+  });
+
+  it("mentions the trial quota", () => {
+    expect(msg).toContain(String(TRIAL_QUOTA));
+  });
+
+  it("references the doc URL so agents can fetch the guide", () => {
+    expect(msg).toContain("https://example.com");
+  });
+
+  it("mentions the x402 payment path", () => {
+    expect(msg.toLowerCase()).toContain("x402");
+  });
+});
+
+describe("buildPaymentRequiredMessage — exact shape", () => {
+  const msg = buildPaymentRequiredMessage("https://example.com");
+
+  it("returns a non-empty string", () => {
+    expect(typeof msg).toBe("string");
+    expect(msg.length).toBeGreaterThan(0);
+  });
+
+  it("references the doc URL so agents can fetch the guide", () => {
+    expect(msg).toContain("https://example.com");
+  });
+
+  it("mentions the x402 payment path", () => {
+    expect(msg.toLowerCase()).toContain("x402");
+  });
+});
+
+// ─── Part 2 — HTTP integration tests: real 402 bodies from POST /api/proof ───
+//
+// We seed two users directly into the DB:
+//  - TRIAL user with quota fully consumed → triggers TRIAL_EXHAUSTED
+//  - Non-trial user with credit_balance = 0 → triggers PAYMENT_REQUIRED
+//
+// We assert the full 402 body fields that agents depend on.
+
+const X402_TRIAL_WALLET = "erd1x402shapetest_trial00000000000000000000000000000000000000000";
+const X402_PAID_WALLET  = "erd1x402shapetest_paid000000000000000000000000000000000000000000";
+
+const TRIAL_RAW_KEY = "pm_x402shapetest_trial_key_00000000000000000000";
+const PAID_RAW_KEY  = "pm_x402shapetest_paid_key_000000000000000000000";
+
+const TRIAL_KEY_HASH = crypto.createHash("sha256").update(TRIAL_RAW_KEY).digest("hex");
+const PAID_KEY_HASH  = crypto.createHash("sha256").update(PAID_RAW_KEY).digest("hex");
+const TRIAL_KEY_PREFIX = TRIAL_RAW_KEY.slice(0, 8);
+const PAID_KEY_PREFIX  = PAID_RAW_KEY.slice(0, 8);
+
+const PROOF_FILE_HASH = crypto.createHash("sha256").update("x402-shape-test-file-v1").digest("hex");
+
+beforeAll(async () => {
+  // Seed trial user with exhausted quota (trial_used = trial_quota).
+  await pool.query(
+    `INSERT INTO users (wallet_address, is_trial, trial_quota, trial_used, credit_balance)
+     VALUES ($1, TRUE, $2, $2, 0)
+     ON CONFLICT (wallet_address)
+     DO UPDATE SET
+       is_trial     = TRUE,
+       trial_quota  = $2,
+       trial_used   = $2,
+       credit_balance = 0`,
+    [X402_TRIAL_WALLET, TRIAL_QUOTA],
+  );
+
+  const trialUserRow = await pool.query<{ id: string }>(
+    `SELECT id FROM users WHERE wallet_address = $1`,
+    [X402_TRIAL_WALLET],
+  );
+  const trialUserId = trialUserRow.rows[0].id;
+
+  await pool.query(
+    `INSERT INTO api_keys (key_hash, key_prefix, user_id, name, is_active)
+     VALUES ($1, $2, $3, 'x402-shape-test-trial', TRUE)
+     ON CONFLICT (key_hash)
+     DO UPDATE SET is_active = TRUE, user_id = $3`,
+    [TRIAL_KEY_HASH, TRIAL_KEY_PREFIX, trialUserId],
+  );
+
+  // Seed non-trial user with zero credits.
+  await pool.query(
+    `INSERT INTO users (wallet_address, is_trial, credit_balance)
+     VALUES ($1, FALSE, 0)
+     ON CONFLICT (wallet_address)
+     DO UPDATE SET is_trial = FALSE, credit_balance = 0`,
+    [X402_PAID_WALLET],
+  );
+
+  const paidUserRow = await pool.query<{ id: string }>(
+    `SELECT id FROM users WHERE wallet_address = $1`,
+    [X402_PAID_WALLET],
+  );
+  const paidUserId = paidUserRow.rows[0].id;
+
+  await pool.query(
+    `INSERT INTO api_keys (key_hash, key_prefix, user_id, name, is_active)
+     VALUES ($1, $2, $3, 'x402-shape-test-paid', TRUE)
+     ON CONFLICT (key_hash)
+     DO UPDATE SET is_active = TRUE, user_id = $3`,
+    [PAID_KEY_HASH, PAID_KEY_PREFIX, paidUserId],
+  );
+});
+
+afterAll(async () => {
+  // Cascade delete removes api_keys rows when the user row is removed.
+  await pool.query(
+    `DELETE FROM users WHERE wallet_address = ANY($1::text[])`,
+    [[X402_TRIAL_WALLET, X402_PAID_WALLET]],
+  );
+});
+
+/**
+ * Shared assertion: every 402 body must carry the fields that agents parse
+ * to follow the payment path.
+ */
+function assertX402Shape(body: Record<string, any>, expectedError: string) {
+  // Top-level error code and message
+  expect(body.error, "body.error must be present").toBe(expectedError);
+  expect(typeof body.message, "body.message must be a string").toBe("string");
+  expect(body.message.length, "body.message must not be empty").toBeGreaterThan(0);
+
+  // x402 block
+  expect(body.x402, "body.x402 must be present").toBeDefined();
+
+  expect(typeof body.x402.doc, "x402.doc must be a string").toBe("string");
+  expect(body.x402.doc.length, "x402.doc must not be empty").toBeGreaterThan(0);
+
+  expect(typeof body.x402.price, "x402.price must be a string").toBe("string");
+  expect(body.x402.price.length, "x402.price must not be empty").toBeGreaterThan(0);
+
+  expect(typeof body.x402.network, "x402.network must be a string").toBe("string");
+  expect(body.x402.network.length, "x402.network must not be empty").toBeGreaterThan(0);
+
+  expect(Array.isArray(body.x402.steps), "x402.steps must be an array").toBe(true);
+  expect(body.x402.steps.length, "x402.steps must have at least one entry").toBeGreaterThan(0);
+  for (const step of body.x402.steps) {
+    expect(typeof step, "each x402.steps entry must be a string").toBe("string");
+  }
+
+  expect(body.x402.curl_example, "x402.curl_example must be present").toBeDefined();
+  expect(
+    typeof body.x402.curl_example.step1_get_payment_details,
+    "x402.curl_example.step1_get_payment_details must be a string",
+  ).toBe("string");
+  expect(
+    typeof body.x402.curl_example.step4_resend_with_payment,
+    "x402.curl_example.step4_resend_with_payment must be a string",
+  ).toBe("string");
+
+  // prepaid_credits block
+  expect(body.prepaid_credits, "body.prepaid_credits must be present").toBeDefined();
+  expect(
+    typeof body.prepaid_credits.endpoint,
+    "prepaid_credits.endpoint must be a string",
+  ).toBe("string");
+  expect(
+    body.prepaid_credits.endpoint.length,
+    "prepaid_credits.endpoint must not be empty",
+  ).toBeGreaterThan(0);
+}
+
+describe("POST /api/proof — TRIAL_EXHAUSTED 402 shape", () => {
+  it(
+    "returns HTTP 402 with TRIAL_EXHAUSTED and all required agent-facing fields",
+    async () => {
+      const res = await fetch(`${BASE_URL}/api/proof`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${TRIAL_RAW_KEY}`,
+        },
+        body: JSON.stringify({
+          file_hash: PROOF_FILE_HASH,
+          filename: "x402-shape-test.pdf",
+        }),
+      });
+
+      expect(res.status, "endpoint must return 402 for an exhausted trial user").toBe(402);
+
+      const body = await res.json() as Record<string, any>;
+      assertX402Shape(body, "TRIAL_EXHAUSTED");
+
+      // TRIAL_EXHAUSTED also carries a trial usage summary agents can log.
+      expect(body.trial, "body.trial must be present for TRIAL_EXHAUSTED").toBeDefined();
+      expect(body.trial.quota, "body.trial.quota must be present").toBe(TRIAL_QUOTA);
+      expect(body.trial.remaining, "body.trial.remaining must be 0").toBe(0);
+    },
+    15_000,
+  );
+
+  it(
+    "body.message references the doc URL so agents know where to read the guide",
+    async () => {
+      const res = await fetch(`${BASE_URL}/api/proof`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${TRIAL_RAW_KEY}`,
+        },
+        body: JSON.stringify({
+          file_hash: PROOF_FILE_HASH,
+          filename: "x402-shape-test.pdf",
+        }),
+      });
+
+      expect(res.status).toBe(402);
+      const body = await res.json() as Record<string, any>;
+      expect(body.message).toContain("llms.txt");
+    },
+    15_000,
+  );
+});
+
+describe("POST /api/proof — PAYMENT_REQUIRED 402 shape", () => {
+  it(
+    "returns HTTP 402 with PAYMENT_REQUIRED and all required agent-facing fields",
+    async () => {
+      const res = await fetch(`${BASE_URL}/api/proof`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${PAID_RAW_KEY}`,
+        },
+        body: JSON.stringify({
+          file_hash: PROOF_FILE_HASH,
+          filename: "x402-shape-test.pdf",
+        }),
+      });
+
+      expect(res.status, "endpoint must return 402 for a non-trial user with zero credits").toBe(402);
+
+      const body = await res.json() as Record<string, any>;
+      assertX402Shape(body, "PAYMENT_REQUIRED");
+    },
+    15_000,
+  );
+
+  it(
+    "body.message references the doc URL so agents know where to read the guide",
+    async () => {
+      const res = await fetch(`${BASE_URL}/api/proof`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${PAID_RAW_KEY}`,
+        },
+        body: JSON.stringify({
+          file_hash: PROOF_FILE_HASH,
+          filename: "x402-shape-test.pdf",
+        }),
+      });
+
+      expect(res.status).toBe(402);
+      const body = await res.json() as Record<string, any>;
+      expect(body.message).toContain("llms.txt");
+    },
+    15_000,
+  );
+});
