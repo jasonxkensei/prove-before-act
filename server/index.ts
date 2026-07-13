@@ -79,6 +79,14 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  if (!process.env.X402_PAY_TO) {
+    logger.warn(
+      "X402_PAY_TO is not set — x402 pay-per-request mode is disabled. " +
+      "Unauthenticated requests to POST /api/proof and POST /api/batch will return 401 instead of 402. " +
+      "Set X402_PAY_TO to a USDC-capable EVM address and restart (or update the env var; the server reads it at call time).",
+      { config_key: "X402_PAY_TO" },
+    );
+  }
   if (x402PriceConfigWarning) {
     logger.warn(x402PriceConfigWarning, {
       config_key: "X402_PRICE_USD",

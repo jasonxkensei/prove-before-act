@@ -6,24 +6,41 @@ import type { Request, Response } from "express";
 import { logger } from "./logger";
 import { getCertificationPriceUsd } from "./pricing";
 
-const X402_PAY_TO = process.env.X402_PAY_TO || "";
-const X402_NETWORK = process.env.X402_NETWORK || "eip155:8453";
-const X402_FACILITATOR_URL = process.env.X402_FACILITATOR_URL || "https://www.x402.org/facilitator";
+// These are NOT cached at module-load time so that env vars set after process
+// startup (e.g. via a secrets-manager sidecar or a Replit env-var update
+// without restart) are reflected in isX402Configured() and getPaymentRequirements()
+// on the next request, rather than for the lifetime of the process.
+// See: isX402Configured(), getPaymentRequirements().
 
 let resourceServer: any = null;
+// Track the configuration values used to build the current singleton so it
+// is re-created if any of them change at runtime.
+let _rsPayTo = "";
+let _rsNetwork = "";
+let _rsFacilitatorUrl = "";
 
 function getResourceServer() {
-  if (!resourceServer) {
-    const facilitatorClient = new HTTPFacilitatorClient({
-      url: X402_FACILITATOR_URL,
-    });
+  const payTo        = process.env.X402_PAY_TO         || "";
+  const network      = process.env.X402_NETWORK        || "eip155:8453";
+  const facilitatorUrl = process.env.X402_FACILITATOR_URL || "https://www.x402.org/facilitator";
+
+  if (
+    !resourceServer ||
+    _rsPayTo !== payTo ||
+    _rsNetwork !== network ||
+    _rsFacilitatorUrl !== facilitatorUrl
+  ) {
+    const facilitatorClient = new HTTPFacilitatorClient({ url: facilitatorUrl });
     resourceServer = new x402ResourceServer(facilitatorClient)
-      .register(X402_NETWORK as `${string}:${string}`, new ExactEvmScheme());
+      .register(network as `${string}:${string}`, new ExactEvmScheme());
     try {
       resourceServer.registerExtension(bazaarResourceServerExtension);
     } catch {
       // Bazaar extension registration is best-effort
     }
+    _rsPayTo          = payTo;
+    _rsNetwork        = network;
+    _rsFacilitatorUrl = facilitatorUrl;
   }
   return resourceServer;
 }
@@ -177,10 +194,14 @@ const BAZAAR_INVESTIGATE = declareDiscoveryExtension({
 });
 
 export function isX402Configured(): boolean {
-  return !!X402_PAY_TO;
+  return !!(process.env.X402_PAY_TO);
 }
 
 export async function getPaymentRequirements(route: "proof" | "batch" | "investigate") {
+  // Read at call time so changes to X402_PAY_TO / X402_NETWORK after process
+  // startup are reflected in the next request without a server restart.
+  const payTo  = process.env.X402_PAY_TO  || "";
+  const network = process.env.X402_NETWORK || "eip155:8453";
   const priceUsd = await getCertificationPriceUsd();
   const envPrice = route === "batch" ? process.env.X402_PRICE_BATCH : route === "investigate" ? process.env.X402_PRICE_INVESTIGATE : process.env.X402_PRICE_PROOF;
   const price = envPrice || `$${priceUsd}`;
@@ -188,8 +209,8 @@ export async function getPaymentRequirements(route: "proof" | "batch" | "investi
   return {
     scheme: "exact",
     price,
-    network: X402_NETWORK,
-    payTo: X402_PAY_TO,
+    network,
+    payTo,
     maxTimeoutSeconds: 60,
     description: route === "batch"
       ? "xproof batch certification — certify up to 100 files/decisions in one on-chain transaction"
