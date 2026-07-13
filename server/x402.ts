@@ -243,6 +243,31 @@ export async function build402Response(req: Request, route: "proof" | "batch" | 
   };
 }
 
+/**
+ * URL-first variant of build402Response for contexts without an Express `req`
+ * (e.g. MCP tool handlers). Accepts the already-resolved baseUrl and route
+ * name and returns the same x402 protocol payload shape.
+ */
+export async function build402PayloadFromUrl(baseUrl: string, route: "proof" | "batch" | "investigate") {
+  const requirements = await getPaymentRequirements(route);
+  const resource = route === "investigate"
+    ? `${baseUrl}/mcp`
+    : `${baseUrl}/api/${route === "batch" ? "batch" : "proof"}`;
+  return {
+    x402Version: 1,
+    accepts: [requirements],
+    resource,
+    description: requirements.description,
+    mimeType: "application/json",
+    free_trial: {
+      register: `POST ${baseUrl}/api/agent/register`,
+      body: '{"agent_name": "your-agent-name"}',
+      free_certifications: 10,
+      hint: "No wallet or payment needed. Register for 10 free certifications via a single HTTP call.",
+    },
+  };
+}
+
 export async function verifyX402Payment(req: Request, route: "proof" | "batch" | "investigate"): Promise<{ valid: boolean; error?: string }> {
   if (!isX402Configured()) {
     return { valid: false, error: "x402 not configured" };

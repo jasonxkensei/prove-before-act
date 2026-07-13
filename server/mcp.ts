@@ -9,7 +9,7 @@ import { getCertificationPriceUsd } from "./pricing";
 import { logger } from "./logger";
 import { auditLogSchema } from "./auditSchema";
 import { reconstructAuditTrail } from "./audit-trail";
-import { isX402Configured, verifyX402PaymentRaw, getInvestigatePaymentRequirements } from "./x402";
+import { isX402Configured, verifyX402PaymentRaw, getInvestigatePaymentRequirements, build402PayloadFromUrl } from "./x402";
 import {
   getTrialUser, getUserCreditBalance, consumeTrialCredit, consumeCredit,
   atomicConsumeCredit, atomicConsumeTrialCredit, refundCredit, refundTrialCredit,
@@ -446,7 +446,8 @@ export async function createMcpServer(ctx: McpContext) {
         if (cwcTrialInfo && cwcTrialInfo.remaining <= 0) {
           const balance = await getUserCreditBalance(auth.userId);
           if (balance <= 0) {
-            return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl) }) }], isError: true };
+            const _x402cwc0 = isX402Configured() ? await build402PayloadFromUrl(baseUrl, "proof") : {};
+            return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), prepaid_credits: buildPrepaidCreditsBlock(baseUrl), ..._x402cwc0 }) }], isError: true };
           }
           cwcCreditInfo = { userId: auth.userId, balance };
         } else if (!cwcTrialInfo) {
@@ -476,7 +477,8 @@ export async function createMcpServer(ctx: McpContext) {
             if (cwcTrialInfo && !cwcCreditInfo) {
               const consumed = await atomicConsumeTrialCredit(cwcTrialInfo.userId);
               if (!consumed) {
-                return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl) }) }], isError: true };
+                const _x402cwc1 = isX402Configured() ? await build402PayloadFromUrl(baseUrl, "proof") : {};
+                return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), prepaid_credits: buildPrepaidCreditsBlock(baseUrl), ..._x402cwc1 }) }], isError: true };
               }
             } else if (cwcCreditInfo) {
               const consumed = await atomicConsumeCredit(cwcCreditInfo.userId);
@@ -554,7 +556,8 @@ export async function createMcpServer(ctx: McpContext) {
           if (cwcTrialInfo && !cwcCreditInfo) {
             const consumed = await atomicConsumeTrialCredit(cwcTrialInfo.userId);
             if (!consumed) {
-              return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl) }) }], isError: true };
+              const _x402cwc2 = isX402Configured() ? await build402PayloadFromUrl(baseUrl, "proof") : {};
+              return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), prepaid_credits: buildPrepaidCreditsBlock(baseUrl), ..._x402cwc2 }) }], isError: true };
             }
           } else if (cwcCreditInfo) {
             const consumed = await atomicConsumeCredit(cwcCreditInfo.userId);
