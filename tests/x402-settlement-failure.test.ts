@@ -2,11 +2,11 @@
  * Contract tests for the x402 settlement-failure path.
  *
  * WHY THIS EXISTS
- * In server/x402.ts, verifyX402Payment / verifyX402PaymentRaw return
+ * In server/x402.ts, verifyX402Payment() returns
  * { valid: false, error: "Payment settlement failed: ..." } when the
  * facilitator's settle() call throws after a successful verify(). The
- * proof-write route then responds HTTP 402 { error: "PAYMENT_FAILED",
- * message: <settlement error> } — but no test asserted this behavior.
+ * proof-write route (server/routes/proof-write.ts lines 409-416) maps this to
+ * HTTP 402 { error: "PAYMENT_FAILED", message: <reason> }.
  *
  * Without this test, a regression that silently drops the settlement error
  * (returning 200, 500, or an empty body instead) would be invisible to CI.
@@ -15,19 +15,38 @@
  * "already paid, proceed" — the PAYMENT_FAILED error code is the only signal.
  *
  * STRUCTURE
- * Part 1 — Unit: call verifyX402Payment() directly with verify() returning
- *           { isValid: true } and settle() throwing. Assert the function
- *           returns { valid: false, error: "Payment settlement failed: ..." }.
  *
- * Part 2 — HTTP integration: mount the settlement-failure branch of
- *           proof-write.ts on a minimal Express app via supertest. Assert
- *           HTTP 402 + { error: "PAYMENT_FAILED", message: <non-empty> }.
+ * Part 1 — Unit: call verifyX402Payment() directly.
+ *   verify() returns { isValid: true }, settle() throws.
+ *   Assert verifyX402Payment() returns { valid: false, error: "Payment settlement failed: ..." }.
+ *
+ * Part 2 — Route integration: mount the real registerProofWriteRoutes(app) on
+ *   a minimal Express app via supertest. This exercises the actual production
+ *   code path (lines 409-416) so any future drift in the route handler is
+ *   caught, not just a copy of the branch logic.
+ *
+ * MOCKING APPROACH
+ *
+ * - @x402/* SDK packages: fully mocked so server/x402.ts loads without a real
+ *   facilitator or blockchain transport.  verify/settle delegate to shared
+ *   vi.hoisted() fn references so per-test control is straightforward.
+ * - server/blockchain: mocked to avoid MultiversX network calls that would
+ *   fail in the test environment.
+ * - server/mx8004: mocked for the same reason.
+ * - server/pricing: mocked to prevent DB calls from getCertificationPriceUsd.
+ * - server/db, server/reliability, shared/schema: NOT mocked — the test
+ *   environment has DATABASE_URL configured, and the payment-rate-limiter
+ *   middleware runs against the real DB (fail-open design ensures the route
+ *   still returns a meaningful response if the DB is unavailable).
+ * - vi.resetModules() + dynamic import: ensures X402_PAY_TO (stubbed via
+ *   vi.stubEnv) is read by the module-level const inside server/x402.ts, and
+ *   that the fresh registerProofWriteRoutes call sees isX402Configured()=true.
+ * - Inner beforeEach re-configures mockVerify/mockSettle AFTER the outer
+ *   beforeEach resets them, so mock state doesn't bleed between tests.
  */
 
 import { vi, describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
-import express from "express";
 import supertest from "supertest";
-import type { Request, Response } from "express";
 
 // vi.hoisted() ensures these exist when the vi.mock factories run
 // (vi.mock calls are hoisted before const declarations in module scope).
@@ -36,10 +55,7 @@ const { mockVerify, mockSettle } = vi.hoisted(() => ({
   mockSettle: vi.fn(),
 }));
 
-// Stub all @x402/* SDK packages so server/x402.ts can be imported without
-// a real facilitator or blockchain transport.
-// The x402ResourceServer mock delegates verify/settle to the shared vi.fn()
-// references so each test can control their behavior independently.
+// ── Stub @x402/* SDK so server/x402.ts loads without a real facilitator ─────
 vi.mock("@x402/express", () => ({
   x402ResourceServer: class {
     register() { return this; }
@@ -49,35 +65,38 @@ vi.mock("@x402/express", () => ({
   },
 }));
 vi.mock("@x402/evm/exact/server", () => ({ ExactEvmScheme: class {} }));
-vi.mock("@x402/core/server", () => ({ HTTPFacilitatorClient: class {} }));
-vi.mock("@x402/extensions/bazaar", () => ({
+vi.mock("@x402/core/server",        () => ({ HTTPFacilitatorClient: class {} }));
+vi.mock("@x402/extensions/bazaar",  () => ({
   bazaarResourceServerExtension: {},
   declareDiscoveryExtension: (meta: unknown) => meta,
 }));
 
-// Mock pricing so tests never hit the database.
+// ── Stub server modules that make external network calls ─────────────────────
+vi.mock("../server/blockchain.js", () => ({
+  recordOnBlockchain:        vi.fn().mockResolvedValue({ txHash: "mock-tx" }),
+  isMultiversXConfigured:    vi.fn().mockReturnValue(false),
+  computeOnchainPayloadBytes: vi.fn().mockReturnValue(100),
+  MAX_ONCHAIN_PAYLOAD_BYTES: 512,
+}));
+vi.mock("../server/mx8004.js", () => ({
+  isMX8004Configured:       vi.fn().mockReturnValue(false),
+  recordCertificationAsJob: vi.fn().mockResolvedValue(undefined),
+}));
 vi.mock("../server/pricing.js", () => ({
-  getCertificationPriceUsd: vi.fn().mockResolvedValue(0.01),
+  getCertificationPriceUsd:  vi.fn().mockResolvedValue(0.01),
+  getCertificationPriceEgld: vi.fn().mockResolvedValue(0.001),
   FLAT_PRICE_USD: 0.01,
 }));
 
-const TEST_PAY_TO = "0xDeAdBeEf0000000000000000000000000000CAFE";
-
-// A valid base64-encoded JSON "payment" payload. Contents don't matter —
-// the resource server is fully mocked, so verify() ignores the payload.
+// A fake (but valid-looking) base64-encoded payment payload.  Contents don't
+// matter because verify() is fully mocked.
 const FAKE_PAYMENT_HEADER = Buffer.from(JSON.stringify({ test: "payload" })).toString("base64");
-
-// Minimal mock Request matching what verifyX402Payment uses.
-function mockReq(paymentHeader = FAKE_PAYMENT_HEADER): Request {
-  return {
-    get: (h: string) => (h === "host" ? "xproof.test" : undefined),
-    headers: { "x-payment": paymentHeader },
-  } as unknown as Request;
-}
+const TEST_PAY_TO         = "0xDeAdBeEf0000000000000000000000000000CAFE";
 
 describe("x402 payment settlement failure — PAYMENT_FAILED contract", () => {
+  // ── Shared module handles (populated in beforeAll) ─────────────────────────
   type VerifyFn = (
-    req: Request,
+    req: { get: (h: string) => string | undefined; headers: Record<string, string> },
     route: "proof" | "batch" | "investigate",
   ) => Promise<{ valid: boolean; error?: string }>;
 
@@ -85,16 +104,14 @@ describe("x402 payment settlement failure — PAYMENT_FAILED contract", () => {
   let isX402Configured: () => boolean;
 
   beforeAll(async () => {
-    // Set X402_PAY_TO so isX402Configured() returns true; otherwise the
-    // function short-circuits before calling verify/settle.
-    vi.stubEnv("X402_PAY_TO", TEST_PAY_TO);
+    vi.stubEnv("X402_PAY_TO",  TEST_PAY_TO);
     vi.stubEnv("X402_NETWORK", "eip155:8453");
 
-    // Fresh module import so module-level consts read the stubbed env vars.
+    // Fresh module load so module-level consts pick up the stubbed env vars.
     vi.resetModules();
-    const mod = await import("../server/x402");
-    verifyX402Payment = mod.verifyX402Payment as unknown as VerifyFn;
-    isX402Configured  = mod.isX402Configured;
+    const x402Mod = await import("../server/x402");
+    verifyX402Payment = x402Mod.verifyX402Payment as unknown as VerifyFn;
+    isX402Configured  = x402Mod.isX402Configured;
   });
 
   afterAll(() => {
@@ -102,52 +119,60 @@ describe("x402 payment settlement failure — PAYMENT_FAILED contract", () => {
     vi.resetModules();
   });
 
-  // Reset mock state before each test so behavior from one test doesn't leak.
+  // Reset mock state so behavior doesn't leak between tests.
   beforeEach(() => {
     mockVerify.mockReset();
     mockSettle.mockReset();
   });
 
-  // ── Part 1: Unit tests — verifyX402Payment() return value ─────────────────
+  // ── Part 1: Unit — verifyX402Payment() return value ───────────────────────
 
-  describe("verifyX402Payment() return value when settle() throws", () => {
-    it("returns { valid: false } when verify succeeds but settle throws", async () => {
+  describe("verifyX402Payment() when verify() succeeds but settle() throws", () => {
+    it("returns { valid: false }", async () => {
       mockVerify.mockResolvedValue({ isValid: true });
       mockSettle.mockRejectedValue(new Error("network timeout"));
 
-      const result = await verifyX402Payment(mockReq(), "proof");
+      const result = await verifyX402Payment(
+        { get: () => "xproof.test", headers: { "x-payment": FAKE_PAYMENT_HEADER } },
+        "proof",
+      );
 
       expect(result.valid, "valid must be false — settlement failed").toBe(false);
     });
 
-    it("error field starts with 'Payment settlement failed:' so agents can parse it", async () => {
+    it("error starts with 'Payment settlement failed:' (parseable prefix for agents)", async () => {
       mockVerify.mockResolvedValue({ isValid: true });
       mockSettle.mockRejectedValue(new Error("facilitator unavailable"));
 
-      const result = await verifyX402Payment(mockReq(), "proof");
-
-      expect(result.error, "error must be defined").toBeDefined();
-      expect(result.error as string, "error must start with the expected prefix").toMatch(
-        /^Payment settlement failed:/,
+      const result = await verifyX402Payment(
+        { get: () => "xproof.test", headers: { "x-payment": FAKE_PAYMENT_HEADER } },
+        "proof",
       );
+
+      expect(result.error).toBeDefined();
+      expect(result.error as string).toMatch(/^Payment settlement failed:/);
     });
 
-    it("error field embeds the underlying thrown message", async () => {
+    it("error embeds the underlying thrown message", async () => {
       mockVerify.mockResolvedValue({ isValid: true });
       mockSettle.mockRejectedValue(new Error("upstream-sentinel-error"));
 
-      const result = await verifyX402Payment(mockReq(), "proof");
-
-      expect(result.error, "underlying error message must be preserved").toContain(
-        "upstream-sentinel-error",
+      const result = await verifyX402Payment(
+        { get: () => "xproof.test", headers: { "x-payment": FAKE_PAYMENT_HEADER } },
+        "proof",
       );
+
+      expect(result.error as string).toContain("upstream-sentinel-error");
     });
 
-    it("error field is a non-empty string (agents need a retry signal)", async () => {
+    it("error is a non-empty string (agents need a retry signal)", async () => {
       mockVerify.mockResolvedValue({ isValid: true });
       mockSettle.mockRejectedValue(new Error("any error"));
 
-      const result = await verifyX402Payment(mockReq(), "proof");
+      const result = await verifyX402Payment(
+        { get: () => "xproof.test", headers: { "x-payment": FAKE_PAYMENT_HEADER } },
+        "proof",
+      );
 
       expect(typeof result.error).toBe("string");
       expect((result.error as string).length).toBeGreaterThan(0);
@@ -157,116 +182,103 @@ describe("x402 payment settlement failure — PAYMENT_FAILED contract", () => {
       mockVerify.mockResolvedValue({ isValid: true });
       mockSettle.mockResolvedValue(undefined);
 
-      const result = await verifyX402Payment(mockReq(), "proof");
+      const result = await verifyX402Payment(
+        { get: () => "xproof.test", headers: { "x-payment": FAKE_PAYMENT_HEADER } },
+        "proof",
+      );
 
-      expect(result.valid, "valid must be true on success").toBe(true);
-      expect(result.error, "error must be absent on success").toBeUndefined();
+      expect(result.valid).toBe(true);
+      expect(result.error).toBeUndefined();
     });
 
     it("returns { valid: false } when verify() itself returns { isValid: false }", async () => {
       mockVerify.mockResolvedValue({ isValid: false });
-      mockSettle.mockResolvedValue(undefined); // should never be called
+      mockSettle.mockResolvedValue(undefined);
 
-      const result = await verifyX402Payment(mockReq(), "proof");
+      const result = await verifyX402Payment(
+        { get: () => "xproof.test", headers: { "x-payment": FAKE_PAYMENT_HEADER } },
+        "proof",
+      );
 
-      expect(result.valid, "valid must be false when verify returns isValid: false").toBe(false);
+      expect(result.valid).toBe(false);
     });
   });
 
-  // ── Part 2: HTTP integration — minimal Express app via supertest ──────────
+  // ── Part 2: Route integration — real registerProofWriteRoutes via supertest ─
   //
-  // Replicates the exact x402 settlement branch from proof-write.ts lines 409-416:
+  // Mounts the actual production route handler so any future drift in the
+  // branch at proof-write.ts lines 409-416 is caught in CI, not just a copy
+  // of the branch logic.
   //
-  //   } else if (hasX402Payment && isX402Configured()) {
-  //     const x402Result = await verifyX402Payment(req, "proof");
-  //     if (!x402Result.valid) {
-  //       return res.status(402).json({
-  //         error: "PAYMENT_FAILED",
-  //         message: x402Result.error || "x402 payment verification failed",
-  //       });
-  //     }
-  //   }
-  //
-  // Using a minimal app avoids importing proof-write.ts's 15+ heavy
-  // dependencies (db, blockchain, mx8004, etc.) that are irrelevant here.
+  // vi.resetModules() was already called in the outer beforeAll.  The modules
+  // imported below use the fresh module cache (which has the @x402/* mocks in
+  // effect), so isX402Configured() reads the stubbed X402_PAY_TO.
 
-  describe("POST /api/proof with X-PAYMENT — settlement failure HTTP shape", () => {
+  describe("POST /api/proof (real route) — settlement failure HTTP contract", () => {
     let request: ReturnType<typeof supertest>;
 
     beforeAll(async () => {
-      const app = express();
-      app.use(express.json());
+      // Build fresh app using the actual registerProofWriteRoutes.
+      // Note: vi.resetModules() was already called in the outer beforeAll, so
+      // this dynamic import gets a fresh module (with all mocks active).
+      const expressModule = await import("express");
+      const app = expressModule.default();
+      app.use(expressModule.default.json());
 
-      app.post("/api/proof", async (req: Request, res: Response) => {
-        const hasX402Payment = !!req.headers["x-payment"];
-        if (hasX402Payment && isX402Configured()) {
-          const x402Result = await verifyX402Payment(req as any, "proof");
-          if (!x402Result.valid) {
-            return res.status(402).json({
-              error: "PAYMENT_FAILED",
-              message: x402Result.error || "x402 payment verification failed",
-            });
-          }
-          return res.status(200).json({ status: "certified" });
-        }
-        return res.status(401).json({ error: "AUTH_REQUIRED" });
-      });
+      const { registerProofWriteRoutes } = await import("../server/routes/proof-write");
+      registerProofWriteRoutes(app);
 
       request = supertest(app);
     });
 
-    // Must run AFTER the outer beforeEach (which resets all mocks) so these
-    // specific configurations take effect for every HTTP test in this block.
+    // Inner beforeEach runs AFTER the outer beforeEach (which resets mocks),
+    // so the settlement-failure configuration takes effect for every test here.
     beforeEach(() => {
       mockVerify.mockResolvedValue({ isValid: true });
       mockSettle.mockRejectedValue(new Error("settlement-sentinel-error"));
     });
 
-    it("responds with HTTP 402 (not 200, not 500)", async () => {
+    it("responds HTTP 402 (not 200, not 500) when settle() throws", async () => {
       const res = await request
         .post("/api/proof")
         .set("Content-Type", "application/json")
         .set("X-PAYMENT", FAKE_PAYMENT_HEADER)
         .send({ file_hash: "a".repeat(64), filename: "test.txt" });
 
-      expect(res.status, "settlement failure must produce HTTP 402, not 200 or 500").toBe(402);
+      expect(res.status, "settlement failure must produce HTTP 402").toBe(402);
     });
 
-    it("body.error is 'PAYMENT_FAILED' (machine-readable code agents can switch on)", async () => {
+    it("body.error is 'PAYMENT_FAILED' — machine-readable code agents switch on", async () => {
       const res = await request
         .post("/api/proof")
         .set("Content-Type", "application/json")
         .set("X-PAYMENT", FAKE_PAYMENT_HEADER)
         .send({ file_hash: "a".repeat(64), filename: "test.txt" });
 
-      expect(res.body.error, "error code must be PAYMENT_FAILED").toBe("PAYMENT_FAILED");
+      expect(res.body.error).toBe("PAYMENT_FAILED");
     });
 
-    it("body.message is a non-empty string so agents have a retry signal", async () => {
+    it("body.message is a non-empty string (retry signal for agents)", async () => {
       const res = await request
         .post("/api/proof")
         .set("Content-Type", "application/json")
         .set("X-PAYMENT", FAKE_PAYMENT_HEADER)
         .send({ file_hash: "a".repeat(64), filename: "test.txt" });
 
-      expect(typeof res.body.message, "message must be a string").toBe("string");
-      expect(
-        (res.body.message as string).length,
-        "message must not be empty",
-      ).toBeGreaterThan(0);
+      expect(typeof res.body.message).toBe("string");
+      expect((res.body.message as string).length).toBeGreaterThan(0);
     });
 
-    it("body.message includes the settlement failure context", async () => {
+    it("body.message includes settlement failure context from the thrown error", async () => {
       const res = await request
         .post("/api/proof")
         .set("Content-Type", "application/json")
         .set("X-PAYMENT", FAKE_PAYMENT_HEADER)
         .send({ file_hash: "a".repeat(64), filename: "test.txt" });
 
-      expect(
-        res.body.message as string,
-        "message must include settlement failure context from the error",
-      ).toContain("settlement");
+      expect(res.body.message as string, "message must reference settlement").toContain(
+        "settlement",
+      );
     });
   });
 });
