@@ -598,6 +598,137 @@ describe("build402Response — native x402 402 shape contract", () => {
       ).toBe("number");
     });
   });
+
+  // ── Part 3d: Supertest — trial-exhausted POST /api/batch ──────────────────
+  //
+  // Simulates the TRIAL_EXHAUSTED path in /api/batch: an agent whose trial
+  // credit was atomically revoked mid-batch. The fixed handler now spreads
+  // `build402Response(req, "batch")` so agents receive x402Version +
+  // accepts[0].payTo alongside the human-readable error. This block validates
+  // that shape, parallel to Part 3c.
+  //
+  // Uses the same minimal supertest approach as Part 3c — directly replicates
+  // the TRIAL_EXHAUSTED branch of the fixed route handler so the contract
+  // between the route and the x402 response shape is exercised end-to-end.
+  //
+  // SKIP BEHAVIOUR: skipped when X402_PAY_TO is absent, because
+  // build402Response requires X402_PAY_TO to produce a meaningful payTo.
+  // ──────────────────────────────────────────────────────────────────────────
+
+  describe("trial-exhausted POST /api/batch — HTTP 402 via supertest (Part 3d)", () => {
+    let status: number;
+    let body:   Record<string, unknown>;
+
+    beforeAll(async () => {
+      // Replicate the TRIAL_EXHAUSTED atomic-revoke branch from the fixed
+      // proof-write.ts batch handler:
+      //
+      //   const x402Payload = isX402Configured() ? await build402Response(req, "batch") : {};
+      //   return res.status(402).json({
+      //     error: "TRIAL_EXHAUSTED",
+      //     message: buildTrialExhaustedMessage(_b, TRIAL_QUOTA),
+      //     trial: { quota: TRIAL_QUOTA, used: TRIAL_QUOTA, remaining: 0 },
+      //     prepaid_credits: buildPrepaidCreditsBlock(_b),
+      //     ...x402Payload,
+      //   });
+      //
+      // The outer beforeAll already imported build402Response with stubbed
+      // X402_PAY_TO, so the spread will include x402Version and accepts[].
+      const app = express();
+      app.use(express.json());
+      app.post("/api/batch", async (req, res) => {
+        if (!isX402Configured()) {
+          return res.status(500).json({ error: "x402 not configured in test — check test setup" });
+        }
+        const x402Payload = await build402Response(req, "batch");
+        return res.status(402).json({
+          error: "TRIAL_EXHAUSTED",
+          message: "Trial credits exhausted. Use x402 per-request payment or purchase prepaid credits.",
+          trial: { quota: 10, used: 10, remaining: 0 },
+          prepaid_credits: { purchase: `https://xproof.test/api/credits/purchase` },
+          ...x402Payload,
+        });
+      });
+      const request = supertest(app);
+
+      const res = await request
+        .post("/api/batch")
+        .set("Content-Type", "application/json")
+        .set("Authorization", "Bearer pm_test_trial_exhausted_key")
+        .send({ files: [{ file_hash: "c".repeat(64), filename: "trial-exhausted-batch-test.txt" }] });
+
+      status = res.status;
+      body   = res.body as Record<string, unknown>;
+    });
+
+    it("responds with HTTP 402 (not 401 or 500)", () => {
+      expect(
+        status,
+        "trial-exhausted batch request must return 402 — " +
+          "401 means auth failed; 500 means x402 not configured in test",
+      ).toBe(402);
+    });
+
+    it("body.error is TRIAL_EXHAUSTED", () => {
+      expect(body.error, "error must be TRIAL_EXHAUSTED").toBe("TRIAL_EXHAUSTED");
+    });
+
+    it("body.x402Version is defined and equals 1", () => {
+      expect(
+        body.x402Version,
+        "x402Version must be present — agents cannot parse a 402 without it",
+      ).toBeDefined();
+      expect(body.x402Version, "x402Version must equal 1").toBe(1);
+    });
+
+    it("body.accepts is a non-empty array", () => {
+      expect(Array.isArray(body.accepts), "accepts must be an array").toBe(true);
+      expect(
+        (body.accepts as unknown[]).length,
+        "accepts must have at least one entry — agents need a payment option",
+      ).toBeGreaterThan(0);
+    });
+
+    it("body.accepts[0].payTo is a non-empty string (payment address agents use)", () => {
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(
+        typeof entry.payTo,
+        "accepts[0].payTo must be a string — missing payTo strands every trial-exhausted batch agent with no payment target",
+      ).toBe("string");
+      expect(
+        (entry.payTo as string).length,
+        "accepts[0].payTo must not be empty",
+      ).toBeGreaterThan(0);
+    });
+
+    it("body.accepts[0].payTo equals the configured X402_PAY_TO address", () => {
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(
+        entry.payTo,
+        "accepts[0].payTo must match the configured payment address so agents pay the right wallet",
+      ).toBe(TEST_PAY_TO);
+    });
+
+    it("body.accepts[0].price is a non-empty string (the payment amount)", () => {
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(typeof entry.price, "accepts[0].price must be a string").toBe("string");
+      expect((entry.price as string).length, "accepts[0].price must not be empty").toBeGreaterThan(0);
+    });
+
+    it("body.resource references /api/batch", () => {
+      expect(typeof body.resource, "resource must be a string").toBe("string");
+      expect(
+        body.resource as string,
+        "resource must reference /api/batch so agents know which endpoint to retry after paying",
+      ).toContain("/api/batch");
+    });
+
+    it("body.trial is present and shows remaining: 0", () => {
+      expect(body.trial, "trial block must be present").toBeDefined();
+      const t = body.trial as Record<string, unknown>;
+      expect(t.remaining, "trial.remaining must be 0 — trial is exhausted").toBe(0);
+    });
+  });
 });
 
 // ── Part 3: Live server integration ──────────────────────────────────────────

@@ -1430,16 +1430,19 @@ export function registerProofWriteRoutes(app: Express) {
       if (newFileCount > 0 && !isAdminExempt) {
         if (trialInfo) {
           if (newFileCount > trialInfo.remaining) {
+            const x402Payload = isX402Configured() ? await build402Response(req, "batch") : {};
             return res.status(402).json({
               error: "INSUFFICIENT_TRIAL_QUOTA",
               message: `Batch requires ${newFileCount} new certifications but only ${trialInfo.remaining} trial credits remain.`,
               trial: { remaining: trialInfo.remaining, requested: newFileCount },
+              ...x402Payload,
             });
           }
           const consumed = await atomicConsumeTrialCredit(trialInfo.userId, newFileCount);
           if (!consumed) {
             const _b = `https://${req.get("host")}`;
-            return res.status(402).json({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(_b, TRIAL_QUOTA), trial: { quota: TRIAL_QUOTA, used: TRIAL_QUOTA, remaining: 0 }, x402: buildX402Block(_b), prepaid_credits: buildPrepaidCreditsBlock(_b) });
+            const x402Payload = isX402Configured() ? await build402Response(req, "batch") : {};
+            return res.status(402).json({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(_b, TRIAL_QUOTA), trial: { quota: TRIAL_QUOTA, used: TRIAL_QUOTA, remaining: 0 }, prepaid_credits: buildPrepaidCreditsBlock(_b), ...x402Payload });
           }
         } else if (creditInfo) {
           if (newFileCount > creditInfo.balance) {
