@@ -18,6 +18,13 @@
  *           This validates that the route produces an actual HTTP 402 with the
  *           correct body fields — catching status-code or middleware regressions
  *           the unit tests cannot detect.
+ * Part 3 — Live server integration: hit the real running server at localhost:5000
+ *           to confirm the actual proof-write route (server/routes/proof-write.ts)
+ *           returns 402 (not 401) when X402_PAY_TO is configured and no auth
+ *           header is present. This catches the scenario where a misconfigured
+ *           deployment has X402_PAY_TO unset at runtime and the route silently
+ *           falls through to the 401 AUTH_REQUIRED path. Skipped when
+ *           X402_PAY_TO is absent from the runtime environment.
  */
 
 import { vi, describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -342,3 +349,107 @@ describe("build402Response — native x402 402 shape contract", () => {
     });
   });
 });
+
+// ── Part 3: Live server integration ──────────────────────────────────────────
+//
+// Hits the *real* running server (http://localhost:5000) to confirm that the
+// actual proof-write route (server/routes/proof-write.ts) returns HTTP 402
+// — not 401 — when X402_PAY_TO is configured in the runtime environment and
+// an unauthenticated caller sends POST /api/proof with no X-PAYMENT header.
+//
+// WHY THIS IS SEPARATE FROM PARTS 1 AND 2
+// Parts 1 and 2 stub process.env.X402_PAY_TO and test build402Response /
+// send402Response in isolation. They cannot catch the failure mode where the
+// *route handler* itself (proof-write.ts) evaluates isX402Configured() against
+// a missing runtime env var and silently falls through to the 401 AUTH_REQUIRED
+// branch. This describe block exercises the live handler end-to-end.
+//
+// SKIP BEHAVIOUR
+// When X402_PAY_TO is not set in the runtime environment the tests are skipped
+// with a clear message so CI runs without X402_PAY_TO do not fail. When the
+// env var IS set the tests are required and a 402 must be returned.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const RUNTIME_PAY_TO = process.env.X402_PAY_TO ?? "";
+const x402LiveEnabled = RUNTIME_PAY_TO.length > 0;
+const BASE_URL = "http://localhost:5000";
+
+describe.skipIf(!x402LiveEnabled)(
+  "POST /api/proof — live server 402 when X402_PAY_TO is configured (Part 3)",
+  () => {
+    let status: number;
+    let body: Record<string, unknown>;
+
+    beforeAll(async () => {
+      // No auth header, no X-PAYMENT header — the unauthenticated branch.
+      const res = await fetch(`${BASE_URL}/api/proof`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          file_hash: "a".repeat(64),
+          filename: "live-server-x402-shape-test.txt",
+        }),
+      });
+      status = res.status;
+      try {
+        body = (await res.json()) as Record<string, unknown>;
+      } catch {
+        body = {};
+      }
+    });
+
+    it("returns HTTP 402 (not 401 AUTH_REQUIRED) when X402_PAY_TO is configured", () => {
+      expect(
+        status,
+        "unauthenticated POST /api/proof must return 402 when X402_PAY_TO is set — " +
+          "401 means isX402Configured() returned false at runtime (X402_PAY_TO missing or empty)",
+      ).toBe(402);
+    });
+
+    it("body.x402Version is defined and equals 1", () => {
+      expect(body.x402Version, "x402Version must be present").toBeDefined();
+      expect(body.x402Version, "x402Version must equal 1").toBe(1);
+    });
+
+    it("body.accepts is a non-empty array", () => {
+      expect(Array.isArray(body.accepts), "accepts must be an array").toBe(true);
+      expect(
+        (body.accepts as unknown[]).length,
+        "accepts must have at least one entry",
+      ).toBeGreaterThan(0);
+    });
+
+    it("body.accepts[0].payTo is a non-empty string matching the configured address", () => {
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(
+        typeof entry.payTo,
+        "accepts[0].payTo must be a string — missing this field strands every pay-per-use agent",
+      ).toBe("string");
+      expect(
+        (entry.payTo as string).length,
+        "accepts[0].payTo must not be empty — a blank address silently misdirects payments",
+      ).toBeGreaterThan(0);
+      expect(
+        entry.payTo,
+        "accepts[0].payTo must equal the X402_PAY_TO env var",
+      ).toBe(RUNTIME_PAY_TO);
+    });
+
+    it("body.accepts[0].price is a non-empty string", () => {
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(typeof entry.price, "accepts[0].price must be a string").toBe("string");
+      expect(
+        (entry.price as string).length,
+        "accepts[0].price must not be empty",
+      ).toBeGreaterThan(0);
+    });
+
+    it("body.resource references /api/proof", () => {
+      expect(typeof body.resource, "resource must be a string").toBe("string");
+      expect(
+        body.resource as string,
+        "resource must reference /api/proof",
+      ).toContain("/api/proof");
+    });
+  },
+);
