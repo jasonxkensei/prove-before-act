@@ -437,13 +437,17 @@ export function registerCalibrationRoutes(app: Express) {
   //   NOTE: if multiple outcomes share the exact same submitted_at timestamp,
   //   a row can theoretically appear on two consecutive pages. Use a compound
   //   (submitted_at, id) cursor to eliminate this edge case in a future hardening.
-  app.get("/api/agent/calibration/:agentId", publicCalibrationRateLimiter, async (req, res) => {
+  // Pre-rate-limiter middleware: set Cache-Control before any middleware can
+  // short-circuit with a 429.  Without this, a rate-limiter rejection fires
+  // before the handler runs and the header is never set.
+  const setPrivateNoStore = (_req: Request, res: Response, next: NextFunction) => {
+    res.set("Cache-Control", "private, no-store");
+    next();
+  };
+
+  app.get("/api/agent/calibration/:agentId", setPrivateNoStore, publicCalibrationRateLimiter, async (req, res) => {
     try {
       const { agentId } = req.params;
-      // Prevent HTTP-level proxy/CDN caching of visibility-gated responses.
-      // The server-side in-memory cache re-checks isPublicProfile on every
-      // request before serving, but an intermediate cache cannot do this.
-      res.set("Cache-Control", "private, no-store");
       const n = Math.min(200, Math.max(1, parseInt((req.query.n as string) || "50", 10) || 50));
 
       // Optional cursor: ISO timestamp from a previous response's next_cursor field
@@ -612,11 +616,9 @@ export function registerCalibrationRoutes(app: Express) {
   // Auth:  API-key owner or wallet-session owner → all outcomes (public + private).
   //        Unauthenticated → allowed only when ALL outcomes are public; blocked otherwise (401).
   // ?n=X  Optional row cap (hard ceiling 100 000). Omit to export full history.
-  app.get("/api/agent/calibration/:agentId/export.csv", calibrationCsvExportRateLimiter, optionalApiKey, async (req, res) => {
+  app.get("/api/agent/calibration/:agentId/export.csv", setPrivateNoStore, calibrationCsvExportRateLimiter, optionalApiKey, async (req, res) => {
     try {
       const { agentId } = req.params;
-      // Prevent HTTP-level proxy/CDN caching of visibility-gated responses.
-      res.set("Cache-Control", "private, no-store");
       // n is optional — omitting it exports the full history (no row cap).
       // Callers may pass ?n=X to limit output (hard cap: 100 000).
       const rawN = req.query.n as string | undefined;

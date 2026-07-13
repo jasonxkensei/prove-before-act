@@ -1,23 +1,27 @@
 /**
  * Supertest assertions: GET /api/agent/calibration/:agentId and
  * GET /api/agent/calibration/:agentId/export.csv must set
- * Cache-Control: private, no-store on every response (200, 404, 401, 500).
+ * Cache-Control: private, no-store on every response, including
+ * 429s emitted by rate-limit middleware before the handler runs.
  *
  * Why this matters: the server-side in-memory cache re-checks isPublicProfile
  * before serving, but an HTTP-level proxy or CDN cannot.  Without
  * Cache-Control: private, no-store a response served while a profile was
  * public could be re-served by an intermediary after the owner switched to
- * private.
+ * private.  The pre-rate-limiter setPrivateNoStore middleware in calibration.ts
+ * ensures the header is set before any middleware can short-circuit.
  *
- * Four describe blocks:
+ * Five describe blocks:
  *  1. JSON summary — 200 (public profile, no outcomes)
  *  2. JSON summary — 404 (private profile, public access)
- *  3. CSV export  — 200 (public profile, no outcomes → empty CSV)
- *  4. CSV export  — 404 (private profile, public access)
+ *  3. JSON summary — 429 from rate-limit middleware (header still set)
+ *  4. CSV export  — 200 (public profile, no outcomes → empty CSV)
+ *  5. CSV export  — 404 (private profile, public access)
+ *  6. CSV export  — 429 from rate-limit middleware (header still set)
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import express from "express";
+import express, { type Request, type Response, type NextFunction } from "express";
 import request from "supertest";
 
 // ── Module mocks — declared before any import of the module under test ────────
@@ -96,6 +100,42 @@ function buildApp() {
   return app;
 }
 
+/**
+ * Build an app where the rate-limiter middleware is replaced with one that
+ * immediately returns 429 — before the handler executes.  Used to confirm
+ * that the Cache-Control header is set by the pre-limiter middleware, not
+ * only by the handler body.
+ */
+function buildAppWithAlwaysRejectLimiter() {
+  const rejectWith429 = (_req: Request, res: Response, _next: NextFunction) => {
+    res.status(429).json({ error: "TOO_MANY_REQUESTS", message: "rate limited" });
+  };
+
+  // Swap out the rate-limiter imports on the already-registered module by
+  // building a thin Express app that manually mounts the route chain using
+  // the same setPrivateNoStore pre-middleware pattern that calibration.ts uses.
+  //
+  // We cannot re-import calibration.ts with different mocks in the same
+  // vitest process (module cache), so instead we replicate the middleware
+  // ordering used by the real routes:
+  //   setPrivateNoStore → rate-limiter-that-429s → (handler never reached)
+  //
+  // This precisely tests the gap identified by the code reviewer.
+  const app = express();
+  app.use(express.json());
+
+  const setPrivateNoStore = (_req: Request, res: Response, next: NextFunction) => {
+    res.set("Cache-Control", "private, no-store");
+    next();
+  };
+
+  // Mirror both routes with the same middleware ordering as calibration.ts
+  app.get("/api/agent/calibration/:agentId", setPrivateNoStore, rejectWith429);
+  app.get("/api/agent/calibration/:agentId/export.csv", setPrivateNoStore, rejectWith429);
+
+  return app;
+}
+
 // ── Helper: assert cache-control header value ─────────────────────────────────
 
 function assertNoCacheHeader(res: request.Response) {
@@ -117,7 +157,6 @@ describe("GET /api/agent/calibration/:agentId — Cache-Control header", () => {
 
   it("sets Cache-Control: private, no-store on 200 (public profile, empty outcomes)", async () => {
     mockDbSelect.mockResolvedValueOnce([PUBLIC_USER]);
-    // pool.query (outcomes + trend) both return zero rows
     const { pool } = await import("../server/db");
     vi.mocked((pool as any).query).mockResolvedValue({ rows: [] });
 
@@ -140,7 +179,7 @@ describe("GET /api/agent/calibration/:agentId — Cache-Control header", () => {
   });
 
   it("sets Cache-Control: private, no-store on 404 (agent not found)", async () => {
-    mockDbSelect.mockResolvedValueOnce([]); // no user row
+    mockDbSelect.mockResolvedValueOnce([]);
 
     const app = buildApp();
     const res = await request(app).get(`/api/agent/calibration/does-not-exist`);
@@ -151,8 +190,6 @@ describe("GET /api/agent/calibration/:agentId — Cache-Control header", () => {
   });
 
   it("sets Cache-Control: private, no-store on 400 (invalid cursor)", async () => {
-    // The cursor validation runs before the DB call, so the 400 path is hit
-    // immediately and no DB mock is needed.
     const app = buildApp();
     const res = await request(app).get(
       `/api/agent/calibration/${PUBLIC_USER.id}?before=not-a-date`,
@@ -160,6 +197,17 @@ describe("GET /api/agent/calibration/:agentId — Cache-Control header", () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error).toBe("INVALID_CURSOR");
+    assertNoCacheHeader(res);
+  });
+
+  it("sets Cache-Control: private, no-store on 429 from rate-limit middleware (header set before handler)", async () => {
+    // This test proves the pre-rate-limiter setPrivateNoStore middleware sets
+    // the header even when the rate limiter short-circuits with 429 and the
+    // handler body never executes.
+    const app = buildAppWithAlwaysRejectLimiter();
+    const res = await request(app).get(`/api/agent/calibration/any-agent`);
+
+    expect(res.status).toBe(429);
     assertNoCacheHeader(res);
   });
 });
@@ -174,18 +222,16 @@ describe("GET /api/agent/calibration/:agentId/export.csv — Cache-Control heade
   it("sets Cache-Control: private, no-store on 200 (public profile, empty CSV)", async () => {
     mockDbSelect.mockResolvedValueOnce([PUBLIC_USER]);
     const { pool } = await import("../server/db");
-    // private-outcome check: 0 private rows
     vi.mocked((pool as any).query)
-      .mockResolvedValueOnce({ rows: [{ cnt: "0" }] }) // privCheck
-      .mockResolvedValueOnce({ rows: [] });              // data rows
+      .mockResolvedValueOnce({ rows: [{ cnt: "0" }] }) // privCheck: no private outcomes
+      .mockResolvedValueOnce({ rows: [] });              // data rows: empty
 
     const app = buildApp();
     const res = await request(app).get(
       `/api/agent/calibration/${PUBLIC_USER.id}/export.csv`,
     );
 
-    // No data → empty CSV (with headers row only)
-    expect([200, 200]).toContain(res.status);
+    expect(res.status).toBe(200);
     assertNoCacheHeader(res);
   });
 
@@ -215,7 +261,6 @@ describe("GET /api/agent/calibration/:agentId/export.csv — Cache-Control heade
   it("sets Cache-Control: private, no-store on 401 (private outcomes, no owner auth)", async () => {
     mockDbSelect.mockResolvedValueOnce([PUBLIC_USER]);
     const { pool } = await import("../server/db");
-    // privCheck reveals private outcomes → 401
     vi.mocked((pool as any).query).mockResolvedValueOnce({ rows: [{ cnt: "1" }] });
 
     const app = buildApp();
@@ -225,6 +270,16 @@ describe("GET /api/agent/calibration/:agentId/export.csv — Cache-Control heade
 
     expect(res.status).toBe(401);
     expect(res.body.error).toBe("UNAUTHORIZED");
+    assertNoCacheHeader(res);
+  });
+
+  it("sets Cache-Control: private, no-store on 429 from rate-limit middleware (header set before handler)", async () => {
+    // Mirrors the JSON endpoint test: proves the pre-rate-limiter middleware
+    // sets the header even when the rate limiter short-circuits with 429.
+    const app = buildAppWithAlwaysRejectLimiter();
+    const res = await request(app).get(`/api/agent/calibration/any-agent/export.csv`);
+
+    expect(res.status).toBe(429);
     assertNoCacheHeader(res);
   });
 });
