@@ -6,7 +6,7 @@ import { certifications, users, apiKeys, MAX_ONCHAIN_FILENAME_LEN, MAX_ONCHAIN_A
 import { eq, desc, sql, and, count, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { paymentRateLimiter, publicSearchRateLimiter } from "../reliability";
-import { isX402Configured, verifyX402Payment, send402Response } from "../x402";
+import { isX402Configured, verifyX402Payment, send402Response, build402Response } from "../x402";
 import { recordOnBlockchain, isMultiversXConfigured, computeOnchainPayloadBytes, MAX_ONCHAIN_PAYLOAD_BYTES } from "../blockchain";
 import { getCertificationPriceEgld, getCertificationPriceUsd } from "../pricing";
 import { auditLogSchema, AUDIT_LOG_JSON_SCHEMA, type AgentAuditLog, REVERSIBILITY_CLASSES, JURISDICTION_TYPES, validateTimestampOrdering, isStrictDatetime } from "../auditSchema";
@@ -1271,11 +1271,13 @@ export function registerProofWriteRoutes(app: Express) {
             } else {
               {
                 const _b = `https://${req.get("host")}`;
+                const x402Payload = isX402Configured() ? await build402Response(req, "batch") : {};
                 return res.status(402).json({
                   error: "PAYMENT_REQUIRED",
                   message: buildPaymentRequiredMessage(_b),
                   x402: buildX402Block(_b),
                   prepaid_credits: buildPrepaidCreditsBlock(_b),
+                  ...x402Payload,
                 });
               }
             }
@@ -1439,15 +1441,18 @@ export function registerProofWriteRoutes(app: Express) {
           }
         } else if (creditInfo) {
           if (newFileCount > creditInfo.balance) {
+            const x402Payload = isX402Configured() ? await build402Response(req, "batch") : {};
             return res.status(402).json({
               error: "INSUFFICIENT_CREDITS",
               message: `Batch requires ${newFileCount} credits for new certifications but balance is ${creditInfo.balance}.`,
               credits: { balance: creditInfo.balance, requested: newFileCount },
+              ...x402Payload,
             });
           }
           const consumed = await atomicConsumeCredit(creditInfo.userId, newFileCount);
           if (!consumed) {
-            return res.status(402).json({ error: "INSUFFICIENT_CREDITS", message: "Credit balance insufficient. Purchase additional credits to continue." });
+            const x402Payload = isX402Configured() ? await build402Response(req, "batch") : {};
+            return res.status(402).json({ error: "INSUFFICIENT_CREDITS", message: "Credit balance insufficient. Purchase additional credits to continue.", ...x402Payload });
           }
         }
       }

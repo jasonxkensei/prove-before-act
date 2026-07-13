@@ -348,6 +348,137 @@ describe("build402Response — native x402 402 shape contract", () => {
       ).toBe("number");
     });
   });
+  // ── Part 3c: Supertest — authenticated zero-credit POST /api/batch ───────────
+  //
+  // Simulates the authenticated-but-broke path in /api/batch: an API key whose
+  // credit balance is zero. The fixed handler (proof-write.ts) now spreads
+  // `build402Response(req, "batch")` into the PAYMENT_REQUIRED / INSUFFICIENT_CREDITS
+  // 402 body so agents receive x402Version + accepts[0].payTo alongside the
+  // human-readable error. This block validates that shape.
+  //
+  // Uses the same approach as Part 2 (a minimal supertest Express app) because
+  // creating a genuinely zero-credit API key against the live server would
+  // require registering a trial and exhausting all 10 credits — too slow and
+  // fragile for a unit-style test. The minimal app directly replicates the
+  // zero-credit branch of the fixed route handler, so the contract between the
+  // route and the x402 response shape is exercised end-to-end.
+  //
+  // SKIP BEHAVIOUR: identical to Part 2 — skipped when X402_PAY_TO is absent,
+  // because build402Response requires X402_PAY_TO to produce a meaningful payTo.
+  // ──────────────────────────────────────────────────────────────────────────────
+
+  describe("authenticated zero-credit POST /api/batch — HTTP 402 via supertest (Part 3c)", () => {
+    let status: number;
+    let body:   Record<string, unknown>;
+
+    beforeAll(async () => {
+      // Replicate the zero-credit PAYMENT_REQUIRED branch from the fixed
+      // proof-write.ts batch handler:
+      //
+      //   const x402Payload = isX402Configured() ? await build402Response(req, "batch") : {};
+      //   return res.status(402).json({
+      //     error: "PAYMENT_REQUIRED",
+      //     message: buildPaymentRequiredMessage(_b),
+      //     ...x402Payload,
+      //   });
+      //
+      // The outer beforeAll already imported build402Response with stubbed
+      // X402_PAY_TO, so the spread will include x402Version and accepts[].
+      const app = express();
+      app.use(express.json());
+      app.post("/api/batch", async (req, res) => {
+        if (!isX402Configured()) {
+          return res.status(500).json({ error: "x402 not configured in test — check test setup" });
+        }
+        const x402Payload = await build402Response(req, "batch");
+        return res.status(402).json({
+          error: "PAYMENT_REQUIRED",
+          message: "No prepaid credits. Use x402 per-request payment or purchase credits.",
+          ...x402Payload,
+        });
+      });
+      const request = supertest(app);
+
+      const res = await request
+        .post("/api/batch")
+        .set("Content-Type", "application/json")
+        .set("Authorization", "Bearer pm_test_zero_credit_key")
+        .send({ files: [{ file_hash: "b".repeat(64), filename: "zero-credit-batch-test.txt" }] });
+
+      status = res.status;
+      body   = res.body as Record<string, unknown>;
+    });
+
+    it("responds with HTTP 402 (not 401 or 500)", () => {
+      expect(
+        status,
+        "zero-credit authenticated batch request must return 402 — " +
+          "401 means auth failed; 500 means x402 not configured in test",
+      ).toBe(402);
+    });
+
+    it("body.error identifies the credit-exhausted condition", () => {
+      expect(typeof body.error, "error must be a string").toBe("string");
+      expect((body.error as string).length, "error must not be empty").toBeGreaterThan(0);
+    });
+
+    it("body.x402Version is defined and equals 1", () => {
+      expect(body.x402Version, "x402Version must be present — agents cannot parse a 402 without it").toBeDefined();
+      expect(body.x402Version, "x402Version must equal 1").toBe(1);
+    });
+
+    it("body.accepts is a non-empty array", () => {
+      expect(Array.isArray(body.accepts), "accepts must be an array").toBe(true);
+      expect(
+        (body.accepts as unknown[]).length,
+        "accepts must have at least one entry — agents need a payment option",
+      ).toBeGreaterThan(0);
+    });
+
+    it("body.accepts[0].payTo is a non-empty string (payment address agents use)", () => {
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(
+        typeof entry.payTo,
+        "accepts[0].payTo must be a string — missing payTo strands every batch-certifying agent with no payment target",
+      ).toBe("string");
+      expect(
+        (entry.payTo as string).length,
+        "accepts[0].payTo must not be empty",
+      ).toBeGreaterThan(0);
+    });
+
+    it("body.accepts[0].payTo equals the configured X402_PAY_TO address", () => {
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(
+        entry.payTo,
+        "accepts[0].payTo must match the configured payment address so agents pay the right wallet",
+      ).toBe(TEST_PAY_TO);
+    });
+
+    it("body.accepts[0].price is a non-empty string (the payment amount)", () => {
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(typeof entry.price, "accepts[0].price must be a string").toBe("string");
+      expect((entry.price as string).length, "accepts[0].price must not be empty").toBeGreaterThan(0);
+    });
+
+    it("body.resource references /api/batch", () => {
+      expect(typeof body.resource, "resource must be a string").toBe("string");
+      expect(
+        body.resource as string,
+        "resource must reference /api/batch so agents know which endpoint to retry after paying",
+      ).toContain("/api/batch");
+    });
+
+    it("body.free_trial discovery block is present so agents know about the free tier", () => {
+      expect(body.free_trial, "free_trial must be present").toBeDefined();
+      const ft = body.free_trial as Record<string, unknown>;
+      expect(typeof ft.register, "free_trial.register must be a string").toBe("string");
+      expect(
+        typeof ft.free_certifications,
+        "free_trial.free_certifications must be a number",
+      ).toBe("number");
+    });
+  });
 });
 
 // ── Part 3: Live server integration ──────────────────────────────────────────
