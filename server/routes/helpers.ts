@@ -402,15 +402,19 @@ export function computeDrift(
 // Single source of truth for all 402 error responses across MCP + REST.
 // Any change to wording, pricing, or curl examples propagates everywhere.
 
+const X402_PRICE = process.env.X402_PRICE_USD ?? "$0.01 USDC per cert";
+const X402_NETWORK = process.env.X402_NETWORK_LABEL ?? "Base (eip155:8453)";
+
 /**
  * Returns the canonical x402 object for 402 responses.
  * Includes doc link and ready-to-copy curl examples for agent adoption.
+ * Price and network are read from X402_PRICE_USD / X402_NETWORK_LABEL env vars.
  */
 export function buildX402Block(baseUrl: string) {
   return {
     endpoint: `POST ${baseUrl}/api/proof`,
-    price: "$0.01 USDC per cert",
-    network: "Base (eip155:8453)",
+    price: X402_PRICE,
+    network: X402_NETWORK,
     no_account_required: true,
     steps: [
       "1. POST /api/proof without Authorization header",
@@ -449,7 +453,7 @@ export function buildPrepaidCreditsBlock(baseUrl: string) {
  * Ends with doc link so agents can fetch full integration guide.
  */
 export function buildTrialExhaustedMessage(baseUrl: string, quota: number): string {
-  return `Trial quota exhausted (${quota}/${quota} used). Continue via x402 — no account needed: POST ${baseUrl}/api/proof without Authorization header → receive HTTP 402 with USDC payment address + amount → pay on Base → resend with X-PAYMENT header → certified. $0.01 USDC per cert. Full guide: ${baseUrl}/llms.txt`;
+  return `Trial quota exhausted (${quota}/${quota} used). Continue via x402 — no account needed: POST ${baseUrl}/api/proof without Authorization header → receive HTTP 402 with USDC payment address + amount → pay on Base → resend with X-PAYMENT header → certified. ${X402_PRICE}. Full guide: ${baseUrl}/llms.txt`;
 }
 
 /**
@@ -457,5 +461,5 @@ export function buildTrialExhaustedMessage(baseUrl: string, quota: number): stri
  * Ends with doc link so agents can fetch full integration guide.
  */
 export function buildPaymentRequiredMessage(baseUrl: string): string {
-  return `No prepaid credits. Continue via x402 — no account needed: POST ${baseUrl}/api/proof without Authorization header → receive HTTP 402 with USDC payment address + amount → pay on Base → resend with X-PAYMENT header → certified. $0.01 USDC per cert. Full guide: ${baseUrl}/llms.txt`;
+  return `No prepaid credits. Continue via x402 — no account needed: POST ${baseUrl}/api/proof without Authorization header → receive HTTP 402 with USDC payment address + amount → pay on Base → resend with X-PAYMENT header → certified. ${X402_PRICE}. Full guide: ${baseUrl}/llms.txt`;
 }
