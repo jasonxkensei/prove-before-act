@@ -56,24 +56,28 @@ afterAll(async () => {
 });
 
 describe("GET /widget/trust/:wallet.js caching", () => {
-  it("marks the response as private, not shared/public-cacheable", async () => {
+  it("sets Cache-Control: private, no-store for a public profile (200)", async () => {
     expect(PUBLIC_WALLET).toMatch(/^erd1[a-z0-9]{58}$/);
     const res = await fetch(`${BASE_URL}/widget/trust/${PUBLIC_WALLET}.js`);
     expect(res.status).toBe(200);
 
     const cacheControl = res.headers.get("cache-control") || "";
     expect(cacheControl).toContain("private");
+    expect(cacheControl).toContain("no-store");
     expect(cacheControl).not.toMatch(/\bpublic\b/);
+    expect(cacheControl).not.toMatch(/max-age/);
   });
 
-  it("also marks the response as private for a wallet with a private profile", async () => {
+  it("sets Cache-Control: private, no-store for a private profile (visibility-blocked 200)", async () => {
     expect(PRIVATE_WALLET).toMatch(/^erd1[a-z0-9]{58}$/);
     const res = await fetch(`${BASE_URL}/widget/trust/${PRIVATE_WALLET}.js`);
     expect(res.status).toBe(200);
 
     const cacheControl = res.headers.get("cache-control") || "";
     expect(cacheControl).toContain("private");
+    expect(cacheControl).toContain("no-store");
     expect(cacheControl).not.toMatch(/\bpublic\b/);
+    expect(cacheControl).not.toMatch(/max-age/);
 
     const body = await res.text();
     // A private profile must never embed calibration data in the script body.

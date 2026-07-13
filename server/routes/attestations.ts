@@ -509,7 +509,7 @@ export function registerAttestationsRoutes(app: Express) {
       if (cached && Date.now() - cached.generatedAt < PDF_CACHE_TTL_MS) {
         res.setHeader("Content-Type", "application/pdf");
         res.setHeader("Content-Disposition", `attachment; filename="xproof-compliance-${wallet.slice(0, 10)}.pdf"`);
-        res.setHeader("Cache-Control", "private, max-age=300");
+        res.setHeader("Cache-Control", "private, no-store");
         return res.send(cached.buf);
       }
 
@@ -602,11 +602,12 @@ export function registerAttestationsRoutes(app: Express) {
 
       res.setHeader("Content-Type", "application/pdf");
       res.setHeader("Content-Disposition", `attachment; filename="xproof-compliance-${wallet.slice(0, 10)}.pdf"`);
-      // Must be "private" — compliance PDFs contain wallet addresses, attestation
-      // metadata, and certification hashes. "public" would allow HTTP proxies and
-      // CDNs to cache and re-serve these reports to other clients, bypassing the
-      // per-request isPublicProfile re-validation that guards the cached path above.
-      res.setHeader("Cache-Control", "private, max-age=300");
+      // Must be "private, no-store" — compliance PDFs contain wallet addresses,
+      // attestation metadata, and certification hashes. Any caching at an HTTP
+      // intermediary or browser could serve a stale public copy after the owner
+      // flips their profile to private, bypassing the per-request isPublicProfile
+      // re-validation that guards the cached path above.
+      res.setHeader("Cache-Control", "private, no-store");
       res.send(pdfBuf);
     } catch (err: any) {
       logger.error("PDF generation error", { error: err.message });
@@ -706,14 +707,13 @@ export function registerAttestationsRoutes(app: Express) {
 })();`;
 
       res.setHeader("Content-Type", "application/javascript; charset=utf-8");
-      // Must be "private" — this script body embeds is_public_profile-gated
-      // calibration data (see the isPublicProfile check above). "public" would
-      // let shared intermediaries/CDNs cache and re-serve one wallet's response
-      // to every caller for up to max-age, so a profile flipped to private would
-      // keep leaking its stale calibration payload to new requesters for up to
-      // 5 minutes. "private" still allows a single browser to cache its own
-      // fetch, which is the only caching this endpoint should provide.
-      res.setHeader("Cache-Control", "private, max-age=300");
+      // Must be "private, no-store" — this script body embeds
+      // is_public_profile-gated calibration data (see the isPublicProfile check
+      // above). Any caching at an HTTP intermediary or browser could serve a
+      // stale public payload after the owner flips their profile to private,
+      // so even a short max-age would keep leaking calibration data to new
+      // requesters. no-store prevents all HTTP-layer caching of this response.
+      res.setHeader("Cache-Control", "private, no-store");
       res.send(js);
     } catch (err: any) {
       res.status(500).send(`/* internal error */`);
