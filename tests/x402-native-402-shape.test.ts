@@ -453,3 +453,95 @@ describe.skipIf(!x402LiveEnabled)(
     });
   },
 );
+
+// ── Part 3b: Live server integration — /api/batch ────────────────────────────
+//
+// Mirrors the Part 3 /api/proof block above but exercises the /api/batch
+// handler's unauthenticated x402 branch (server/routes/proof-write.ts,
+// `send402Response(res, req, "batch")`). A misconfigured deployment where
+// X402_PAY_TO is missing at runtime would silently return 401 on /api/batch
+// too, stranding batch-certifying agents with no payment info. This test
+// catches that failure mode end-to-end by hitting the live route.
+//
+// SKIP BEHAVIOUR: identical to Part 3 — skipped when X402_PAY_TO is absent.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe.skipIf(!x402LiveEnabled)(
+  "POST /api/batch — live server 402 when X402_PAY_TO is configured (Part 3b)",
+  () => {
+    let status: number;
+    let body: Record<string, unknown>;
+
+    beforeAll(async () => {
+      // No auth header, no X-PAYMENT header — triggers the unauthenticated
+      // x402 branch in the /api/batch handler.
+      const res = await fetch(`${BASE_URL}/api/batch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          files: [{ file_hash: "b".repeat(64), filename: "live-batch-x402-test.txt" }],
+        }),
+      });
+      status = res.status;
+      try {
+        body = (await res.json()) as Record<string, unknown>;
+      } catch {
+        body = {};
+      }
+    });
+
+    it("returns HTTP 402 (not 401 AUTH_REQUIRED) when X402_PAY_TO is configured", () => {
+      expect(
+        status,
+        "unauthenticated POST /api/batch must return 402 when X402_PAY_TO is set — " +
+          "401 means isX402Configured() returned false at runtime (X402_PAY_TO missing or empty)",
+      ).toBe(402);
+    });
+
+    it("body.x402Version is defined and equals 1", () => {
+      expect(body.x402Version, "x402Version must be present").toBeDefined();
+      expect(body.x402Version, "x402Version must equal 1").toBe(1);
+    });
+
+    it("body.accepts is a non-empty array", () => {
+      expect(Array.isArray(body.accepts), "accepts must be an array").toBe(true);
+      expect(
+        (body.accepts as unknown[]).length,
+        "accepts must have at least one entry",
+      ).toBeGreaterThan(0);
+    });
+
+    it("body.accepts[0].payTo is a non-empty string matching the configured address", () => {
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(
+        typeof entry.payTo,
+        "accepts[0].payTo must be a string — missing this field strands every batch-certifying agent",
+      ).toBe("string");
+      expect(
+        (entry.payTo as string).length,
+        "accepts[0].payTo must not be empty — a blank address silently misdirects payments",
+      ).toBeGreaterThan(0);
+      expect(
+        entry.payTo,
+        "accepts[0].payTo must equal the X402_PAY_TO env var",
+      ).toBe(RUNTIME_PAY_TO);
+    });
+
+    it("body.accepts[0].price is a non-empty string", () => {
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(typeof entry.price, "accepts[0].price must be a string").toBe("string");
+      expect(
+        (entry.price as string).length,
+        "accepts[0].price must not be empty",
+      ).toBeGreaterThan(0);
+    });
+
+    it("body.resource references /api/batch", () => {
+      expect(typeof body.resource, "resource must be a string").toBe("string");
+      expect(
+        body.resource as string,
+        "resource must reference /api/batch",
+      ).toContain("/api/batch");
+    });
+  },
+);
