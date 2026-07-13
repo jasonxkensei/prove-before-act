@@ -519,7 +519,8 @@ export function registerProofWriteRoutes(app: Express) {
         const consumed = await atomicConsumeTrialCredit(trialInfo.userId);
         if (!consumed) {
           const _b = `https://${req.get("host")}`;
-          return res.status(402).json({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(_b, TRIAL_QUOTA), trial: { quota: TRIAL_QUOTA, used: TRIAL_QUOTA, remaining: 0 }, x402: buildX402Block(_b), prepaid_credits: buildPrepaidCreditsBlock(_b) });
+          const x402Payload = isX402Configured() ? await build402Response(req, "proof") : {};
+          return res.status(402).json({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(_b, TRIAL_QUOTA), trial: { quota: TRIAL_QUOTA, used: TRIAL_QUOTA, remaining: 0 }, x402: buildX402Block(_b), prepaid_credits: buildPrepaidCreditsBlock(_b), ...x402Payload });
         }
       } else if (creditInfo) {
         const consumed = await atomicConsumeCredit(creditInfo.userId);
@@ -953,7 +954,8 @@ export function registerProofWriteRoutes(app: Express) {
         const consumed = await atomicConsumeTrialCredit(trialInfo.userId);
         if (!consumed) {
           const _b = `https://${req.get("host")}`;
-          return res.status(402).json({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(_b, TRIAL_QUOTA), trial: { quota: TRIAL_QUOTA, used: TRIAL_QUOTA, remaining: 0 }, x402: buildX402Block(_b), prepaid_credits: buildPrepaidCreditsBlock(_b) });
+          const x402Payload = isX402Configured() ? await build402Response(req, "proof") : {};
+          return res.status(402).json({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(_b, TRIAL_QUOTA), trial: { quota: TRIAL_QUOTA, used: TRIAL_QUOTA, remaining: 0 }, x402: buildX402Block(_b), prepaid_credits: buildPrepaidCreditsBlock(_b), ...x402Payload });
         }
       } else if (creditInfo) {
         const consumed = await atomicConsumeCredit(creditInfo.userId);
