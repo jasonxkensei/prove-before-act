@@ -17,6 +17,7 @@ import { pool, db } from "./db";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { requestIdMiddleware, logger } from "./logger";
+import { x402PriceConfigWarning } from "./routes/helpers";
 
 setupProcessErrorHandlers();
 
@@ -78,6 +79,13 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  if (x402PriceConfigWarning) {
+    logger.warn(x402PriceConfigWarning, {
+      config_key: "X402_PRICE_USD",
+      fallback: "$0.01 USDC per cert",
+    });
+  }
+
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

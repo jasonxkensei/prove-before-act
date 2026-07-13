@@ -402,7 +402,27 @@ export function computeDrift(
 // Single source of truth for all 402 error responses across MCP + REST.
 // Any change to wording, pricing, or curl examples propagates everywhere.
 
-const X402_PRICE = process.env.X402_PRICE_USD ?? "$0.01 USDC per cert";
+const _X402_PRICE_RAW = process.env.X402_PRICE_USD;
+const X402_PRICE_DEFAULT = "$0.01 USDC per cert";
+// Valid price: non-empty and starts with a digit or "$".
+const _X402_PRICE_VALID =
+  _X402_PRICE_RAW !== undefined &&
+  _X402_PRICE_RAW.trim() !== "" &&
+  /^[\d$]/.test(_X402_PRICE_RAW.trim());
+const X402_PRICE =
+  _X402_PRICE_RAW !== undefined && _X402_PRICE_RAW.trim() !== "" && _X402_PRICE_VALID
+    ? _X402_PRICE_RAW
+    : X402_PRICE_DEFAULT;
+
+/**
+ * Non-null when X402_PRICE_USD is set but does not match a basic price pattern
+ * (non-empty, starts with a digit or "$"). Consumed at startup by server/index.ts
+ * to emit a structured warning before the misconfiguration reaches any agent.
+ */
+export const x402PriceConfigWarning: string | null =
+  _X402_PRICE_RAW !== undefined && !_X402_PRICE_VALID
+    ? `X402_PRICE_USD is set but malformed ("${_X402_PRICE_RAW}"); falling back to default "${X402_PRICE_DEFAULT}"`
+    : null;
 const X402_NETWORK = process.env.X402_NETWORK_LABEL ?? "Base (eip155:8453)";
 // Human-readable network name used in step text and messages.
 // Derived automatically from X402_NETWORK_LABEL by stripping the chain-id
