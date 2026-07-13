@@ -440,6 +440,10 @@ export function registerCalibrationRoutes(app: Express) {
   app.get("/api/agent/calibration/:agentId", publicCalibrationRateLimiter, async (req, res) => {
     try {
       const { agentId } = req.params;
+      // Prevent HTTP-level proxy/CDN caching of visibility-gated responses.
+      // The server-side in-memory cache re-checks isPublicProfile on every
+      // request before serving, but an intermediate cache cannot do this.
+      res.set("Cache-Control", "private, no-store");
       const n = Math.min(200, Math.max(1, parseInt((req.query.n as string) || "50", 10) || 50));
 
       // Optional cursor: ISO timestamp from a previous response's next_cursor field
@@ -611,6 +615,8 @@ export function registerCalibrationRoutes(app: Express) {
   app.get("/api/agent/calibration/:agentId/export.csv", calibrationCsvExportRateLimiter, optionalApiKey, async (req, res) => {
     try {
       const { agentId } = req.params;
+      // Prevent HTTP-level proxy/CDN caching of visibility-gated responses.
+      res.set("Cache-Control", "private, no-store");
       // n is optional — omitting it exports the full history (no row cap).
       // Callers may pass ?n=X to limit output (hard cap: 100 000).
       const rawN = req.query.n as string | undefined;
@@ -725,7 +731,7 @@ export function registerCalibrationRoutes(app: Express) {
         const headers = "submitted_at,proof_id,anchored_confidence,outcome_score,confidence_gap\n";
         res.setHeader("Content-Type", "text/csv; charset=utf-8");
         res.setHeader("Content-Disposition", `attachment; filename="calibration-${user.walletAddress.slice(0, 12)}.csv"`);
-        res.setHeader("Cache-Control", "no-store");
+        res.setHeader("Cache-Control", "private, no-store");
         return res.send(headers);
       }
 
@@ -748,7 +754,7 @@ export function registerCalibrationRoutes(app: Express) {
 
       res.setHeader("Content-Type", "text/csv; charset=utf-8");
       res.setHeader("Content-Disposition", `attachment; filename="calibration-${safeAgentName}.csv"`);
-      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("Cache-Control", "private, no-store");
       return res.send(csv);
     } catch (error) {
       logger.error("Failed to export calibration CSV", { error: (error as Error).message });
