@@ -615,3 +615,202 @@ describe("MCP certify_file — PAYMENT_REQUIRED shape", () => {
     15_000,
   );
 });
+
+// ─── Part 6 — MCP certify_with_confidence tool ───────────────────────────────
+//
+// certify_with_confidence emits TRIAL_EXHAUSTED / PAYMENT_REQUIRED via the same
+// helpers as certify_file. Distinct file_hash to avoid cross-test interference.
+
+const MCP_CWC_FILE_HASH = crypto.createHash("sha256").update("x402-shape-test-cwc-v1").digest("hex");
+
+function makeMcpCertifyWithConfidenceCall(fileHash: string) {
+  return {
+    jsonrpc: "2.0",
+    id: 2,
+    method: "tools/call",
+    params: {
+      name: "certify_with_confidence",
+      arguments: {
+        file_hash: fileHash,
+        filename: "cwc-test.json",
+        decision_id: "00000000-0000-0000-0000-000000000cwc",
+        confidence_level: 0.8,
+        threshold_stage: "pre-commitment",
+      },
+    },
+  };
+}
+
+describe("MCP certify_with_confidence — TRIAL_EXHAUSTED shape", () => {
+  it(
+    "returns isError result with TRIAL_EXHAUSTED and all required agent-facing fields",
+    async () => {
+      const res = await fetch(`${BASE_URL}/mcp`, {
+        method: "POST",
+        headers: { ...MCP_HEADERS, Authorization: `Bearer ${TRIAL_RAW_KEY}` },
+        body: JSON.stringify(makeMcpCertifyWithConfidenceCall(MCP_CWC_FILE_HASH)),
+      });
+
+      expect(res.status, "MCP endpoint must return HTTP 200 even for payment errors").toBe(200);
+
+      const mcpResult = await res.json() as Record<string, any>;
+      assertMcpX402Shape(mcpResult, "TRIAL_EXHAUSTED");
+    },
+    15_000,
+  );
+
+  it(
+    "inner message references the doc URL so agents know where to read the guide",
+    async () => {
+      const res = await fetch(`${BASE_URL}/mcp`, {
+        method: "POST",
+        headers: { ...MCP_HEADERS, Authorization: `Bearer ${TRIAL_RAW_KEY}` },
+        body: JSON.stringify(makeMcpCertifyWithConfidenceCall(MCP_CWC_FILE_HASH)),
+      });
+
+      expect(res.status).toBe(200);
+      const mcpResult = await res.json() as Record<string, any>;
+      const inner = JSON.parse(mcpResult.result.content[0].text) as Record<string, any>;
+      expect(inner.message).toContain("llms.txt");
+    },
+    15_000,
+  );
+});
+
+describe("MCP certify_with_confidence — PAYMENT_REQUIRED shape", () => {
+  it(
+    "returns isError result with PAYMENT_REQUIRED and all required agent-facing fields",
+    async () => {
+      const res = await fetch(`${BASE_URL}/mcp`, {
+        method: "POST",
+        headers: { ...MCP_HEADERS, Authorization: `Bearer ${PAID_RAW_KEY}` },
+        body: JSON.stringify(makeMcpCertifyWithConfidenceCall(MCP_CWC_FILE_HASH)),
+      });
+
+      expect(res.status, "MCP endpoint must return HTTP 200 even for payment errors").toBe(200);
+
+      const mcpResult = await res.json() as Record<string, any>;
+      assertMcpX402Shape(mcpResult, "PAYMENT_REQUIRED");
+    },
+    15_000,
+  );
+
+  it(
+    "inner message references the doc URL so agents know where to read the guide",
+    async () => {
+      const res = await fetch(`${BASE_URL}/mcp`, {
+        method: "POST",
+        headers: { ...MCP_HEADERS, Authorization: `Bearer ${PAID_RAW_KEY}` },
+        body: JSON.stringify(makeMcpCertifyWithConfidenceCall(MCP_CWC_FILE_HASH)),
+      });
+
+      expect(res.status).toBe(200);
+      const mcpResult = await res.json() as Record<string, any>;
+      const inner = JSON.parse(mcpResult.result.content[0].text) as Record<string, any>;
+      expect(inner.message).toContain("llms.txt");
+    },
+    15_000,
+  );
+});
+
+// ─── Part 7 — MCP audit_agent_session tool ───────────────────────────────────
+//
+// audit_agent_session derives its file_hash from the canonical JSON of the
+// params, so unique session_id values produce distinct hashes. We use
+// dedicated session_ids for each test user to avoid collision.
+//
+// The billing gate fires before hash derivation: TRIAL_EXHAUSTED / PAYMENT_REQUIRED
+// are returned before any DB or blockchain work, using the same helpers.
+
+function makeMcpAuditCall(sessionId: string) {
+  return {
+    jsonrpc: "2.0",
+    id: 3,
+    method: "tools/call",
+    params: {
+      name: "audit_agent_session",
+      arguments: {
+        agent_id: "x402-shape-test-agent",
+        session_id: sessionId,
+        action_type: "api_call",
+        action_description: "x402 shape contract test — payment wall verification",
+        inputs_hash: "a".repeat(64),
+        risk_level: "low",
+        decision: "approved",
+        timestamp: new Date().toISOString(),
+      },
+    },
+  };
+}
+
+describe("MCP audit_agent_session — TRIAL_EXHAUSTED shape", () => {
+  it(
+    "returns isError result with TRIAL_EXHAUSTED and all required agent-facing fields",
+    async () => {
+      const res = await fetch(`${BASE_URL}/mcp`, {
+        method: "POST",
+        headers: { ...MCP_HEADERS, Authorization: `Bearer ${TRIAL_RAW_KEY}` },
+        body: JSON.stringify(makeMcpAuditCall("x402-shape-audit-trial-v1")),
+      });
+
+      expect(res.status, "MCP endpoint must return HTTP 200 even for payment errors").toBe(200);
+
+      const mcpResult = await res.json() as Record<string, any>;
+      assertMcpX402Shape(mcpResult, "TRIAL_EXHAUSTED");
+    },
+    15_000,
+  );
+
+  it(
+    "inner message references the doc URL so agents know where to read the guide",
+    async () => {
+      const res = await fetch(`${BASE_URL}/mcp`, {
+        method: "POST",
+        headers: { ...MCP_HEADERS, Authorization: `Bearer ${TRIAL_RAW_KEY}` },
+        body: JSON.stringify(makeMcpAuditCall("x402-shape-audit-trial-v1")),
+      });
+
+      expect(res.status).toBe(200);
+      const mcpResult = await res.json() as Record<string, any>;
+      const inner = JSON.parse(mcpResult.result.content[0].text) as Record<string, any>;
+      expect(inner.message).toContain("llms.txt");
+    },
+    15_000,
+  );
+});
+
+describe("MCP audit_agent_session — PAYMENT_REQUIRED shape", () => {
+  it(
+    "returns isError result with PAYMENT_REQUIRED and all required agent-facing fields",
+    async () => {
+      const res = await fetch(`${BASE_URL}/mcp`, {
+        method: "POST",
+        headers: { ...MCP_HEADERS, Authorization: `Bearer ${PAID_RAW_KEY}` },
+        body: JSON.stringify(makeMcpAuditCall("x402-shape-audit-paid-v1")),
+      });
+
+      expect(res.status, "MCP endpoint must return HTTP 200 even for payment errors").toBe(200);
+
+      const mcpResult = await res.json() as Record<string, any>;
+      assertMcpX402Shape(mcpResult, "PAYMENT_REQUIRED");
+    },
+    15_000,
+  );
+
+  it(
+    "inner message references the doc URL so agents know where to read the guide",
+    async () => {
+      const res = await fetch(`${BASE_URL}/mcp`, {
+        method: "POST",
+        headers: { ...MCP_HEADERS, Authorization: `Bearer ${PAID_RAW_KEY}` },
+        body: JSON.stringify(makeMcpAuditCall("x402-shape-audit-paid-v1")),
+      });
+
+      expect(res.status).toBe(200);
+      const mcpResult = await res.json() as Record<string, any>;
+      const inner = JSON.parse(mcpResult.result.content[0].text) as Record<string, any>;
+      expect(inner.message).toContain("llms.txt");
+    },
+    15_000,
+  );
+});
