@@ -1256,7 +1256,7 @@ export async function createMcpServer(ctx: McpContext) {
             const balance = await getUserCreditBalance(auth.userId);
             if (balance <= 0) {
               return {
-                content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA) + " For investigation, the public incident report is available without payment.", x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl), incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` }) }],
+                content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl), incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` }) }],
                 isError: true,
               };
             }
@@ -1268,7 +1268,7 @@ export async function createMcpServer(ctx: McpContext) {
               const balance = await getUserCreditBalance(auth.userId);
               if (balance <= 0) {
                 return {
-                  content: [{ type: "text" as const, text: JSON.stringify({ error: "PAYMENT_REQUIRED", message: buildPaymentRequiredMessage(baseUrl) + " For investigation, the public incident report is available without payment.", x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl), incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` }) }],
+                  content: [{ type: "text" as const, text: JSON.stringify({ error: "PAYMENT_REQUIRED", message: buildPaymentRequiredMessage(baseUrl), x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl), incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` }) }],
                   isError: true,
                 };
               }
@@ -1281,7 +1281,7 @@ export async function createMcpServer(ctx: McpContext) {
             const consumed = await atomicConsumeTrialCredit(invTrialInfo.userId);
             if (!consumed) {
               return {
-                content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA) + " For investigation, the public incident report is available without payment.", x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl), incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` }) }],
+                content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl), incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` }) }],
                 isError: true,
               };
             }
