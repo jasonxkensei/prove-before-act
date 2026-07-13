@@ -17,7 +17,7 @@ import { pool, db } from "./db";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { requestIdMiddleware, logger } from "./logger";
-import { x402PriceConfigWarning } from "./routes/helpers";
+import { x402PriceConfigWarning, x402NetworkConfigWarning } from "./routes/helpers";
 
 setupProcessErrorHandlers();
 
@@ -83,6 +83,12 @@ app.use((req, res, next) => {
     logger.warn(x402PriceConfigWarning, {
       config_key: "X402_PRICE_USD",
       fallback: "$0.01 USDC per cert",
+    });
+  }
+  if (x402NetworkConfigWarning) {
+    logger.warn(x402NetworkConfigWarning, {
+      config_key: "X402_NETWORK_LABEL",
+      fallback: "Base (eip155:8453)",
     });
   }
 

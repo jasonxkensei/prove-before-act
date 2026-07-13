@@ -423,7 +423,28 @@ export const x402PriceConfigWarning: string | null =
   _X402_PRICE_RAW !== undefined && !_X402_PRICE_VALID
     ? `X402_PRICE_USD is set but malformed ("${_X402_PRICE_RAW}"); falling back to default "${X402_PRICE_DEFAULT}"`
     : null;
-const X402_NETWORK = process.env.X402_NETWORK_LABEL ?? "Base (eip155:8453)";
+const _X402_NETWORK_RAW = process.env.X402_NETWORK_LABEL;
+const X402_NETWORK_DEFAULT = "Base (eip155:8453)";
+// Valid label: non-empty and matches "Name (eip155:NNNN)" shape.
+const _X402_NETWORK_VALID =
+  _X402_NETWORK_RAW !== undefined &&
+  _X402_NETWORK_RAW.trim() !== "" &&
+  /^.+\s\(eip155:\d+\)$/.test(_X402_NETWORK_RAW.trim());
+const X402_NETWORK =
+  _X402_NETWORK_RAW !== undefined && _X402_NETWORK_RAW.trim() !== "" && _X402_NETWORK_VALID
+    ? _X402_NETWORK_RAW
+    : X402_NETWORK_DEFAULT;
+
+/**
+ * Non-null when X402_NETWORK_LABEL is set but does not match the expected
+ * "Name (eip155:NNNN)" shape. Consumed at startup by server/index.ts
+ * to emit a structured warning before the misconfiguration reaches any agent.
+ */
+export const x402NetworkConfigWarning: string | null =
+  _X402_NETWORK_RAW !== undefined && !_X402_NETWORK_VALID
+    ? `X402_NETWORK_LABEL is set but malformed ("${_X402_NETWORK_RAW}"); expected "Name (eip155:NNNN)" shape; falling back to default "${X402_NETWORK_DEFAULT}"`
+    : null;
+
 // Human-readable network name used in step text and messages.
 // Derived automatically from X402_NETWORK_LABEL by stripping the chain-id
 // suffix, e.g. "Base (eip155:8453)" → "Base", "Base Sepolia (eip155:84532)" → "Base Sepolia".
