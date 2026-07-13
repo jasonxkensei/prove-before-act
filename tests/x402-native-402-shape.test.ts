@@ -729,6 +729,154 @@ describe("build402Response — native x402 402 shape contract", () => {
       expect(t.remaining, "trial.remaining must be 0 — trial is exhausted").toBe(0);
     });
   });
+
+  // ── Part 3f: Supertest — INSUFFICIENT_TRIAL_QUOTA POST /api/batch ─────────
+  //
+  // Simulates the pre-check branch in /api/batch where the requested batch size
+  // exceeds the remaining trial credits (newFileCount > trialInfo.remaining).
+  // The fixed handler (proof-write.ts line ~1433) spreads
+  // `build402Response(req, "batch")` so agents receive x402Version +
+  // accepts[0].payTo alongside the human-readable error and trial context.
+  //
+  // This is distinct from Part 3d (TRIAL_EXHAUSTED / atomic-revoke race):
+  // INSUFFICIENT_TRIAL_QUOTA fires synchronously at the pre-check stage before
+  // atomicConsumeTrialCredit is even attempted, so the trial.remaining and
+  // trial.requested fields surface the concrete quota context agents need.
+  //
+  // SKIP BEHAVIOUR: skipped when X402_PAY_TO is absent because build402Response
+  // requires X402_PAY_TO to produce a meaningful payTo field.
+  // ──────────────────────────────────────────────────────────────────────────────
+
+  describe("INSUFFICIENT_TRIAL_QUOTA pre-check POST /api/batch — HTTP 402 via supertest (Part 3f)", () => {
+    let status: number;
+    let body:   Record<string, unknown>;
+
+    const SIMULATED_REMAINING = 2;
+    const SIMULATED_REQUESTED = 5;
+
+    beforeAll(async () => {
+      // Replicate the INSUFFICIENT_TRIAL_QUOTA pre-check branch from the fixed
+      // proof-write.ts batch handler:
+      //
+      //   const x402Payload = isX402Configured() ? await build402Response(req, "batch") : {};
+      //   return res.status(402).json({
+      //     error: "INSUFFICIENT_TRIAL_QUOTA",
+      //     message: `Batch requires ${newFileCount} new certifications but only ${trialInfo.remaining} trial credits remain.`,
+      //     trial: { remaining: trialInfo.remaining, requested: newFileCount },
+      //     ...x402Payload,
+      //   });
+      //
+      // The outer beforeAll already imported build402Response with stubbed
+      // X402_PAY_TO, so the spread will include x402Version and accepts[].
+      const app = express();
+      app.use(express.json());
+      app.post("/api/batch", async (req, res) => {
+        if (!isX402Configured()) {
+          return res.status(500).json({ error: "x402 not configured in test — check test setup" });
+        }
+        const x402Payload = await build402Response(req, "batch");
+        return res.status(402).json({
+          error: "INSUFFICIENT_TRIAL_QUOTA",
+          message: `Batch requires ${SIMULATED_REQUESTED} new certifications but only ${SIMULATED_REMAINING} trial credits remain.`,
+          trial: { remaining: SIMULATED_REMAINING, requested: SIMULATED_REQUESTED },
+          ...x402Payload,
+        });
+      });
+      const request = supertest(app);
+
+      const files = Array.from({ length: SIMULATED_REQUESTED }, (_, i) => ({
+        file_hash: i.toString(16).padStart(64, "0"),
+        filename: `batch-quota-test-${i}.txt`,
+      }));
+      const res = await request
+        .post("/api/batch")
+        .set("Content-Type", "application/json")
+        .set("Authorization", "Bearer pm_test_trial_quota_key")
+        .send({ files });
+
+      status = res.status;
+      body   = res.body as Record<string, unknown>;
+    });
+
+    it("responds with HTTP 402 (not 401 or 500)", () => {
+      expect(
+        status,
+        "INSUFFICIENT_TRIAL_QUOTA batch request must return 402 — " +
+          "401 means auth failed; 500 means x402 not configured in test",
+      ).toBe(402);
+    });
+
+    it("body.error is INSUFFICIENT_TRIAL_QUOTA", () => {
+      expect(body.error, "error must be INSUFFICIENT_TRIAL_QUOTA").toBe("INSUFFICIENT_TRIAL_QUOTA");
+    });
+
+    it("body.x402Version is defined and equals 1", () => {
+      expect(
+        body.x402Version,
+        "x402Version must be present — agents cannot parse a 402 without it",
+      ).toBeDefined();
+      expect(body.x402Version, "x402Version must equal 1").toBe(1);
+    });
+
+    it("body.accepts is a non-empty array", () => {
+      expect(Array.isArray(body.accepts), "accepts must be an array").toBe(true);
+      expect(
+        (body.accepts as unknown[]).length,
+        "accepts must have at least one entry — agents need a payment option",
+      ).toBeGreaterThan(0);
+    });
+
+    it("body.accepts[0].payTo is a non-empty string (payment address agents use)", () => {
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(
+        typeof entry.payTo,
+        "accepts[0].payTo must be a string — missing payTo strands agents with no payment target",
+      ).toBe("string");
+      expect(
+        (entry.payTo as string).length,
+        "accepts[0].payTo must not be empty",
+      ).toBeGreaterThan(0);
+    });
+
+    it("body.accepts[0].payTo equals the configured X402_PAY_TO address", () => {
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(
+        entry.payTo,
+        "accepts[0].payTo must match the configured payment address so agents pay the right wallet",
+      ).toBe(TEST_PAY_TO);
+    });
+
+    it("body.accepts[0].price is a non-empty string (the payment amount)", () => {
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(typeof entry.price, "accepts[0].price must be a string").toBe("string");
+      expect((entry.price as string).length, "accepts[0].price must not be empty").toBeGreaterThan(0);
+    });
+
+    it("body.resource references /api/batch", () => {
+      expect(typeof body.resource, "resource must be a string").toBe("string");
+      expect(
+        body.resource as string,
+        "resource must reference /api/batch so agents know which endpoint to retry after paying",
+      ).toContain("/api/batch");
+    });
+
+    it("body.trial.remaining shows the actual credits left before the request", () => {
+      expect(body.trial, "trial block must be present").toBeDefined();
+      const t = body.trial as Record<string, unknown>;
+      expect(
+        t.remaining,
+        "trial.remaining must reflect the credits available before this request",
+      ).toBe(SIMULATED_REMAINING);
+    });
+
+    it("body.trial.requested shows how many files were in the batch", () => {
+      const t = body.trial as Record<string, unknown>;
+      expect(
+        t.requested,
+        "trial.requested must reflect the number of files the batch attempted to certify",
+      ).toBe(SIMULATED_REQUESTED);
+    });
+  });
 });
 
 // ── Part 3: Live server integration ──────────────────────────────────────────
