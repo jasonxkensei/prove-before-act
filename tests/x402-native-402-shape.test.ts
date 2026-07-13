@@ -47,6 +47,94 @@ vi.mock("@x402/extensions/bazaar", () => ({
   declareDiscoveryExtension: (meta: unknown) => meta,
 }));
 
+// ── Hoisted mock fns used by Part 3i (audit-log real-route wiring) ──────────
+// vi.hoisted() ensures these refs exist when the vi.mock factory for
+// helpers/db runs — vi.mock factories are hoisted before module-scope consts.
+const {
+  mockAtomicConsumeTrialCredit3i,
+  mockGetTrialUser3i,
+  mockCheckRateLimit3i,
+  mockDbWhere3i,
+} = vi.hoisted(() => ({
+  mockAtomicConsumeTrialCredit3i: vi.fn(),
+  mockGetTrialUser3i:             vi.fn(),
+  mockCheckRateLimit3i:           vi.fn(),
+  mockDbWhere3i:                  vi.fn(),
+}));
+
+// Mock server modules that proof-write.ts depends on for the /api/audit path.
+// These mocks are active for the whole file but only affect tests that import
+// through the real route (Part 3i); Parts 1-3h only import build402Response
+// from server/x402 directly and are unaffected.
+vi.mock("../server/routes/helpers.js", () => ({
+  checkRateLimit:            mockCheckRateLimit3i,
+  getTrialUser:              mockGetTrialUser3i,
+  atomicConsumeTrialCredit:  mockAtomicConsumeTrialCredit3i,
+  atomicConsumeCredit:       vi.fn().mockResolvedValue(false),
+  isAdminWallet:             vi.fn().mockReturnValue(false),
+  getUserCreditBalance:      vi.fn().mockResolvedValue(0),
+  getApiKeyOwnerWallet:      vi.fn().mockResolvedValue(null),
+  consumeTrialCredit:        vi.fn().mockResolvedValue(undefined),
+  consumeCredit:             vi.fn().mockResolvedValue(undefined),
+  refundCredit:              vi.fn().mockResolvedValue(undefined),
+  refundTrialCredit:         vi.fn().mockResolvedValue(undefined),
+  tryDisplaceAcpReservation: vi.fn().mockResolvedValue("no_row"),
+  buildCanonicalId:          vi.fn().mockReturnValue("canonical-id"),
+  buildX402Block:            vi.fn().mockReturnValue({ payTo: "https://test.xproof/credits/purchase" }),
+  buildPrepaidCreditsBlock:  vi.fn().mockReturnValue({ purchase: "https://test.xproof/credits/purchase" }),
+  buildTrialExhaustedMessage: vi.fn().mockReturnValue(
+    "Trial credits exhausted. Use x402 per-request payment or purchase prepaid credits.",
+  ),
+  buildPaymentRequiredMessage: vi.fn().mockReturnValue("Payment required."),
+  TRIAL_QUOTA:          10,
+  RATE_LIMIT_MAX_VALUE: 100,
+}));
+
+// Mock the DB so no real PostgreSQL connection is required for Part 3i.
+// mockDbWhere3i is configured per-test in beforeAll with mockResolvedValueOnce.
+vi.mock("../server/db.js", () => ({
+  db: {
+    select: vi.fn().mockReturnValue({
+      from: vi.fn().mockReturnValue({ where: mockDbWhere3i }),
+    }),
+    update: vi.fn().mockReturnValue({
+      set: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          execute: vi.fn().mockResolvedValue(undefined),
+        }),
+      }),
+    }),
+  },
+  pool: {},
+}));
+
+// Mock blockchain so isMultiversXConfigured() can be controlled per-test.
+vi.mock("../server/blockchain.js", () => ({
+  isMultiversXConfigured:      vi.fn().mockReturnValue(true),
+  recordOnBlockchain:          vi.fn().mockResolvedValue({ txHash: "mock-tx" }),
+  computeOnchainPayloadBytes:  vi.fn().mockReturnValue(100),
+  MAX_ONCHAIN_PAYLOAD_BYTES:   512,
+}));
+
+// Mock reliability middleware to pass through without hitting the DB.
+vi.mock("../server/reliability.js", () => ({
+  paymentRateLimiter:    (_req: unknown, _res: unknown, next: () => void) => next(),
+  publicSearchRateLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
+}));
+
+// Mock pricing so getCertificationPriceUsd doesn't hit DB or external APIs.
+vi.mock("../server/pricing.js", () => ({
+  getCertificationPriceUsd:  vi.fn().mockResolvedValue(0.01),
+  getCertificationPriceEgld: vi.fn().mockResolvedValue(0.001),
+  FLAT_PRICE_USD: 0.01,
+}));
+
+// Mock MX-8004 to avoid external blockchain calls in the write path.
+vi.mock("../server/mx8004.js", () => ({
+  isMX8004Configured:       vi.fn().mockReturnValue(false),
+  recordCertificationAsJob: vi.fn().mockResolvedValue(undefined),
+}));
+
 const TEST_PAY_TO  = "0xDeAdBeEf0000000000000000000000000000CAFE";
 const TEST_NETWORK = "eip155:8453";
 const TEST_PRICE   = "$0.10";
@@ -1139,6 +1227,177 @@ describe("build402Response — native x402 402 shape contract", () => {
       expect(body.trial, "trial block must be present").toBeDefined();
       const t = body.trial as Record<string, unknown>;
       expect(t.remaining, "trial.remaining must be 0 — trial is exhausted").toBe(0);
+    });
+  });
+
+  // ── Part 3i: Real-route — audit-log handler TRIAL_EXHAUSTED POST /api/audit ──
+  //
+  // Exercises the TRIAL_EXHAUSTED branch that fires inside the /api/audit
+  // handler (proof-write.ts ~line 958) when atomicConsumeTrialCredit returns
+  // false mid-request.  Unlike Parts 3d and 3h, which use synthetic stub
+  // handlers, this describe block mounts the *real* registerProofWriteRoutes
+  // and drives it with a valid audit_log body so the actual production code
+  // path runs: auth → auditLogSchema.parse → duplicate check → isMultiversX-
+  // Configured guard → atomicConsumeTrialCredit → TRIAL_EXHAUSTED 402.
+  //
+  // A future regression that removes the build402Response spread from only the
+  // /api/audit branch (~line 957) would not be caught by Part 3h (which only
+  // tests the /api/proof main handler at ~line 525).
+  //
+  // MOCKING APPROACH (mirrors x402-settlement-failure.test.ts)
+  //   • @x402/* SDK packages: stubbed by the file-level vi.mock calls above.
+  //   • server/routes/helpers: mocked via file-level vi.mock; per-run values
+  //     set in beforeAll via the vi.hoisted refs (mockGetTrialUser3i etc.).
+  //   • server/db:             mocked via file-level vi.mock; mockDbWhere3i
+  //     is configured in beforeAll with mockResolvedValueOnce so the first
+  //     DB select (apiKeys lookup) returns a valid key record, and subsequent
+  //     selects (certifications duplicate check) return [].
+  //   • server/blockchain:     mocked via file-level vi.mock; isMultiversX-
+  //     Configured returns true so the blockchain-config guard is passed.
+  //   • server/reliability:    paymentRateLimiter mocked to call next() so
+  //     no real DB connection is required for the middleware.
+  //   • server/pricing + mx8004: mocked so no external calls are made.
+  //
+  // SKIP BEHAVIOUR: skipped when X402_PAY_TO is absent because build402Response
+  // (called inside the real handler) requires X402_PAY_TO to produce a
+  // meaningful payTo field.  X402_PAY_TO is already stubbed by the outer
+  // beforeAll (vi.stubEnv("X402_PAY_TO", TEST_PAY_TO)).
+  // ──────────────────────────────────────────────────────────────────────────────
+
+  describe("audit-log handler TRIAL_EXHAUSTED POST /api/audit — real route via supertest (Part 3i)", () => {
+    let status: number;
+    let body:   Record<string, unknown>;
+
+    beforeAll(async () => {
+      // Fresh module registry so the real proof-write route and x402 module
+      // both read the already-stubbed X402_PAY_TO env var when they are
+      // imported below.
+      vi.resetModules();
+
+      // Configure mock return values for this test run.
+      //
+      // DB: first select returns a valid (mock) API key record so auth passes;
+      // subsequent selects (certifications duplicate check) return [].
+      const MOCK_KEY = {
+        id: "audit-key-1",
+        userId: "audit-user-1",
+        isActive: true,
+        requestCount: 0,
+        lastUsedAt: null,
+      };
+      mockDbWhere3i
+        .mockResolvedValueOnce([MOCK_KEY])  // apiKeys lookup → found
+        .mockResolvedValue([]);              // certifications check → no duplicate
+
+      // Helpers: rate-limit passes; trial user has remaining > 0 (so the early
+      // pre-check TRIAL_EXHAUSTED does NOT fire); atomicConsumeTrialCredit
+      // returns false to trigger the mid-request TRIAL_EXHAUSTED branch at
+      // proof-write.ts ~line 958.
+      mockCheckRateLimit3i.mockResolvedValue({
+        allowed: true,
+        remaining: 99,
+        resetAt: Date.now() + 60_000,
+      });
+      mockGetTrialUser3i.mockResolvedValue({
+        isTrial: true,
+        remaining: 1,  // > 0 so the pre-check passes; atomic consume returns false
+        userId: "audit-user-1",
+      });
+      mockAtomicConsumeTrialCredit3i.mockResolvedValue(false);
+
+      // Build a minimal Express app wired to the real proof-write routes.
+      const expressModule  = await import("express");
+      const app = expressModule.default();
+      app.use(expressModule.default.json());
+
+      const { registerProofWriteRoutes } = await import("../server/routes/proof-write");
+      registerProofWriteRoutes(app);
+
+      const request = supertest(app);
+
+      // Send a valid audit_log body so the request reaches the audit-log
+      // sub-handler (not the main proof handler).  All required fields of
+      // auditLogSchema are provided.
+      const res = await request
+        .post("/api/audit")
+        .set("Content-Type", "application/json")
+        .set("Authorization", "Bearer pm_auditTrialExhaustedTest01")
+        .send({
+          agent_id:           "test-agent-audit-trial-exhausted",
+          session_id:         "sess-audit-trial-exhausted-001",
+          action_type:        "api_call",
+          action_description: "Certify audit log before executing critical API call",
+          inputs_hash:        "a".repeat(64),
+          risk_level:         "high",
+          decision:           "approved",
+          timestamp:          "2026-07-13T00:00:00Z",
+        });
+
+      status = res.status;
+      body   = res.body as Record<string, unknown>;
+    });
+
+    it("responds with HTTP 402 (not 401 or 500)", () => {
+      expect(
+        status,
+        `audit-log TRIAL_EXHAUSTED must return 402 — got ${status} with body: ${JSON.stringify(body)}; ` +
+          "401 means auth or mock setup failed; 500 means an unexpected error in the real route",
+      ).toBe(402);
+    });
+
+    it("body.error is TRIAL_EXHAUSTED", () => {
+      expect(
+        body.error,
+        "error must be TRIAL_EXHAUSTED — confirms atomicConsumeTrialCredit returned false in the real audit-log handler",
+      ).toBe("TRIAL_EXHAUSTED");
+    });
+
+    it("body.x402Version is defined and equals 1", () => {
+      expect(
+        body.x402Version,
+        "x402Version must be present — agents parsing a 402 from the /api/audit handler need this field to know the protocol version",
+      ).toBeDefined();
+      expect(body.x402Version, "x402Version must equal 1").toBe(1);
+    });
+
+    it("body.accepts is a non-empty array", () => {
+      expect(Array.isArray(body.accepts), "accepts must be an array").toBe(true);
+      expect(
+        (body.accepts as unknown[]).length,
+        "accepts must have at least one entry — agents need a payment option after trial exhaustion",
+      ).toBeGreaterThan(0);
+    });
+
+    it("body.accepts[0].payTo is a non-empty string (payment address agents use)", () => {
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(
+        typeof entry.payTo,
+        "accepts[0].payTo must be a string — missing payTo strands every audit-log agent with no payment target when trial expires mid-request",
+      ).toBe("string");
+      expect(
+        (entry.payTo as string).length,
+        "accepts[0].payTo must not be empty",
+      ).toBeGreaterThan(0);
+    });
+
+    it("body.accepts[0].payTo equals the configured X402_PAY_TO address", () => {
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(
+        entry.payTo,
+        "accepts[0].payTo must match the configured payment address so audit-log agents pay the right wallet after trial exhaustion",
+      ).toBe(TEST_PAY_TO);
+    });
+
+    it("body.accepts[0].price is a non-empty string (the payment amount)", () => {
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(typeof entry.price, "accepts[0].price must be a string").toBe("string");
+      expect((entry.price as string).length, "accepts[0].price must not be empty").toBeGreaterThan(0);
+    });
+
+    it("body.trial is present and shows remaining: 0", () => {
+      expect(body.trial, "trial block must be present in the real audit-log TRIAL_EXHAUSTED response").toBeDefined();
+      const t = body.trial as Record<string, unknown>;
+      expect(t.remaining, "trial.remaining must be 0 — trial is exhausted after the atomic consume fails").toBe(0);
     });
   });
 });
