@@ -449,14 +449,9 @@ export function registerCalibrationRoutes(app: Express) {
         return res.status(400).json({ error: "INVALID_CURSOR", message: "before must be a valid ISO 8601 timestamp" });
       }
 
-      // Serve from cache if still fresh
-      const cacheKey = `${agentId}:${n}:${beforeTs?.toISOString() ?? ""}`;
-      const cached = calibrationCache.get(cacheKey);
-      if (cached && Date.now() - cached.cachedAt < CALIBRATION_CACHE_TTL_MS) {
-        return res.json(cached.body);
-      }
-
-      // Resolve agentId → user (accepts wallet address or user id)
+      // Resolve agentId → user (accepts wallet address or user id).
+      // This must happen before the cache check so that a profile that has been
+      // made private is never served from a stale cache entry.
       const [user] = await db
         .select({ id: users.id, walletAddress: users.walletAddress, agentName: users.agentName, isPublicProfile: users.isPublicProfile })
         .from(users)
@@ -470,27 +465,22 @@ export function registerCalibrationRoutes(app: Express) {
         });
       }
 
-      // Check whether this agent has any private outcomes (needed by the
-      // frontend to decide whether to show a login prompt on the download
-      // button).  EXISTS stops at the first matching row.
-      const privCheckResult = await pool.query<{ exists: boolean }>(
-        `SELECT EXISTS(SELECT 1 FROM agent_outcomes WHERE user_id = $1 AND visibility = 'private') AS exists`,
-        [user.id]
-      );
-      const hasPrivateOutcomes = privCheckResult.rows[0]?.exists === true;
+      // Enforce profile-visibility boundary: private profiles must not expose
+      // calibration data through this public endpoint.
+      if (!user.isPublicProfile) {
+        return res.status(404).json({
+          error: "AGENT_NOT_FOUND",
+          message: `No agent found with id or wallet: ${agentId}`,
+        });
+      }
 
-      // Count certifications that have metadata.confidence_level but no
-      // submitted outcome yet — surfaced to the owner as an actionable prompt.
-      const pendingResult = await pool.query<{ cnt: string }>(
-        `SELECT COUNT(*) AS cnt
-         FROM certifications c
-         LEFT JOIN agent_outcomes ao ON ao.certification_id = c.id
-         WHERE c.user_id = $1
-           AND c.metadata->>'confidence_level' IS NOT NULL
-           AND ao.id IS NULL`,
-        [user.id]
-      );
-      const pendingOutcomeCount = parseInt(pendingResult.rows[0]?.cnt ?? "0", 10);
+      // Serve from cache if still fresh (keyed on internal user id for
+      // consistency regardless of whether the caller used wallet or user id).
+      const cacheKey = `${user.id}:${n}:${beforeTs?.toISOString() ?? ""}`;
+      const cached = calibrationCache.get(cacheKey);
+      if (cached && Date.now() - cached.cachedAt < CALIBRATION_CACHE_TTL_MS) {
+        return res.json(cached.body);
+      }
 
       // Fetch last N public outcomes for this agent, most recent first.
       // When a cursor is supplied, keyset-filter to avoid scanning sorted rows
@@ -529,8 +519,6 @@ export function registerCalibrationRoutes(app: Express) {
           wallet_address: user.walletAddress,
           agent_name: user.agentName ?? null,
           outcome_count: 0,
-          has_private_outcomes: hasPrivateOutcomes,
-          pending_outcome_count: pendingOutcomeCount,
           calibration: null,
           message: "No public outcome data yet for this agent.",
           time_series: [],
@@ -581,8 +569,6 @@ export function registerCalibrationRoutes(app: Express) {
         wallet_address: user.walletAddress,
         agent_name: user.agentName ?? null,
         outcome_count: count,
-        has_private_outcomes: hasPrivateOutcomes,
-        pending_outcome_count: pendingOutcomeCount,
         calibration: {
           mean_gap: roundedMean,
           variance: roundedVariance,
@@ -635,7 +621,7 @@ export function registerCalibrationRoutes(app: Express) {
 
       // Resolve agentId → user
       const [user] = await db
-        .select({ id: users.id, walletAddress: users.walletAddress, agentName: users.agentName })
+        .select({ id: users.id, walletAddress: users.walletAddress, agentName: users.agentName, isPublicProfile: users.isPublicProfile })
         .from(users)
         .where(or(eq(users.id, agentId), eq(users.walletAddress, agentId)))
         .limit(1);
@@ -655,6 +641,16 @@ export function registerCalibrationRoutes(app: Express) {
       const isOwner =
         (!!callerUserId && callerUserId === user.id) ||
         (!!sessionWallet && sessionWallet === user.walletAddress);
+
+      // Enforce profile-visibility boundary for non-owners: a user who has set
+      // their profile to private must not have their calibration history exported
+      // by unauthenticated callers, even when all outcomes are individually public.
+      if (!isOwner && !user.isPublicProfile) {
+        return res.status(404).json({
+          error: "AGENT_NOT_FOUND",
+          message: `No agent found with id or wallet: ${agentId}`,
+        });
+      }
 
       // Owners get a higher effective limit (30/min) via a two-step token swap:
       //   1. Refund the token consumed by the calibrationCsvExportRateLimiter
