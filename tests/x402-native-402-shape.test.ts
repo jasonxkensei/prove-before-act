@@ -55,11 +55,15 @@ const {
   mockGetTrialUser3i,
   mockCheckRateLimit3i,
   mockDbWhere3i,
+  mockGetUserCreditBalance3j,
 } = vi.hoisted(() => ({
   mockAtomicConsumeTrialCredit3i: vi.fn(),
   mockGetTrialUser3i:             vi.fn(),
   mockCheckRateLimit3i:           vi.fn(),
   mockDbWhere3i:                  vi.fn(),
+  // Part 3j: controls getUserCreditBalance so creditInfo is populated for the
+  // INSUFFICIENT_CREDITS branch (getTrialUser returns null → credit path).
+  mockGetUserCreditBalance3j:     vi.fn().mockResolvedValue(0),
 }));
 
 // Mock server modules that proof-write.ts depends on for the /api/audit path.
@@ -72,7 +76,7 @@ vi.mock("../server/routes/helpers.js", () => ({
   atomicConsumeTrialCredit:  mockAtomicConsumeTrialCredit3i,
   atomicConsumeCredit:       vi.fn().mockResolvedValue(false),
   isAdminWallet:             vi.fn().mockReturnValue(false),
-  getUserCreditBalance:      vi.fn().mockResolvedValue(0),
+  getUserCreditBalance:      mockGetUserCreditBalance3j,
   getApiKeyOwnerWallet:      vi.fn().mockResolvedValue(null),
   consumeTrialCredit:        vi.fn().mockResolvedValue(undefined),
   consumeCredit:             vi.fn().mockResolvedValue(undefined),
@@ -1398,6 +1402,151 @@ describe("build402Response — native x402 402 shape contract", () => {
       expect(body.trial, "trial block must be present in the real audit-log TRIAL_EXHAUSTED response").toBeDefined();
       const t = body.trial as Record<string, unknown>;
       expect(t.remaining, "trial.remaining must be 0 — trial is exhausted after the atomic consume fails").toBe(0);
+    });
+  });
+
+  // ── Part 3j: Real-route — audit-log handler INSUFFICIENT_CREDITS POST /api/audit ──
+  //
+  // Exercises the INSUFFICIENT_CREDITS branch that fires inside the /api/audit
+  // handler (proof-write.ts ~line 960-964) when atomicConsumeCredit returns
+  // false mid-request.  Unlike Part 3i which tests the TRIAL_EXHAUSTED branch,
+  // this describe block drives the credit-user code path: getTrialUser returns
+  // null → getUserCreditBalance returns 1 (so creditInfo is set and the early
+  // PAYMENT_REQUIRED 402 is bypassed) → atomicConsumeCredit returns false →
+  // INSUFFICIENT_CREDITS 402 is emitted.
+  //
+  // A regression that removes the build402Response spread from only the
+  // INSUFFICIENT_CREDITS branch at ~line 963 (while leaving TRIAL_EXHAUSTED
+  // intact) would not be caught by Part 3i.
+  //
+  // MOCKING APPROACH (mirrors Part 3i)
+  //   • All file-level vi.mock stubs remain active.
+  //   • mockGetTrialUser3i.mockResolvedValue(null)  — no trial user.
+  //   • mockGetUserCreditBalance3j.mockResolvedValue(1) — 1 credit so creditInfo
+  //     is populated and the pre-check PAYMENT_REQUIRED branch is bypassed.
+  //   • atomicConsumeCredit is already mocked at file level to return false,
+  //     which triggers the INSUFFICIENT_CREDITS 402 at ~line 962-964.
+  //   • mockDbWhere3i is reconfigured with mockResolvedValueOnce so the API key
+  //     lookup succeeds and the certifications duplicate check returns [].
+  // ──────────────────────────────────────────────────────────────────────────────
+
+  describe("audit-log handler INSUFFICIENT_CREDITS POST /api/audit — real route via supertest (Part 3j)", () => {
+    let status: number;
+    let body:   Record<string, unknown>;
+
+    beforeAll(async () => {
+      vi.resetModules();
+
+      const MOCK_KEY = {
+        id: "audit-key-2",
+        userId: "audit-user-2",
+        isActive: true,
+        requestCount: 0,
+        lastUsedAt: null,
+      };
+      mockDbWhere3i
+        .mockResolvedValueOnce([MOCK_KEY])  // apiKeys lookup → found
+        .mockResolvedValue([]);              // certifications check → no duplicate
+
+      mockCheckRateLimit3i.mockResolvedValue({
+        allowed: true,
+        remaining: 99,
+        resetAt: Date.now() + 60_000,
+      });
+
+      // No trial user → route takes the credit path.
+      mockGetTrialUser3i.mockResolvedValue(null);
+
+      // Balance of 1 so creditInfo is populated (balance > 0) and the early
+      // PAYMENT_REQUIRED guard at ~line 873 is bypassed.
+      mockGetUserCreditBalance3j.mockResolvedValue(1);
+
+      // atomicConsumeCredit is already set to false at file level — that
+      // triggers the INSUFFICIENT_CREDITS 402 at proof-write.ts ~line 962-964.
+
+      const expressModule = await import("express");
+      const app = expressModule.default();
+      app.use(expressModule.default.json());
+
+      const { registerProofWriteRoutes } = await import("../server/routes/proof-write");
+      registerProofWriteRoutes(app);
+
+      const request = supertest(app);
+
+      const res = await request
+        .post("/api/audit")
+        .set("Content-Type", "application/json")
+        .set("Authorization", "Bearer pm_auditInsufficientCreditsTest01")
+        .send({
+          agent_id:           "test-agent-audit-insufficient-credits",
+          session_id:         "sess-audit-insufficient-credits-001",
+          action_type:        "api_call",
+          action_description: "Certify audit log before executing critical API call",
+          inputs_hash:        "b".repeat(64),
+          risk_level:         "high",
+          decision:           "approved",
+          timestamp:          "2026-07-13T00:00:00Z",
+        });
+
+      status = res.status;
+      body   = res.body as Record<string, unknown>;
+    });
+
+    it("responds with HTTP 402 (not 401 or 500)", () => {
+      expect(
+        status,
+        `audit-log INSUFFICIENT_CREDITS must return 402 — got ${status} with body: ${JSON.stringify(body)}; ` +
+          "401 means auth or mock setup failed; 500 means an unexpected error in the real route",
+      ).toBe(402);
+    });
+
+    it("body.error is INSUFFICIENT_CREDITS", () => {
+      expect(
+        body.error,
+        "error must be INSUFFICIENT_CREDITS — confirms atomicConsumeCredit returned false in the real audit-log handler",
+      ).toBe("INSUFFICIENT_CREDITS");
+    });
+
+    it("body.x402Version is defined and equals 1", () => {
+      expect(
+        body.x402Version,
+        "x402Version must be present — agents parsing a 402 from the /api/audit INSUFFICIENT_CREDITS branch need this field to know the protocol version",
+      ).toBeDefined();
+      expect(body.x402Version, "x402Version must equal 1").toBe(1);
+    });
+
+    it("body.accepts is a non-empty array", () => {
+      expect(Array.isArray(body.accepts), "accepts must be an array").toBe(true);
+      expect(
+        (body.accepts as unknown[]).length,
+        "accepts must have at least one entry — agents need a payment option when credits run out mid-request",
+      ).toBeGreaterThan(0);
+    });
+
+    it("body.accepts[0].payTo is a non-empty string (payment address agents use)", () => {
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(
+        typeof entry.payTo,
+        "accepts[0].payTo must be a string — missing payTo strands every audit-log agent with no payment target when credits are exhausted mid-request",
+      ).toBe("string");
+      expect(
+        (entry.payTo as string).length,
+        "accepts[0].payTo must not be empty",
+      ).toBeGreaterThan(0);
+    });
+
+    it("body.accepts[0].payTo equals the configured X402_PAY_TO address", () => {
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(
+        entry.payTo,
+        "accepts[0].payTo must match the configured payment address so audit-log agents pay the right wallet after credits run out",
+      ).toBe(TEST_PAY_TO);
+    });
+
+    it("body.accepts[0].price is a non-empty string (the payment amount)", () => {
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(typeof entry.price, "accepts[0].price must be a string").toBe("string");
+      expect((entry.price as string).length, "accepts[0].price must not be empty").toBeGreaterThan(0);
     });
   });
 });
