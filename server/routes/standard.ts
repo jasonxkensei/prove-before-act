@@ -6,7 +6,7 @@ import { certifications, users, apiKeys } from "@shared/schema";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { paymentRateLimiter, publicReadRateLimiter } from "../reliability";
-import { isX402Configured, verifyX402Payment, send402Response } from "../x402";
+import { isX402Configured, verifyX402Payment, send402Response, build402Response } from "../x402";
 import { recordOnBlockchain, isMultiversXConfigured, computeOnchainPayloadBytes, MAX_ONCHAIN_PAYLOAD_BYTES } from "../blockchain";
 import { getCertificationPriceEgld, getCertificationPriceUsd } from "../pricing";
 import { isMX8004Configured, recordCertificationAsJob } from "../mx8004";
@@ -488,15 +488,15 @@ export function registerStandardRoutes(app: Express) {
         if (standardTrialInfo) {
           const consumed = await atomicConsumeTrialCredit(standardTrialInfo.userId);
           if (!consumed) {
-            {
-              const _b = `https://${req.get("host")}`;
-              return res.status(402).json({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(_b, TRIAL_QUOTA), x402: buildX402Block(_b), prepaid_credits: buildPrepaidCreditsBlock(_b) });
-            }
+            const x402Payload = isX402Configured() ? await build402Response(req, "proof") : {};
+            const _b = `https://${req.get("host")}`;
+            return res.status(402).json({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(_b, TRIAL_QUOTA), prepaid_credits: buildPrepaidCreditsBlock(_b), ...x402Payload });
           }
         } else if (standardCreditInfo) {
           const consumed = await atomicConsumeCredit(standardCreditInfo.userId);
           if (!consumed) {
-            return res.status(402).json({ error: "INSUFFICIENT_CREDITS", message: "Credit balance insufficient. Purchase additional credits to continue." });
+            const x402Payload = isX402Configured() ? await build402Response(req, "proof") : {};
+            return res.status(402).json({ error: "INSUFFICIENT_CREDITS", message: "Credit balance insufficient. Purchase additional credits to continue.", ...x402Payload });
           }
         }
       }

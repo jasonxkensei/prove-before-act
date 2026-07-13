@@ -1549,6 +1549,143 @@ describe("build402Response — native x402 402 shape contract", () => {
       expect((entry.price as string).length, "accepts[0].price must not be empty").toBeGreaterThan(0);
     });
   });
+
+  // ── Part 3k: Real-route — batch handler INSUFFICIENT_CREDITS (atomic race) POST /api/batch ──
+  //
+  // Exercises the INSUFFICIENT_CREDITS branch that fires inside the /api/batch
+  // handler (proof-write.ts ~line 1461-1462) when atomicConsumeCredit returns
+  // false mid-request — i.e. the race condition where another request consumed
+  // the last credit between the balance pre-check and the atomic consume.
+  //
+  // The pre-check at ~line 1450 (newFileCount > creditInfo.balance) is bypassed
+  // by setting getUserCreditBalance to exactly newFileCount (1 file → balance 1,
+  // so 1 > 1 is false and the pre-check passes). atomicConsumeCredit is already
+  // mocked at file level to return false, firing the atomic-race branch.
+  //
+  // A regression that removes the build402Response spread from only the
+  // batch atomic-race INSUFFICIENT_CREDITS branch (while leaving the pre-check
+  // branch or the audit-log handler intact) would not be caught by Part 3j or
+  // any earlier test.
+  //
+  // MOCKING APPROACH (mirrors Part 3j)
+  //   • All file-level vi.mock stubs remain active.
+  //   • mockGetTrialUser3i.mockResolvedValue(null) — no trial user → credit path.
+  //   • mockGetUserCreditBalance3j.mockResolvedValue(1) — balance equals newFileCount
+  //     (1 file) so the pre-check passes; atomicConsumeCredit then returns false.
+  //   • mockDbWhere3i reconfigured: API key lookup → MOCK_KEY, subsequent selects
+  //     (certifications duplicate check) → [] so all 1 files are counted as new.
+  // ──────────────────────────────────────────────────────────────────────────────
+
+  describe("batch handler INSUFFICIENT_CREDITS (atomic race) POST /api/batch — real route via supertest (Part 3k)", () => {
+    let status: number;
+    let body:   Record<string, unknown>;
+
+    beforeAll(async () => {
+      vi.resetModules();
+
+      const MOCK_KEY = {
+        id:           "batch-key-1",
+        userId:       "batch-user-1",
+        isActive:     true,
+        requestCount: 0,
+        lastUsedAt:   null,
+      };
+      mockDbWhere3i
+        .mockResolvedValueOnce([MOCK_KEY])  // apiKeys lookup → found
+        .mockResolvedValue([]);              // certifications duplicate check → all new
+
+      mockCheckRateLimit3i.mockResolvedValue({
+        allowed:   true,
+        remaining: 99,
+        resetAt:   Date.now() + 60_000,
+      });
+
+      // No trial user → route takes the credit path.
+      mockGetTrialUser3i.mockResolvedValue(null);
+
+      // Balance equals newFileCount (1 file) so the pre-check at ~line 1450
+      // passes (1 > 1 is false); atomicConsumeCredit then returns false, firing
+      // the atomic-race INSUFFICIENT_CREDITS 402 at ~line 1461-1462.
+      mockGetUserCreditBalance3j.mockResolvedValue(1);
+
+      const expressModule = await import("express");
+      const app = expressModule.default();
+      app.use(expressModule.default.json());
+
+      const { registerProofWriteRoutes } = await import("../server/routes/proof-write");
+      registerProofWriteRoutes(app);
+
+      const request = supertest(app);
+
+      const res = await request
+        .post("/api/batch")
+        .set("Content-Type", "application/json")
+        .set("Authorization", "Bearer pm_batchInsufficientCreditsRaceTest01")
+        .send({
+          files: [{ file_hash: "c".repeat(64), filename: "batch-race-test.txt" }],
+        });
+
+      status = res.status;
+      body   = res.body as Record<string, unknown>;
+    });
+
+    it("responds with HTTP 402 (not 401 or 500)", () => {
+      expect(
+        status,
+        `batch INSUFFICIENT_CREDITS must return 402 — got ${status} with body: ${JSON.stringify(body)}; ` +
+          "401 means auth or mock setup failed; 500 means an unexpected error in the real batch handler",
+      ).toBe(402);
+    });
+
+    it("body.error is INSUFFICIENT_CREDITS", () => {
+      expect(
+        body.error,
+        "error must be INSUFFICIENT_CREDITS — confirms atomicConsumeCredit returned false in the real batch handler (atomic-race path)",
+      ).toBe("INSUFFICIENT_CREDITS");
+    });
+
+    it("body.x402Version is defined and equals 1", () => {
+      expect(
+        body.x402Version,
+        "x402Version must be present — agents parsing a 402 from /api/batch INSUFFICIENT_CREDITS need this to know the protocol version",
+      ).toBeDefined();
+      expect(body.x402Version, "x402Version must equal 1").toBe(1);
+    });
+
+    it("body.accepts is a non-empty array", () => {
+      expect(Array.isArray(body.accepts), "accepts must be an array").toBe(true);
+      expect(
+        (body.accepts as unknown[]).length,
+        "accepts must have at least one entry — agents need a payment option when credits run out mid-batch",
+      ).toBeGreaterThan(0);
+    });
+
+    it("body.accepts[0].payTo is a non-empty string (payment address agents use)", () => {
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(
+        typeof entry.payTo,
+        "accepts[0].payTo must be a string — missing payTo strands every batch agent with no payment target when the atomic-race INSUFFICIENT_CREDITS fires",
+      ).toBe("string");
+      expect(
+        (entry.payTo as string).length,
+        "accepts[0].payTo must not be empty",
+      ).toBeGreaterThan(0);
+    });
+
+    it("body.accepts[0].payTo equals the configured X402_PAY_TO address", () => {
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(
+        entry.payTo,
+        "accepts[0].payTo must match the configured payment address so batch agents pay the right wallet",
+      ).toBe(TEST_PAY_TO);
+    });
+
+    it("body.accepts[0].price is a non-empty string (the payment amount)", () => {
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(typeof entry.price, "accepts[0].price must be a string").toBe("string");
+      expect((entry.price as string).length, "accepts[0].price must not be empty").toBeGreaterThan(0);
+    });
+  });
 });
 
 // ── Part 3: Live server integration ──────────────────────────────────────────

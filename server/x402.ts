@@ -222,25 +222,7 @@ export async function getPaymentRequirements(route: "proof" | "batch" | "investi
 }
 
 export async function build402Response(req: Request, route: "proof" | "batch" | "investigate") {
-  const requirements = await getPaymentRequirements(route);
-  const resource = route === "investigate"
-    ? `https://${req.get('host')}/mcp`
-    : `https://${req.get('host')}/api/${route === "batch" ? "batch" : "proof"}`;
-
-  const baseUrl = `https://${req.get('host')}`;
-  return {
-    x402Version: 1,
-    accepts: [requirements],
-    resource,
-    description: requirements.description,
-    mimeType: "application/json",
-    free_trial: {
-      register: `POST ${baseUrl}/api/agent/register`,
-      body: '{"agent_name": "your-agent-name"}',
-      free_certifications: 10,
-      hint: "No wallet or payment needed. Register for 10 free certifications via a single HTTP call.",
-    },
-  };
+  return build402PayloadFromUrl(`https://${req.get("host")}`, route);
 }
 
 /**
