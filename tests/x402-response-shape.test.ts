@@ -370,3 +370,248 @@ describe("POST /api/proof — PAYMENT_REQUIRED 402 shape", () => {
     15_000,
   );
 });
+
+// ─── Part 3 — POST /api/batch ─────────────────────────────────────────────────
+//
+// Distinct hash to avoid any cross-test interference with the /api/proof suite.
+const BATCH_FILE_HASH = crypto.createHash("sha256").update("x402-shape-test-batch-v1").digest("hex");
+
+describe("POST /api/batch — TRIAL_EXHAUSTED 402 shape", () => {
+  it(
+    "returns HTTP 402 with TRIAL_EXHAUSTED and all required agent-facing fields",
+    async () => {
+      const res = await fetch(`${BASE_URL}/api/batch`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${TRIAL_RAW_KEY}`,
+        },
+        body: JSON.stringify({
+          files: [{ file_hash: BATCH_FILE_HASH, filename: "batch-test.pdf" }],
+        }),
+      });
+
+      expect(res.status, "endpoint must return 402 for an exhausted trial user").toBe(402);
+
+      const body = await res.json() as Record<string, any>;
+      assertX402Shape(body, "TRIAL_EXHAUSTED");
+
+      expect(body.trial, "body.trial must be present for TRIAL_EXHAUSTED").toBeDefined();
+      expect(body.trial.quota, "body.trial.quota must equal TRIAL_QUOTA").toBe(TRIAL_QUOTA);
+      expect(body.trial.remaining, "body.trial.remaining must be 0").toBe(0);
+    },
+    15_000,
+  );
+
+  it(
+    "body.message references the doc URL so agents know where to read the guide",
+    async () => {
+      const res = await fetch(`${BASE_URL}/api/batch`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${TRIAL_RAW_KEY}`,
+        },
+        body: JSON.stringify({
+          files: [{ file_hash: BATCH_FILE_HASH, filename: "batch-test.pdf" }],
+        }),
+      });
+
+      expect(res.status).toBe(402);
+      const body = await res.json() as Record<string, any>;
+      expect(body.message).toContain("llms.txt");
+    },
+    15_000,
+  );
+});
+
+describe("POST /api/batch — PAYMENT_REQUIRED 402 shape", () => {
+  it(
+    "returns HTTP 402 with PAYMENT_REQUIRED and all required agent-facing fields",
+    async () => {
+      const res = await fetch(`${BASE_URL}/api/batch`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${PAID_RAW_KEY}`,
+        },
+        body: JSON.stringify({
+          files: [{ file_hash: BATCH_FILE_HASH, filename: "batch-test.pdf" }],
+        }),
+      });
+
+      expect(res.status, "endpoint must return 402 for a non-trial user with zero credits").toBe(402);
+
+      const body = await res.json() as Record<string, any>;
+      assertX402Shape(body, "PAYMENT_REQUIRED");
+    },
+    15_000,
+  );
+});
+
+// ─── Part 4 — POST /api/standard/anchor ──────────────────────────────────────
+//
+// The billing gate fires after schema validation but before signature verification.
+// We send a schema-valid proof with a fake signature so the trial/credit check
+// is reached without requiring a real cryptographic key.
+//
+// Schema requirements (from server/routes/standard.ts):
+//   PUBLIC_KEY_REGEX  = /^(ed25519|ecdsa):[a-fA-F0-9]{64,}$/
+//   SHA256_REGEX      = /^sha256:[a-fA-F0-9]{64}$/
+//   HEX_SIG_REGEX     = /^hex:[a-fA-F0-9]{128,}$/
+const SCHEMA_VALID_PROOF = {
+  version: "1.0",
+  agent_id: "x402-shape-test-standard-agent",
+  public_key: "ed25519:" + "aa".repeat(32),      // 64 hex chars, ed25519 prefix ✓
+  instruction_hash: "sha256:" + "bb".repeat(32), // 64 hex chars, sha256 prefix  ✓
+  action_hash: "sha256:" + "cc".repeat(32),      // 64 hex chars, sha256 prefix  ✓
+  timestamp: new Date().toISOString(),
+  signature: "hex:" + "dd".repeat(64),           // 128 hex chars, hex prefix    ✓
+};
+
+describe("POST /api/standard/anchor — TRIAL_EXHAUSTED 402 shape", () => {
+  it(
+    "returns HTTP 402 with TRIAL_EXHAUSTED and all required agent-facing fields",
+    async () => {
+      const res = await fetch(`${BASE_URL}/api/standard/anchor`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${TRIAL_RAW_KEY}`,
+        },
+        body: JSON.stringify({ proof: SCHEMA_VALID_PROOF }),
+      });
+
+      expect(res.status, "endpoint must return 402 for an exhausted trial user").toBe(402);
+
+      const body = await res.json() as Record<string, any>;
+      assertX402Shape(body, "TRIAL_EXHAUSTED");
+
+      expect(body.trial, "body.trial must be present for TRIAL_EXHAUSTED").toBeDefined();
+      expect(body.trial.quota, "body.trial.quota must equal TRIAL_QUOTA").toBe(TRIAL_QUOTA);
+      expect(body.trial.remaining, "body.trial.remaining must be 0").toBe(0);
+    },
+    15_000,
+  );
+});
+
+describe("POST /api/standard/anchor — PAYMENT_REQUIRED 402 shape", () => {
+  it(
+    "returns HTTP 402 with PAYMENT_REQUIRED and all required agent-facing fields",
+    async () => {
+      const res = await fetch(`${BASE_URL}/api/standard/anchor`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${PAID_RAW_KEY}`,
+        },
+        body: JSON.stringify({ proof: SCHEMA_VALID_PROOF }),
+      });
+
+      expect(res.status, "endpoint must return 402 for a non-trial user with zero credits").toBe(402);
+
+      const body = await res.json() as Record<string, any>;
+      assertX402Shape(body, "PAYMENT_REQUIRED");
+    },
+    15_000,
+  );
+});
+
+// ─── Part 5 — MCP certify_file tool ──────────────────────────────────────────
+//
+// The MCP protocol wraps tool errors as HTTP 200 with result.isError = true.
+// The canonical 402-equivalent payload is a JSON string inside result.content[0].text.
+// This section verifies the same field contract as Parts 2-4 but via the MCP transport.
+
+const MCP_FILE_HASH = crypto.createHash("sha256").update("x402-shape-test-mcp-v1").digest("hex");
+
+function makeMcpCertifyCall(fileHash: string) {
+  return {
+    jsonrpc: "2.0",
+    id: 1,
+    method: "tools/call",
+    params: {
+      name: "certify_file",
+      arguments: { file_hash: fileHash, filename: "mcp-test.pdf" },
+    },
+  };
+}
+
+/**
+ * For MCP tool errors the payment-wall data lives inside result.content[0].text
+ * (a JSON string). This helper unwraps and delegates to the shared assertX402Shape.
+ */
+function assertMcpX402Shape(mcpResult: Record<string, any>, expectedError: string) {
+  expect(mcpResult.result, "MCP response must have a result field").toBeDefined();
+  expect(mcpResult.result.isError, "result.isError must be true for payment errors").toBe(true);
+
+  const content = mcpResult.result.content as Array<{ type: string; text: string }>;
+  expect(Array.isArray(content), "result.content must be an array").toBe(true);
+  expect(content.length, "result.content must have at least one entry").toBeGreaterThan(0);
+  expect(content[0].type, "content[0].type must be 'text'").toBe("text");
+
+  const inner = JSON.parse(content[0].text) as Record<string, any>;
+  assertX402Shape(inner, expectedError);
+}
+
+// The MCP Streamable HTTP transport spec requires these Accept headers.
+// Without them the SDK transport returns HTTP 406 Not Acceptable.
+const MCP_HEADERS = {
+  "Content-Type": "application/json",
+  "Accept": "application/json, text/event-stream",
+};
+
+describe("MCP certify_file — TRIAL_EXHAUSTED shape", () => {
+  it(
+    "returns isError result with TRIAL_EXHAUSTED and all required agent-facing fields",
+    async () => {
+      const res = await fetch(`${BASE_URL}/mcp`, {
+        method: "POST",
+        headers: { ...MCP_HEADERS, Authorization: `Bearer ${TRIAL_RAW_KEY}` },
+        body: JSON.stringify(makeMcpCertifyCall(MCP_FILE_HASH)),
+      });
+
+      expect(res.status, "MCP endpoint must return HTTP 200 even for payment errors").toBe(200);
+
+      const mcpResult = await res.json() as Record<string, any>;
+      assertMcpX402Shape(mcpResult, "TRIAL_EXHAUSTED");
+    },
+    15_000,
+  );
+
+  it(
+    "inner message references the doc URL so agents know where to read the guide",
+    async () => {
+      const res = await fetch(`${BASE_URL}/mcp`, {
+        method: "POST",
+        headers: { ...MCP_HEADERS, Authorization: `Bearer ${TRIAL_RAW_KEY}` },
+        body: JSON.stringify(makeMcpCertifyCall(MCP_FILE_HASH)),
+      });
+
+      expect(res.status).toBe(200);
+      const mcpResult = await res.json() as Record<string, any>;
+      const inner = JSON.parse(mcpResult.result.content[0].text) as Record<string, any>;
+      expect(inner.message).toContain("llms.txt");
+    },
+    15_000,
+  );
+});
+
+describe("MCP certify_file — PAYMENT_REQUIRED shape", () => {
+  it(
+    "returns isError result with PAYMENT_REQUIRED and all required agent-facing fields",
+    async () => {
+      const res = await fetch(`${BASE_URL}/mcp`, {
+        method: "POST",
+        headers: { ...MCP_HEADERS, Authorization: `Bearer ${PAID_RAW_KEY}` },
+        body: JSON.stringify(makeMcpCertifyCall(MCP_FILE_HASH)),
+      });
+
+      expect(res.status, "MCP endpoint must return HTTP 200 even for payment errors").toBe(200);
+
+      const mcpResult = await res.json() as Record<string, any>;
+      assertMcpX402Shape(mcpResult, "PAYMENT_REQUIRED");
+    },
+    15_000,
+  );
+});
