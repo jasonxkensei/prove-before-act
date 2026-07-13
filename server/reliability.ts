@@ -405,7 +405,7 @@ export async function healthCheck(_req: Request, res: Response) {
         const balData = await balResp.json() as { balance?: string; nonce?: number };
         const balanceRaw = BigInt(balData.balance ?? "0");
         const balanceEgld = Number(balanceRaw) / 1e18;
-        const LOW_EGLD_WARN = 1.0;   // warn below 1 EGLD (~10 000 txs)
+        const LOW_EGLD_WARN = 0.3;   // warn below 0.3 EGLD (~3 000 txs)
         const LOW_EGLD_CRIT = 0.1;   // critical below 0.1 EGLD (~1 000 txs)
         const balStatus = balanceEgld < LOW_EGLD_CRIT ? "critical_low_balance" : balanceEgld < LOW_EGLD_WARN ? "low_balance" : "ok";
         checks.signer_balance = {
