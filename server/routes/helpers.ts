@@ -404,6 +404,11 @@ export function computeDrift(
 
 const X402_PRICE = process.env.X402_PRICE_USD ?? "$0.01 USDC per cert";
 const X402_NETWORK = process.env.X402_NETWORK_LABEL ?? "Base (eip155:8453)";
+// Human-readable network name used in step text and messages.
+// Derived automatically from X402_NETWORK_LABEL by stripping the chain-id
+// suffix, e.g. "Base (eip155:8453)" → "Base", "Base Sepolia (eip155:84532)" → "Base Sepolia".
+// Override independently via X402_NETWORK_NAME if needed.
+const X402_NETWORK_NAME = process.env.X402_NETWORK_NAME ?? X402_NETWORK.split(" (")[0];
 
 /**
  * Returns the canonical x402 object for 402 responses.
@@ -419,7 +424,7 @@ export function buildX402Block(baseUrl: string) {
     steps: [
       "1. POST /api/proof without Authorization header",
       "2. Receive HTTP 402 with payment.address + payment.amount_usdc",
-      "3. Send USDC on Base to payment.address",
+      `3. Send USDC on ${X402_NETWORK_NAME} to payment.address`,
       "4. Resend POST /api/proof with X-PAYMENT: <receipt> header",
     ],
     doc: `${baseUrl}/llms.txt`,
@@ -453,7 +458,7 @@ export function buildPrepaidCreditsBlock(baseUrl: string) {
  * Ends with doc link so agents can fetch full integration guide.
  */
 export function buildTrialExhaustedMessage(baseUrl: string, quota: number): string {
-  return `Trial quota exhausted (${quota}/${quota} used). Continue via x402 — no account needed: POST ${baseUrl}/api/proof without Authorization header → receive HTTP 402 with USDC payment address + amount → pay on Base → resend with X-PAYMENT header → certified. ${X402_PRICE}. Full guide: ${baseUrl}/llms.txt`;
+  return `Trial quota exhausted (${quota}/${quota} used). Continue via x402 — no account needed: POST ${baseUrl}/api/proof without Authorization header → receive HTTP 402 with USDC payment address + amount → pay on ${X402_NETWORK_NAME} → resend with X-PAYMENT header → certified. ${X402_PRICE}. Full guide: ${baseUrl}/llms.txt`;
 }
 
 /**
@@ -461,5 +466,5 @@ export function buildTrialExhaustedMessage(baseUrl: string, quota: number): stri
  * Ends with doc link so agents can fetch full integration guide.
  */
 export function buildPaymentRequiredMessage(baseUrl: string): string {
-  return `No prepaid credits. Continue via x402 — no account needed: POST ${baseUrl}/api/proof without Authorization header → receive HTTP 402 with USDC payment address + amount → pay on Base → resend with X-PAYMENT header → certified. ${X402_PRICE}. Full guide: ${baseUrl}/llms.txt`;
+  return `No prepaid credits. Continue via x402 — no account needed: POST ${baseUrl}/api/proof without Authorization header → receive HTTP 402 with USDC payment address + amount → pay on ${X402_NETWORK_NAME} → resend with X-PAYMENT header → certified. ${X402_PRICE}. Full guide: ${baseUrl}/llms.txt`;
 }
