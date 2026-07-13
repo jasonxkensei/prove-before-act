@@ -519,7 +519,7 @@ export function registerProofWriteRoutes(app: Express) {
         const consumed = await atomicConsumeTrialCredit(trialInfo.userId);
         if (!consumed) {
           const _b = `https://${req.get("host")}`;
-          return res.status(402).json({ error: "TRIAL_EXHAUSTED", message: `Trial quota exhausted (5/5 used). Continue via x402 — no account needed: POST ${_b}/api/proof without Authorization header → receive HTTP 402 with USDC payment details → pay on Base → resend with X-PAYMENT header. $0.01 USDC per cert.`, x402: { endpoint: `POST ${_b}/api/proof`, price: "$0.01 USDC per cert", network: "Base (eip155:8453)", no_account_required: true }, prepaid_credits: `POST ${_b}/api/credits/purchase` });
+          return res.status(402).json({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(_b, TRIAL_QUOTA), trial: { quota: TRIAL_QUOTA, used: TRIAL_QUOTA, remaining: 0 }, x402: buildX402Block(_b), prepaid_credits: buildPrepaidCreditsBlock(_b) });
         }
       } else if (creditInfo) {
         const consumed = await atomicConsumeCredit(creditInfo.userId);
@@ -952,7 +952,7 @@ export function registerProofWriteRoutes(app: Express) {
         const consumed = await atomicConsumeTrialCredit(trialInfo.userId);
         if (!consumed) {
           const _b = `https://${req.get("host")}`;
-          return res.status(402).json({ error: "TRIAL_EXHAUSTED", message: `Trial quota exhausted (5/5 used). Continue via x402 — no account needed: POST ${_b}/api/proof without Authorization header → receive HTTP 402 with USDC payment details → pay on Base → resend with X-PAYMENT header. $0.01 USDC per cert.`, x402: { endpoint: `POST ${_b}/api/proof`, price: "$0.01 USDC per cert", network: "Base (eip155:8453)", no_account_required: true }, prepaid_credits: `POST ${_b}/api/credits/purchase` });
+          return res.status(402).json({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(_b, TRIAL_QUOTA), trial: { quota: TRIAL_QUOTA, used: TRIAL_QUOTA, remaining: 0 }, x402: buildX402Block(_b), prepaid_credits: buildPrepaidCreditsBlock(_b) });
         }
       } else if (creditInfo) {
         const consumed = await atomicConsumeCredit(creditInfo.userId);
@@ -1435,7 +1435,7 @@ export function registerProofWriteRoutes(app: Express) {
           const consumed = await atomicConsumeTrialCredit(trialInfo.userId, newFileCount);
           if (!consumed) {
             const _b = `https://${req.get("host")}`;
-            return res.status(402).json({ error: "TRIAL_EXHAUSTED", message: `Trial quota exhausted (5/5 used). Continue via x402 — no account needed: POST ${_b}/api/proof without Authorization header → receive HTTP 402 with USDC payment details → pay on Base → resend with X-PAYMENT header. $0.01 USDC per cert.`, x402: { endpoint: `POST ${_b}/api/proof`, price: "$0.01 USDC per cert", network: "Base (eip155:8453)", no_account_required: true }, prepaid_credits: `POST ${_b}/api/credits/purchase` });
+            return res.status(402).json({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(_b, TRIAL_QUOTA), trial: { quota: TRIAL_QUOTA, used: TRIAL_QUOTA, remaining: 0 }, x402: buildX402Block(_b), prepaid_credits: buildPrepaidCreditsBlock(_b) });
           }
         } else if (creditInfo) {
           if (newFileCount > creditInfo.balance) {
