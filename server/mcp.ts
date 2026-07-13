@@ -44,6 +44,30 @@ const CALIBRATION_IP_WINDOW_MS = 60_000;
 const SUBMIT_OUTCOME_KEY_LIMIT = 10;
 const SUBMIT_OUTCOME_KEY_WINDOW_MS = 5 * 60_000;
 
+// ── MCP billing error helpers ─────────────────────────────────────────────
+// Every tool handler that gates on trial quota or prepaid credits uses these
+// helpers to build its error response. Having a single construction point
+// guarantees a consistent, machine-readable shape (x402Version, accepts[],
+// resource) across all tools without copy-pasted inline logic.
+
+function mcpErr(payload: Record<string, unknown>): { content: [{ type: "text"; text: string }]; isError: true } {
+  return { content: [{ type: "text" as const, text: JSON.stringify(payload) }], isError: true };
+}
+
+async function mcpTrialExhausted(baseUrl: string, extra?: Record<string, unknown>) {
+  const x402 = isX402Configured() ? await build402PayloadFromUrl(baseUrl, "proof") : {};
+  return mcpErr({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), prepaid_credits: buildPrepaidCreditsBlock(baseUrl), ...x402, ...extra });
+}
+
+async function mcpInsufficientCredits(baseUrl: string, extra?: Record<string, unknown>) {
+  const x402 = isX402Configured() ? await build402PayloadFromUrl(baseUrl, "proof") : {};
+  return mcpErr({ error: "INSUFFICIENT_CREDITS", message: "Credit balance insufficient. Purchase additional credits to continue.", prepaid_credits: buildPrepaidCreditsBlock(baseUrl), ...x402, ...extra });
+}
+
+function mcpPaymentRequired(baseUrl: string, extra?: Record<string, unknown>) {
+  return mcpErr({ error: "PAYMENT_REQUIRED", message: buildPaymentRequiredMessage(baseUrl), x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl), ...extra });
+}
+
 export async function createMcpServer(ctx: McpContext) {
   const currentPriceUsd = await getCertificationPriceUsd();
   
@@ -189,8 +213,7 @@ export async function createMcpServer(ctx: McpContext) {
         if (trialInfo && trialInfo.remaining <= 0) {
           const balance = await getUserCreditBalance(auth.userId);
           if (balance <= 0) {
-            const _x402cf0 = isX402Configured() ? await build402PayloadFromUrl(baseUrl, "proof") : {};
-            return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), prepaid_credits: buildPrepaidCreditsBlock(baseUrl), ..._x402cf0 }) }], isError: true };
+            return await mcpTrialExhausted(baseUrl);
           }
           mcpCreditInfo = { userId: auth.userId, balance };
         } else if (!trialInfo) {
@@ -199,7 +222,7 @@ export async function createMcpServer(ctx: McpContext) {
           if (!ownerWallet || !isAdminWallet(ownerWallet)) {
             const balance = await getUserCreditBalance(auth.userId);
             if (balance <= 0) {
-              return { content: [{ type: "text" as const, text: JSON.stringify({ error: "PAYMENT_REQUIRED", message: buildPaymentRequiredMessage(baseUrl), x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl) }) }], isError: true };
+              return mcpPaymentRequired(baseUrl);
             }
             mcpCreditInfo = { userId: auth.userId, balance };
           }
@@ -221,13 +244,12 @@ export async function createMcpServer(ctx: McpContext) {
             if (trialInfo && !mcpCreditInfo) {
               const consumed = await atomicConsumeTrialCredit(trialInfo.userId);
               if (!consumed) {
-                const _x402cf1 = isX402Configured() ? await build402PayloadFromUrl(baseUrl, "proof") : {};
-                return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), prepaid_credits: buildPrepaidCreditsBlock(baseUrl), ..._x402cf1 }) }], isError: true };
+                return await mcpTrialExhausted(baseUrl);
               }
             } else if (mcpCreditInfo) {
               const consumed = await atomicConsumeCredit(mcpCreditInfo.userId);
               if (!consumed) {
-                return { content: [{ type: "text" as const, text: JSON.stringify({ error: "INSUFFICIENT_CREDITS", message: "Credit balance insufficient. Purchase additional credits to continue." }) }], isError: true };
+                return await mcpInsufficientCredits(baseUrl);
               }
             }
             creditConsumed = true;
@@ -295,13 +317,12 @@ export async function createMcpServer(ctx: McpContext) {
           if (trialInfo && !mcpCreditInfo) {
             const consumed = await atomicConsumeTrialCredit(trialInfo.userId);
             if (!consumed) {
-              const _x402cf2 = isX402Configured() ? await build402PayloadFromUrl(baseUrl, "proof") : {};
-              return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), prepaid_credits: buildPrepaidCreditsBlock(baseUrl), ..._x402cf2 }) }], isError: true };
+              return await mcpTrialExhausted(baseUrl);
             }
           } else if (mcpCreditInfo) {
             const consumed = await atomicConsumeCredit(mcpCreditInfo.userId);
             if (!consumed) {
-              return { content: [{ type: "text" as const, text: JSON.stringify({ error: "INSUFFICIENT_CREDITS", message: "Credit balance insufficient. Purchase additional credits to continue." }) }], isError: true };
+              return await mcpInsufficientCredits(baseUrl);
             }
           }
         }
@@ -449,8 +470,7 @@ export async function createMcpServer(ctx: McpContext) {
         if (cwcTrialInfo && cwcTrialInfo.remaining <= 0) {
           const balance = await getUserCreditBalance(auth.userId);
           if (balance <= 0) {
-            const _x402cwc0 = isX402Configured() ? await build402PayloadFromUrl(baseUrl, "proof") : {};
-            return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), prepaid_credits: buildPrepaidCreditsBlock(baseUrl), ..._x402cwc0 }) }], isError: true };
+            return await mcpTrialExhausted(baseUrl);
           }
           cwcCreditInfo = { userId: auth.userId, balance };
         } else if (!cwcTrialInfo) {
@@ -459,7 +479,7 @@ export async function createMcpServer(ctx: McpContext) {
           if (!ownerWallet || !isAdminWallet(ownerWallet)) {
             const balance = await getUserCreditBalance(auth.userId);
             if (balance <= 0) {
-              return { content: [{ type: "text" as const, text: JSON.stringify({ error: "PAYMENT_REQUIRED", message: buildPaymentRequiredMessage(baseUrl), x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl) }) }], isError: true };
+              return mcpPaymentRequired(baseUrl);
             }
             cwcCreditInfo = { userId: auth.userId, balance };
           }
@@ -480,13 +500,12 @@ export async function createMcpServer(ctx: McpContext) {
             if (cwcTrialInfo && !cwcCreditInfo) {
               const consumed = await atomicConsumeTrialCredit(cwcTrialInfo.userId);
               if (!consumed) {
-                const _x402cwc1 = isX402Configured() ? await build402PayloadFromUrl(baseUrl, "proof") : {};
-                return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), prepaid_credits: buildPrepaidCreditsBlock(baseUrl), ..._x402cwc1 }) }], isError: true };
+                return await mcpTrialExhausted(baseUrl);
               }
             } else if (cwcCreditInfo) {
               const consumed = await atomicConsumeCredit(cwcCreditInfo.userId);
               if (!consumed) {
-                return { content: [{ type: "text" as const, text: JSON.stringify({ error: "INSUFFICIENT_CREDITS", message: "Credit balance insufficient. Purchase additional credits to continue." }) }], isError: true };
+                return await mcpInsufficientCredits(baseUrl);
               }
             }
             cwcCreditConsumed = true;
@@ -559,13 +578,12 @@ export async function createMcpServer(ctx: McpContext) {
           if (cwcTrialInfo && !cwcCreditInfo) {
             const consumed = await atomicConsumeTrialCredit(cwcTrialInfo.userId);
             if (!consumed) {
-              const _x402cwc2 = isX402Configured() ? await build402PayloadFromUrl(baseUrl, "proof") : {};
-              return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), prepaid_credits: buildPrepaidCreditsBlock(baseUrl), ..._x402cwc2 }) }], isError: true };
+              return await mcpTrialExhausted(baseUrl);
             }
           } else if (cwcCreditInfo) {
             const consumed = await atomicConsumeCredit(cwcCreditInfo.userId);
             if (!consumed) {
-              return { content: [{ type: "text" as const, text: JSON.stringify({ error: "INSUFFICIENT_CREDITS", message: "Credit balance insufficient. Purchase additional credits to continue." }) }], isError: true };
+              return await mcpInsufficientCredits(baseUrl);
             }
           }
         }
@@ -935,7 +953,7 @@ export async function createMcpServer(ctx: McpContext) {
         if (auditTrialInfo && auditTrialInfo.remaining <= 0) {
           const balance = await getUserCreditBalance(auth.userId);
           if (balance <= 0) {
-            return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl) }) }], isError: true };
+            return await mcpTrialExhausted(baseUrl);
           }
           auditCreditInfo = { userId: auth.userId, balance };
         } else if (!auditTrialInfo) {
@@ -944,7 +962,7 @@ export async function createMcpServer(ctx: McpContext) {
           if (!ownerWallet || !isAdminWallet(ownerWallet)) {
             const balance = await getUserCreditBalance(auth.userId);
             if (balance <= 0) {
-              return { content: [{ type: "text" as const, text: JSON.stringify({ error: "PAYMENT_REQUIRED", message: buildPaymentRequiredMessage(baseUrl), x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl) }) }], isError: true };
+              return mcpPaymentRequired(baseUrl);
             }
             auditCreditInfo = { userId: auth.userId, balance };
           }
@@ -1011,12 +1029,12 @@ export async function createMcpServer(ctx: McpContext) {
         if (auditTrialInfo && !auditCreditInfo) {
           const consumed = await atomicConsumeTrialCredit(auditTrialInfo.userId);
           if (!consumed) {
-            return { content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl) }) }], isError: true };
+            return await mcpTrialExhausted(baseUrl);
           }
         } else if (auditCreditInfo) {
           const consumed = await atomicConsumeCredit(auditCreditInfo.userId);
           if (!consumed) {
-            return { content: [{ type: "text" as const, text: JSON.stringify({ error: "INSUFFICIENT_CREDITS", message: "Credit balance insufficient. Purchase additional credits to continue." }) }], isError: true };
+            return await mcpInsufficientCredits(baseUrl);
           }
         }
 
@@ -1261,10 +1279,7 @@ export async function createMcpServer(ctx: McpContext) {
           if (invTrialInfo && invTrialInfo.remaining <= 0) {
             const balance = await getUserCreditBalance(auth.userId);
             if (balance <= 0) {
-              return {
-                content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl), incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` }) }],
-                isError: true,
-              };
+              return await mcpTrialExhausted(baseUrl, { incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` });
             }
             invCreditInfo = { userId: auth.userId, balance };
           } else if (!invTrialInfo) {
@@ -1273,10 +1288,7 @@ export async function createMcpServer(ctx: McpContext) {
             if (!ownerWallet || !isAdminWallet(ownerWallet)) {
               const balance = await getUserCreditBalance(auth.userId);
               if (balance <= 0) {
-                return {
-                  content: [{ type: "text" as const, text: JSON.stringify({ error: "PAYMENT_REQUIRED", message: buildPaymentRequiredMessage(baseUrl), x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl), incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` }) }],
-                  isError: true,
-                };
+                return mcpPaymentRequired(baseUrl, { incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` });
               }
               invCreditInfo = { userId: auth.userId, balance };
             }
@@ -1286,18 +1298,12 @@ export async function createMcpServer(ctx: McpContext) {
           if (invTrialInfo && !invCreditInfo) {
             const consumed = await atomicConsumeTrialCredit(invTrialInfo.userId);
             if (!consumed) {
-              return {
-                content: [{ type: "text" as const, text: JSON.stringify({ error: "TRIAL_EXHAUSTED", message: buildTrialExhaustedMessage(baseUrl, TRIAL_QUOTA), x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl), incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` }) }],
-                isError: true,
-              };
+              return await mcpTrialExhausted(baseUrl, { incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` });
             }
           } else if (invCreditInfo) {
             const consumed = await atomicConsumeCredit(invCreditInfo.userId);
             if (!consumed) {
-              return {
-                content: [{ type: "text" as const, text: JSON.stringify({ error: "INSUFFICIENT_CREDITS", message: "Credit balance insufficient. Purchase additional credits to continue.", incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` }) }],
-                isError: true,
-              };
+              return await mcpInsufficientCredits(baseUrl, { incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` });
             }
           }
 
