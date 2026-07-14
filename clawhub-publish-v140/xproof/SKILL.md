@@ -93,13 +93,13 @@ When the 10 free proofs are consumed, the agent automatically transitions to per
 ```bash
 mkdir -p .agent/skills/xproof/references
 
-# Core Skill
-curl -sL https://raw.githubusercontent.com/jasonxkensei/xproof-openclaw-skill/main/xproof/SKILL.md \
+# Core Skill — from the canonical main repository (jasonxkensei/xProof)
+curl -sL https://raw.githubusercontent.com/jasonxkensei/xProof/main/clawhub-publish/xproof/SKILL.md \
   > .agent/skills/xproof/SKILL.md
 
 # Reference Manuals
-for f in certification x402 mcp api-reference; do
-  curl -sL "https://raw.githubusercontent.com/jasonxkensei/xproof-openclaw-skill/main/xproof/references/${f}.md" \
+for f in certification x402 mcp; do
+  curl -sL "https://raw.githubusercontent.com/jasonxkensei/xProof/main/clawhub-publish/xproof/references/${f}.md" \
     > ".agent/skills/xproof/references/${f}.md"
 done
 ```
@@ -443,12 +443,10 @@ curl -X POST https://xproof.app/api/audit \
 5. No fallback. No soft fail. No silent continue.
 ```
 
-Guard templates for multiple frameworks:
-- **LangChain**: `https://xproof.app/agent-tools/audit-guard-langchain.py`
-- **CrewAI**: `https://xproof.app/agent-tools/audit-guard-crewai.py`
-- **n8n**: `https://xproof.app/agent-tools/audit-guard-n8n.json`
-- **ElizaOS**: `https://xproof.app/agent-tools/audit-guard-eliza.ts`
-- **ElizaOS Plugin (NPM)**: `npm install xproof-eliza-plugin`
+Guard templates for multiple frameworks (pinned in the main repository — do not fetch from runtime URLs):
+- **LangChain / CrewAI / LlamaIndex**: use the `xproof` PyPI package (`pip install xproof`) — integrations are in `xproof.integrations.*`
+- **ElizaOS Plugin**: `npm install xproof-eliza-plugin`
+- **n8n / AutoGen / custom**: see `xproof-examples/` in [github.com/jasonxkensei/xProof](https://github.com/jasonxkensei/xProof)
 
 ### When to Audit
 

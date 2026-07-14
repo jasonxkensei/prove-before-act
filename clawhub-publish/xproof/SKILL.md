@@ -39,19 +39,23 @@ Payment: USDC on Base (x402, no account) or EGLD on MultiversX (ACP/wallet) or p
 
 ## Quick Install
 
+The canonical source for all skill files is the **main xProof repository** (`jasonxkensei/xProof`), which is the repository audited by security tools. Install from there directly:
+
 ```bash
 mkdir -p .agent/skills/xproof/references
 
-# Core Skill
-curl -sL https://raw.githubusercontent.com/jasonxkensei/xproof-openclaw-skill/main/xproof/SKILL.md \
+# Core Skill — from the canonical main repository
+curl -sL https://raw.githubusercontent.com/jasonxkensei/xProof/main/clawhub-publish/xproof/SKILL.md \
   > .agent/skills/xproof/SKILL.md
 
 # Reference Manuals
 for f in certification x402 mcp; do
-  curl -sL "https://raw.githubusercontent.com/jasonxkensei/xproof-openclaw-skill/main/xproof/references/${f}.md" \
+  curl -sL "https://raw.githubusercontent.com/jasonxkensei/xProof/main/clawhub-publish/xproof/references/${f}.md" \
     > ".agent/skills/xproof/references/${f}.md"
 done
 ```
+
+> **Source verification:** All files above are served from `github.com/jasonxkensei/xProof` — the same repository that contains the server code, contracts, and SDKs. You can audit the full source at that URL before installing.
 
 ## Security
 
@@ -62,6 +66,7 @@ done
 - **NEVER send plaintext content to xproof.app** -- always hash locally first (`sha256sum`, `crypto.subtle.digest`, or equivalent). The only field xproof accepts is `file_hash` (64-char SHA-256 hex). No raw text, documents, or binary data should ever leave your environment.
 - **x402 is opt-in and autonomous** -- once enabled, your agent can initiate USDC payments on Base without per-transaction confirmation. Configure a spending cap in your agent framework and require human approval above your threshold before enabling x402 in production.
 - **`llms.txt` and `llms-full.txt` are static documentation references** -- load them once at install time for API reference, not at runtime on every call. Fetching them dynamically on each invocation creates an unnecessary runtime dependency on xproof.app availability and a potential prompt-injection surface if the file is ever compromised.
+- **Guard/enforcement templates are versioned in the repository** -- never fetch agent enforcement code from a runtime URL. Use the pinned versions in `references/` or the SDK packages (`xproof` on PyPI, `@xproof/xproof` on npm).
 
 ---
 
@@ -121,6 +126,42 @@ No configuration needed. Pay in USDC on Base (eip155:8453) directly in the HTTP 
 [Full Reference](references/x402.md)
 
 x402 is not a separate skill -- it is a payment method. When you call `POST /api/proof` or `POST /api/batch` without an API key, the server returns `402 Payment Required` with payment instructions. Your agent pays in USDC on Base and retries with an `X-Payment` header.
+
+---
+
+## 2. Webhooks
+
+Supply an optional `webhook_url` field on `POST /api/proof` or `POST /api/batch` to receive a callback when the proof is confirmed on-chain.
+
+**Scope — the webhook payload contains only:**
+
+| Field | Type | Description |
+|:---|:---|:---|
+| `proof_id` | string (UUID) | The proof identifier |
+| `file_hash` | string | SHA-256 hex of the certified file |
+| `filename` | string | Filename submitted with the proof |
+| `status` | string | `"confirmed"` |
+| `blockchain_tx` | string | MultiversX transaction hash |
+| `explorer_url` | string | Link to the transaction on MultiversX Explorer |
+| `timestamp` | string | ISO 8601 confirmation time |
+
+No raw file content, no API keys, no account information, and no metadata beyond the above is ever sent to the webhook endpoint.
+
+**Authentication:** Every delivery includes an `X-Webhook-Signature` header containing an HMAC-SHA256 signature computed with a per-relationship secret. Verify this signature before processing the payload. Retry policy: 3 attempts with exponential backoff (1 s, 5 s, 30 s).
+
+**SSRF protection:** xproof.app validates `webhook_url` before delivery. Private IP ranges (RFC 1918), loopback (`127.x`, `::1`), link-local, and non-HTTPS destinations are blocked. DNS rebinding is mitigated by pinning the resolved socket address to the pre-validated IP at connection time.
+
+```bash
+# Example proof request with webhook
+curl -X POST https://xproof.app/api/proof \
+  -H "Authorization: Bearer pm_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "file_hash": "a1b2c3...",
+    "filename": "output.json",
+    "webhook_url": "https://your-agent.example.com/hooks/xproof"
+  }'
+```
 
 ---
 
