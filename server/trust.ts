@@ -153,6 +153,7 @@ async function computeStreakWeeks(userId: string): Promise<number> {
     WHERE user_id = ${userId}
       AND blockchain_status = 'confirmed'
       AND is_public = true
+      AND (auth_method IS NULL OR auth_method != 'onboarding')
     ORDER BY week_num DESC
   `);
 
@@ -169,6 +170,7 @@ async function computeStreakWeeksBatch(userIds: string[]): Promise<Map<string, n
        WHERE user_id = ANY($1)
          AND blockchain_status = 'confirmed'
          AND is_public = true
+         AND (auth_method IS NULL OR auth_method != 'onboarding')
        ORDER BY user_id, week_num DESC`,
       [userIds],
     );
@@ -198,6 +200,7 @@ async function computeAttestationBonus(walletAddress: string): Promise<{ bonus: 
       FROM attestations a
       LEFT JOIN users u ON u.wallet_address = a.issuer_wallet
       LEFT JOIN certifications c ON c.user_id = u.id
+        AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')
       WHERE a.subject_wallet = ${walletAddress}
         AND a.status = 'active'
         AND (a.expires_at IS NULL OR a.expires_at > ${now})
@@ -228,6 +231,7 @@ async function computeAttestationBonusBatch(walletAddresses: string[]): Promise<
        FROM attestations a
        LEFT JOIN users u ON u.wallet_address = a.issuer_wallet
        LEFT JOIN certifications c ON c.user_id = u.id
+         AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')
        WHERE a.subject_wallet = ANY($1)
          AND a.status = 'active'
          AND (a.expires_at IS NULL OR a.expires_at > $2)
@@ -258,8 +262,8 @@ async function computeTransparencyCounts(userId: string): Promise<{ metadataCoun
   try {
     const [result] = await db
       .select({
-        metadataCount: sql<number>`COUNT(*) FILTER (WHERE blockchain_status = 'confirmed' AND is_public = true AND metadata IS NOT NULL AND (metadata->>'model_hash' IS NOT NULL OR metadata->>'strategy_hash' IS NOT NULL OR metadata->>'version_number' IS NOT NULL))`,
-        auditCount: sql<number>`COUNT(*) FILTER (WHERE blockchain_status = 'confirmed' AND is_public = true AND metadata IS NOT NULL AND metadata->>'agent_id' IS NOT NULL)`,
+        metadataCount: sql<number>`COUNT(*) FILTER (WHERE blockchain_status = 'confirmed' AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding') AND metadata IS NOT NULL AND (metadata->>'model_hash' IS NOT NULL OR metadata->>'strategy_hash' IS NOT NULL OR metadata->>'version_number' IS NOT NULL))`,
+        auditCount: sql<number>`COUNT(*) FILTER (WHERE blockchain_status = 'confirmed' AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding') AND metadata IS NOT NULL AND metadata->>'agent_id' IS NOT NULL)`,
       })
       .from(certifications)
       .where(eq(certifications.userId, userId));
@@ -277,10 +281,10 @@ export async function computeTrustScore(userId: string): Promise<TrustScore> {
 
   const [totals] = await db
     .select({
-      confirmed: sql<number>`COUNT(*) FILTER (WHERE blockchain_status = 'confirmed' AND is_public = true)`,
-      last30d: sql<number>`COUNT(*) FILTER (WHERE created_at >= ${cutoff30d} AND blockchain_status = 'confirmed' AND is_public = true)`,
-      firstAt: sql<Date>`MIN(created_at) FILTER (WHERE blockchain_status = 'confirmed' AND is_public = true)`,
-      lastAt: sql<Date>`MAX(created_at) FILTER (WHERE blockchain_status = 'confirmed' AND is_public = true)`,
+      confirmed: sql<number>`COUNT(*) FILTER (WHERE blockchain_status = 'confirmed' AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding'))`,
+      last30d: sql<number>`COUNT(*) FILTER (WHERE created_at >= ${cutoff30d} AND blockchain_status = 'confirmed' AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding'))`,
+      firstAt: sql<Date>`MIN(created_at) FILTER (WHERE blockchain_status = 'confirmed' AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding'))`,
+      lastAt: sql<Date>`MAX(created_at) FILTER (WHERE blockchain_status = 'confirmed' AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding'))`,
     })
     .from(certifications)
     .where(eq(certifications.userId, userId));
@@ -445,18 +449,18 @@ async function computeAllLeaderboardEntries(): Promise<LeaderboardEntry[]> {
       u.agent_category,
       u.agent_description,
       u.agent_website,
-      COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true) AS cert_total,
-      COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND c.created_at >= ${cutoff30d}) AS cert_last_30d,
-      MIN(c.created_at) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true) AS first_cert_at,
-      MAX(c.created_at) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true) AS last_cert_at,
-      COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND c.metadata IS NOT NULL AND (c.metadata->>'model_hash' IS NOT NULL OR c.metadata->>'strategy_hash' IS NOT NULL OR c.metadata->>'version_number' IS NOT NULL)) AS metadata_count,
-      COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND c.metadata IS NOT NULL AND c.metadata->>'agent_id' IS NOT NULL) AS audit_count
+      COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) AS cert_total,
+      COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding') AND c.created_at >= ${cutoff30d}) AS cert_last_30d,
+      MIN(c.created_at) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) AS first_cert_at,
+      MAX(c.created_at) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) AS last_cert_at,
+      COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding') AND c.metadata IS NOT NULL AND (c.metadata->>'model_hash' IS NOT NULL OR c.metadata->>'strategy_hash' IS NOT NULL OR c.metadata->>'version_number' IS NOT NULL)) AS metadata_count,
+      COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding') AND c.metadata IS NOT NULL AND c.metadata->>'agent_id' IS NOT NULL) AS audit_count
     FROM users u
     LEFT JOIN certifications c ON c.user_id = u.id
     WHERE u.is_public_profile = true
       AND u.wallet_address NOT LIKE 'erd1trial%'
     GROUP BY u.id, u.wallet_address, u.agent_name, u.agent_category, u.agent_description, u.agent_website
-    HAVING COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true) > 0
+    HAVING COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) > 0
   `);
 
   const allRows = rows.rows as any[];
