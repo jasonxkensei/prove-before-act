@@ -27,6 +27,7 @@ import {
   ChevronDown,
   ChevronRight,
   Gauge,
+  Filter,
 } from "lucide-react";
 import { Link } from "wouter";
 
@@ -83,6 +84,11 @@ interface PublicStats {
     total_api_keys: number;
     trial_agents: number;
     trial_certifications_used: number;
+  };
+  onboarding_funnel?: {
+    all_time: { registrations: number; converted: number; conversion_rate: number | null };
+    last_7d:  { registrations: number; converted: number; conversion_rate: number | null };
+    last_30d: { registrations: number; converted: number; conversion_rate: number | null };
   };
   generated_at: string;
 }
@@ -469,6 +475,116 @@ function formatTimeAgo(isoDate: string): string {
 }
 
 
+type FunnelWindow = "all_time" | "last_7d" | "last_30d";
+
+function OnboardingFunnelCard({ data }: { data: PublicStats["onboarding_funnel"] }) {
+  const [activeWindow, setActiveWindow] = useState<FunnelWindow>("last_30d");
+
+  if (!data) return null;
+
+  const windowLabels: Record<FunnelWindow, string> = {
+    all_time: "All time",
+    last_7d: "Last 7d",
+    last_30d: "Last 30d",
+  };
+
+  const current = data[activeWindow];
+  const rate = current.conversion_rate;
+  const dropOff = current.registrations - current.converted;
+
+  return (
+    <Card data-testid="card-onboarding-funnel">
+      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+        <div className="flex items-center gap-2">
+          <CardTitle className="text-sm font-medium">Onboarding Funnel</CardTitle>
+          <Badge variant="secondary" data-testid="badge-funnel-rate">
+            {rate !== null ? `${rate}% converted` : "No data"}
+          </Badge>
+        </div>
+        <div className="flex items-center gap-1">
+          <Filter className="h-4 w-4 text-muted-foreground" />
+          {(["last_7d", "last_30d", "all_time"] as FunnelWindow[]).map((w) => (
+            <Button
+              key={w}
+              size="sm"
+              variant={activeWindow === w ? "default" : "ghost"}
+              onClick={() => setActiveWindow(w)}
+              data-testid={`button-funnel-window-${w}`}
+            >
+              {windowLabels[w]}
+            </Button>
+          ))}
+        </div>
+      </CardHeader>
+      <CardContent>
+        <p className="text-xs text-muted-foreground mb-4">
+          Agents who called <code className="font-mono">register_trial</code> vs. those who went on to certify a real file
+        </p>
+        <div className="space-y-4">
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-sm text-muted-foreground flex items-center gap-2">
+                <Bot className="h-3 w-3" /> Registered
+              </span>
+              <span className="font-medium tabular-nums" data-testid="text-funnel-registrations">
+                {current.registrations.toLocaleString()}
+              </span>
+            </div>
+            <div className="w-full bg-muted rounded-full h-2">
+              <div className="bg-primary h-2 rounded-full w-full" />
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-sm text-muted-foreground flex items-center gap-2">
+                <CheckCircle2 className="h-3 w-3 text-chart-2" /> Certified a real file
+              </span>
+              <span className="font-medium tabular-nums text-chart-2" data-testid="text-funnel-converted">
+                {current.converted.toLocaleString()}
+              </span>
+            </div>
+            <div className="w-full bg-muted rounded-full h-2">
+              <div
+                className="bg-chart-2 h-2 rounded-full transition-all"
+                style={{
+                  width: current.registrations > 0
+                    ? `${(current.converted / current.registrations) * 100}%`
+                    : "0%",
+                }}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between pt-2 border-t">
+            <span className="text-sm text-muted-foreground flex items-center gap-2">
+              <XCircle className="h-3 w-3 text-muted-foreground" /> Dropped off
+            </span>
+            <span className="font-medium tabular-nums text-muted-foreground" data-testid="text-funnel-dropoff">
+              {dropOff.toLocaleString()}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium">Conversion rate</span>
+            <Badge
+              variant={
+                rate === null ? "secondary"
+                  : rate >= 50 ? "default"
+                  : rate >= 20 ? "secondary"
+                  : "destructive"
+              }
+              data-testid="badge-funnel-conversion-rate"
+            >
+              {rate !== null ? `${rate}%` : "—"}
+            </Badge>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function TrendIndicator({ current, previous }: { current: number; previous: number }) {
   if (previous === 0 && current === 0) {
     return <span className="text-xs text-muted-foreground flex items-center gap-1"><Minus className="h-3 w-3" /> No change</span>;
@@ -834,6 +950,7 @@ export default function AdminDashboard() {
 
             {isAdmin && (
               <div className="mb-6 space-y-6">
+                <OnboardingFunnelCard data={stats.onboarding_funnel} />
                 <TrafficSourcesCard data={trafficSources} />
                 <UtmCampaignCard data={utmStats} />
                 <RateLimitActivityCard data={rateLimitStats} isError={rateLimitError} />

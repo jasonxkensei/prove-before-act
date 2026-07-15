@@ -193,6 +193,39 @@ export function registerAdminRoutes(app: Express) {
       const [trialAgentsRow] = await db.select({ count: count() }).from(users).where(eq(users.isTrial, true));
       const [trialUsedRow] = await db.select({ total: sql<number>`COALESCE(SUM(trial_used), 0)` }).from(users).where(eq(users.isTrial, true));
 
+      const funnelResult = await db.execute(sql`
+        WITH onboarded AS (
+          SELECT user_id, MIN(created_at) AS registered_at
+          FROM certifications
+          WHERE auth_method = 'onboarding' AND user_id IS NOT NULL
+          GROUP BY user_id
+        ),
+        real_certs AS (
+          SELECT DISTINCT c.user_id
+          FROM certifications c
+          INNER JOIN users u ON u.id = c.user_id
+          WHERE c.auth_method != 'onboarding'
+            AND c.user_id IS NOT NULL
+            AND u.trial_used >= 1
+        )
+        SELECT
+          COUNT(DISTINCT o.user_id) AS registrations_all,
+          COUNT(DISTINCT o.user_id) FILTER (WHERE o.registered_at >= NOW() - INTERVAL '7 days')  AS registrations_7d,
+          COUNT(DISTINCT o.user_id) FILTER (WHERE o.registered_at >= NOW() - INTERVAL '30 days') AS registrations_30d,
+          COUNT(DISTINCT o.user_id) FILTER (WHERE r.user_id IS NOT NULL) AS converted_all,
+          COUNT(DISTINCT o.user_id) FILTER (WHERE r.user_id IS NOT NULL AND o.registered_at >= NOW() - INTERVAL '7 days')  AS converted_7d,
+          COUNT(DISTINCT o.user_id) FILTER (WHERE r.user_id IS NOT NULL AND o.registered_at >= NOW() - INTERVAL '30 days') AS converted_30d
+        FROM onboarded o
+        LEFT JOIN real_certs r ON r.user_id = o.user_id
+      `);
+      const frow = (funnelResult.rows[0] as Record<string, string>) || {};
+      const fRegAll  = parseInt(frow.registrations_all  || "0");
+      const fReg7d   = parseInt(frow.registrations_7d   || "0");
+      const fReg30d  = parseInt(frow.registrations_30d  || "0");
+      const fConvAll = parseInt(frow.converted_all  || "0");
+      const fConv7d  = parseInt(frow.converted_7d   || "0");
+      const fConv30d = parseInt(frow.converted_30d  || "0");
+
         const body = {
           certifications: {
             total: totalRow.count,
@@ -249,6 +282,23 @@ export function registerAdminRoutes(app: Express) {
             total_api_keys: totalApiKeysRow.count,
             trial_agents: trialAgentsRow.count,
             trial_certifications_used: Number(trialUsedRow.total) || 0,
+          },
+          onboarding_funnel: {
+            all_time: {
+              registrations: fRegAll,
+              converted: fConvAll,
+              conversion_rate: fRegAll > 0 ? Math.round((fConvAll / fRegAll) * 1000) / 10 : null,
+            },
+            last_7d: {
+              registrations: fReg7d,
+              converted: fConv7d,
+              conversion_rate: fReg7d > 0 ? Math.round((fConv7d / fReg7d) * 1000) / 10 : null,
+            },
+            last_30d: {
+              registrations: fReg30d,
+              converted: fConv30d,
+              conversion_rate: fReg30d > 0 ? Math.round((fConv30d / fReg30d) * 1000) / 10 : null,
+            },
           },
           generated_at: now.toISOString(),
         };
