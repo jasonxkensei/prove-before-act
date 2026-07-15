@@ -542,6 +542,9 @@ function makeMcpCertifyCall(fileHash: string) {
 /**
  * For MCP tool errors the payment-wall data lives inside result.content[0].text
  * (a JSON string). This helper unwraps and delegates to the shared assertX402Shape.
+ *
+ * Used for PAYMENT_REQUIRED responses, which still use the nested `x402:` block
+ * produced by buildX402Block().
  */
 function assertMcpX402Shape(mcpResult: Record<string, any>, expectedError: string) {
   expect(mcpResult.result, "MCP response must have a result field").toBeDefined();
@@ -554,6 +557,50 @@ function assertMcpX402Shape(mcpResult: Record<string, any>, expectedError: strin
 
   const inner = JSON.parse(content[0].text) as Record<string, any>;
   assertX402Shape(inner, expectedError);
+}
+
+/**
+ * For TRIAL_EXHAUSTED MCP tool errors the payment-wall fields are spread at the
+ * top level of the inner JSON (x402Version, accepts[], resource, free_trial) rather
+ * than nested under an `x402` key. This matches the shape produced by
+ * build402PayloadFromUrl() when X402_PAY_TO is configured.
+ *
+ * When X402_PAY_TO is not set (e.g. in CI without x402 credentials), those fields
+ * are absent — this helper checks them conditionally so tests pass in both
+ * environments. The always-required fields (error, message, prepaid_credits) are
+ * asserted unconditionally.
+ */
+function assertMcpX402PayloadShape(mcpResult: Record<string, any>, expectedError: string) {
+  expect(mcpResult.result, "MCP response must have a result field").toBeDefined();
+  expect(mcpResult.result.isError, "result.isError must be true for payment errors").toBe(true);
+
+  const content = mcpResult.result.content as Array<{ type: string; text: string }>;
+  expect(Array.isArray(content), "result.content must be an array").toBe(true);
+  expect(content.length, "result.content must have at least one entry").toBeGreaterThan(0);
+  expect(content[0].type, "content[0].type must be 'text'").toBe("text");
+
+  const inner = JSON.parse(content[0].text) as Record<string, any>;
+
+  // Always-required fields
+  expect(inner.error, "error must be present").toBe(expectedError);
+  expect(typeof inner.message, "message must be a string").toBe("string");
+  expect(inner.message.length, "message must not be empty").toBeGreaterThan(0);
+
+  expect(inner.prepaid_credits, "prepaid_credits must be present").toBeDefined();
+  expect(typeof inner.prepaid_credits.endpoint, "prepaid_credits.endpoint must be a string").toBe("string");
+  expect(inner.prepaid_credits.endpoint.length, "prepaid_credits.endpoint must not be empty").toBeGreaterThan(0);
+
+  // x402 payload fields — present when X402_PAY_TO is configured (build402PayloadFromUrl shape).
+  // Skipped gracefully when x402 is not configured in the test environment.
+  if (inner.x402Version !== undefined) {
+    expect(inner.x402Version, "x402Version must be 1").toBe(1);
+    expect(Array.isArray(inner.accepts), "accepts must be an array").toBe(true);
+    expect(inner.accepts.length, "accepts must have at least one entry").toBeGreaterThan(0);
+    expect(typeof inner.accepts[0].payTo, "accepts[0].payTo must be a string").toBe("string");
+    expect(inner.accepts[0].payTo.length, "accepts[0].payTo must not be empty").toBeGreaterThan(0);
+    expect(typeof inner.resource, "resource must be a string").toBe("string");
+    expect(inner.resource.length, "resource must not be empty").toBeGreaterThan(0);
+  }
 }
 
 // The MCP Streamable HTTP transport spec requires these Accept headers.
@@ -576,7 +623,7 @@ describe("MCP certify_file — TRIAL_EXHAUSTED shape", () => {
       expect(res.status, "MCP endpoint must return HTTP 200 even for payment errors").toBe(200);
 
       const mcpResult = await res.json() as Record<string, any>;
-      assertMcpX402Shape(mcpResult, "TRIAL_EXHAUSTED");
+      assertMcpX402PayloadShape(mcpResult, "TRIAL_EXHAUSTED");
     },
     15_000,
   );
@@ -656,7 +703,7 @@ describe("MCP certify_with_confidence — TRIAL_EXHAUSTED shape", () => {
       expect(res.status, "MCP endpoint must return HTTP 200 even for payment errors").toBe(200);
 
       const mcpResult = await res.json() as Record<string, any>;
-      assertMcpX402Shape(mcpResult, "TRIAL_EXHAUSTED");
+      assertMcpX402PayloadShape(mcpResult, "TRIAL_EXHAUSTED");
     },
     15_000,
   );
@@ -758,7 +805,7 @@ describe("MCP audit_agent_session — TRIAL_EXHAUSTED shape", () => {
       expect(res.status, "MCP endpoint must return HTTP 200 even for payment errors").toBe(200);
 
       const mcpResult = await res.json() as Record<string, any>;
-      assertMcpX402Shape(mcpResult, "TRIAL_EXHAUSTED");
+      assertMcpX402PayloadShape(mcpResult, "TRIAL_EXHAUSTED");
     },
     15_000,
   );
