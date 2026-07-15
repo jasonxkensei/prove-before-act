@@ -160,6 +160,81 @@ export async function createMcpServer(ctx: McpContext) {
           ipHash,
         });
 
+        // ── Onboarding "hello world" proof ─────────────────────────────────────
+        // Automatically anchor one first proof so the agent immediately has
+        // something real and verifiable on-chain — no extra call needed.
+        // authMethod = "onboarding" distinguishes this cert from quota-consumed
+        // ones. trialUsed is NOT incremented: the quota stays at TRIAL_QUOTA.
+        // Failure here is fully non-fatal; registration succeeds regardless.
+        let firstProof: { proof_id: string; verify_url: string; file_hash: string; message: string } | null = null;
+        let firstProofSkipped = false;
+        try {
+          const onboardingHash = crypto
+            .createHash("sha256")
+            .update(`xproof:onboarding:${name}:hello-world`)
+            .digest("hex"); // already lowercase from digest("hex")
+
+          const [pendingOnboarding] = await db.insert(certifications).values({
+            userId: trialUser.id,
+            fileName: "xproof-onboarding.txt",
+            fileHash: onboardingHash,
+            fileType: "txt",
+            authorName: name,
+            blockchainStatus: "pending",
+            isPublic: true,
+            authMethod: "onboarding",
+          }).returning();
+
+          let onboardingResult: Awaited<ReturnType<typeof recordOnBlockchain>>;
+          try {
+            onboardingResult = await recordOnBlockchain(
+              onboardingHash,
+              "xproof-onboarding.txt",
+              name,
+            );
+          } catch (blockchainErr) {
+            await db.delete(certifications)
+              .where(eq(certifications.id, pendingOnboarding.id))
+              .catch(() => {});
+            throw blockchainErr;
+          }
+
+          const [confirmedOnboarding] = await db.update(certifications).set({
+            transactionHash: onboardingResult.transactionHash,
+            transactionUrl: onboardingResult.transactionUrl,
+            blockchainStatus: "confirmed",
+            ...(onboardingResult.latencyMs != null
+              ? { blockchainLatencyMs: onboardingResult.latencyMs }
+              : {}),
+          }).where(eq(certifications.id, pendingOnboarding.id)).returning();
+
+          firstProof = {
+            proof_id: confirmedOnboarding.id,
+            verify_url: `${baseUrl}/proof/${confirmedOnboarding.id}`,
+            file_hash: confirmedOnboarding.fileHash,
+            message: `Your first proof is anchored on MultiversX. View it at ${baseUrl}/proof/${confirmedOnboarding.id}`,
+          };
+
+          logger.info("Onboarding proof anchored for trial agent", {
+            agentName: name,
+            userId: trialUser.id,
+            certId: confirmedOnboarding.id,
+            fileHash: onboardingHash,
+          });
+        } catch (onboardingErr) {
+          firstProofSkipped = true;
+          logger.warn("Onboarding proof skipped (non-fatal)", {
+            agentName: name,
+            userId: trialUser.id,
+            error: String(onboardingErr),
+          });
+        }
+
+        const sampleHash = crypto
+          .createHash("sha256")
+          .update("xproof:quick-start:sample")
+          .digest("hex");
+
         return {
           content: [{
             type: "text" as const,
@@ -170,10 +245,12 @@ export async function createMcpServer(ctx: McpContext) {
               trial_remaining: TRIAL_QUOTA,
               message: `Your key is ready. You have ${TRIAL_QUOTA} free on-chain certifications.`,
               next_step: `Include this header in every subsequent MCP call: Authorization: Bearer ${rawKey}`,
+              ...(firstProof ? { first_proof: firstProof } : {}),
+              ...(firstProofSkipped ? { first_proof_skipped: true } : {}),
               quick_start: {
-                mcp_certify: `Call certify_file with your file_hash + filename`,
+                mcp_certify: `Call certify_file with: { "file_hash": "<sha256-of-your-file>", "filename": "output.json" }`,
                 mcp_audit: `Call audit_agent_session before any critical action`,
-                rest_alternative: `POST ${baseUrl}/api/proof — Authorization: Bearer ${rawKey}`,
+                rest_example: `curl -s -X POST ${baseUrl}/api/proof -H "Authorization: Bearer ${rawKey}" -H "Content-Type: application/json" -d '{"file_hash":"${sampleHash}","filename":"output.json"}'`,
                 batch: `POST ${baseUrl}/api/batch — certify up to 100 hashes per call`,
               },
             }),
