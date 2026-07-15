@@ -397,11 +397,13 @@ export function registerProofWriteRoutes(app: Express) {
               creditInfo = { userId: apiKey.userId, balance };
             } else {
               const _b = `https://${req.get("host")}`;
+              const x402Payload = isX402Configured() ? await build402Response(req, "proof") : {};
               return res.status(402).json({
-                error: "PAYMENT_REQUIRED",
-                message: buildPaymentRequiredMessage(_b),
+                error: "INSUFFICIENT_CREDITS",
+                message: "Credit balance insufficient. Purchase additional credits to continue.",
                 x402: buildX402Block(_b),
                 prepaid_credits: buildPrepaidCreditsBlock(_b),
+                ...x402Payload,
               });
             }
           }

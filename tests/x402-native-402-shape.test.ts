@@ -1979,6 +1979,146 @@ describe("build402Response — native x402 402 shape contract", () => {
       ).toBe(creditPath);
     });
   });
+
+  // ── Part 3n: Real-route — proof handler INSUFFICIENT_CREDITS (pre-check) POST /api/proof ──
+  //
+  // Exercises the INSUFFICIENT_CREDITS branch that fires at the pre-check stage
+  // in /api/proof (proof-write.ts) when a non-trial, non-admin API key holder
+  // has a zero credit balance — i.e. the pre-check fires before any atomic
+  // consume or blockchain write is attempted.
+  //
+  // This is distinct from Part 3m (structural equivalence using minimal apps)
+  // and from the atomic-consume INSUFFICIENT_CREDITS path tested via Part 3m:
+  // the pre-check fires synchronously as soon as getUserCreditBalance returns 0
+  // and trialInfo is null, so atomicConsumeCredit is never called. A regression
+  // that removes the build402Response spread from only the proof pre-check
+  // branch (while leaving the atomic-race branch or batch handler intact) would
+  // not be caught by Part 3m or Part 3e.
+  //
+  // MOCKING APPROACH (mirrors Part 3l for /api/batch)
+  //   • All file-level vi.mock stubs remain active.
+  //   • mockGetTrialUser3i.mockResolvedValue(null) — no trial user → credit path.
+  //   • mockGetUserCreditBalance3j.mockResolvedValue(0) — zero balance so the
+  //     pre-check fires INSUFFICIENT_CREDITS immediately, before atomicConsumeCredit
+  //     is ever called.
+  //   • mockDbWhere3i reconfigured: API key lookup → MOCK_KEY only (the handler
+  //     returns before any certifications duplicate check is reached).
+  // ──────────────────────────────────────────────────────────────────────────────
+
+  describe("proof handler INSUFFICIENT_CREDITS (pre-check) POST /api/proof — real route via supertest (Part 3n)", () => {
+    let status: number;
+    let body:   Record<string, unknown>;
+
+    beforeAll(async () => {
+      vi.resetModules();
+
+      const MOCK_KEY = {
+        id:           "proof-precheck-key-1",
+        userId:       "proof-precheck-user-1",
+        isActive:     true,
+        requestCount: 0,
+        lastUsedAt:   null,
+      };
+      // Only the apiKeys lookup fires before the pre-check returns.
+      mockDbWhere3i.mockResolvedValue([MOCK_KEY]);
+
+      mockCheckRateLimit3i.mockResolvedValue({
+        allowed:   true,
+        remaining: 99,
+        resetAt:   Date.now() + 60_000,
+      });
+
+      // No trial user → route takes the credit path.
+      mockGetTrialUser3i.mockResolvedValue(null);
+
+      // Balance 0 → creditInfo is never set and the pre-check at
+      // ~line 401 fires INSUFFICIENT_CREDITS immediately, before any atomic
+      // consume is attempted.
+      mockGetUserCreditBalance3j.mockResolvedValue(0);
+
+      const expressModule = await import("express");
+      const app = expressModule.default();
+      app.use(expressModule.default.json());
+
+      const { registerProofWriteRoutes } = await import("../server/routes/proof-write");
+      registerProofWriteRoutes(app);
+
+      const request = supertest(app);
+
+      const res = await request
+        .post("/api/proof")
+        .set("Content-Type", "application/json")
+        .set("Authorization", "Bearer pm_proofInsufficientCreditsPrecheckTest01")
+        .send({ file_hash: "a".repeat(64), filename: "proof-precheck-test.txt" });
+
+      status = res.status;
+      body   = res.body as Record<string, unknown>;
+    });
+
+    it("responds with HTTP 402 (not 401 or 500)", () => {
+      expect(
+        status,
+        `proof INSUFFICIENT_CREDITS pre-check must return 402 — got ${status} with body: ${JSON.stringify(body)}; ` +
+          "401 means auth or mock setup failed; 500 means an unexpected error in the real proof handler",
+      ).toBe(402);
+    });
+
+    it("body.error is INSUFFICIENT_CREDITS", () => {
+      expect(
+        body.error,
+        "error must be INSUFFICIENT_CREDITS — confirms the pre-check (balance=0, no trial) fired before any atomic consume",
+      ).toBe("INSUFFICIENT_CREDITS");
+    });
+
+    it("body.x402Version is defined and equals 1", () => {
+      expect(
+        body.x402Version,
+        "x402Version must be present — agents parsing a 402 from /api/proof INSUFFICIENT_CREDITS pre-check need this to know the protocol version",
+      ).toBeDefined();
+      expect(body.x402Version, "x402Version must equal 1").toBe(1);
+    });
+
+    it("body.accepts is a non-empty array", () => {
+      expect(Array.isArray(body.accepts), "accepts must be an array").toBe(true);
+      expect(
+        (body.accepts as unknown[]).length,
+        "accepts must have at least one entry — agents need a payment option when the proof request has no credits",
+      ).toBeGreaterThan(0);
+    });
+
+    it("body.accepts[0].payTo is a non-empty string (payment address agents use)", () => {
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(
+        typeof entry.payTo,
+        "accepts[0].payTo must be a string — missing payTo strands every agent with no payment target when the INSUFFICIENT_CREDITS pre-check fires",
+      ).toBe("string");
+      expect(
+        (entry.payTo as string).length,
+        "accepts[0].payTo must not be empty",
+      ).toBeGreaterThan(0);
+    });
+
+    it("body.accepts[0].payTo equals the configured X402_PAY_TO address", () => {
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(
+        entry.payTo,
+        "accepts[0].payTo must match the configured payment address so agents pay the right wallet",
+      ).toBe(TEST_PAY_TO);
+    });
+
+    it("body.accepts[0].price is a non-empty string (the payment amount)", () => {
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(typeof entry.price, "accepts[0].price must be a string").toBe("string");
+      expect((entry.price as string).length, "accepts[0].price must not be empty").toBeGreaterThan(0);
+    });
+
+    it("body does not include a trial block (credit-key path, not trial path)", () => {
+      expect(
+        body.trial,
+        "trial block must be absent — INSUFFICIENT_CREDITS pre-check is only reached when trialInfo is null",
+      ).toBeUndefined();
+    });
+  });
 });
 
 // ── Part 3: Live server integration ──────────────────────────────────────────
