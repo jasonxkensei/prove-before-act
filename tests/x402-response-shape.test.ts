@@ -27,6 +27,7 @@ import {
   buildPaymentRequiredMessage,
   TRIAL_QUOTA,
   REGISTER_RATE_LIMIT_MAX,
+  REGISTER_RATE_LIMIT_WINDOW_MS,
 } from "../server/routes/helpers";
 
 const BASE_URL = "http://localhost:5000";
@@ -818,158 +819,176 @@ describe("MCP audit_agent_session — PAYMENT_REQUIRED shape", () => {
 
 // ─── Part 8 — MCP register_trial error shapes ─────────────────────────────────
 //
-// register_trial returns three structured error codes that onboarding agents
-// parse to self-serve: RATE_LIMIT_EXCEEDED, DUPLICATE_AGENT_NAME, and
-// REGISTRATION_ERROR. Each uses the same MCP response wrapper:
-//
+// register_trial returns structured error codes that onboarding agents parse to
+// self-serve: RATE_LIMIT_EXCEEDED, DUPLICATE_AGENT_NAME. Each uses the MCP wrapper:
 //   { content: [{ type: "text", text: JSON.stringify({ error, message }) }], isError: true }
 //
-// A wrapper-level rename (e.g. "error" → "error_code", "message" → "detail")
-// would silently break agent onboarding flows. These unit tests pin the exact
-// shape by assembling the JSON strings exactly as the handler does and parsing
-// them back — no live server or DB state required.
+// A wrapper-level rename (e.g. "error" → "error_code") would silently break
+// agent onboarding flows. These integration tests call the live /mcp endpoint
+// and assert the actual response shape the handler produces.
 
-function makeRegisterTrialMcpWrapper(payload: Record<string, unknown>) {
-  // Mirrors the exact MCP wrapper pattern used by all register_trial error returns:
-  //   return { content: [{ type: "text" as const, text: JSON.stringify({...}) }], isError: true };
+// Unique fixtures scoped to Part 8 so they don't collide with Parts 1-7.
+const REG_TEST_AGENT_NAME   = "x402-reg-shape-dup-v3";
+const REG_TEST_WALLET       = "erd1x402regshapetest000000000000000000000000000000000000000000001";
+// Both loopback addresses that the test runner may appear as at the server.
+const LOOPBACK_IPS          = ["127.0.0.1", "::1"];
+
+function makeRegisterTrialCall(agentName: string) {
   return {
-    result: {
-      isError: true,
-      content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+    jsonrpc: "2.0",
+    id: 99,
+    method: "tools/call",
+    params: { name: "register_trial", arguments: { agent_name: agentName } },
+  };
+}
+
+/** Parse the inner { error, message } payload from a live MCP response. */
+function extractRegisterInner(mcpResult: Record<string, any>): Record<string, any> {
+  const content = mcpResult.result.content as Array<{ type: string; text: string }>;
+  return JSON.parse(content[0].text) as Record<string, any>;
+}
+
+// ── Part 8a — DUPLICATE_AGENT_NAME ───────────────────────────────────────────
+
+describe("MCP register_trial — DUPLICATE_AGENT_NAME shape", () => {
+  beforeAll(async () => {
+    // Reset rate limit for loopback IPs so the duplicate-name test fires before
+    // any rate-limit exhaustion (order-safe: runs before Part 8b seeds the counter).
+    const windowStart = Math.floor(Date.now() / REGISTER_RATE_LIMIT_WINDOW_MS) * REGISTER_RATE_LIMIT_WINDOW_MS;
+    for (const ip of LOOPBACK_IPS) {
+      const ipHash = crypto.createHash("sha256").update(ip).digest("hex").slice(0, 16);
+      const bucket = `register:${ipHash}:${windowStart}`;
+      await pool.query(`DELETE FROM rate_limit_counters WHERE bucket = $1`, [bucket]);
+    }
+
+    // Seed a non-trial user whose agent_name will trigger DUPLICATE_AGENT_NAME.
+    await pool.query(
+      `INSERT INTO users (wallet_address, is_trial, agent_name, company_name, credit_balance)
+       VALUES ($1, FALSE, $2, $2, 0)
+       ON CONFLICT (wallet_address) DO UPDATE SET is_trial = FALSE, agent_name = $2, company_name = $2`,
+      [REG_TEST_WALLET, REG_TEST_AGENT_NAME],
+    );
+  });
+
+  afterAll(async () => {
+    await pool.query(`DELETE FROM users WHERE wallet_address = $1`, [REG_TEST_WALLET]);
+  });
+
+  it(
+    "returns isError:true with error=DUPLICATE_AGENT_NAME and a non-empty message",
+    async () => {
+      const res = await fetch(`${BASE_URL}/mcp`, {
+        method: "POST",
+        headers: MCP_HEADERS,
+        body: JSON.stringify(makeRegisterTrialCall(REG_TEST_AGENT_NAME)),
+      });
+
+      expect(res.status, "MCP endpoint returns HTTP 200 even for tool errors").toBe(200);
+
+      const mcpResult = await res.json() as Record<string, any>;
+      expect(mcpResult.result.isError, "isError must be true").toBe(true);
+
+      const content = mcpResult.result.content as Array<{ type: string; text: string }>;
+      expect(content[0].type, "content[0].type must be 'text'").toBe("text");
+
+      const inner = extractRegisterInner(mcpResult);
+      expect(inner.error,             "error must be DUPLICATE_AGENT_NAME").toBe("DUPLICATE_AGENT_NAME");
+      expect(typeof inner.message,    "message must be a string").toBe("string");
+      expect(inner.message.length,    "message must not be empty").toBeGreaterThan(0);
     },
-  };
-}
+    15_000,
+  );
 
-function parseRegisterTrialInner(mcpWrapper: ReturnType<typeof makeRegisterTrialMcpWrapper>) {
-  return JSON.parse(mcpWrapper.result.content[0].text) as Record<string, unknown>;
-}
+  it(
+    "DUPLICATE_AGENT_NAME message mentions the conflicting name and a suggested alternative",
+    async () => {
+      const res = await fetch(`${BASE_URL}/mcp`, {
+        method: "POST",
+        headers: MCP_HEADERS,
+        body: JSON.stringify(makeRegisterTrialCall(REG_TEST_AGENT_NAME)),
+      });
 
-describe("MCP register_trial — RATE_LIMIT_EXCEEDED error shape", () => {
-  const payload = {
-    error: "RATE_LIMIT_EXCEEDED",
-    message: `Maximum ${REGISTER_RATE_LIMIT_MAX} trial registrations per hour per IP. Try again later.`,
-  };
-  const wrapper = makeRegisterTrialMcpWrapper(payload);
-  const inner = parseRegisterTrialInner(wrapper);
-
-  it("MCP wrapper has isError: true", () => {
-    expect(wrapper.result.isError, "isError must be true so MCP clients surface it as an error").toBe(true);
-  });
-
-  it("MCP wrapper content[0].type is 'text'", () => {
-    expect(wrapper.result.content[0].type, "content[0].type must be 'text' per MCP spec").toBe("text");
-  });
-
-  it("inner error field is RATE_LIMIT_EXCEEDED", () => {
-    expect(inner.error, "error must be RATE_LIMIT_EXCEEDED so agents can branch on it").toBe("RATE_LIMIT_EXCEEDED");
-  });
-
-  it("inner message is a non-empty string", () => {
-    expect(typeof inner.message, "message must be a string").toBe("string");
-    expect((inner.message as string).length, "message must not be empty").toBeGreaterThan(0);
-  });
-
-  it("inner message mentions the rate limit count so agents know when to retry", () => {
-    expect(inner.message as string).toContain(String(REGISTER_RATE_LIMIT_MAX));
-  });
-
-  it("inner JSON round-trip preserves both fields", () => {
-    const roundTripped = JSON.parse(JSON.stringify(inner)) as Record<string, unknown>;
-    expect(roundTripped.error).toBe("RATE_LIMIT_EXCEEDED");
-    expect(typeof roundTripped.message).toBe("string");
-  });
+      const mcpResult = await res.json() as Record<string, any>;
+      const inner = extractRegisterInner(mcpResult);
+      expect(inner.message as string, "message must mention the conflicting name").toContain(REG_TEST_AGENT_NAME);
+      expect(inner.message as string, "message must include a suggested alternative").toContain("e.g.");
+    },
+    15_000,
+  );
 });
 
-describe("MCP register_trial — DUPLICATE_AGENT_NAME error shape", () => {
-  const agentName = "my-test-agent";
-  const suggested = `${agentName}-abc123`;
-  const payload = {
-    error: "DUPLICATE_AGENT_NAME",
-    message: `An agent named "${agentName}" already exists. Try a unique name (e.g. "${suggested}").`,
-  };
-  const wrapper = makeRegisterTrialMcpWrapper(payload);
-  const inner = parseRegisterTrialInner(wrapper);
+// ── Part 8b — RATE_LIMIT_EXCEEDED ────────────────────────────────────────────
 
-  it("MCP wrapper has isError: true", () => {
-    expect(wrapper.result.isError).toBe(true);
+describe("MCP register_trial — RATE_LIMIT_EXCEEDED shape", () => {
+  let windowStart: number;
+
+  beforeAll(async () => {
+    // Seed rate_limit_counters at REGISTER_RATE_LIMIT_MAX + 1 for every loopback
+    // IP the test runner may appear as. pgCheckRateLimit uses a fixed-window bucket
+    // keyed as "register:{ipHash}:{windowStart}".
+    windowStart = Math.floor(Date.now() / REGISTER_RATE_LIMIT_WINDOW_MS) * REGISTER_RATE_LIMIT_WINDOW_MS;
+    const resetAt = new Date(windowStart + REGISTER_RATE_LIMIT_WINDOW_MS);
+
+    for (const ip of LOOPBACK_IPS) {
+      const ipHash = crypto.createHash("sha256").update(ip).digest("hex").slice(0, 16);
+      const bucket = `register:${ipHash}:${windowStart}`;
+      await pool.query(
+        `INSERT INTO rate_limit_counters (bucket, count, reset_at)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (bucket) DO UPDATE SET count = GREATEST(rate_limit_counters.count, $2)`,
+        [bucket, REGISTER_RATE_LIMIT_MAX + 1, resetAt],
+      );
+    }
   });
 
-  it("MCP wrapper content[0].type is 'text'", () => {
-    expect(wrapper.result.content[0].type).toBe("text");
+  afterAll(async () => {
+    // Remove the seeded rows so this test does not permanently exhaust the
+    // register rate limit for other tests running on the same dev server.
+    for (const ip of LOOPBACK_IPS) {
+      const ipHash = crypto.createHash("sha256").update(ip).digest("hex").slice(0, 16);
+      const bucket = `register:${ipHash}:${windowStart}`;
+      await pool.query(`DELETE FROM rate_limit_counters WHERE bucket = $1`, [bucket]);
+    }
   });
 
-  it("inner error field is DUPLICATE_AGENT_NAME", () => {
-    expect(inner.error, "error must be DUPLICATE_AGENT_NAME so agents can supply a different name").toBe("DUPLICATE_AGENT_NAME");
-  });
+  it(
+    "returns isError:true with error=RATE_LIMIT_EXCEEDED and a non-empty message",
+    async () => {
+      const res = await fetch(`${BASE_URL}/mcp`, {
+        method: "POST",
+        headers: MCP_HEADERS,
+        body: JSON.stringify(makeRegisterTrialCall("x402-rate-limit-test-v3")),
+      });
 
-  it("inner message is a non-empty string", () => {
-    expect(typeof inner.message).toBe("string");
-    expect((inner.message as string).length).toBeGreaterThan(0);
-  });
+      expect(res.status, "MCP endpoint returns HTTP 200 even for rate limit errors").toBe(200);
 
-  it("inner message mentions the conflicting agent name so agents can pick a new one", () => {
-    expect(inner.message as string).toContain(agentName);
-  });
+      const mcpResult = await res.json() as Record<string, any>;
+      expect(mcpResult.result.isError, "isError must be true").toBe(true);
 
-  it("inner message includes a suggested alternative name", () => {
-    expect(inner.message as string).toContain(suggested);
-  });
+      const content = mcpResult.result.content as Array<{ type: string; text: string }>;
+      expect(content[0].type, "content[0].type must be 'text'").toBe("text");
 
-  it("inner JSON round-trip preserves both fields", () => {
-    const roundTripped = JSON.parse(JSON.stringify(inner)) as Record<string, unknown>;
-    expect(roundTripped.error).toBe("DUPLICATE_AGENT_NAME");
-    expect(typeof roundTripped.message).toBe("string");
-  });
-});
+      const inner = extractRegisterInner(mcpResult);
+      expect(inner.error,             "error must be RATE_LIMIT_EXCEEDED").toBe("RATE_LIMIT_EXCEEDED");
+      expect(typeof inner.message,    "message must be a string").toBe("string");
+      expect(inner.message.length,    "message must not be empty").toBeGreaterThan(0);
+    },
+    15_000,
+  );
 
-describe("MCP register_trial — REGISTRATION_ERROR error shape", () => {
-  const simulatedError = new Error("database connection refused");
-  const payload = {
-    error: "REGISTRATION_ERROR",
-    message: String(simulatedError),
-  };
-  const wrapper = makeRegisterTrialMcpWrapper(payload);
-  const inner = parseRegisterTrialInner(wrapper);
+  it(
+    "RATE_LIMIT_EXCEEDED message mentions the configured limit count",
+    async () => {
+      const res = await fetch(`${BASE_URL}/mcp`, {
+        method: "POST",
+        headers: MCP_HEADERS,
+        body: JSON.stringify(makeRegisterTrialCall("x402-rate-limit-test-v3-b")),
+      });
 
-  it("MCP wrapper has isError: true", () => {
-    expect(wrapper.result.isError).toBe(true);
-  });
-
-  it("MCP wrapper content[0].type is 'text'", () => {
-    expect(wrapper.result.content[0].type).toBe("text");
-  });
-
-  it("inner error field is REGISTRATION_ERROR", () => {
-    expect(inner.error, "error must be REGISTRATION_ERROR so agents know registration failed").toBe("REGISTRATION_ERROR");
-  });
-
-  it("inner message is a non-empty string containing the error detail", () => {
-    expect(typeof inner.message).toBe("string");
-    expect((inner.message as string).length).toBeGreaterThan(0);
-    expect(inner.message as string).toContain("database connection refused");
-  });
-
-  it("inner JSON round-trip preserves both fields", () => {
-    const roundTripped = JSON.parse(JSON.stringify(inner)) as Record<string, unknown>;
-    expect(roundTripped.error).toBe("REGISTRATION_ERROR");
-    expect(typeof roundTripped.message).toBe("string");
-  });
-});
-
-describe("MCP register_trial — all error codes share the same { error, message } contract", () => {
-  const errorCodes = [
-    { error: "RATE_LIMIT_EXCEEDED",  message: `Maximum ${REGISTER_RATE_LIMIT_MAX} trial registrations per hour per IP. Try again later.` },
-    { error: "DUPLICATE_AGENT_NAME", message: 'An agent named "bot" already exists. Try a unique name (e.g. "bot-1a2b3c").' },
-    { error: "REGISTRATION_ERROR",   message: "Error: internal db failure" },
-  ];
-
-  for (const { error, message } of errorCodes) {
-    it(`${error}: inner JSON has string error and string message`, () => {
-      const inner = parseRegisterTrialInner(makeRegisterTrialMcpWrapper({ error, message }));
-      expect(typeof inner.error).toBe("string");
-      expect(inner.error).toBe(error);
-      expect(typeof inner.message).toBe("string");
-      expect((inner.message as string).length).toBeGreaterThan(0);
-    });
-  }
+      const mcpResult = await res.json() as Record<string, any>;
+      const inner = extractRegisterInner(mcpResult);
+      expect(inner.message as string, "message must contain the limit count").toContain(String(REGISTER_RATE_LIMIT_MAX));
+    },
+    15_000,
+  );
 });
