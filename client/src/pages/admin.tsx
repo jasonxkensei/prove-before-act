@@ -89,6 +89,8 @@ interface PublicStats {
     all_time: { registrations: number; converted: number; conversion_rate: number | null };
     last_7d:  { registrations: number; converted: number; conversion_rate: number | null };
     last_30d: { registrations: number; converted: number; conversion_rate: number | null };
+    prev_7d:  { registrations: number; converted: number; conversion_rate: number | null };
+    prev_30d: { registrations: number; converted: number; conversion_rate: number | null };
   };
   generated_at: string;
 }
@@ -492,6 +494,9 @@ function OnboardingFunnelCard({ data }: { data: PublicStats["onboarding_funnel"]
   const rate = current.conversion_rate;
   const dropOff = current.registrations - current.converted;
 
+  const prevWindow = activeWindow === "last_7d" ? data.prev_7d : activeWindow === "last_30d" ? data.prev_30d : null;
+  const prevRate = prevWindow?.conversion_rate ?? null;
+
   return (
     <Card data-testid="card-onboarding-funnel">
       <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
@@ -500,6 +505,9 @@ function OnboardingFunnelCard({ data }: { data: PublicStats["onboarding_funnel"]
           <Badge variant="secondary" data-testid="badge-funnel-rate">
             {rate !== null ? `${rate}% converted` : "No data"}
           </Badge>
+          {prevRate !== null && rate !== null && (
+            <TrendIndicator current={rate} previous={prevRate} />
+          )}
         </div>
         <div className="flex items-center gap-1">
           <Filter className="h-4 w-4 text-muted-foreground" />

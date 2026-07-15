@@ -212,19 +212,27 @@ export function registerAdminRoutes(app: Express) {
           COUNT(DISTINCT o.user_id) AS registrations_all,
           COUNT(DISTINCT o.user_id) FILTER (WHERE o.registered_at >= NOW() - INTERVAL '7 days')  AS registrations_7d,
           COUNT(DISTINCT o.user_id) FILTER (WHERE o.registered_at >= NOW() - INTERVAL '30 days') AS registrations_30d,
+          COUNT(DISTINCT o.user_id) FILTER (WHERE o.registered_at >= NOW() - INTERVAL '14 days' AND o.registered_at < NOW() - INTERVAL '7 days')  AS registrations_prev_7d,
+          COUNT(DISTINCT o.user_id) FILTER (WHERE o.registered_at >= NOW() - INTERVAL '60 days' AND o.registered_at < NOW() - INTERVAL '30 days') AS registrations_prev_30d,
           COUNT(DISTINCT o.user_id) FILTER (WHERE r.user_id IS NOT NULL) AS converted_all,
           COUNT(DISTINCT o.user_id) FILTER (WHERE r.user_id IS NOT NULL AND o.registered_at >= NOW() - INTERVAL '7 days')  AS converted_7d,
-          COUNT(DISTINCT o.user_id) FILTER (WHERE r.user_id IS NOT NULL AND o.registered_at >= NOW() - INTERVAL '30 days') AS converted_30d
+          COUNT(DISTINCT o.user_id) FILTER (WHERE r.user_id IS NOT NULL AND o.registered_at >= NOW() - INTERVAL '30 days') AS converted_30d,
+          COUNT(DISTINCT o.user_id) FILTER (WHERE r.user_id IS NOT NULL AND o.registered_at >= NOW() - INTERVAL '14 days' AND o.registered_at < NOW() - INTERVAL '7 days')  AS converted_prev_7d,
+          COUNT(DISTINCT o.user_id) FILTER (WHERE r.user_id IS NOT NULL AND o.registered_at >= NOW() - INTERVAL '60 days' AND o.registered_at < NOW() - INTERVAL '30 days') AS converted_prev_30d
         FROM onboarded o
         LEFT JOIN real_certs r ON r.user_id = o.user_id
       `);
       const frow = (funnelResult.rows[0] as Record<string, string>) || {};
-      const fRegAll  = parseInt(frow.registrations_all  || "0");
-      const fReg7d   = parseInt(frow.registrations_7d   || "0");
-      const fReg30d  = parseInt(frow.registrations_30d  || "0");
-      const fConvAll = parseInt(frow.converted_all  || "0");
-      const fConv7d  = parseInt(frow.converted_7d   || "0");
-      const fConv30d = parseInt(frow.converted_30d  || "0");
+      const fRegAll      = parseInt(frow.registrations_all      || "0");
+      const fReg7d       = parseInt(frow.registrations_7d       || "0");
+      const fReg30d      = parseInt(frow.registrations_30d      || "0");
+      const fRegPrev7d   = parseInt(frow.registrations_prev_7d  || "0");
+      const fRegPrev30d  = parseInt(frow.registrations_prev_30d || "0");
+      const fConvAll     = parseInt(frow.converted_all          || "0");
+      const fConv7d      = parseInt(frow.converted_7d           || "0");
+      const fConv30d     = parseInt(frow.converted_30d          || "0");
+      const fConvPrev7d  = parseInt(frow.converted_prev_7d      || "0");
+      const fConvPrev30d = parseInt(frow.converted_prev_30d     || "0");
 
         const body = {
           certifications: {
@@ -298,6 +306,16 @@ export function registerAdminRoutes(app: Express) {
               registrations: fReg30d,
               converted: fConv30d,
               conversion_rate: fReg30d > 0 ? Math.round((fConv30d / fReg30d) * 1000) / 10 : null,
+            },
+            prev_7d: {
+              registrations: fRegPrev7d,
+              converted: fConvPrev7d,
+              conversion_rate: fRegPrev7d > 0 ? Math.round((fConvPrev7d / fRegPrev7d) * 1000) / 10 : null,
+            },
+            prev_30d: {
+              registrations: fRegPrev30d,
+              converted: fConvPrev30d,
+              conversion_rate: fRegPrev30d > 0 ? Math.round((fConvPrev30d / fRegPrev30d) * 1000) / 10 : null,
             },
           },
           generated_at: now.toISOString(),
