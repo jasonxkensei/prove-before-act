@@ -1686,6 +1686,164 @@ describe("build402Response — native x402 402 shape contract", () => {
       expect((entry.price as string).length, "accepts[0].price must not be empty").toBeGreaterThan(0);
     });
   });
+
+  // ── Part 3l: Real-route — batch handler INSUFFICIENT_CREDITS (pre-check) POST /api/batch ──
+  //
+  // Exercises the INSUFFICIENT_CREDITS branch that fires at the pre-check stage
+  // in /api/batch (proof-write.ts ~line 1449-1457) when newFileCount exceeds
+  // creditInfo.balance — i.e. the agent has fewer prepaid credits than files
+  // requested, before any atomic consume is attempted.
+  //
+  // This is distinct from Part 3k (atomic-race path where balance >= newFileCount
+  // but atomicConsumeCredit returns false): the pre-check fires synchronously
+  // and includes a `credits` block (balance, requested) so agents know exactly
+  // how many credits they are short. Trial fields must be absent because this
+  // path is only reached when trialInfo is null (credit-key holder, no trial).
+  //
+  // A regression that removes the build402Response spread from only the
+  // pre-check INSUFFICIENT_CREDITS branch (while leaving the atomic-race branch
+  // or the audit-log handler intact) would not be caught by Part 3k, 3j, or
+  // any earlier test.
+  //
+  // MOCKING APPROACH (mirrors Part 3k)
+  //   • All file-level vi.mock stubs remain active.
+  //   • mockGetTrialUser3i.mockResolvedValue(null) — no trial user → credit path.
+  //   • mockGetUserCreditBalance3j.mockResolvedValue(1) — balance 1 < 2 files
+  //     requested, so the pre-check fires INSUFFICIENT_CREDITS immediately.
+  //   • mockDbWhere3i reconfigured: API key lookup → MOCK_KEY, subsequent selects
+  //     (certifications duplicate check) → [] so both files are counted as new.
+  // ──────────────────────────────────────────────────────────────────────────────
+
+  describe("batch handler INSUFFICIENT_CREDITS (pre-check) POST /api/batch — real route via supertest (Part 3l)", () => {
+    let status: number;
+    let body:   Record<string, unknown>;
+
+    beforeAll(async () => {
+      vi.resetModules();
+
+      const MOCK_KEY = {
+        id:           "batch-precheck-key-1",
+        userId:       "batch-precheck-user-1",
+        isActive:     true,
+        requestCount: 0,
+        lastUsedAt:   null,
+      };
+      mockDbWhere3i
+        .mockResolvedValueOnce([MOCK_KEY])  // apiKeys lookup → found
+        .mockResolvedValue([]);              // certifications duplicate check → all new
+
+      mockCheckRateLimit3i.mockResolvedValue({
+        allowed:   true,
+        remaining: 99,
+        resetAt:   Date.now() + 60_000,
+      });
+
+      // No trial user → route takes the credit path.
+      mockGetTrialUser3i.mockResolvedValue(null);
+
+      // Balance (1) is less than newFileCount (2 files) so the pre-check at
+      // ~line 1450 fires INSUFFICIENT_CREDITS immediately, before any atomic
+      // consume is attempted.
+      mockGetUserCreditBalance3j.mockResolvedValue(1);
+
+      const expressModule = await import("express");
+      const app = expressModule.default();
+      app.use(expressModule.default.json());
+
+      const { registerProofWriteRoutes } = await import("../server/routes/proof-write");
+      registerProofWriteRoutes(app);
+
+      const request = supertest(app);
+
+      const res = await request
+        .post("/api/batch")
+        .set("Content-Type", "application/json")
+        .set("Authorization", "Bearer pm_batchInsufficientCreditsPrecheckTest01")
+        .send({
+          files: [
+            { file_hash: "f".repeat(64), filename: "precheck-batch-test-1.txt" },
+            { file_hash: "1".repeat(64), filename: "precheck-batch-test-2.txt" },
+          ],
+        });
+
+      status = res.status;
+      body   = res.body as Record<string, unknown>;
+    });
+
+    it("responds with HTTP 402 (not 401 or 500)", () => {
+      expect(
+        status,
+        `batch INSUFFICIENT_CREDITS pre-check must return 402 — got ${status} with body: ${JSON.stringify(body)}; ` +
+          "401 means auth or mock setup failed; 500 means an unexpected error in the real batch handler",
+      ).toBe(402);
+    });
+
+    it("body.error is INSUFFICIENT_CREDITS", () => {
+      expect(
+        body.error,
+        "error must be INSUFFICIENT_CREDITS — confirms the pre-check (newFileCount > creditInfo.balance) fired before any atomic consume",
+      ).toBe("INSUFFICIENT_CREDITS");
+    });
+
+    it("body.x402Version is defined and equals 1", () => {
+      expect(
+        body.x402Version,
+        "x402Version must be present — agents parsing a 402 from /api/batch INSUFFICIENT_CREDITS pre-check need this to know the protocol version",
+      ).toBeDefined();
+      expect(body.x402Version, "x402Version must equal 1").toBe(1);
+    });
+
+    it("body.accepts is a non-empty array", () => {
+      expect(Array.isArray(body.accepts), "accepts must be an array").toBe(true);
+      expect(
+        (body.accepts as unknown[]).length,
+        "accepts must have at least one entry — agents need a payment option when the batch exceeds the credit balance",
+      ).toBeGreaterThan(0);
+    });
+
+    it("body.accepts[0].payTo is a non-empty string (payment address agents use)", () => {
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(
+        typeof entry.payTo,
+        "accepts[0].payTo must be a string — missing payTo strands every batch agent with no payment target when the INSUFFICIENT_CREDITS pre-check fires",
+      ).toBe("string");
+      expect(
+        (entry.payTo as string).length,
+        "accepts[0].payTo must not be empty",
+      ).toBeGreaterThan(0);
+    });
+
+    it("body.accepts[0].payTo equals the configured X402_PAY_TO address", () => {
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(
+        entry.payTo,
+        "accepts[0].payTo must match the configured payment address so batch agents pay the right wallet",
+      ).toBe(TEST_PAY_TO);
+    });
+
+    it("body.accepts[0].price is a non-empty string (the payment amount)", () => {
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(typeof entry.price, "accepts[0].price must be a string").toBe("string");
+      expect((entry.price as string).length, "accepts[0].price must not be empty").toBeGreaterThan(0);
+    });
+
+    it("body.credits block is present with balance and requested counts", () => {
+      expect(
+        body.credits,
+        "credits block must be present — agents and operators need to know the balance and request size to plan a top-up",
+      ).toBeDefined();
+      const c = body.credits as Record<string, unknown>;
+      expect(c.balance, "credits.balance must be 1 (the mocked balance)").toBe(1);
+      expect(c.requested, "credits.requested must be 2 (the number of new files)").toBe(2);
+    });
+
+    it("body does not include a trial block (credit-key path, not trial path)", () => {
+      expect(
+        body.trial,
+        "trial block must be absent — INSUFFICIENT_CREDITS pre-check is only reached when trialInfo is null",
+      ).toBeUndefined();
+    });
+  });
 });
 
 // ── Part 3: Live server integration ──────────────────────────────────────────
