@@ -134,3 +134,45 @@ describe("buildX402Block — network fallback on malformed X402_NETWORK_LABEL", 
     expect(block.network).toBe("Base Sepolia (eip155:84532)");
   });
 });
+
+// ---------------------------------------------------------------------------
+// buildX402Block().steps[2] embeds X402_NETWORK_NAME (short name, no eip suffix)
+// ---------------------------------------------------------------------------
+
+describe("buildX402Block — steps[2] network name fallback on malformed X402_NETWORK_LABEL", () => {
+  const DEFAULT_NETWORK_NAME = "Base"; // X402_NETWORK.split(" (")[0] of default "Base (eip155:8453)"
+
+  it("steps[2] contains default network name when X402_NETWORK_LABEL is empty", async () => {
+    process.env.X402_NETWORK_LABEL = "";
+    const { buildX402Block } = await loadHelpers();
+    const block = buildX402Block("https://example.com");
+    const steps = block.steps as string[];
+    expect(steps[2]).toContain(DEFAULT_NETWORK_NAME);
+  });
+
+  it("steps[2] does NOT contain the malformed label when X402_NETWORK_LABEL is invalid", async () => {
+    process.env.X402_NETWORK_LABEL = "notanetwork";
+    const { buildX402Block } = await loadHelpers();
+    const block = buildX402Block("https://example.com");
+    const steps = block.steps as string[];
+    expect(steps[2]).not.toContain("notanetwork");
+    expect(steps[2]).toContain(DEFAULT_NETWORK_NAME);
+  });
+
+  it("steps[2] contains default network name when X402_NETWORK_LABEL is absent", async () => {
+    delete process.env.X402_NETWORK_LABEL;
+    const { buildX402Block } = await loadHelpers();
+    const block = buildX402Block("https://example.com");
+    const steps = block.steps as string[];
+    expect(steps[2]).toContain(DEFAULT_NETWORK_NAME);
+  });
+
+  it("steps[2] contains custom short name when X402_NETWORK_LABEL is valid custom label", async () => {
+    process.env.X402_NETWORK_LABEL = "Base Sepolia (eip155:84532)";
+    const { buildX402Block } = await loadHelpers();
+    const block = buildX402Block("https://example.com");
+    const steps = block.steps as string[];
+    expect(steps[2]).toContain("Base Sepolia");
+    expect(steps[2]).not.toContain("eip155");
+  });
+});
