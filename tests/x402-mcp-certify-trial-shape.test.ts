@@ -375,6 +375,89 @@ describe("certify_with_confidence TRIAL_EXHAUSTED — MCP 402 payload shape (Tas
     });
   });
 
+  // ── Part E: mcpPaymentRequired PAYMENT_REQUIRED JSON round-trip ──────────
+  //
+  // Non-trial agents with a zero credit balance hit mcpPaymentRequired(baseUrl)
+  // in server/mcp.ts. Before this fix it returned only the human-readable
+  // `x402: buildX402Block(...)` block without x402Version or accepts[], so
+  // agents could not autonomously pay and retry. mcpPaymentRequired is now async
+  // and spreads build402PayloadFromUrl(baseUrl, "proof") when isX402Configured(),
+  // matching mcpTrialExhausted and mcpInsufficientCredits. These tests verify the
+  // resulting JSON string includes the machine-readable x402 protocol fields.
+
+  describe("mcpPaymentRequired PAYMENT_REQUIRED JSON round-trip", () => {
+    type PaymentBody = Record<string, unknown>;
+
+    const buildPaymentRequiredJson = async (): Promise<PaymentBody> => {
+      const x402Payload = isX402Configured() ? await build402PayloadFromUrl(TEST_BASE_URL, "proof") : {};
+      const raw = JSON.stringify({
+        error: "PAYMENT_REQUIRED",
+        message: "Credit balance is zero. Add prepaid credits or pay per-request via x402.",
+        prepaid_credits: { purchase: `${TEST_BASE_URL}/api/credits/purchase` },
+        ...x402Payload,
+      });
+      return JSON.parse(raw) as PaymentBody;
+    };
+
+    it("x402Version present and equals 1 after JSON round-trip", async () => {
+      const body = await buildPaymentRequiredJson();
+      expect(body.x402Version, "PAYMENT_REQUIRED MCP response must include x402Version so agents can detect x402 responses").toBe(1);
+    });
+
+    it("accepts is a non-empty array after JSON round-trip", async () => {
+      const body = await buildPaymentRequiredJson();
+      expect(Array.isArray(body.accepts), "accepts must be an array").toBe(true);
+      expect((body.accepts as unknown[]).length, "accepts must not be empty").toBeGreaterThan(0);
+    });
+
+    it("accepts[0].payTo is present and matches TEST_PAY_TO after JSON round-trip", async () => {
+      const body = await buildPaymentRequiredJson();
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(typeof entry.payTo, "accepts[0].payTo must be a string").toBe("string");
+      expect((entry.payTo as string).length, "accepts[0].payTo must not be empty").toBeGreaterThan(0);
+      expect(entry.payTo, "PAYMENT_REQUIRED MCP response must include accepts[0].payTo matching X402_PAY_TO").toBe(TEST_PAY_TO);
+    });
+
+    it("accepts[0].price is a non-empty string after JSON round-trip", async () => {
+      const body = await buildPaymentRequiredJson();
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(typeof entry.price, "accepts[0].price must be a string").toBe("string");
+      expect((entry.price as string).length, "accepts[0].price must not be empty").toBeGreaterThan(0);
+    });
+
+    it("resource is a non-empty string referencing /api/proof after JSON round-trip", async () => {
+      const body = await buildPaymentRequiredJson();
+      expect(typeof body.resource, "resource must be a string").toBe("string");
+      expect((body.resource as string).length, "resource must not be empty").toBeGreaterThan(0);
+      expect(body.resource as string, "resource must reference /api/proof so agents know the retry target").toContain("/api/proof");
+    });
+
+    it("error field is PAYMENT_REQUIRED (x402 spread must not clobber it)", async () => {
+      const body = await buildPaymentRequiredJson();
+      expect(body.error, "error must remain PAYMENT_REQUIRED after x402 spread").toBe("PAYMENT_REQUIRED");
+    });
+
+    it("prepaid_credits block is preserved alongside x402 fields", async () => {
+      const body = await buildPaymentRequiredJson();
+      expect(body.prepaid_credits, "prepaid_credits must survive the x402 spread").toBeDefined();
+    });
+
+    it("PAYMENT_REQUIRED and TRIAL_EXHAUSTED payloads share the same x402Version and payTo", async () => {
+      const payment = await buildPaymentRequiredJson();
+      const trial: PaymentBody = {
+        error: "TRIAL_EXHAUSTED",
+        message: "Trial limit reached.",
+        prepaid_credits: { purchase: `${TEST_BASE_URL}/api/credits/purchase` },
+        ...(isX402Configured() ? await build402PayloadFromUrl(TEST_BASE_URL, "proof") : {}),
+      };
+      expect(payment.x402Version, "PAYMENT_REQUIRED x402Version must equal TRIAL_EXHAUSTED x402Version").toBe(trial.x402Version);
+      expect(
+        (payment.accepts as Record<string, unknown>[])[0].payTo,
+        "PAYMENT_REQUIRED payTo must match TRIAL_EXHAUSTED payTo",
+      ).toBe((trial.accepts as Record<string, unknown>[])[0].payTo);
+    });
+  });
+
   // ── Part F: audit_agent_session TRIAL_EXHAUSTED JSON round-trip ──────────
   //
   // audit_agent_session has a TRIAL_EXHAUSTED path in server/mcp.ts (line ~397)

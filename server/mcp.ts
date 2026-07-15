@@ -64,8 +64,9 @@ async function mcpInsufficientCredits(baseUrl: string, extra?: Record<string, un
   return mcpErr({ error: "INSUFFICIENT_CREDITS", message: "Credit balance insufficient. Purchase additional credits to continue.", prepaid_credits: buildPrepaidCreditsBlock(baseUrl), ...x402, ...extra });
 }
 
-function mcpPaymentRequired(baseUrl: string, extra?: Record<string, unknown>) {
-  return mcpErr({ error: "PAYMENT_REQUIRED", message: buildPaymentRequiredMessage(baseUrl), x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl), ...extra });
+async function mcpPaymentRequired(baseUrl: string, extra?: Record<string, unknown>) {
+  const x402 = isX402Configured() ? await build402PayloadFromUrl(baseUrl, "proof") : {};
+  return mcpErr({ error: "PAYMENT_REQUIRED", message: buildPaymentRequiredMessage(baseUrl), x402: buildX402Block(baseUrl), prepaid_credits: buildPrepaidCreditsBlock(baseUrl), ...x402, ...extra });
 }
 
 export async function createMcpServer(ctx: McpContext) {
@@ -299,7 +300,7 @@ export async function createMcpServer(ctx: McpContext) {
           if (!ownerWallet || !isAdminWallet(ownerWallet)) {
             const balance = await getUserCreditBalance(auth.userId);
             if (balance <= 0) {
-              return mcpPaymentRequired(baseUrl);
+              return await mcpPaymentRequired(baseUrl);
             }
             mcpCreditInfo = { userId: auth.userId, balance };
           }
@@ -556,7 +557,7 @@ export async function createMcpServer(ctx: McpContext) {
           if (!ownerWallet || !isAdminWallet(ownerWallet)) {
             const balance = await getUserCreditBalance(auth.userId);
             if (balance <= 0) {
-              return mcpPaymentRequired(baseUrl);
+              return await mcpPaymentRequired(baseUrl);
             }
             cwcCreditInfo = { userId: auth.userId, balance };
           }
@@ -1039,7 +1040,7 @@ export async function createMcpServer(ctx: McpContext) {
           if (!ownerWallet || !isAdminWallet(ownerWallet)) {
             const balance = await getUserCreditBalance(auth.userId);
             if (balance <= 0) {
-              return mcpPaymentRequired(baseUrl);
+              return await mcpPaymentRequired(baseUrl);
             }
             auditCreditInfo = { userId: auth.userId, balance };
           }
@@ -1365,7 +1366,7 @@ export async function createMcpServer(ctx: McpContext) {
             if (!ownerWallet || !isAdminWallet(ownerWallet)) {
               const balance = await getUserCreditBalance(auth.userId);
               if (balance <= 0) {
-                return mcpPaymentRequired(baseUrl, { incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` });
+                return await mcpPaymentRequired(baseUrl, { incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` });
               }
               invCreditInfo = { userId: auth.userId, balance };
             }
