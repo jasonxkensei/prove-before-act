@@ -538,6 +538,134 @@ describe("certify_with_confidence TRIAL_EXHAUSTED — MCP 402 payload shape (Tas
     });
   });
 
+  // ── Part H: investigate_proof TRIAL_EXHAUSTED JSON round-trip ────────────
+  //
+  // investigate_proof has two TRIAL_EXHAUSTED paths in server/mcp.ts (lines
+  // ~1360 and ~1379) that both call:
+  //
+  //   mcpTrialExhausted(baseUrl, { incident_report_url: `${baseUrl}/incident/...` })
+  //
+  // mcpTrialExhausted spreads build402PayloadFromUrl(baseUrl, "proof") when
+  // isX402Configured(), then spreads the extra { incident_report_url } on top.
+  // Part 9b of tests/x402-response-shape.test.ts only asserts error, message,
+  // prepaid_credits, and incident_report_url — it does NOT check x402Version,
+  // accepts[], or resource, because X402_PAY_TO is unset in CI.
+  // This block provides unconditional stub-env coverage so a regression
+  // removing the spread cannot hide.
+  //
+  // It also verifies that build402PayloadFromUrl(baseUrl, "investigate") — the
+  // route used by verifyX402Payment for the investigate endpoint — sets
+  // resource = baseUrl + /mcp (not /api/proof), so agents constructing a
+  // payment directly for the MCP endpoint use the correct resource URL.
+
+  describe("investigate_proof TRIAL_EXHAUSTED JSON round-trip", () => {
+    type InvestigateBody = Record<string, unknown>;
+
+    const MOCK_INCIDENT_URL = `${TEST_BASE_URL}/incident/erd1test.../proof-id-123`;
+
+    const buildInvestigateTrialJson = async (): Promise<InvestigateBody> => {
+      const x402Payload = isX402Configured() ? await build402PayloadFromUrl(TEST_BASE_URL, "proof") : {};
+      const raw = JSON.stringify({
+        error: "TRIAL_EXHAUSTED",
+        message: `Trial limit reached. You have used all ${10} free certifications. Use x402 per-request payment or purchase prepaid credits.`,
+        prepaid_credits: { purchase: `${TEST_BASE_URL}/api/credits/purchase` },
+        ...x402Payload,
+        incident_report_url: MOCK_INCIDENT_URL,
+      });
+      return JSON.parse(raw) as InvestigateBody;
+    };
+
+    it("build402PayloadFromUrl('investigate') resource contains /mcp (not /api/proof)", async () => {
+      const payload = await build402PayloadFromUrl(TEST_BASE_URL, "investigate");
+      expect(typeof payload.resource, "resource must be a string").toBe("string");
+      expect(
+        payload.resource as string,
+        "investigate route resource must reference /mcp so agents pay the MCP endpoint",
+      ).toContain("/mcp");
+      expect(
+        payload.resource as string,
+        "investigate route resource must NOT reference /api/proof — that is the proof-write resource",
+      ).not.toContain("/api/proof");
+    });
+
+    it("build402PayloadFromUrl('investigate') x402Version is 1", async () => {
+      const payload = await build402PayloadFromUrl(TEST_BASE_URL, "investigate");
+      expect(payload.x402Version, "x402Version must be 1").toBe(1);
+    });
+
+    it("build402PayloadFromUrl('investigate') accepts[0].payTo matches X402_PAY_TO", async () => {
+      const payload = await build402PayloadFromUrl(TEST_BASE_URL, "investigate");
+      expect(Array.isArray(payload.accepts), "accepts must be an array").toBe(true);
+      const entry = (payload.accepts as Record<string, unknown>[])[0];
+      expect(entry.payTo, "accepts[0].payTo must match the configured X402_PAY_TO address").toBe(TEST_PAY_TO);
+    });
+
+    it("x402Version present and equals 1 after JSON round-trip", async () => {
+      const body = await buildInvestigateTrialJson();
+      expect(body.x402Version, "investigate_proof TRIAL_EXHAUSTED must include x402Version after JSON round-trip").toBe(1);
+    });
+
+    it("accepts is a non-empty array after JSON round-trip", async () => {
+      const body = await buildInvestigateTrialJson();
+      expect(Array.isArray(body.accepts), "accepts must be an array").toBe(true);
+      expect((body.accepts as unknown[]).length, "accepts must not be empty").toBeGreaterThan(0);
+    });
+
+    it("accepts[0].payTo is present and matches TEST_PAY_TO after JSON round-trip", async () => {
+      const body = await buildInvestigateTrialJson();
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(typeof entry.payTo, "accepts[0].payTo must be a string").toBe("string");
+      expect((entry.payTo as string).length, "accepts[0].payTo must not be empty").toBeGreaterThan(0);
+      expect(entry.payTo, "investigate_proof TRIAL_EXHAUSTED must include accepts[0].payTo matching X402_PAY_TO").toBe(TEST_PAY_TO);
+    });
+
+    it("accepts[0].price is a non-empty string after JSON round-trip", async () => {
+      const body = await buildInvestigateTrialJson();
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(typeof entry.price, "accepts[0].price must be a string").toBe("string");
+      expect((entry.price as string).length, "accepts[0].price must not be empty").toBeGreaterThan(0);
+    });
+
+    it("resource is a non-empty string after JSON round-trip", async () => {
+      const body = await buildInvestigateTrialJson();
+      expect(typeof body.resource, "resource must be a string").toBe("string");
+      expect((body.resource as string).length, "resource must not be empty").toBeGreaterThan(0);
+    });
+
+    it("error field is TRIAL_EXHAUSTED (x402 spread must not clobber it)", async () => {
+      const body = await buildInvestigateTrialJson();
+      expect(body.error, "error must remain TRIAL_EXHAUSTED after x402 spread").toBe("TRIAL_EXHAUSTED");
+    });
+
+    it("prepaid_credits block is preserved alongside x402 fields", async () => {
+      const body = await buildInvestigateTrialJson();
+      expect(body.prepaid_credits, "prepaid_credits must survive the x402 spread").toBeDefined();
+    });
+
+    it("incident_report_url extra field survives the spread and is the mock URL", async () => {
+      const body = await buildInvestigateTrialJson();
+      expect(
+        body.incident_report_url,
+        "incident_report_url extra must survive after x402 spread — agents need it to fetch the full audit trail",
+      ).toBe(MOCK_INCIDENT_URL);
+    });
+
+    it("investigate_proof and certify_file TRIAL_EXHAUSTED payloads share the same x402Version and payTo", async () => {
+      const inv = await buildInvestigateTrialJson();
+      const cf: InvestigateBody = {
+        error: "TRIAL_EXHAUSTED",
+        message: `Trial limit reached. You have used all ${10} free certifications. Use x402 per-request payment or purchase prepaid credits.`,
+        prepaid_credits: { purchase: `${TEST_BASE_URL}/api/credits/purchase` },
+        ...(isX402Configured() ? await build402PayloadFromUrl(TEST_BASE_URL, "proof") : {}),
+      };
+      expect(inv.x402Version, "investigate_proof x402Version must equal certify_file x402Version").toBe(cf.x402Version);
+      expect(
+        (inv.accepts as Record<string, unknown>[])[0].payTo,
+        "investigate_proof payTo must match certify_file payTo",
+      ).toBe((cf.accepts as Record<string, unknown>[])[0].payTo);
+    });
+  });
+
   // ── Part G: certify_with_confidence INSUFFICIENT_CREDITS JSON round-trip ──
   //
   // certify_with_confidence has three INSUFFICIENT_CREDITS paths in server/mcp.ts
