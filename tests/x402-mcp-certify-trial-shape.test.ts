@@ -291,4 +291,87 @@ describe("certify_with_confidence TRIAL_EXHAUSTED — MCP 402 payload shape (Tas
       ).toBe((cwc.accepts as Record<string, unknown>[])[0].payTo);
     });
   });
+
+  // ── Part D: certify_file INSUFFICIENT_CREDITS JSON round-trip ────────────
+  //
+  // certify_file has two INSUFFICIENT_CREDITS paths (ACP-displacement and
+  // normal atomic-revoke). Both call mcpInsufficientCredits(baseUrl) which
+  // assembles:
+  //
+  //   const x402 = isX402Configured() ? await build402PayloadFromUrl(baseUrl, "proof") : {};
+  //   return mcpErr({ error: "INSUFFICIENT_CREDITS", message: "...",
+  //                   prepaid_credits: buildPrepaidCreditsBlock(baseUrl), ...x402 });
+  //
+  // These tests verify that the resulting JSON string is parseable by agents
+  // and contains the required x402 protocol fields.
+
+  describe("certify_file INSUFFICIENT_CREDITS JSON round-trip (Task #434)", () => {
+    type InsufficientBody = Record<string, unknown>;
+
+    const buildInsufficientJson = async (): Promise<InsufficientBody> => {
+      const x402Payload = isX402Configured() ? await build402PayloadFromUrl(TEST_BASE_URL, "proof") : {};
+      const raw = JSON.stringify({
+        error: "INSUFFICIENT_CREDITS",
+        message: "Credit balance insufficient. Purchase additional credits to continue.",
+        prepaid_credits: { purchase: `${TEST_BASE_URL}/api/credits/purchase` },
+        ...x402Payload,
+      });
+      return JSON.parse(raw) as InsufficientBody;
+    };
+
+    it("x402Version present and equals 1 after JSON round-trip", async () => {
+      const body = await buildInsufficientJson();
+      expect(body.x402Version, "INSUFFICIENT_CREDITS MCP response must include x402Version after JSON round-trip").toBe(1);
+    });
+
+    it("accepts is a non-empty array after JSON round-trip", async () => {
+      const body = await buildInsufficientJson();
+      expect(Array.isArray(body.accepts), "accepts must be an array").toBe(true);
+      expect((body.accepts as unknown[]).length, "accepts must not be empty").toBeGreaterThan(0);
+    });
+
+    it("accepts[0].payTo is present and matches TEST_PAY_TO after JSON round-trip", async () => {
+      const body = await buildInsufficientJson();
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(entry.payTo, "INSUFFICIENT_CREDITS MCP response must include accepts[0].payTo after JSON round-trip").toBe(TEST_PAY_TO);
+    });
+
+    it("accepts[0].price is a non-empty string after JSON round-trip", async () => {
+      const body = await buildInsufficientJson();
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(typeof entry.price, "accepts[0].price must be a string").toBe("string");
+      expect((entry.price as string).length, "accepts[0].price must not be empty").toBeGreaterThan(0);
+    });
+
+    it("resource contains /api/proof after JSON round-trip", async () => {
+      const body = await buildInsufficientJson();
+      expect(typeof body.resource, "resource must be a string").toBe("string");
+      expect(body.resource as string, "resource must reference /api/proof").toContain("/api/proof");
+    });
+
+    it("error field is INSUFFICIENT_CREDITS (spread must not clobber it)", async () => {
+      const body = await buildInsufficientJson();
+      expect(body.error, "error must remain INSUFFICIENT_CREDITS after x402 spread").toBe("INSUFFICIENT_CREDITS");
+    });
+
+    it("prepaid_credits block is preserved alongside x402 fields", async () => {
+      const body = await buildInsufficientJson();
+      expect(body.prepaid_credits, "prepaid_credits must survive the x402 spread").toBeDefined();
+    });
+
+    it("INSUFFICIENT_CREDITS and TRIAL_EXHAUSTED payloads share the same x402Version and payTo", async () => {
+      const insuf = await buildInsufficientJson();
+      const trial: InsufficientBody = {
+        error: "TRIAL_EXHAUSTED",
+        message: "Trial limit reached.",
+        prepaid_credits: { purchase: `${TEST_BASE_URL}/api/credits/purchase` },
+        ...(isX402Configured() ? await build402PayloadFromUrl(TEST_BASE_URL, "proof") : {}),
+      };
+      expect(insuf.x402Version, "INSUFFICIENT_CREDITS x402Version must equal TRIAL_EXHAUSTED x402Version").toBe(trial.x402Version);
+      expect(
+        (insuf.accepts as Record<string, unknown>[])[0].payTo,
+        "INSUFFICIENT_CREDITS payTo must match TRIAL_EXHAUSTED payTo",
+      ).toBe((trial.accepts as Record<string, unknown>[])[0].payTo);
+    });
+  });
 });
