@@ -1,7 +1,7 @@
 ---
 name: xproof
-version: 3.2.1
-description: Prove Before & After Act — anchor reasoning (WHY) before execution, anchor actual result (WHAT) after. Full 4W audit trail, trust score, violations layer. REST API, MCP, x402. $0.01/proof flat. No proof = no critical action.
+version: 3.2.2
+description: Prove Before & After Act — WHO from MX-8004 identity, WHAT/WHEN/WHY from xProof. Full 4W audit trail, trust score, violations layer. REST API, MCP, x402. $0.01/proof flat. No proof = no critical action.
 homepage: https://xproof.app
 metadata: {"xproof":{"category":"proof,security,compliance,accountability,prove-before-act","api_base":"https://xproof.app"}}
 ---
@@ -17,6 +17,19 @@ This skill enables your agent to **anchor reasoning (WHY) on-chain before execut
 ```
 
 Anchor reasoning (WHY) on-chain **before** execution. Anchor the actual result/output (WHAT) **after** for a complete 4W audit trail. The proof_id is your immutable pre-execution commitment — if something goes wrong, you have forensic evidence that the reasoning preceded the action.
+
+**4W breakdown — what each letter means and who provides it:**
+
+| | Question | Provided by |
+|:--|:--|:--|
+| **W**HO | Which agent or actor made this decision? | **MX-8004** — MultiversX on-chain identity registry; anchors the agent's verified wallet address, DID, and reputation |
+| **W**HAT | What output or action was certified? | **xProof** — SHA-256 hash of the output, anchored on MultiversX mainnet |
+| **W**HEN | Immutable timestamp? | **xProof** — MultiversX block finality (~6 s); not a self-reported clock |
+| **W**HY | What reasoning led to the decision? | **xProof** — `action_description`, `risk_level`, and `context` fields from `/api/audit` |
+
+xProof owns WHAT / WHEN / WHY and the causal link that proves reasoning preceded the action. MX-8004 owns WHO. Together they form a forensically complete 4W trail.
+
+> **Agent reference:** [`https://xproof.app/agent-context`](https://xproof.app/agent-context) — 13 Q&A sections written specifically for autonomous agents: production deployment patterns, retry policy, x402 payment walkthrough, 4W audit trail deep-dive, privacy model, fleet monitoring, latency benchmarks, and framework integration examples (LangChain, CrewAI, AutoGen, LlamaIndex, OpenAI Agents SDK, Fetch.ai).
 
 **Why Prove Before Act?** An agent that can prove its reasoning before acting is fundamentally more trustworthy than one that cannot. It creates an unbreakable causal chain: the intent existed before the action, and the blockchain makes that sequence immutable.
 
@@ -205,6 +218,7 @@ Standard API: `GET /api/standard` | `GET /api/standard/validate` (POST)
 | `POST /mcp` | MCP JSON-RPC 2.0 endpoint |
 | `GET /mcp` | MCP capability discovery |
 | `GET /api/standard` | Agent Proof Standard specification |
+| `GET /agent-context` | Agent-first deep-dive: production patterns, retry policy, 4W walkthrough, x402, cost, MCP examples, framework integrations |
 
 ---
 
