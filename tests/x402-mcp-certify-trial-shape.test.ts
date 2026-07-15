@@ -623,4 +623,152 @@ describe("certify_with_confidence TRIAL_EXHAUSTED — MCP 402 payload shape (Tas
       ).toBe((cf.accepts as Record<string, unknown>[])[0].payTo);
     });
   });
+
+  // ── Part H: investigate_proof TRIAL_EXHAUSTED / PAYMENT_REQUIRED x402 shape ──
+  //
+  // investigate_proof in server/mcp.ts has two API-key payment-wall paths:
+  //
+  //   TRIAL_EXHAUSTED:
+  //     return await mcpTrialExhausted(baseUrl,
+  //       { incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` });
+  //
+  //   PAYMENT_REQUIRED:
+  //     return await mcpPaymentRequired(baseUrl,
+  //       { incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` });
+  //
+  // Both helpers spread build402PayloadFromUrl(baseUrl, "proof") first, then
+  // the `extra` object containing incident_report_url. These tests verify:
+  //   1. The x402 machine-readable fields survive the JSON round-trip.
+  //   2. The incident_report_url extra field survives the spread and is non-empty.
+  //   3. The error discriminator is not clobbered by the spread.
+  //   4. Both paths share the same x402Version and payTo as the other tools.
+
+  describe("investigate_proof TRIAL_EXHAUSTED / PAYMENT_REQUIRED JSON round-trip (Task #469)", () => {
+    type InvestigateBody = Record<string, unknown>;
+
+    const TEST_WALLET   = "erd1testwalletaddress0000000000000000000000000000000000000000";
+    const TEST_PROOF_ID = "00000000-0000-0000-0000-000000000001";
+    const TEST_INCIDENT_URL = `${TEST_BASE_URL}/incident/${TEST_WALLET}/${TEST_PROOF_ID}`;
+
+    const buildInvestigateTrialJson = async (): Promise<InvestigateBody> => {
+      const x402Payload = isX402Configured() ? await build402PayloadFromUrl(TEST_BASE_URL, "proof") : {};
+      const raw = JSON.stringify({
+        error: "TRIAL_EXHAUSTED",
+        message: "Trial limit reached. Purchase credits to continue.",
+        prepaid_credits: { purchase: `${TEST_BASE_URL}/api/credits/purchase` },
+        ...x402Payload,
+        incident_report_url: TEST_INCIDENT_URL,
+      });
+      return JSON.parse(raw) as InvestigateBody;
+    };
+
+    const buildInvestigatePaymentJson = async (): Promise<InvestigateBody> => {
+      const x402Payload = isX402Configured() ? await build402PayloadFromUrl(TEST_BASE_URL, "proof") : {};
+      const raw = JSON.stringify({
+        error: "PAYMENT_REQUIRED",
+        message: "Credit balance is zero. Add prepaid credits or pay per-request via x402.",
+        x402: { payTo: TEST_PAY_TO, network: TEST_NETWORK, price: TEST_PRICE },
+        prepaid_credits: { purchase: `${TEST_BASE_URL}/api/credits/purchase` },
+        ...x402Payload,
+        incident_report_url: TEST_INCIDENT_URL,
+      });
+      return JSON.parse(raw) as InvestigateBody;
+    };
+
+    // ── TRIAL_EXHAUSTED path ─────────────────────────────────────────────────
+
+    it("TRIAL_EXHAUSTED: x402Version present and equals 1 after JSON round-trip", async () => {
+      const body = await buildInvestigateTrialJson();
+      expect(body.x402Version, "investigate_proof TRIAL_EXHAUSTED must include x402Version=1 for agent pay-and-retry").toBe(1);
+    });
+
+    it("TRIAL_EXHAUSTED: accepts is a non-empty array after JSON round-trip", async () => {
+      const body = await buildInvestigateTrialJson();
+      expect(Array.isArray(body.accepts), "accepts must be an array").toBe(true);
+      expect((body.accepts as unknown[]).length, "accepts must not be empty").toBeGreaterThan(0);
+    });
+
+    it("TRIAL_EXHAUSTED: accepts[0].payTo matches TEST_PAY_TO after JSON round-trip", async () => {
+      const body = await buildInvestigateTrialJson();
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(entry.payTo, "investigate_proof TRIAL_EXHAUSTED payTo must match X402_PAY_TO").toBe(TEST_PAY_TO);
+    });
+
+    it("TRIAL_EXHAUSTED: resource contains /api/proof after JSON round-trip", async () => {
+      const body = await buildInvestigateTrialJson();
+      expect(typeof body.resource, "resource must be a string").toBe("string");
+      expect(body.resource as string, "resource must reference /api/proof").toContain("/api/proof");
+    });
+
+    it("TRIAL_EXHAUSTED: error field is TRIAL_EXHAUSTED (x402 spread must not clobber it)", async () => {
+      const body = await buildInvestigateTrialJson();
+      expect(body.error, "error must remain TRIAL_EXHAUSTED after x402 spread").toBe("TRIAL_EXHAUSTED");
+    });
+
+    it("TRIAL_EXHAUSTED: incident_report_url survives the spread and includes wallet + proof_id", async () => {
+      const body = await buildInvestigateTrialJson();
+      expect(typeof body.incident_report_url, "incident_report_url must be a string").toBe("string");
+      expect(body.incident_report_url as string, "incident_report_url must contain the wallet").toContain(TEST_WALLET);
+      expect(body.incident_report_url as string, "incident_report_url must contain the proof_id").toContain(TEST_PROOF_ID);
+    });
+
+    it("TRIAL_EXHAUSTED: prepaid_credits block is preserved alongside x402 fields", async () => {
+      const body = await buildInvestigateTrialJson();
+      expect(body.prepaid_credits, "prepaid_credits must survive the x402 spread").toBeDefined();
+    });
+
+    // ── PAYMENT_REQUIRED path ────────────────────────────────────────────────
+
+    it("PAYMENT_REQUIRED: x402Version present and equals 1 after JSON round-trip", async () => {
+      const body = await buildInvestigatePaymentJson();
+      expect(body.x402Version, "investigate_proof PAYMENT_REQUIRED must include x402Version=1 for agent pay-and-retry").toBe(1);
+    });
+
+    it("PAYMENT_REQUIRED: accepts[0].payTo matches TEST_PAY_TO after JSON round-trip", async () => {
+      const body = await buildInvestigatePaymentJson();
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(entry.payTo, "investigate_proof PAYMENT_REQUIRED payTo must match X402_PAY_TO").toBe(TEST_PAY_TO);
+    });
+
+    it("PAYMENT_REQUIRED: resource contains /api/proof after JSON round-trip", async () => {
+      const body = await buildInvestigatePaymentJson();
+      expect(body.resource as string, "resource must reference /api/proof").toContain("/api/proof");
+    });
+
+    it("PAYMENT_REQUIRED: error field is PAYMENT_REQUIRED (x402 spread must not clobber it)", async () => {
+      const body = await buildInvestigatePaymentJson();
+      expect(body.error, "error must remain PAYMENT_REQUIRED after x402 spread").toBe("PAYMENT_REQUIRED");
+    });
+
+    it("PAYMENT_REQUIRED: incident_report_url survives the spread and includes wallet + proof_id", async () => {
+      const body = await buildInvestigatePaymentJson();
+      expect(typeof body.incident_report_url, "incident_report_url must be a string").toBe("string");
+      expect(body.incident_report_url as string, "incident_report_url must contain the wallet").toContain(TEST_WALLET);
+      expect(body.incident_report_url as string, "incident_report_url must contain the proof_id").toContain(TEST_PROOF_ID);
+    });
+
+    // ── Cross-tool consistency ───────────────────────────────────────────────
+
+    it("investigate_proof and certify_file payloads share the same x402Version and payTo", async () => {
+      const invTrial   = await buildInvestigateTrialJson();
+      const invPayment = await buildInvestigatePaymentJson();
+      const cfTrial: InvestigateBody = {
+        error: "TRIAL_EXHAUSTED",
+        message: "Trial limit reached.",
+        prepaid_credits: { purchase: `${TEST_BASE_URL}/api/credits/purchase` },
+        ...(isX402Configured() ? await build402PayloadFromUrl(TEST_BASE_URL, "proof") : {}),
+      };
+      expect(invTrial.x402Version,   "investigate_proof TRIAL_EXHAUSTED x402Version must equal 1").toBe(1);
+      expect(invPayment.x402Version, "investigate_proof PAYMENT_REQUIRED x402Version must equal 1").toBe(1);
+      expect(cfTrial.x402Version,    "certify_file TRIAL_EXHAUSTED x402Version must equal 1").toBe(1);
+      expect(
+        (invTrial.accepts as Record<string, unknown>[])[0].payTo,
+        "investigate_proof TRIAL_EXHAUSTED payTo must match certify_file payTo",
+      ).toBe((cfTrial.accepts as Record<string, unknown>[])[0].payTo);
+      expect(
+        (invPayment.accepts as Record<string, unknown>[])[0].payTo,
+        "investigate_proof PAYMENT_REQUIRED payTo must match certify_file payTo",
+      ).toBe((cfTrial.accepts as Record<string, unknown>[])[0].payTo);
+    });
+  });
 });
