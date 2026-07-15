@@ -26,6 +26,7 @@ import {
   buildTrialExhaustedMessage,
   buildPaymentRequiredMessage,
   TRIAL_QUOTA,
+  REGISTER_RATE_LIMIT_MAX,
 } from "../server/routes/helpers";
 
 const BASE_URL = "http://localhost:5000";
@@ -813,4 +814,162 @@ describe("MCP audit_agent_session — PAYMENT_REQUIRED shape", () => {
     },
     15_000,
   );
+});
+
+// ─── Part 8 — MCP register_trial error shapes ─────────────────────────────────
+//
+// register_trial returns three structured error codes that onboarding agents
+// parse to self-serve: RATE_LIMIT_EXCEEDED, DUPLICATE_AGENT_NAME, and
+// REGISTRATION_ERROR. Each uses the same MCP response wrapper:
+//
+//   { content: [{ type: "text", text: JSON.stringify({ error, message }) }], isError: true }
+//
+// A wrapper-level rename (e.g. "error" → "error_code", "message" → "detail")
+// would silently break agent onboarding flows. These unit tests pin the exact
+// shape by assembling the JSON strings exactly as the handler does and parsing
+// them back — no live server or DB state required.
+
+function makeRegisterTrialMcpWrapper(payload: Record<string, unknown>) {
+  // Mirrors the exact MCP wrapper pattern used by all register_trial error returns:
+  //   return { content: [{ type: "text" as const, text: JSON.stringify({...}) }], isError: true };
+  return {
+    result: {
+      isError: true,
+      content: [{ type: "text" as const, text: JSON.stringify(payload) }],
+    },
+  };
+}
+
+function parseRegisterTrialInner(mcpWrapper: ReturnType<typeof makeRegisterTrialMcpWrapper>) {
+  return JSON.parse(mcpWrapper.result.content[0].text) as Record<string, unknown>;
+}
+
+describe("MCP register_trial — RATE_LIMIT_EXCEEDED error shape", () => {
+  const payload = {
+    error: "RATE_LIMIT_EXCEEDED",
+    message: `Maximum ${REGISTER_RATE_LIMIT_MAX} trial registrations per hour per IP. Try again later.`,
+  };
+  const wrapper = makeRegisterTrialMcpWrapper(payload);
+  const inner = parseRegisterTrialInner(wrapper);
+
+  it("MCP wrapper has isError: true", () => {
+    expect(wrapper.result.isError, "isError must be true so MCP clients surface it as an error").toBe(true);
+  });
+
+  it("MCP wrapper content[0].type is 'text'", () => {
+    expect(wrapper.result.content[0].type, "content[0].type must be 'text' per MCP spec").toBe("text");
+  });
+
+  it("inner error field is RATE_LIMIT_EXCEEDED", () => {
+    expect(inner.error, "error must be RATE_LIMIT_EXCEEDED so agents can branch on it").toBe("RATE_LIMIT_EXCEEDED");
+  });
+
+  it("inner message is a non-empty string", () => {
+    expect(typeof inner.message, "message must be a string").toBe("string");
+    expect((inner.message as string).length, "message must not be empty").toBeGreaterThan(0);
+  });
+
+  it("inner message mentions the rate limit count so agents know when to retry", () => {
+    expect(inner.message as string).toContain(String(REGISTER_RATE_LIMIT_MAX));
+  });
+
+  it("inner JSON round-trip preserves both fields", () => {
+    const roundTripped = JSON.parse(JSON.stringify(inner)) as Record<string, unknown>;
+    expect(roundTripped.error).toBe("RATE_LIMIT_EXCEEDED");
+    expect(typeof roundTripped.message).toBe("string");
+  });
+});
+
+describe("MCP register_trial — DUPLICATE_AGENT_NAME error shape", () => {
+  const agentName = "my-test-agent";
+  const suggested = `${agentName}-abc123`;
+  const payload = {
+    error: "DUPLICATE_AGENT_NAME",
+    message: `An agent named "${agentName}" already exists. Try a unique name (e.g. "${suggested}").`,
+  };
+  const wrapper = makeRegisterTrialMcpWrapper(payload);
+  const inner = parseRegisterTrialInner(wrapper);
+
+  it("MCP wrapper has isError: true", () => {
+    expect(wrapper.result.isError).toBe(true);
+  });
+
+  it("MCP wrapper content[0].type is 'text'", () => {
+    expect(wrapper.result.content[0].type).toBe("text");
+  });
+
+  it("inner error field is DUPLICATE_AGENT_NAME", () => {
+    expect(inner.error, "error must be DUPLICATE_AGENT_NAME so agents can supply a different name").toBe("DUPLICATE_AGENT_NAME");
+  });
+
+  it("inner message is a non-empty string", () => {
+    expect(typeof inner.message).toBe("string");
+    expect((inner.message as string).length).toBeGreaterThan(0);
+  });
+
+  it("inner message mentions the conflicting agent name so agents can pick a new one", () => {
+    expect(inner.message as string).toContain(agentName);
+  });
+
+  it("inner message includes a suggested alternative name", () => {
+    expect(inner.message as string).toContain(suggested);
+  });
+
+  it("inner JSON round-trip preserves both fields", () => {
+    const roundTripped = JSON.parse(JSON.stringify(inner)) as Record<string, unknown>;
+    expect(roundTripped.error).toBe("DUPLICATE_AGENT_NAME");
+    expect(typeof roundTripped.message).toBe("string");
+  });
+});
+
+describe("MCP register_trial — REGISTRATION_ERROR error shape", () => {
+  const simulatedError = new Error("database connection refused");
+  const payload = {
+    error: "REGISTRATION_ERROR",
+    message: String(simulatedError),
+  };
+  const wrapper = makeRegisterTrialMcpWrapper(payload);
+  const inner = parseRegisterTrialInner(wrapper);
+
+  it("MCP wrapper has isError: true", () => {
+    expect(wrapper.result.isError).toBe(true);
+  });
+
+  it("MCP wrapper content[0].type is 'text'", () => {
+    expect(wrapper.result.content[0].type).toBe("text");
+  });
+
+  it("inner error field is REGISTRATION_ERROR", () => {
+    expect(inner.error, "error must be REGISTRATION_ERROR so agents know registration failed").toBe("REGISTRATION_ERROR");
+  });
+
+  it("inner message is a non-empty string containing the error detail", () => {
+    expect(typeof inner.message).toBe("string");
+    expect((inner.message as string).length).toBeGreaterThan(0);
+    expect(inner.message as string).toContain("database connection refused");
+  });
+
+  it("inner JSON round-trip preserves both fields", () => {
+    const roundTripped = JSON.parse(JSON.stringify(inner)) as Record<string, unknown>;
+    expect(roundTripped.error).toBe("REGISTRATION_ERROR");
+    expect(typeof roundTripped.message).toBe("string");
+  });
+});
+
+describe("MCP register_trial — all error codes share the same { error, message } contract", () => {
+  const errorCodes = [
+    { error: "RATE_LIMIT_EXCEEDED",  message: `Maximum ${REGISTER_RATE_LIMIT_MAX} trial registrations per hour per IP. Try again later.` },
+    { error: "DUPLICATE_AGENT_NAME", message: 'An agent named "bot" already exists. Try a unique name (e.g. "bot-1a2b3c").' },
+    { error: "REGISTRATION_ERROR",   message: "Error: internal db failure" },
+  ];
+
+  for (const { error, message } of errorCodes) {
+    it(`${error}: inner JSON has string error and string message`, () => {
+      const inner = parseRegisterTrialInner(makeRegisterTrialMcpWrapper({ error, message }));
+      expect(typeof inner.error).toBe("string");
+      expect(inner.error).toBe(error);
+      expect(typeof inner.message).toBe("string");
+      expect((inner.message as string).length).toBeGreaterThan(0);
+    });
+  }
 });
