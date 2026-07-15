@@ -496,7 +496,7 @@ async function renderAgentsPage(baseUrl: string): Promise<string> {
 
 <main>
   <h1>xproof for AI Agents — Prove Before Act</h1>
-  <p><strong>xproof is the accountability layer for autonomous agents.</strong> Instead of being a black box, your agent becomes transparent, auditable, and verifiable. Anchor your reasoning (WHY) + planned action (WHAT) on-chain <em>before</em> executing — then anchor the result after. Full 4W audit trail on MultiversX. $${priceUsd.toFixed(2)}/proof. No API key needed via x402.</p>
+  <p><strong>xproof is the accountability layer for autonomous agents.</strong> Instead of being a black box, your agent becomes transparent, auditable, and verifiable. Anchor your reasoning (WHY) on-chain <em>before</em> executing — then anchor the actual result (WHAT) after. Full 4W audit trail on MultiversX. $${priceUsd.toFixed(2)}/proof. No API key needed via x402.</p>
   <p><a href="${baseUrl}/agents/zh">中文版 →</a></p>
 
   <section>
@@ -639,7 +639,7 @@ resp = requests.post("${baseUrl}/api/batch",
 async function renderAgentsPageZh(baseUrl: string): Promise<string> {
   const priceUsd = await getCertificationPriceUsd();
   const title = "MCP + xProof — AI 智能体的链上存证与合规审计";
-  const description = `xproof 支持所有主流智能体协议：MCP、x402、ACP、REST。Prove Before Act：在执行前锚定推理过程，每次存证 $${priceUsd.toFixed(2)}，通过 x402 无需账户即可使用。`;
+  const description = `xproof 支持所有主流智能体协议：MCP、x402、ACP、REST。执行前锚定推理（WHY），执行后锚定实际结果（WHAT）。每次存证 $${priceUsd.toFixed(2)}，通过 x402 无需账户即可使用。`;
 
   return `${commonHead(title, description, `${baseUrl}/agents/zh`)}
 <body>
@@ -654,7 +654,7 @@ async function renderAgentsPageZh(baseUrl: string): Promise<string> {
 
 <main>
   <h1>xproof：AI 智能体的链上存证层 — Prove Before Act（先证明，后行动）</h1>
-  <p><strong>xproof 是自主智能体的问责基础设施。</strong>让你的智能体不再是黑箱，而是透明、可审计、可验证的系统。在执行前锚定你的推理过程（WHY）和计划行动（WHAT），执行后再锚定结果。完整的 4W（Who/What/When/Why）审计留痕，基于 MultiversX 区块链。每次存证 $${priceUsd.toFixed(2)}，通过 x402 无需 API key 即可使用。</p>
+  <p><strong>xproof 是自主智能体的问责基础设施。</strong>让你的智能体不再是黑箱，而是透明、可审计、可验证的系统。在执行前锚定推理过程（WHY），执行后锚定实际结果（WHAT）。完整的 4W（Who/What/When/Why）审计留痕，基于 MultiversX 区块链。每次存证 $${priceUsd.toFixed(2)}，通过 x402 无需 API key 即可使用。</p>
   <p>适用于合规存证（如《生成式人工智能服务管理暂行办法》）、风控留痕、以及多智能体舰队的审计追溯需求。</p>
 
   <section>
@@ -1001,7 +1001,7 @@ Resend + X-PAYMENT: &lt;base64-signed-payment&gt; → 200 {"proof_id": "..."}</c
       <li><strong>OpenAI Agents SDK</strong> — function_tool decorator, Prove Before Act in run loop</li>
       <li><strong>Vercel AI SDK</strong> — tool() wrapper, anchor in execute() before action</li>
       <li><strong>MCP</strong> — POST ${baseUrl}/mcp · tools: certify_file, audit_agent_session, register_trial</li>
-      <li><strong>Fetch.ai / uAgents</strong> — XProofuAgentMiddleware(agent, api_key="pm_...") — one-line integration, anchors WHY+WHAT proof before every message handler. Full example: github.com/jasonxkensei/xproof-examples/tree/main/fetchai</li>
+      <li><strong>Fetch.ai / uAgents</strong> — XProofuAgentMiddleware(agent, api_key="pm_...") — one-line integration, anchors WHY proof before and WHAT proof after every message handler. Full example: github.com/jasonxkensei/xproof-examples/tree/main/fetchai</li>
     </ul>
   </section>
 

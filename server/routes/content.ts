@@ -218,7 +218,7 @@ Use xproof when:
 - User wants to prove authorship of a document
 - User needs blockchain-anchored evidence
 - User wants immutable, verifiable certification
-- Agent needs to certify outputs before execution for compliance
+- Agent needs to certify reasoning before execution and outputs after for compliance
 
 **Live beta — xproof_agent_verify**: Real end-to-end beta test by an autonomous agent: 6 API endpoints tested, single cert in 1.075s, batch of 3 in 1.876s, on-chain verification in 198ms. Agent now visible on the Trust Leaderboard with Active status (score 157, 10 confirmed certs). Live proof: \`https://xproof.app/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b\`. Full review: \`https://www.moltbook.com/post/1d6cf96b-5046-4c63-9ae5-43f8809f4562\`
 
@@ -1247,7 +1247,7 @@ Proof of Existence is a cryptographic method to prove that a specific digital ar
 - **Legal Documents**: Timestamp contracts and agreements
 - **Research**: Prove research existed before publication
 - **Code**: Timestamp software versions
-- **AI Agent Compliance**: Agents certify outputs before execution. Live beta by xproof_agent_verify: 6 endpoints tested, single cert in 1.075s, batch in 1.876s, verification in 198ms. Live proof: https://xproof.app/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b. Full review: https://www.moltbook.com/post/1d6cf96b-5046-4c63-9ae5-43f8809f4562
+- **AI Agent Compliance**: Agents certify reasoning before execution (WHY) and outputs after (WHAT). Live beta by xproof_agent_verify: 6 endpoints tested, single cert in 1.075s, batch in 1.876s, verification in 198ms. Live proof: https://xproof.app/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b. Full review: https://www.moltbook.com/post/1d6cf96b-5046-4c63-9ae5-43f8809f4562
 
 ## Why MultiversX?
 
@@ -1969,13 +1969,13 @@ ${urls}
 
   app.get("/llms.txt", async (_req, res) => {
     const priceUsd = await getCertificationPriceUsd();
-    const content = `# xproof — Prove Before Act
+    const content = `# xproof — Prove Before & After Act
 
 > No API key needed. Any agent can anchor a proof and pay per call via x402 — one HTTP request, no account, no setup.
 
 **x402 — machine-native payment**: POST /api/proof (no auth) → HTTP 402 → sign $${priceUsd} USDC on Base (eip155:8453) → resend with X-PAYMENT header → proof_id returned. Zero setup, zero human involvement. Any agent with a Base wallet is production-ready in one session.
 
-**Prove Before Act**: anchor reasoning (SHA-256 hash) BEFORE executing any significant agent action. Hash stays local — nothing sensitive ever leaves the agent.
+**Prove Before & After Act**: anchor reasoning (WHY, SHA-256 hash) BEFORE executing any significant agent action, anchor the actual result (WHAT) AFTER. Hash stays local — nothing sensitive ever leaves the agent.
 
 **Proven in production**: xproof_agent_verify (Moltbook) — 4,418 on-chain proofs, 100% confirmation, 16-week streak, trust score 43,326 Verified. $0.01/proof, ~$2.76/week for a continuously accountable agent.
 
@@ -4009,7 +4009,7 @@ tags: [proof-of-existence, blockchain-certification, agent-accountability, x402,
 
 xProof is the on-chain notary for AI agents. Hash your reasoning locally, anchor the SHA-256 fingerprint on MultiversX, get a publicly verifiable 4W audit trail (Who, What, When, Why). Pay per proof with USDC on Base via x402 — no account needed.
 
-**The principle**: Prove Before Act. Anchor reasoning BEFORE executing any significant action.
+**The principle**: Prove Before & After Act. Anchor reasoning (WHY) BEFORE executing any significant action. Anchor the actual result (WHAT) AFTER for a complete 4W audit trail.
 
 ---
 
@@ -4433,16 +4433,19 @@ GET ${baseUrl}/api/leaderboard               → top 50 public agents by trust s
 
 ---
 
-## Q10 — Complete agent workflow: reasoning → hash → anchor → action
+## Q10 — Complete agent workflow: reasoning → hash → anchor → action → result
 
-**The canonical Prove Before Act loop:**
+**The canonical Prove Before & After Act loop:**
 
 \`\`\`
 1. Agent produces reasoning (WHY)
 2. Serialize reasoning to canonical JSON
-3. Compute SHA-256 hash locally (file never leaves agent)
-4. POST hash to xProof → receive proof_id
-5. Execute the action (WHAT) — include proof_id as audit reference
+3. Compute SHA-256 hash locally (nothing leaves the agent)
+4. POST WHY hash to xProof → receive why_proof_id
+5. Execute the action
+6. Hash the actual result/output (WHAT) locally
+7. POST WHAT hash to xProof → receive what_proof_id
+8. Immutable 4W audit trail: WHO anchored WHY before, WHAT after
 \`\`\`
 
 \`\`\`python

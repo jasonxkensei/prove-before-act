@@ -1155,7 +1155,7 @@ const anchorTool = tool({
           <div>
             <p className="text-xs font-semibold mb-2">Fetch.ai / uAgents (Python)</p>
             <p className="text-xs text-muted-foreground mb-2 leading-relaxed">
-              xProof integrates natively with the Fetch.ai Agentverse ecosystem via <code className="font-mono bg-muted px-1 rounded">XProofuAgentMiddleware</code>. Every uAgent message handler automatically anchors a WHY+WHAT proof before processing — making your Fetch.ai agent auditable and trust-scored on the xProof leaderboard.
+              xProof integrates natively with the Fetch.ai Agentverse ecosystem via <code className="font-mono bg-muted px-1 rounded">XProofuAgentMiddleware</code>. Every uAgent message handler automatically anchors a WHY proof before processing and a WHAT proof after — making your Fetch.ai agent auditable and trust-scored on the xProof leaderboard.
             </p>
             <CodeBlock lang="python" code={`from uagents import Agent, Context
 from xproof.integrations.fetchai import XProofuAgentMiddleware

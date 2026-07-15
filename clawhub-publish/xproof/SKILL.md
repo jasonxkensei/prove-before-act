@@ -1,22 +1,22 @@
 ---
 name: xproof
-version: 3.2.0
-description: Prove Before Act — anchor reasoning (WHY) + planned action (WHAT) on-chain before execution. Public 4W audit trail, trust score, violations layer. REST API, MCP, x402. $0.01/proof flat. No proof = no action.
+version: 3.2.1
+description: Prove Before & After Act — anchor reasoning (WHY) before execution, anchor actual result (WHAT) after. Full 4W audit trail, trust score, violations layer. REST API, MCP, x402. $0.01/proof flat. No proof = no critical action.
 homepage: https://xproof.app
 metadata: {"xproof":{"category":"proof,security,compliance,accountability,prove-before-act","api_base":"https://xproof.app"}}
 ---
 
-# xProof -- Prove Before Act & Accountability Layer for AI Agents
+# xProof -- Prove Before & After Act — Accountability Layer for AI Agents
 
-This skill enables your agent to **anchor reasoning and intent on-chain before executing any significant action** (Prove Before Act), enforce pre-execution audit logging, and detect violations via Base -- creating tamper-proof, publicly verifiable records of who decided what, when, and why.
+This skill enables your agent to **anchor reasoning (WHY) on-chain before executing any significant action and the actual result (WHAT) after** — creating a complete Prove Before & After Act cycle. Enforce pre-execution audit logging and detect violations via Base, producing tamper-proof, publicly verifiable records of who decided what, when, and why.
 
-## The Core Pattern: Prove Before Act
+## The Core Pattern: Prove Before & After Act
 
 ```
-1. Agent reasons (WHY) → 2. Hash locally → 3. Anchor on-chain → 4. Get proof_id → 5. Execute (WHAT)
+1. Reason (WHY) → 2. Hash locally → 3. Anchor WHY on-chain → 4. Get proof_id → 5. Execute → 6. Hash result (WHAT) → 7. Anchor WHAT on-chain → 8. Full 4W trail
 ```
 
-Anchor reasoning (WHY) + planned decision/intention (WHAT) on-chain **before** execution. Anchor actual result/output **after** for a full 4W audit trail. The proof_id is your immutable pre-execution commitment -- if something goes wrong, you have forensic evidence that the reasoning preceded the action.
+Anchor reasoning (WHY) on-chain **before** execution. Anchor the actual result/output (WHAT) **after** for a complete 4W audit trail. The proof_id is your immutable pre-execution commitment — if something goes wrong, you have forensic evidence that the reasoning preceded the action.
 
 **Why Prove Before Act?** An agent that can prove its reasoning before acting is fundamentally more trustworthy than one that cannot. It creates an unbreakable causal chain: the intent existed before the action, and the blockchain makes that sequence immutable.
 
