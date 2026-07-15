@@ -992,3 +992,260 @@ describe("MCP register_trial — RATE_LIMIT_EXCEEDED shape", () => {
     15_000,
   );
 });
+
+// ─── Part 9 — MCP investigate_proof tool ──────────────────────────────────────
+//
+// investigate_proof is unique among MCP tools: it accepts EITHER an API key
+// (like certify_file) OR an x402 per-request payment from anonymous callers.
+//
+// Error paths that agents must be able to parse:
+//
+//  A. No auth + x402 not configured        → UNAUTHORIZED
+//  B. No auth + x402 configured (no header) → PAYMENT_REQUIRED (x402 anonymous path)
+//     — shape has payment_requirements (not the standard x402 block)
+//  C. API key, trial quota exhausted        → TRIAL_EXHAUSTED  (assertMcpX402Shape)
+//  D. API key, non-trial, zero credits      → PAYMENT_REQUIRED (assertMcpX402Shape)
+//
+// In the test environment x402 may or may not be configured. For path A/B the
+// tests accept either error code and branch on the actual value to assert the
+// correct shape; paths C and D always reach their intended branch because the
+// seeded API keys have the required billing state regardless of x402 config.
+
+const MCP_INV_WALLET   = "erd1investigateproof000000000000000000000000000000000000000000000";
+const MCP_INV_PROOF_ID = "00000000-4170-4170-4170-000000000417";
+
+function makeMcpInvestigateProofCall(wallet: string, proofId: string) {
+  return {
+    jsonrpc: "2.0",
+    id: 9,
+    method: "tools/call",
+    params: {
+      name: "investigate_proof",
+      arguments: { proof_id: proofId, wallet },
+    },
+  };
+}
+
+/**
+ * Parse the inner JSON payload from an investigate_proof MCP response.
+ * The handler always puts the error object in content[0].text as JSON.
+ */
+function extractInvestigateInner(mcpResult: Record<string, any>): Record<string, any> {
+  const content = mcpResult.result.content as Array<{ type: string; text: string }>;
+  return JSON.parse(content[0].text) as Record<string, any>;
+}
+
+// ── Part 9a — No-auth path: UNAUTHORIZED or PAYMENT_REQUIRED (x402 anon) ─────
+
+describe("MCP investigate_proof — no-auth path (UNAUTHORIZED or PAYMENT_REQUIRED)", () => {
+  it(
+    "returns HTTP 200 with isError:true and a machine-readable error code",
+    async () => {
+      const res = await fetch(`${BASE_URL}/mcp`, {
+        method: "POST",
+        headers: MCP_HEADERS,
+        body: JSON.stringify(makeMcpInvestigateProofCall(MCP_INV_WALLET, MCP_INV_PROOF_ID)),
+      });
+
+      expect(res.status, "MCP endpoint must return HTTP 200 for auth errors").toBe(200);
+
+      const mcpResult = await res.json() as Record<string, any>;
+      expect(mcpResult.result, "response must have a result field").toBeDefined();
+      expect(mcpResult.result.isError, "result.isError must be true when not authenticated").toBe(true);
+
+      const content = mcpResult.result.content as Array<{ type: string; text: string }>;
+      expect(Array.isArray(content), "result.content must be an array").toBe(true);
+      expect(content.length, "result.content must have at least one entry").toBeGreaterThan(0);
+      expect(content[0].type, "content[0].type must be 'text'").toBe("text");
+
+      const inner = extractInvestigateInner(mcpResult);
+      expect(
+        ["UNAUTHORIZED", "PAYMENT_REQUIRED"],
+        "error must be UNAUTHORIZED (no x402) or PAYMENT_REQUIRED (x402 configured)",
+      ).toContain(inner.error);
+      expect(typeof inner.message, "message must be a string").toBe("string");
+      expect(inner.message.length, "message must not be empty").toBeGreaterThan(0);
+    },
+    15_000,
+  );
+
+  it(
+    "UNAUTHORIZED path: message guides the agent toward register_trial or an API key",
+    async () => {
+      const res = await fetch(`${BASE_URL}/mcp`, {
+        method: "POST",
+        headers: MCP_HEADERS,
+        body: JSON.stringify(makeMcpInvestigateProofCall(MCP_INV_WALLET, MCP_INV_PROOF_ID)),
+      });
+
+      const mcpResult = await res.json() as Record<string, any>;
+      const inner = extractInvestigateInner(mcpResult);
+
+      if (inner.error === "UNAUTHORIZED") {
+        expect(inner.message as string, "UNAUTHORIZED message must mention register_trial or API key").toMatch(
+          /register_trial|API key|pm_/i,
+        );
+        expect(typeof inner.incident_report_url, "incident_report_url must be a string").toBe("string");
+        expect(inner.incident_report_url as string, "incident_report_url must contain the wallet").toContain(MCP_INV_WALLET);
+        expect(inner.incident_report_url as string, "incident_report_url must contain the proof_id").toContain(MCP_INV_PROOF_ID);
+      } else {
+        expect(inner.error, "if not UNAUTHORIZED, must be PAYMENT_REQUIRED").toBe("PAYMENT_REQUIRED");
+      }
+    },
+    15_000,
+  );
+
+  it(
+    "PAYMENT_REQUIRED (x402 anon) path: payment_requirements block is machine-readable",
+    async () => {
+      const res = await fetch(`${BASE_URL}/mcp`, {
+        method: "POST",
+        headers: MCP_HEADERS,
+        body: JSON.stringify(makeMcpInvestigateProofCall(MCP_INV_WALLET, MCP_INV_PROOF_ID)),
+      });
+
+      const mcpResult = await res.json() as Record<string, any>;
+      const inner = extractInvestigateInner(mcpResult);
+
+      if (inner.error !== "PAYMENT_REQUIRED") {
+        // x402 is not configured in this environment; skip x402-anon-path assertions.
+        return;
+      }
+
+      // The x402 anonymous path returns a payment_requirements block (not the
+      // standard x402 builder block) so agents can construct the X-PAYMENT header.
+      expect(inner.payment_requirements, "payment_requirements must be present").toBeDefined();
+
+      const pr = inner.payment_requirements as Record<string, any>;
+      expect(pr.x402Version, "payment_requirements.x402Version must be present").toBeDefined();
+      expect(Array.isArray(pr.accepts), "payment_requirements.accepts must be an array").toBe(true);
+      expect(pr.accepts.length, "payment_requirements.accepts must have at least one entry").toBeGreaterThan(0);
+      expect(typeof pr.resource, "payment_requirements.resource must be a string").toBe("string");
+      expect(pr.resource.length, "payment_requirements.resource must not be empty").toBeGreaterThan(0);
+
+      expect(typeof inner.hint, "hint must be a string so agents know how to attach the payment").toBe("string");
+      expect(inner.hint.length, "hint must not be empty").toBeGreaterThan(0);
+
+      expect(typeof inner.incident_report_url, "incident_report_url must be a string").toBe("string");
+      expect(inner.incident_report_url as string, "incident_report_url must contain the wallet").toContain(MCP_INV_WALLET);
+      expect(inner.incident_report_url as string, "incident_report_url must contain the proof_id").toContain(MCP_INV_PROOF_ID);
+    },
+    15_000,
+  );
+});
+
+// ── Part 9b — API key path: TRIAL_EXHAUSTED ───────────────────────────────────
+//
+// mcpTrialExhausted() includes the x402 block only when X402_PAY_TO is set.
+// Regardless of x402 config it ALWAYS returns error, message, and prepaid_credits
+// so agents can purchase credits without per-request x402 payment.
+// (The nested x402 block is tested separately when x402 IS configured; that
+// regression is tracked in the "Fix 3 integration tests" task.)
+
+describe("MCP investigate_proof — TRIAL_EXHAUSTED (API key path)", () => {
+  it(
+    "returns HTTP 200 with isError:true and error=TRIAL_EXHAUSTED",
+    async () => {
+      const res = await fetch(`${BASE_URL}/mcp`, {
+        method: "POST",
+        headers: { ...MCP_HEADERS, Authorization: `Bearer ${TRIAL_RAW_KEY}` },
+        body: JSON.stringify(makeMcpInvestigateProofCall(MCP_INV_WALLET, MCP_INV_PROOF_ID)),
+      });
+
+      expect(res.status, "MCP endpoint must return HTTP 200 even for billing errors").toBe(200);
+
+      const mcpResult = await res.json() as Record<string, any>;
+      expect(mcpResult.result.isError, "result.isError must be true").toBe(true);
+
+      const content = mcpResult.result.content as Array<{ type: string; text: string }>;
+      expect(content[0].type, "content[0].type must be 'text'").toBe("text");
+
+      const inner = extractInvestigateInner(mcpResult);
+      expect(inner.error, "error must be TRIAL_EXHAUSTED").toBe("TRIAL_EXHAUSTED");
+      expect(typeof inner.message, "message must be a string").toBe("string");
+      expect(inner.message.length, "message must not be empty").toBeGreaterThan(0);
+    },
+    15_000,
+  );
+
+  it(
+    "TRIAL_EXHAUSTED inner payload includes prepaid_credits so agents can self-serve top-up",
+    async () => {
+      const res = await fetch(`${BASE_URL}/mcp`, {
+        method: "POST",
+        headers: { ...MCP_HEADERS, Authorization: `Bearer ${TRIAL_RAW_KEY}` },
+        body: JSON.stringify(makeMcpInvestigateProofCall(MCP_INV_WALLET, MCP_INV_PROOF_ID)),
+      });
+
+      const mcpResult = await res.json() as Record<string, any>;
+      const inner = extractInvestigateInner(mcpResult);
+      expect(inner.prepaid_credits, "prepaid_credits must be present").toBeDefined();
+      expect(
+        typeof inner.prepaid_credits.endpoint,
+        "prepaid_credits.endpoint must be a string",
+      ).toBe("string");
+      expect(
+        inner.prepaid_credits.endpoint.length,
+        "prepaid_credits.endpoint must not be empty",
+      ).toBeGreaterThan(0);
+    },
+    15_000,
+  );
+
+  it(
+    "TRIAL_EXHAUSTED inner payload includes incident_report_url referencing wallet and proof_id",
+    async () => {
+      const res = await fetch(`${BASE_URL}/mcp`, {
+        method: "POST",
+        headers: { ...MCP_HEADERS, Authorization: `Bearer ${TRIAL_RAW_KEY}` },
+        body: JSON.stringify(makeMcpInvestigateProofCall(MCP_INV_WALLET, MCP_INV_PROOF_ID)),
+      });
+
+      const mcpResult = await res.json() as Record<string, any>;
+      const inner = extractInvestigateInner(mcpResult);
+      expect(typeof inner.incident_report_url, "incident_report_url must be a string").toBe("string");
+      expect(inner.incident_report_url as string, "incident_report_url must contain the wallet").toContain(MCP_INV_WALLET);
+      expect(inner.incident_report_url as string, "incident_report_url must contain the proof_id").toContain(MCP_INV_PROOF_ID);
+    },
+    15_000,
+  );
+});
+
+// ── Part 9c — API key path: PAYMENT_REQUIRED (non-trial, zero credits) ────────
+
+describe("MCP investigate_proof — PAYMENT_REQUIRED (API key, non-trial, zero credits)", () => {
+  it(
+    "returns isError result with PAYMENT_REQUIRED and all required agent-facing fields",
+    async () => {
+      const res = await fetch(`${BASE_URL}/mcp`, {
+        method: "POST",
+        headers: { ...MCP_HEADERS, Authorization: `Bearer ${PAID_RAW_KEY}` },
+        body: JSON.stringify(makeMcpInvestigateProofCall(MCP_INV_WALLET, MCP_INV_PROOF_ID)),
+      });
+
+      expect(res.status, "MCP endpoint must return HTTP 200 even for billing errors").toBe(200);
+
+      const mcpResult = await res.json() as Record<string, any>;
+      assertMcpX402Shape(mcpResult, "PAYMENT_REQUIRED");
+    },
+    15_000,
+  );
+
+  it(
+    "PAYMENT_REQUIRED inner payload includes incident_report_url referencing wallet and proof_id",
+    async () => {
+      const res = await fetch(`${BASE_URL}/mcp`, {
+        method: "POST",
+        headers: { ...MCP_HEADERS, Authorization: `Bearer ${PAID_RAW_KEY}` },
+        body: JSON.stringify(makeMcpInvestigateProofCall(MCP_INV_WALLET, MCP_INV_PROOF_ID)),
+      });
+
+      const mcpResult = await res.json() as Record<string, any>;
+      const inner = extractInvestigateInner(mcpResult);
+      expect(typeof inner.incident_report_url, "incident_report_url must be a string").toBe("string");
+      expect(inner.incident_report_url as string, "incident_report_url must contain the wallet").toContain(MCP_INV_WALLET);
+      expect(inner.incident_report_url as string, "incident_report_url must contain the proof_id").toContain(MCP_INV_PROOF_ID);
+    },
+    15_000,
+  );
+});
