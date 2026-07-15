@@ -374,4 +374,84 @@ describe("certify_with_confidence TRIAL_EXHAUSTED — MCP 402 payload shape (Tas
       ).toBe((trial.accepts as Record<string, unknown>[])[0].payTo);
     });
   });
+
+  // ── Part F: audit_agent_session TRIAL_EXHAUSTED JSON round-trip ──────────
+  //
+  // audit_agent_session has a TRIAL_EXHAUSTED path in server/mcp.ts (line ~397)
+  // that calls mcpTrialExhausted(baseUrl) — the same helper used by certify_file
+  // and certify_with_confidence. The assembly is:
+  //
+  //   const x402 = isX402Configured() ? await build402PayloadFromUrl(baseUrl, "proof") : {};
+  //   return mcpErr({ error: "TRIAL_EXHAUSTED", message: ..., prepaid_credits: ..., ...x402 });
+  //
+  // Part 7 of tests/x402-response-shape.test.ts exercises the live-server path
+  // but uses assertMcpX402PayloadShape, which silently skips x402 fields when
+  // X402_PAY_TO is unset in CI. This describe block provides unconditional
+  // stub-env unit-test coverage so a regression removing the spread cannot hide.
+
+  describe("audit_agent_session TRIAL_EXHAUSTED JSON round-trip", () => {
+    type AuditBody = Record<string, unknown>;
+
+    const buildAuditTrialJson = async (): Promise<AuditBody> => {
+      const x402Payload = isX402Configured() ? await build402PayloadFromUrl(TEST_BASE_URL, "proof") : {};
+      const raw = JSON.stringify({
+        error: "TRIAL_EXHAUSTED",
+        message: `Trial limit reached. You have used all ${10} free certifications. Use x402 per-request payment or purchase prepaid credits.`,
+        prepaid_credits: { purchase: `${TEST_BASE_URL}/api/credits/purchase` },
+        ...x402Payload,
+      });
+      return JSON.parse(raw) as AuditBody;
+    };
+
+    it("x402Version present and equals 1 after JSON round-trip", async () => {
+      const body = await buildAuditTrialJson();
+      expect(body.x402Version, "audit_agent_session TRIAL_EXHAUSTED must include x402Version").toBe(1);
+    });
+
+    it("accepts is a non-empty array after JSON round-trip", async () => {
+      const body = await buildAuditTrialJson();
+      expect(Array.isArray(body.accepts), "accepts must be an array").toBe(true);
+      expect((body.accepts as unknown[]).length, "accepts must not be empty").toBeGreaterThan(0);
+    });
+
+    it("accepts[0].payTo is present and matches TEST_PAY_TO after JSON round-trip", async () => {
+      const body = await buildAuditTrialJson();
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(typeof entry.payTo, "accepts[0].payTo must be a string").toBe("string");
+      expect((entry.payTo as string).length, "accepts[0].payTo must not be empty").toBeGreaterThan(0);
+      expect(entry.payTo, "audit_agent_session TRIAL_EXHAUSTED must include accepts[0].payTo matching X402_PAY_TO").toBe(TEST_PAY_TO);
+    });
+
+    it("resource is a non-empty string after JSON round-trip", async () => {
+      const body = await buildAuditTrialJson();
+      expect(typeof body.resource, "resource must be a string").toBe("string");
+      expect((body.resource as string).length, "resource must not be empty").toBeGreaterThan(0);
+      expect(body.resource as string, "resource must reference /api/proof").toContain("/api/proof");
+    });
+
+    it("error field is TRIAL_EXHAUSTED (x402 spread must not clobber it)", async () => {
+      const body = await buildAuditTrialJson();
+      expect(body.error, "error must remain TRIAL_EXHAUSTED after x402 spread").toBe("TRIAL_EXHAUSTED");
+    });
+
+    it("prepaid_credits block is preserved alongside x402 fields", async () => {
+      const body = await buildAuditTrialJson();
+      expect(body.prepaid_credits, "prepaid_credits must survive the x402 spread").toBeDefined();
+    });
+
+    it("audit_agent_session and certify_file TRIAL_EXHAUSTED payloads share the same x402Version and payTo", async () => {
+      const audit = await buildAuditTrialJson();
+      const certify: AuditBody = {
+        error: "TRIAL_EXHAUSTED",
+        message: `Trial limit reached. You have used all ${10} free certifications. Use x402 per-request payment or purchase prepaid credits.`,
+        prepaid_credits: { purchase: `${TEST_BASE_URL}/api/credits/purchase` },
+        ...(isX402Configured() ? await build402PayloadFromUrl(TEST_BASE_URL, "proof") : {}),
+      };
+      expect(audit.x402Version, "audit_agent_session x402Version must equal certify_file x402Version").toBe(certify.x402Version);
+      expect(
+        (audit.accepts as Record<string, unknown>[])[0].payTo,
+        "audit_agent_session payTo must match certify_file payTo",
+      ).toBe((certify.accepts as Record<string, unknown>[])[0].payTo);
+    });
+  });
 });
