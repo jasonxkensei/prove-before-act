@@ -204,6 +204,89 @@ describe("x402 payment settlement failure — PAYMENT_FAILED contract", () => {
     });
   });
 
+  // ── Part 1b: Unit — verifyX402Payment() when verify() itself throws ────────
+  //
+  // This covers the outer try/catch at server/x402.ts lines 295-298:
+  //   } catch (err: any) {
+  //     return { valid: false, error: `Payment verification error: ${err.message}` };
+  //   }
+  //
+  // A network error reaching the x402 facilitator hits this path, not the
+  // settlement-failure path.  Without this test a regression that silently
+  // swallows the error (returning {} or { valid: true }) would be invisible.
+
+  describe("verifyX402Payment() when verify() itself throws", () => {
+    it("returns { valid: false }", async () => {
+      mockVerify.mockRejectedValue(new Error("facilitator unreachable"));
+      mockSettle.mockResolvedValue(undefined);
+
+      const result = await verifyX402Payment(
+        { get: () => "xproof.test", headers: { "x-payment": FAKE_PAYMENT_HEADER } },
+        "proof",
+      );
+
+      expect(result.valid, "valid must be false when verify() throws").toBe(false);
+    });
+
+    it("error starts with 'Payment verification error:' (parseable prefix for agents)", async () => {
+      mockVerify.mockRejectedValue(new Error("network timeout"));
+      mockSettle.mockResolvedValue(undefined);
+
+      const result = await verifyX402Payment(
+        { get: () => "xproof.test", headers: { "x-payment": FAKE_PAYMENT_HEADER } },
+        "proof",
+      );
+
+      expect(result.error).toBeDefined();
+      expect(result.error as string).toMatch(/^Payment verification error:/);
+    });
+
+    it("error embeds the underlying thrown message", async () => {
+      mockVerify.mockRejectedValue(new Error("verify-sentinel-error"));
+      mockSettle.mockResolvedValue(undefined);
+
+      const result = await verifyX402Payment(
+        { get: () => "xproof.test", headers: { "x-payment": FAKE_PAYMENT_HEADER } },
+        "proof",
+      );
+
+      expect(result.error as string).toContain("verify-sentinel-error");
+    });
+
+    it("error is a non-empty string (agents need a signal to distinguish from settlement failure)", async () => {
+      mockVerify.mockRejectedValue(new Error("any verify error"));
+      mockSettle.mockResolvedValue(undefined);
+
+      const result = await verifyX402Payment(
+        { get: () => "xproof.test", headers: { "x-payment": FAKE_PAYMENT_HEADER } },
+        "proof",
+      );
+
+      expect(typeof result.error).toBe("string");
+      expect((result.error as string).length).toBeGreaterThan(0);
+    });
+
+    it("error prefix distinguishes verify throws from settle throws", async () => {
+      mockVerify.mockRejectedValue(new Error("sentinel"));
+
+      const verifyThrowsResult = await verifyX402Payment(
+        { get: () => "xproof.test", headers: { "x-payment": FAKE_PAYMENT_HEADER } },
+        "proof",
+      );
+
+      mockVerify.mockResolvedValue({ isValid: true });
+      mockSettle.mockRejectedValue(new Error("sentinel"));
+
+      const settleThrowsResult = await verifyX402Payment(
+        { get: () => "xproof.test", headers: { "x-payment": FAKE_PAYMENT_HEADER } },
+        "proof",
+      );
+
+      expect(verifyThrowsResult.error as string).toMatch(/^Payment verification error:/);
+      expect(settleThrowsResult.error as string).toMatch(/^Payment settlement failed:/);
+    });
+  });
+
   // ── Part 2: Route integration — real registerProofWriteRoutes via supertest ─
   //
   // Mounts the actual production route handler so any future drift in the
