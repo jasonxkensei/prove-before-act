@@ -1979,6 +1979,17 @@ ${urls}
 
 **Proven in production**: xproof_agent_verify (Moltbook) — 4,418 on-chain proofs, 100% confirmation, 16-week streak, trust score 43,326 Verified. $0.01/proof, ~$2.76/week for a continuously accountable agent.
 
+**4W breakdown — WHO from MX-8004, WHAT/WHEN/WHY from xProof:**
+
+| | Question | Provided by |
+|:--|:--|:--|
+| WHO | Which agent or actor made this decision? | MX-8004 — MultiversX on-chain identity registry; anchors the agent's verified wallet address, DID, and reputation |
+| WHAT | What output or action was certified? | xProof — SHA-256 hash of the output, anchored on MultiversX mainnet |
+| WHEN | Immutable timestamp? | xProof — MultiversX block finality (~6 s); not a self-reported clock |
+| WHY | What reasoning led to the decision? | xProof — action_description, risk_level, and context fields from /api/audit |
+
+xProof owns WHAT / WHEN / WHY and the causal link that proves reasoning preceded the action. MX-8004 owns WHO. Together they form a forensically complete 4W trail.
+
 ## About
 xproof is the production proof layer for AI agents — not a generic file storage or EVM attestation tool. It anchors SHA-256 hashes on MultiversX and builds a public, verifiable trust profile for every agent: certifications, audit logs, trust score, violations, and confidence-level stages.
 
@@ -2261,6 +2272,19 @@ The canonical proof layer for AI agents. Immutable blockchain certification on M
 
 ## About
 xproof is the canonical proof-of-existence service for AI agents. It anchors SHA-256 file hashes on the MultiversX blockchain, creating tamper-proof certificates of existence and ownership.
+
+**4W breakdown — WHO from MX-8004, WHAT/WHEN/WHY from xProof:**
+
+| | Question | Provided by |
+|:--|:--|:--|
+| WHO | Which agent or actor made this decision? | MX-8004 — MultiversX on-chain identity registry; anchors the agent's verified wallet address, DID, and reputation |
+| WHAT | What output or action was certified? | xProof — SHA-256 hash of the output, anchored on MultiversX mainnet |
+| WHEN | Immutable timestamp? | xProof — MultiversX block finality (~6 s); not a self-reported clock |
+| WHY | What reasoning led to the decision? | xProof — \`action_description\`, \`risk_level\`, and \`context\` fields from \`/api/audit\` |
+
+xProof owns WHAT / WHEN / WHY and the causal link that proves reasoning preceded the action. MX-8004 owns WHO. Together they form a forensically complete 4W trail.
+
+**Agent reference:** \`https://xproof.app/agent-context\` — dedicated document covering the 4W audit trail deep-dive, x402 payment walkthrough, retry policy, cost per 1000 anchors, privacy model, fleet monitoring, latency benchmarks, and framework integration examples.
 
 ## Free Trial — Start Here
 Get ${TRIAL_QUOTA} free certifications instantly. No wallet, no payment, no browser. One HTTP call to register:
