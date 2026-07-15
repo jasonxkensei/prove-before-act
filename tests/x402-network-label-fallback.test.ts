@@ -32,6 +32,8 @@ async function loadHelpers() {
   return import("../server/routes/helpers.js") as Promise<{
     x402NetworkConfigWarning: string | null;
     buildX402Block: (baseUrl: string) => Record<string, unknown>;
+    buildTrialExhaustedMessage: (baseUrl: string, quota: number) => string;
+    buildPaymentRequiredMessage: (baseUrl: string) => string;
   }>;
 }
 
@@ -174,5 +176,80 @@ describe("buildX402Block — steps[2] network name fallback on malformed X402_NE
     const steps = block.steps as string[];
     expect(steps[2]).toContain("Base Sepolia");
     expect(steps[2]).not.toContain("eip155");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildTrialExhaustedMessage() — network name falls back / uses custom label
+// ---------------------------------------------------------------------------
+
+describe("buildTrialExhaustedMessage — network name in message string", () => {
+  const BASE_URL = "https://example.com";
+  const QUOTA = 3;
+
+  it("includes the default network name when X402_NETWORK_LABEL is empty", async () => {
+    process.env.X402_NETWORK_LABEL = "";
+    const { buildTrialExhaustedMessage } = await loadHelpers();
+    const msg = buildTrialExhaustedMessage(BASE_URL, QUOTA);
+    expect(msg).toContain("pay on Base");
+  });
+
+  it("includes the default network name when X402_NETWORK_LABEL has no eip155 suffix", async () => {
+    process.env.X402_NETWORK_LABEL = "notanetwork";
+    const { buildTrialExhaustedMessage } = await loadHelpers();
+    const msg = buildTrialExhaustedMessage(BASE_URL, QUOTA);
+    expect(msg).toContain("pay on Base");
+  });
+
+  it("includes the default network name when X402_NETWORK_LABEL is absent", async () => {
+    delete process.env.X402_NETWORK_LABEL;
+    const { buildTrialExhaustedMessage } = await loadHelpers();
+    const msg = buildTrialExhaustedMessage(BASE_URL, QUOTA);
+    expect(msg).toContain("pay on Base");
+  });
+
+  it("includes the custom network name when X402_NETWORK_LABEL is valid", async () => {
+    process.env.X402_NETWORK_LABEL = "Base Sepolia (eip155:84532)";
+    const { buildTrialExhaustedMessage } = await loadHelpers();
+    const msg = buildTrialExhaustedMessage(BASE_URL, QUOTA);
+    expect(msg).toContain("pay on Base Sepolia");
+    expect(msg).not.toContain("pay on Base (eip155");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildPaymentRequiredMessage() — network name falls back / uses custom label
+// ---------------------------------------------------------------------------
+
+describe("buildPaymentRequiredMessage — network name in message string", () => {
+  const BASE_URL = "https://example.com";
+
+  it("includes the default network name when X402_NETWORK_LABEL is empty", async () => {
+    process.env.X402_NETWORK_LABEL = "";
+    const { buildPaymentRequiredMessage } = await loadHelpers();
+    const msg = buildPaymentRequiredMessage(BASE_URL);
+    expect(msg).toContain("pay on Base");
+  });
+
+  it("includes the default network name when X402_NETWORK_LABEL has no eip155 suffix", async () => {
+    process.env.X402_NETWORK_LABEL = "notanetwork";
+    const { buildPaymentRequiredMessage } = await loadHelpers();
+    const msg = buildPaymentRequiredMessage(BASE_URL);
+    expect(msg).toContain("pay on Base");
+  });
+
+  it("includes the default network name when X402_NETWORK_LABEL is absent", async () => {
+    delete process.env.X402_NETWORK_LABEL;
+    const { buildPaymentRequiredMessage } = await loadHelpers();
+    const msg = buildPaymentRequiredMessage(BASE_URL);
+    expect(msg).toContain("pay on Base");
+  });
+
+  it("includes the custom network name when X402_NETWORK_LABEL is valid", async () => {
+    process.env.X402_NETWORK_LABEL = "Base Sepolia (eip155:84532)";
+    const { buildPaymentRequiredMessage } = await loadHelpers();
+    const msg = buildPaymentRequiredMessage(BASE_URL);
+    expect(msg).toContain("pay on Base Sepolia");
+    expect(msg).not.toContain("pay on Base (eip155");
   });
 });
