@@ -62,84 +62,6 @@ export interface ReconstructAuditTrailOptions {
   recordViolations?: boolean;
 }
 
-// ── Proof-only report ────────────────────────────────────────────────────────
-// Built when the agent hasn't registered a public profile yet (trial key,
-// anonymous certified proof). Surfaces 4W metadata directly from the proof
-// so the incident page shows real data instead of an error page.
-function buildProofOnlyReport(
-  wallet: string,
-  proofId: string,
-  proof: any,
-  user: { agentName?: string | null } | null,
-) {
-  const m = (proof.metadata || {}) as Record<string, any>;
-  const agentName = m.who || m.agent || m.agent_id || user?.agentName || null;
-  const verifiedOnChain = proof.blockchainStatus === "confirmed";
-  const hasWhy  = !!(m.why || m.reasoning || m.rationale);
-  const hasWhat = !!(m.what || m.action || m.decision);
-  const hasWho  = !!(m.who || m.agent || m.agent_id);
-  const hasWhen = !!(m.when || m.proof_timestamp);
-
-  const checks: boolean[] = [verifiedOnChain, hasWhy, hasWhat, hasWho];
-  const passCount  = checks.filter(Boolean).length;
-  const failCount  = checks.filter((v) => !v).length;
-
-  const entry = formatProofEntry(proof, "contested", wallet);
-
-  return {
-    agent: {
-      wallet,
-      name: agentName,
-      sigil_id: m.sigil_agent_id || null,
-      profile_url: null,
-      partial: true,
-    },
-    contested_proof_id: proofId,
-    report_generated_at: new Date().toISOString(),
-    verdict: {
-      status: "incomplete" as const,
-      label: "Partial Verification",
-      detail:
-        "4W metadata extracted from the on-chain proof. " +
-        "Register a public agent profile to unlock full trust analysis and cross-proof WHY/WHAT pairing.",
-      register_url: "/leaderboard",
-      checks_passed: passCount,
-      checks_failed: failCount,
-      checks_total: checks.length,
-    },
-    trust: null,
-    verification: {
-      intent_preceded_execution: null,
-      why_certified: hasWhy,
-      what_certified: hasWhat,
-      session_anchored: false,
-      all_confirmed: verifiedOnChain,
-    },
-    summary: {
-      why_count:        hasWhy  ? 1 : 0,
-      what_count:       hasWhat ? 1 : 0,
-      total_proofs:     1,
-      confirmed_proofs: verifiedOnChain ? 1 : 0,
-      time_span:        null,
-    },
-    timeline: [
-      {
-        ...entry,
-        metadata: {
-          ...entry.metadata,
-          who:  m.who  || null,
-          what: m.what || null,
-          when: hasWhen ? (m.when || m.proof_timestamp) : null,
-          why:  m.why  || null,
-        },
-      },
-    ],
-    session:           null,
-    violations_created: 0,
-    violationsCreated:  0,
-  };
-}
-
 export async function reconstructAuditTrail(
   wallet: string,
   proofId: string,
@@ -156,22 +78,12 @@ export async function reconstructAuditTrail(
     .from(users)
     .where(eq(users.walletAddress, wallet));
 
-  // ── Graceful fallback: no public profile registered yet ─────────────────────
-  // If the agent has no profile (trial key, anonymous proof) or has a private
-  // profile, we still try to surface the proof's own 4W metadata so the
-  // incident page shows something useful instead of a blank wall.
-  // The proof's own `isPublic` flag is the consent signal — no profile needed.
+  // ── Profile visibility gate ──────────────────────────────────────────────────
+  // Both per-proof (isPublic) AND per-profile (isPublicProfile) visibility must
+  // be satisfied before disclosing any proof metadata. A missing users row is
+  // not consent to publish; absence of a public profile fails closed to 404.
   if (!user || !user.isPublicProfile) {
-    const [publicProof] = await db
-      .select()
-      .from(certifications)
-      .where(and(eq(certifications.id, proofId), eq(certifications.isPublic, true)));
-
-    if (!publicProof) {
-      throw { status: 404, error: "Proof not found or not public" } as AuditTrailError;
-    }
-
-    return buildProofOnlyReport(wallet, proofId, publicProof, user ?? null);
+    throw { status: 404, error: "Agent not found or profile is not public" } as AuditTrailError;
   }
 
   const [contestedProof] = await db
