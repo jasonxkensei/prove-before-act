@@ -217,3 +217,7 @@ Required guarantees:
 ## Scan Notes — 2026-07-13 Production Security Scan
 
 - Treat `server/routes/calibration.ts` as a first-class public disclosure surface alongside trust/profile routes. Public calibration summary and CSV export endpoints must enforce `users.isPublicProfile` before returning agent metadata or calibration history; "all outcomes are public" is not equivalent to profile consent.
+
+## Scan Notes — 2026-07-16 Production Security Scan
+
+- `GET /api/agents/:wallet/incident-report` must enforce the same proof-plus-profile visibility rule as `/api/proof/:id`, `/proof/:id.json`, `/proof/:id.md`, and prerendered proof pages. In `server/audit-trail.ts`, the fallback path for `!user || !user.isPublicProfile` currently treats `certifications.isPublic` alone as sufficient and fetches by `proofId` without confirming that the proof belongs to the requested wallet. That makes the incident-report API and `/incident/:wallet/:proofId` page a public disclosure review anchor: missing or private profile rows are not consent to publish proof metadata.
