@@ -788,6 +788,36 @@ export function registerProofWriteRoutes(app: Express) {
         ...(creditInfo ? { credits: { remaining: Math.max(0, creditInfo.balance - 1) } } : {}),
         ...build4WField(certification.metadata, baseUrl, certification.id),
         message: "File certified on MultiversX blockchain. Proof is immutable and publicly verifiable.",
+        ...await (async () => {
+          // First real proof milestone: check if this is the user's first non-onboarding cert.
+          // Only relevant for trial agents with a userId (not anonymous x402 paths).
+          if (!ownerUserId) return {};
+          try {
+            const [{ cnt }] = await db
+              .select({ cnt: sql<number>`count(*)` })
+              .from(certifications)
+              .where(and(
+                eq(certifications.userId, ownerUserId),
+                sql`auth_method != 'onboarding'`,
+              ));
+            if (Number(cnt) === 1) {
+              return {
+                first_proof: true,
+                milestone: {
+                  message: "This is your first on-chain proof. Your agent now has a verifiable track record on MultiversX.",
+                  trust_profile: `${baseUrl}/agent/${certification.authorName || ""}`,
+                  next_steps: {
+                    view_proof: `${baseUrl}/proof/${certification.id}`,
+                    certify_more: `POST ${baseUrl}/api/proof with the same Authorization header`,
+                    upgrade: `POST ${baseUrl}/api/trial/claim — link these proofs to your real wallet`,
+                    audit_trail: `Call audit_agent_session (MCP) or POST ${baseUrl}/api/audit for session-level provenance`,
+                  },
+                },
+              };
+            }
+          } catch (_) {}
+          return {};
+        })(),
       });
     } catch (error) {
       if (error instanceof z.ZodError) {

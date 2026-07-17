@@ -8,8 +8,9 @@ import { z } from "zod";
 import { isWalletAuthenticated } from "../walletAuth";
 import { paymentRateLimiter } from "../reliability";
 import { computeTrustScoreByWallet } from "../trust";
-import { TRIAL_QUOTA, REGISTER_RATE_LIMIT_MAX, REGISTER_RATE_LIMIT_WINDOW_MS, getClientIp, buildX402Block, buildPrepaidCreditsBlock, buildTrialExhaustedMessage, buildPaymentRequiredMessage } from "./helpers";
+import { TRIAL_QUOTA, REGISTER_RATE_LIMIT_MAX, REGISTER_RATE_LIMIT_WINDOW_MS, getClientIp, buildX402Block, buildPrepaidCreditsBlock, buildTrialExhaustedMessage, buildPaymentRequiredMessage, atomicConsumeTrialCredit, refundTrialCredit } from "./helpers";
 import { pgCheckRateLimit } from "../pgRateLimit";
+import { recordOnBlockchain } from "../blockchain";
 
 // ============================================
 // Builds the machine-actionable quick_start guide
@@ -103,7 +104,7 @@ function buildQuickStart(apiKey: string, agentName: string, baseUrl: string) {
       confidence_staging: {
         description: "Multi-stage certification for decisions that build progressively (e.g. 60% → 80% → 100%). All stages share the same decision_id.",
         example_body: {
-          file_hash: "<sha256-hex>",
+          file_hash: sampleHash,
           filename: "decision.json",
           author_name: agentName,
           metadata: {
@@ -465,13 +466,105 @@ export function registerAgentsRoutes(app: Express) {
 
       const baseUrl = `https://${req.get('host')}`;
 
+      // ── Onboarding proof — same logic as MCP register_trial ───────────────
+      // Anchor a real "proof_of_registration" so the agent sees a complete
+      // example response and understands that Authorization: Bearer <api_key>
+      // is what made it work. Without this, agents get the quick_start guide
+      // but stall because they never try the curl or misconfigure the header.
+      const onboardingHash = crypto
+        .createHash("sha256")
+        .update(`xproof:onboarding:${trialWallet}:${data.agent_name}`)
+        .digest("hex");
+
+      let onboardingProof: Record<string, any> | null = null;
+      const creditConsumed = await atomicConsumeTrialCredit(trialUser.id, 1);
+      if (creditConsumed) {
+        try {
+          const [pending] = await db.insert(certifications).values({
+            userId: trialUser.id,
+            fileName: `onboarding-${data.agent_name}.json`,
+            fileHash: onboardingHash,
+            fileType: "json",
+            authorName: data.agent_name,
+            blockchainStatus: "pending",
+            isPublic: true,
+            authMethod: "onboarding",
+            metadata: {
+              action_type: "proof_of_registration",
+              who: data.agent_name,
+              what: "onboarding_certification",
+              why: "Automatically created during registration to demonstrate the complete certification flow and Bearer token usage.",
+            },
+          }).returning();
+
+          const txResult = await recordOnBlockchain(
+            onboardingHash,
+            `onboarding-${data.agent_name}.json`,
+            data.agent_name,
+          );
+
+          const [confirmed] = await db.update(certifications)
+            .set({
+              transactionHash: txResult.transactionHash,
+              transactionUrl: txResult.transactionUrl,
+              blockchainStatus: "confirmed",
+              ...(txResult.latencyMs != null ? { blockchainLatencyMs: txResult.latencyMs } : {}),
+            })
+            .where(eq(certifications.id, pending.id))
+            .returning();
+
+          onboardingProof = {
+            proof_id: confirmed.id,
+            file_hash: confirmed.fileHash,
+            filename: confirmed.fileName,
+            blockchain_status: "confirmed",
+            transaction_hash: txResult.transactionHash,
+            verify_url: `${baseUrl}/proof/${confirmed.id}`,
+            certificate_url: `${baseUrl}/api/certificates/${confirmed.id}.pdf`,
+            note: "This is your first on-chain proof. It was created automatically using your api_key in the Authorization header — this is exactly what POST /api/proof returns for every subsequent call.",
+          };
+
+          logger.withRequest(req).info("Onboarding proof anchored via REST register", {
+            agentName: data.agent_name,
+            userId: trialUser.id,
+            proofId: confirmed.id,
+            txHash: txResult.transactionHash,
+          });
+        } catch (proofErr) {
+          // Blockchain or DB failure — refund the trial credit silently.
+          // Registration still succeeds; agent gets key + quick_start guide.
+          await refundTrialCredit(trialUser.id).catch(() => {});
+          logger.withRequest(req).warn("Onboarding proof failed during REST register — credit refunded", {
+            agentName: data.agent_name,
+            error: String(proofErr),
+          });
+        }
+      }
+
+      const trialUsed = onboardingProof ? 1 : 0;
+      const trialRemaining = TRIAL_QUOTA - trialUsed;
+
       return res.status(201).json({
         api_key: rawKey,
         agent_name: data.agent_name,
+        onboarding_proof: onboardingProof,
+        authorization_guide: {
+          problem: "POST /api/agent/register requires NO Authorization header — it is the only endpoint that works without a key. Every other endpoint (POST /api/proof, GET /api/agent/status, etc.) requires Authorization: Bearer <api_key>.",
+          solution: `Add this header to every subsequent request: Authorization: Bearer ${rawKey}`,
+          what_happens_without_it: "POST /api/proof returns 401 UNAUTHORIZED — the most common reason agents register but never certify.",
+          mcp_client_config: {
+            mcpServers: {
+              xproof: {
+                url: `${baseUrl}/mcp`,
+                headers: { Authorization: `Bearer ${rawKey}` },
+              },
+            },
+          },
+        },
         trial: {
           quota: TRIAL_QUOTA,
-          used: 0,
-          remaining: TRIAL_QUOTA,
+          used: trialUsed,
+          remaining: trialRemaining,
         },
         // Machine-actionable guide: every request pre-filled, ready to execute
         quick_start: buildQuickStart(rawKey, data.agent_name, baseUrl),
