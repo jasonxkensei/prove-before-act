@@ -195,40 +195,45 @@ export async function createMcpServer(ctx: McpContext) {
               },
             }).returning();
 
-            const txResult = await recordOnBlockchain(onboardingHash, `onboarding-${name}.json`, name);
-
-            const [confirmed] = await db.update(certifications)
-              .set({
-                transactionHash: txResult.transactionHash,
-                transactionUrl: txResult.transactionUrl,
-                blockchainStatus: "confirmed",
-                ...(txResult.latencyMs != null ? { blockchainLatencyMs: txResult.latencyMs } : {}),
+            // Fire blockchain async — do NOT await. Registration returns in <200ms
+            // with blockchain_status: "pending". The cert upgrades to "confirmed"
+            // in ~5s in the background. The agent can check verify_url for the tx hash.
+            recordOnBlockchain(onboardingHash, `onboarding-${name}.json`, name)
+              .then(async (txResult) => {
+                await db.update(certifications)
+                  .set({
+                    transactionHash: txResult.transactionHash,
+                    transactionUrl: txResult.transactionUrl,
+                    blockchainStatus: "confirmed",
+                    ...(txResult.latencyMs != null ? { blockchainLatencyMs: txResult.latencyMs } : {}),
+                  })
+                  .where(eq(certifications.id, pending.id))
+                  .catch(() => {});
+                logger.info("Onboarding proof confirmed (async) via MCP register_trial", {
+                  agentName: name, userId: trialUser.id, proofId: pending.id,
+                  txHash: txResult.transactionHash,
+                });
               })
-              .where(eq(certifications.id, pending.id))
-              .returning();
+              .catch(async () => {
+                // Blockchain failed in background — clean up pending row + refund credit.
+                await db.delete(certifications).where(eq(certifications.id, pending.id)).catch(() => {});
+                await refundTrialCredit(trialUser.id).catch(() => {});
+                logger.warn("Onboarding proof blockchain failed (async) — credit refunded", { agentName: name });
+              });
 
             onboardingProof = {
-              proof_id: confirmed.id,
-              file_hash: confirmed.fileHash,
-              filename: confirmed.fileName,
-              blockchain_status: "confirmed",
-              transaction_hash: txResult.transactionHash,
-              verify_url: `${baseUrl}/proof/${confirmed.id}`,
-              certificate_url: `${baseUrl}/api/certificates/${confirmed.id}.pdf`,
-              note: "This is your first on-chain proof. It was created automatically using your api_key — this is exactly what certify_file returns for every subsequent call.",
+              proof_id: pending.id,
+              file_hash: pending.fileHash,
+              filename: pending.fileName,
+              blockchain_status: "pending",
+              verify_url: `${baseUrl}/proof/${pending.id}`,
+              certificate_url: `${baseUrl}/api/certificates/${pending.id}.pdf`,
+              note: "Your first on-chain proof is being anchored — blockchain_status will update to 'confirmed' in ~5 seconds. Call verify_url to see the transaction hash once confirmed.",
             };
-
-            logger.info("Onboarding proof anchored via MCP register_trial", {
-              agentName: name,
-              userId: trialUser.id,
-              proofId: confirmed.id,
-              txHash: txResult.transactionHash,
-            });
           } catch (proofErr) {
-            // Blockchain or DB failure — refund the trial credit but don't fail registration.
-            // The agent still gets their key; they just won't have an onboarding proof.
+            // DB insert failed — refund the trial credit but don't fail registration.
             await refundTrialCredit(trialUser.id).catch(() => {});
-            logger.warn("Onboarding proof failed during MCP register_trial — credit refunded", {
+            logger.warn("Onboarding proof DB insert failed during MCP register_trial — credit refunded", {
               agentName: name,
               error: String(proofErr),
             });
@@ -506,6 +511,32 @@ export async function createMcpServer(ctx: McpContext) {
           }
         }
 
+        // First real proof milestone
+        let firstProofMilestone: Record<string, any> | undefined;
+        if (certUserId) {
+          try {
+            const [{ cnt }] = await db
+              .select({ cnt: sql<number>`count(*)` })
+              .from(certifications)
+              .where(and(eq(certifications.userId, certUserId), sql`auth_method != 'onboarding'`));
+            if (Number(cnt) === 1) {
+              firstProofMilestone = {
+                first_proof: true,
+                milestone: {
+                  message: "This is your first on-chain proof. Your agent now has a verifiable track record on MultiversX.",
+                  trust_profile: `${baseUrl}/agent/${certification.authorName || ""}`,
+                  next_steps: {
+                    view_proof: `${baseUrl}/proof/${certification.id}`,
+                    certify_more: "Call certify_file again with a different file_hash",
+                    upgrade: `POST ${baseUrl}/api/trial/claim — link these proofs to your real wallet`,
+                    audit_trail: "Call audit_agent_session for session-level provenance",
+                  },
+                },
+              };
+            }
+          } catch (_) {}
+        }
+
         return {
           content: [{
             type: "text" as const,
@@ -519,9 +550,8 @@ export async function createMcpServer(ctx: McpContext) {
               blockchain: { network: "MultiversX", transaction_hash: result.transactionHash, explorer_url: result.transactionUrl },
               timestamp: certification.createdAt?.toISOString(),
               webhook_status: webhookStatus,
-              // webhook_secret is present only when webhook_url was supplied.
-              // Store it securely to verify X-xProof-Signature on callbacks.
               ...(mcpWebhookSecret ? { webhook_secret: mcpWebhookSecret } : {}),
+              ...(firstProofMilestone ?? {}),
               message: "File certified on MultiversX blockchain. Proof is immutable and publicly verifiable.",
             }),
           }],
@@ -761,6 +791,31 @@ export async function createMcpServer(ctx: McpContext) {
           return { content: [{ type: "text" as const, text: JSON.stringify({ error: "DB_ERROR", message: "Failed to confirm certification after blockchain write. Your credit has been refunded." }) }], isError: true };
         }
 
+        // First real proof milestone
+        let cwcFirstProofMilestone: Record<string, any> | undefined;
+        if (auth.userId) {
+          try {
+            const [{ cnt }] = await db
+              .select({ cnt: sql<number>`count(*)` })
+              .from(certifications)
+              .where(and(eq(certifications.userId, auth.userId), sql`auth_method != 'onboarding'`));
+            if (Number(cnt) === 1) {
+              cwcFirstProofMilestone = {
+                first_proof: true,
+                milestone: {
+                  message: "This is your first on-chain proof. Your agent now has a verifiable track record on MultiversX.",
+                  trust_profile: `${baseUrl}/agent/${certification.authorName || ""}`,
+                  next_steps: {
+                    view_proof: `${baseUrl}/proof/${certification.id}`,
+                    certify_more: "Call certify_with_confidence or certify_file for subsequent decisions",
+                    upgrade: `POST ${baseUrl}/api/trial/claim — link these proofs to your real wallet`,
+                  },
+                },
+              };
+            }
+          } catch (_) {}
+        }
+
         return {
           content: [{
             type: "text" as const,
@@ -777,6 +832,7 @@ export async function createMcpServer(ctx: McpContext) {
               certificate_url: `${baseUrl}/api/certificates/${certification.id}.pdf`,
               blockchain: { network: "MultiversX", transaction_hash: result.transactionHash, explorer_url: result.transactionUrl },
               timestamp: certification.createdAt?.toISOString(),
+              ...(cwcFirstProofMilestone ?? {}),
               message: `Confidence stage '${threshold_stage}' certified at ${Math.round(confidence_level * 100)}%.${reversibility_class === "irreversible" && confidence_level < 0.95 ? " WARNING: policy_violation — irreversible action certified below 0.95 confidence threshold." : ""} Use decision_id '${decision_id}' for subsequent stages.`,
             }),
           }],

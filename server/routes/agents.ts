@@ -20,9 +20,11 @@ function buildQuickStart(apiKey: string, agentName: string, baseUrl: string) {
   // Pre-compute a real SHA-256 hash so the quick_start curl is immediately executable.
   // The agent can run step 2 without editing anything — or replace this hash with
   // SHA-256 of their own content. Either way, no placeholder to substitute manually.
+  // Include the key prefix so two agents with the same name get different sample hashes.
+  // Avoids "already certified" surprises when step 2 curl is copied by a duplicate agent.
   const sampleHash = crypto
     .createHash("sha256")
-    .update(`xproof:quick-start:${agentName}`)
+    .update(`xproof:quick-start:${agentName}:${apiKey.slice(0, 10)}`)
     .digest("hex");
 
   return {
@@ -497,44 +499,46 @@ export function registerAgentsRoutes(app: Express) {
             },
           }).returning();
 
-          const txResult = await recordOnBlockchain(
-            onboardingHash,
-            `onboarding-${data.agent_name}.json`,
-            data.agent_name,
-          );
-
-          const [confirmed] = await db.update(certifications)
-            .set({
-              transactionHash: txResult.transactionHash,
-              transactionUrl: txResult.transactionUrl,
-              blockchainStatus: "confirmed",
-              ...(txResult.latencyMs != null ? { blockchainLatencyMs: txResult.latencyMs } : {}),
+          // Fire blockchain async — do NOT await. Registration returns in <200ms
+          // with blockchain_status: "pending". The cert upgrades to "confirmed"
+          // in ~5s in the background. The agent can check verify_url for the tx hash.
+          recordOnBlockchain(onboardingHash, `onboarding-${data.agent_name}.json`, data.agent_name)
+            .then(async (txResult) => {
+              await db.update(certifications)
+                .set({
+                  transactionHash: txResult.transactionHash,
+                  transactionUrl: txResult.transactionUrl,
+                  blockchainStatus: "confirmed",
+                  ...(txResult.latencyMs != null ? { blockchainLatencyMs: txResult.latencyMs } : {}),
+                })
+                .where(eq(certifications.id, pending.id))
+                .catch(() => {});
+              logger.info("Onboarding proof confirmed (async) via REST register", {
+                agentName: data.agent_name, userId: trialUser.id, proofId: pending.id,
+                txHash: txResult.transactionHash,
+              });
             })
-            .where(eq(certifications.id, pending.id))
-            .returning();
+            .catch(async () => {
+              await db.delete(certifications).where(eq(certifications.id, pending.id)).catch(() => {});
+              await refundTrialCredit(trialUser.id).catch(() => {});
+              logger.warn("Onboarding proof blockchain failed (async) — credit refunded", {
+                agentName: data.agent_name,
+              });
+            });
 
           onboardingProof = {
-            proof_id: confirmed.id,
-            file_hash: confirmed.fileHash,
-            filename: confirmed.fileName,
-            blockchain_status: "confirmed",
-            transaction_hash: txResult.transactionHash,
-            verify_url: `${baseUrl}/proof/${confirmed.id}`,
-            certificate_url: `${baseUrl}/api/certificates/${confirmed.id}.pdf`,
-            note: "This is your first on-chain proof. It was created automatically using your api_key in the Authorization header — this is exactly what POST /api/proof returns for every subsequent call.",
+            proof_id: pending.id,
+            file_hash: pending.fileHash,
+            filename: pending.fileName,
+            blockchain_status: "pending",
+            verify_url: `${baseUrl}/proof/${pending.id}`,
+            certificate_url: `${baseUrl}/api/certificates/${pending.id}.pdf`,
+            note: "Your first on-chain proof is being anchored — blockchain_status will update to 'confirmed' in ~5 seconds. Call verify_url to see the transaction hash once confirmed.",
           };
-
-          logger.withRequest(req).info("Onboarding proof anchored via REST register", {
-            agentName: data.agent_name,
-            userId: trialUser.id,
-            proofId: confirmed.id,
-            txHash: txResult.transactionHash,
-          });
         } catch (proofErr) {
-          // Blockchain or DB failure — refund the trial credit silently.
-          // Registration still succeeds; agent gets key + quick_start guide.
+          // DB insert failed — refund the trial credit silently.
           await refundTrialCredit(trialUser.id).catch(() => {});
-          logger.withRequest(req).warn("Onboarding proof failed during REST register — credit refunded", {
+          logger.withRequest(req).warn("Onboarding proof DB insert failed during REST register — credit refunded", {
             agentName: data.agent_name,
             error: String(proofErr),
           });
