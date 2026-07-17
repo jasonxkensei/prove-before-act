@@ -497,7 +497,7 @@ export function registerAttestationsRoutes(app: Express) {
       // serving the stale cached buffer would leak wallet, attestations, and
       // recent proof metadata for up to PDF_CACHE_TTL_MS after opt-out.
       const [agentUser] = await db
-        .select({ id: users.id, isPublicProfile: users.isPublicProfile })
+        .select({ id: users.id, isPublicProfile: users.isPublicProfile, agentName: users.agentName })
         .from(users)
         .where(eq(users.walletAddress, wallet));
       if (!agentUser || !agentUser.isPublicProfile) {
@@ -556,7 +556,7 @@ export function registerAttestationsRoutes(app: Express) {
       doc.fontSize(13).fillColor(dark).text("Agent Identity", { underline: true });
       doc.moveDown(0.3);
       doc.fontSize(10).fillColor(dark).text(`Wallet: ${wallet}`);
-      if (trust.agentName) doc.text(`Name: ${trust.agentName}`);
+      if (agentUser.agentName) doc.text(`Name: ${agentUser.agentName}`);
       doc.text(`Trust Level: ${trust.level} (score ${trust.score})`);
       doc.text(`Total certifications: ${trust.certTotal}`);
       doc.text(`Streak: ${trust.streakWeeks} consecutive weeks`);

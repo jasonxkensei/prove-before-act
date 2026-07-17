@@ -19,7 +19,7 @@ const calibrationCache = new Map<string, { body: object; cachedAt: number }>();
 // long uptimes (e.g. many unique agentId/n combinations building up).
 setInterval(() => {
   const now = Date.now();
-  for (const [key, entry] of calibrationCache) {
+  for (const [key, entry] of Array.from(calibrationCache)) {
     if (now - entry.cachedAt >= CALIBRATION_CACHE_TTL_MS) {
       calibrationCache.delete(key);
     }
@@ -297,7 +297,7 @@ export function registerCalibrationRoutes(app: Express) {
           .limit(1);
         const walletPrefix = ownerUser?.walletAddress ? `${ownerUser.walletAddress}:` : null;
         const userPrefix = `${userId}:`;
-        for (const cacheKey of calibrationCache.keys()) {
+        for (const cacheKey of Array.from(calibrationCache.keys())) {
           if (cacheKey.startsWith(userPrefix) || (walletPrefix && cacheKey.startsWith(walletPrefix))) {
             calibrationCache.delete(cacheKey);
           }

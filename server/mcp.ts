@@ -21,7 +21,7 @@ import { pgCheckRateLimit } from "./pgRateLimit";
 
 interface McpContext {
   baseUrl: string;
-  auth: { valid: boolean; keyHash?: string; apiKeyId?: number; userId?: string };
+  auth: { valid: boolean; keyHash?: string; apiKeyId?: string; userId?: string };
   xPaymentHeader?: string;
   host: string;
   clientIp: string;
@@ -1575,7 +1575,7 @@ export async function createMcpServer(ctx: McpContext) {
   return server;
 }
 
-export async function authenticateApiKey(authHeader: string | undefined): Promise<{ valid: boolean; keyHash?: string; apiKeyId?: number; userId?: string }> {
+export async function authenticateApiKey(authHeader: string | undefined): Promise<{ valid: boolean; keyHash?: string; apiKeyId?: string; userId?: string }> {
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return { valid: false };
   }

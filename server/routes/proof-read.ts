@@ -742,12 +742,13 @@ export function registerProofReadRoutes(app: Express) {
       const baseUrl = process.env.REPLIT_DEPLOYMENT ? "https://xproof.app" : `${req.protocol}://${req.get("host")}`;
 
       // ── 1. Call SIGIL API (live lookup, 5s timeout, graceful fallback)
-      let sigilData: {
+      type SigilCompact = {
         criticalPass?: boolean;
         persistenceScore?: number;
         receiptCount?: number;
         confidence?: number;
-      } | null = null;
+      };
+      let sigilData: SigilCompact | null = null;
       let sigilReachable = false;
 
       const controller = new AbortController();
@@ -758,7 +759,7 @@ export function registerProofReadRoutes(app: Express) {
           { signal: controller.signal, headers: { "Accept": "application/json" } }
         );
         if (sigilRes.ok) {
-          sigilData = await sigilRes.json() as typeof sigilData;
+          sigilData = await sigilRes.json() as SigilCompact;
           sigilReachable = true;
         }
       } catch {

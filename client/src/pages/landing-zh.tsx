@@ -882,8 +882,8 @@ print(proof["verify_url"])  # 链上可验证`}
       </footer>
 
       <WalletLoginModal
-        isOpen={isLoginModalOpen}
-        onClose={() => setIsLoginModalOpen(false)}
+        open={isLoginModalOpen}
+        onOpenChange={setIsLoginModalOpen}
       />
     </div>
   );

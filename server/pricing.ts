@@ -25,7 +25,7 @@ export async function getTotalCertificationCount(): Promise<number> {
     const result = await db
       .select({ value: count() })
       .from(certifications)
-      .where(not(isUnpaidAcpReservation));
+      .where(not(isUnpaidAcpReservation!));
     const totalCount = result[0]?.value ?? 0;
     cachedTotalCount = { count: totalCount, timestamp: Date.now() };
     return totalCount;

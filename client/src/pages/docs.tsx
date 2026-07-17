@@ -176,9 +176,7 @@ const ENDPOINT_GROUPS: EndpointGroup[] = [
         path: "/api/proofs/status",
         auth: "None",
         description: "Batch status check — get the status of up to 50 proofs in a single request. Returns blockchain_status, transaction_hash, and verify_url for each proof.",
-        body: [
-          ["ids", "string (comma-separated UUIDs, required, max 50)"],
-        ],
+        body: { ids: "string (comma-separated UUIDs, required, max 50)" },
         response: `{ "proofs": [{ "proof_id": "uuid", "file_hash": "abc...", "filename": "doc.pdf", "blockchain_status": "confirmed", "transaction_hash": "0x...", "verify_url": "..." }] }`,
         curl: `curl "${BASE}/api/proofs/status?ids=uuid1,uuid2,uuid3"`,
       },

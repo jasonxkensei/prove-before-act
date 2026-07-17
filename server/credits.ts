@@ -68,13 +68,14 @@ export function getEffectivePackage(id: string, _totalCerts: number): EffectiveC
   return getEffectivePackages(0).find((p) => p.id === id) ?? null;
 }
 
-let _client: ReturnType<typeof createPublicClient> | null = null;
-function getBaseClient() {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let _client: any = null;
+function getBaseClient(): ReturnType<typeof createPublicClient> {
   if (!_client) {
     const rpcUrl = process.env.BASE_RPC_URL || "https://mainnet.base.org";
     _client = createPublicClient({ chain: base, transport: http(rpcUrl) });
   }
-  return _client;
+  return _client as ReturnType<typeof createPublicClient>;
 }
 
 /**

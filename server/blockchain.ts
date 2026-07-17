@@ -130,6 +130,7 @@ export async function recordOnBlockchain(
 ): Promise<{
   transactionHash: string;
   transactionUrl: string;
+  latencyMs?: number;
 }> {
   // Fail-closed in production: if the MultiversX signer is missing or
   // misconfigured, refuse to fabricate a simulated transaction. Returning a

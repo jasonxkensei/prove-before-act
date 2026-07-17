@@ -783,7 +783,7 @@ function CalibrationCard({ data, wallet }: { data: CalibrationData; wallet: stri
       let description = "Failed to submit outcome.";
       try {
         const raw = String(err?.message ?? "");
-        const match = raw.match(/^\d+: (.+)$/s);
+        const match = raw.match(/^\d+: ([\s\S]+)$/);
         if (match) {
           const body = JSON.parse(match[1]);
           if (body?.message) description = body.message;

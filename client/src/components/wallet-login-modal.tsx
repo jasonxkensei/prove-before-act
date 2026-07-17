@@ -159,7 +159,7 @@ export function WalletLoginModal({ open, onOpenChange, redirectTo }: WalletLogin
     }
   }, [open]);
 
-  const handleProviderLogin = async (providerType: ProviderTypeEnum, buttonKey: string) => {
+  const handleProviderLogin = async (providerType: (typeof ProviderTypeEnum)[keyof typeof ProviderTypeEnum], buttonKey: string) => {
     setLoading(buttonKey);
     setError(null);
     syncAttempted.current = false;
