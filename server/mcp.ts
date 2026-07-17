@@ -186,7 +186,7 @@ export async function createMcpServer(ctx: McpContext) {
               authorName: name,
               blockchainStatus: "pending",
               isPublic: true,
-              authMethod: "api_key",
+              authMethod: "onboarding",
               metadata: {
                 action_type: "proof_of_registration",
                 who: name,
