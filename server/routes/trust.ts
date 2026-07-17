@@ -2,7 +2,7 @@ import { type Express } from "express";
 import { z } from "zod";
 import { db, pool } from "../db";
 import { logger } from "../logger";
-import { certifications, users, attestations } from "@shared/schema";
+import { certifications, users, attestations, agentViolations } from "@shared/schema";
 import { eq, desc, sql, and, gte, count } from "drizzle-orm";
 import { isWalletAuthenticated } from "../walletAuth";
 import { publicReadRateLimiter, publicSearchRateLimiter, publicCompareRateLimiter } from "../reliability";
@@ -235,6 +235,59 @@ export function registerTrustRoutes(app: Express) {
         return res.status(err.status).json({ error: err.error });
       }
       logger.error("Incident report error", { error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // POST /api/incident/:wallet/:proofId/re-evaluate
+  // Public, rate-limited. Re-runs the audit trail with the heartbeat fallback.
+  // If the proof now resolves with a WHY found, any existing "no WHY" breach
+  // violation for that proof is rejected (voided) and the trust snapshot is invalidated.
+  const NO_WHY_REASON =
+    "WHAT certified without any WHY — action executed without prior intent declaration (potential deliberate omission)";
+
+  app.post("/api/incident/:wallet/:proofId/re-evaluate", publicReadRateLimiter, async (req, res) => {
+    try {
+      const { wallet, proofId } = req.params;
+
+      const result = await reconstructAuditTrail(wallet, proofId);
+
+      let violationsVoided = 0;
+
+      if (result.verification?.why_certified) {
+        const existing = await db.execute(sql`
+          SELECT id FROM agent_violations
+          WHERE wallet_address = ${wallet}
+            AND proof_id = ${proofId}
+            AND type = 'breach'
+            AND reason = ${NO_WHY_REASON}
+            AND status != 'rejected'
+        `);
+        if (existing.rows.length > 0) {
+          await db.execute(sql`
+            UPDATE agent_violations
+            SET status    = 'rejected',
+                notes     = 'Voided by re-evaluation: WHY proof found via session heartbeat fallback'
+            WHERE wallet_address = ${wallet}
+              AND proof_id      = ${proofId}
+              AND type          = 'breach'
+              AND reason        = ${NO_WHY_REASON}
+              AND status       != 'rejected'
+          `);
+          violationsVoided = existing.rows.length;
+          // Invalidate the in-memory trust snapshot so the next read reflects the voided violation.
+          await db.execute(sql`
+            DELETE FROM trust_score_snapshots WHERE wallet_address = ${wallet}
+          `);
+        }
+      }
+
+      return res.json({ ...result, violations_voided: violationsVoided });
+    } catch (err: any) {
+      if (err.status && err.error) {
+        return res.status(err.status).json({ error: err.error });
+      }
+      logger.error("Re-evaluate error", { error: err.message });
       res.status(500).json({ error: err.message });
     }
   });

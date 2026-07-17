@@ -1,6 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { useState } from "react";
+import { apiRequest } from "@/lib/queryClient";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -40,6 +41,7 @@ import {
   ArrowDown,
   Info,
   Target,
+  RefreshCw,
 } from "lucide-react";
 
 function CopyInline({ text, label }: { text: string; label?: string }) {
@@ -1014,6 +1016,16 @@ export default function IncidentReportPage() {
     enabled: !!wallet && !!proofId,
   });
 
+  const queryClient = useQueryClient();
+
+  const reEvaluate = useMutation<any, Error>({
+    mutationFn: () =>
+      apiRequest("POST", `/api/incident/${wallet}/${proofId}/re-evaluate`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/agents", wallet, "incident-report", proofId] });
+    },
+  });
+
   const deltaSec = data ? computeDelta(data.timeline || []) : null;
   const reportUrl = typeof window !== "undefined" ? window.location.href : "";
   const jsonUrl = `/api/agents/${wallet}/incident-report?proof_id=${proofId}`;
@@ -1187,6 +1199,45 @@ export default function IncidentReportPage() {
             <PlainSummaryBlock data={data} deltaSec={deltaSec} proofId={proofId} />
 
             <VerdictBanner verdict={data.verdict} deltaSec={deltaSec} verification={data.verification} />
+
+            {/* Re-evaluate banner — shown when WHY link is missing (gap, not a confirmed violation) */}
+            {data.verdict?.status === "anomaly" && (() => {
+              const sv = resolveVisualSeverity(data.verdict, data.verification);
+              if (sv !== "gap") return null;
+
+              const voided = reEvaluate.data?.violations_voided ?? 0;
+              const nowClean = reEvaluate.isSuccess && (reEvaluate.data?.verdict?.status === "clean" || voided > 0);
+              const stillGap = reEvaluate.isSuccess && !nowClean;
+
+              return (
+                <div className="rounded-md border border-border bg-muted/20 p-4 mb-6 flex flex-wrap items-start gap-4">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground mb-1">
+                      Re-evaluate this proof
+                    </p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      {nowClean
+                        ? voided > 0
+                          ? `WHY proof found — ${voided} violation${voided > 1 ? "s" : ""} voided. Trust score will update within a few minutes.`
+                          : "WHY proof found. Timeline updated."
+                        : stillGap
+                        ? "WHY proof still not found via heartbeat. The link may not be available yet, or the session heartbeat was not certified."
+                        : "Re-run the audit trail to check if the WHY proof can now be linked via the session heartbeat."}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant={nowClean ? "outline" : "default"}
+                    onClick={() => reEvaluate.mutate()}
+                    disabled={reEvaluate.isPending}
+                    data-testid="button-re-evaluate"
+                  >
+                    <RefreshCw className={`mr-1.5 h-3.5 w-3.5 ${reEvaluate.isPending ? "animate-spin" : ""}`} />
+                    {reEvaluate.isPending ? "Checking…" : nowClean ? "Re-check" : "Re-evaluate"}
+                  </Button>
+                </div>
+              );
+            })()}
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
               <Card>

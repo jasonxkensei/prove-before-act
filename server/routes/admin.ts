@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { db, pool } from "../db";
 import { getRateLimitStats } from "../pgRateLimit";
 import { logger } from "../logger";
-import { certifications, users, apiKeys, visits, txQueue as txQueueTable } from "@shared/schema";
+import { certifications, users, apiKeys, visits, txQueue as txQueueTable, agentViolations } from "@shared/schema";
 import { eq, desc, sql, and, gte, gt, count, ne } from "drizzle-orm";
 import { isWalletAuthenticated } from "../walletAuth";
 import { computeTrustScoreByWallet, runLeaderboardRefreshCycle, runTrustRefreshCycle } from "../trust";
@@ -11,6 +11,7 @@ import { getAlertConfig, getRateLimitAlertConfig } from "../alerts";
 import { getMetrics } from "../metrics";
 import { getTxQueueStats } from "../txQueue";
 import { requireAdmin, EXCLUDED_IP_HASHES, getClientIp } from "./helpers";
+import { reconstructAuditTrail } from "../audit-trail";
 import { publicStatsRateLimiter } from "../reliability";
 
 // Map a referer hostname to a friendly traffic-source label.
@@ -966,6 +967,79 @@ export function registerAdminRoutes(app: Express) {
   });
 
   // ============================================
+  // ============================================
+  // POST /api/admin/repair/void-false-why-violations
+  // Scans all open "no WHY" breach violations, re-runs the heartbeat fallback
+  // for each, and rejects those where the WHY proof is now found.
+  // Triggers a full trust score refresh for affected wallets.
+  // ============================================
+  const NO_WHY_REASON =
+    "WHAT certified without any WHY — action executed without prior intent declaration (potential deliberate omission)";
+
+  app.post("/api/admin/repair/void-false-why-violations", isWalletAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const open = await db.execute(sql`
+        SELECT id, wallet_address, proof_id
+        FROM agent_violations
+        WHERE type    = 'breach'
+          AND reason  = ${NO_WHY_REASON}
+          AND status != 'rejected'
+          AND proof_id IS NOT NULL
+        ORDER BY detected_at ASC
+      `);
+
+      let voided = 0;
+      const affectedWallets = new Set<string>();
+
+      for (const row of open.rows as Array<{ id: string; wallet_address: string; proof_id: string }>) {
+        try {
+          const result = await reconstructAuditTrail(row.wallet_address, row.proof_id);
+          if (result.verification?.why_certified) {
+            await db.execute(sql`
+              UPDATE agent_violations
+              SET status = 'rejected',
+                  notes  = 'Voided by admin repair: WHY proof found via session heartbeat fallback'
+              WHERE id = ${row.id}
+            `);
+            voided++;
+            affectedWallets.add(row.wallet_address);
+          }
+        } catch {
+          // Skip inaccessible or deleted proofs
+        }
+      }
+
+      // Delete stale snapshots so the next trust read triggers a fresh recompute.
+      if (affectedWallets.size > 0) {
+        for (const wallet of affectedWallets) {
+          await db.execute(sql`
+            DELETE FROM trust_score_snapshots WHERE wallet_address = ${wallet}
+          `);
+        }
+        // Full refresh cycle so leaderboard is also updated.
+        await runLeaderboardRefreshCycle();
+        await runTrustRefreshCycle();
+      }
+
+      logger.info("Admin WHY-violation repair completed", {
+        checked: open.rows.length,
+        voided,
+        affected_wallets: affectedWallets.size,
+      });
+
+      res.json({
+        success: true,
+        checked: open.rows.length,
+        voided,
+        affected_wallets: affectedWallets.size,
+        affected_wallet_list: [...affectedWallets],
+      });
+    } catch (err: any) {
+      logger.error("Admin WHY-violation repair error", { error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // DELETE /api/admin/cleanup/test-agents
   // Removes test agents created during development
   // ============================================
