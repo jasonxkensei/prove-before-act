@@ -16,6 +16,14 @@ import { pgCheckRateLimit } from "../pgRateLimit";
 // Pre-fills the API key into every request so the agent can execute immediately
 // ============================================
 function buildQuickStart(apiKey: string, agentName: string, baseUrl: string) {
+  // Pre-compute a real SHA-256 hash so the quick_start curl is immediately executable.
+  // The agent can run step 2 without editing anything — or replace this hash with
+  // SHA-256 of their own content. Either way, no placeholder to substitute manually.
+  const sampleHash = crypto
+    .createHash("sha256")
+    .update(`xproof:quick-start:${agentName}`)
+    .digest("hex");
+
   return {
     workflow: [
       {
@@ -32,7 +40,7 @@ function buildQuickStart(apiKey: string, agentName: string, baseUrl: string) {
       {
         step: 2,
         name: "anchor_proof",
-        description: "Certify a file or AI decision on-chain. Replace file_hash with SHA-256(your_content). Add 4W metadata fields (who/what/when/why) for richer provenance.",
+        description: "Certify a file or AI decision on-chain. The file_hash below is real and executable immediately. Replace it with SHA-256 of your own content for production use. Add 4W metadata fields (who/what/when/why) for richer provenance.",
         request: {
           method: "POST",
           url: `${baseUrl}/api/proof`,
@@ -41,23 +49,23 @@ function buildQuickStart(apiKey: string, agentName: string, baseUrl: string) {
             "Content-Type": "application/json",
           },
           body: {
-            file_hash: "<sha256-hex-64-chars>",
+            file_hash: sampleHash,
             filename: "decision.json",
             author_name: agentName,
             metadata: {
               action_type: "decision",
               who: agentName,
-              what: "<hash or description of the action>",
-              when: "<ISO-8601 timestamp>",
-              why: "<instruction hash or goal>",
+              what: "quick-start test certification",
+              when: new Date().toISOString(),
+              why: "onboarding verification",
             },
           },
         },
         curl: `curl -X POST "${baseUrl}/api/proof" \\
   -H "Authorization: Bearer ${apiKey}" \\
   -H "Content-Type: application/json" \\
-  -d '{"file_hash":"<sha256-hex>","filename":"decision.json","author_name":"${agentName}","metadata":{"action_type":"decision","who":"${agentName}","why":"<instruction>"}}'`,
-        note: "Response contains proof_id, verify_url, and blockchain transaction hash. Save proof_id for step 3.",
+  -d '{"file_hash":"${sampleHash}","filename":"decision.json","author_name":"${agentName}","metadata":{"action_type":"decision","who":"${agentName}","why":"onboarding verification"}}'`,
+        note: "This curl is executable as-is — no placeholder to replace. Response contains proof_id, verify_url, and blockchain transaction hash. Save proof_id for step 3.",
       },
       {
         step: 3,

@@ -161,10 +161,81 @@ export async function createMcpServer(ctx: McpContext) {
           ipHash,
         });
 
-        const sampleHash = crypto
+        // ── Onboarding proof — consume 1 trial credit, anchor on-chain ────────
+        // Purpose: demonstrate the full certification flow to the agent and show
+        // what a successful certify_file response looks like, so it can immediately
+        // replicate the pattern. This is why register_trial was designed to auto-
+        // anchor one proof: without it, agents call register_trial (no auth needed)
+        // then get UNAUTHORIZED on certify_file because they haven't set the Bearer
+        // token in their MCP client config. Seeing the proof here, with the auth
+        // header pre-filled, removes that friction entirely.
+        const onboardingHash = crypto
           .createHash("sha256")
-          .update("xproof:quick-start:sample")
+          .update(`xproof:onboarding:${trialWallet}:${name}`)
           .digest("hex");
+
+        let onboardingProof: Record<string, any> | null = null;
+        const creditConsumed = await atomicConsumeTrialCredit(trialUser.id, 1);
+        if (creditConsumed) {
+          try {
+            const [pending] = await db.insert(certifications).values({
+              userId: trialUser.id,
+              fileName: `onboarding-${name}.json`,
+              fileHash: onboardingHash,
+              fileType: "json",
+              authorName: name,
+              blockchainStatus: "pending",
+              isPublic: true,
+              authMethod: "api_key",
+              metadata: {
+                action_type: "proof_of_registration",
+                who: name,
+                what: "onboarding_certification",
+                why: "Automatically created during registration to demonstrate the complete certification flow and Bearer token usage.",
+              },
+            }).returning();
+
+            const txResult = await recordOnBlockchain(onboardingHash, `onboarding-${name}.json`, name);
+
+            const [confirmed] = await db.update(certifications)
+              .set({
+                transactionHash: txResult.transactionHash,
+                transactionUrl: txResult.transactionUrl,
+                blockchainStatus: "confirmed",
+                ...(txResult.latencyMs != null ? { blockchainLatencyMs: txResult.latencyMs } : {}),
+              })
+              .where(eq(certifications.id, pending.id))
+              .returning();
+
+            onboardingProof = {
+              proof_id: confirmed.id,
+              file_hash: confirmed.fileHash,
+              filename: confirmed.fileName,
+              blockchain_status: "confirmed",
+              transaction_hash: txResult.transactionHash,
+              verify_url: `${baseUrl}/proof/${confirmed.id}`,
+              certificate_url: `${baseUrl}/api/certificates/${confirmed.id}.pdf`,
+              note: "This is your first on-chain proof. It was created automatically using your api_key — this is exactly what certify_file returns for every subsequent call.",
+            };
+
+            logger.info("Onboarding proof anchored via MCP register_trial", {
+              agentName: name,
+              userId: trialUser.id,
+              proofId: confirmed.id,
+              txHash: txResult.transactionHash,
+            });
+          } catch (proofErr) {
+            // Blockchain or DB failure — refund the trial credit but don't fail registration.
+            // The agent still gets their key; they just won't have an onboarding proof.
+            await refundTrialCredit(trialUser.id).catch(() => {});
+            logger.warn("Onboarding proof failed during MCP register_trial — credit refunded", {
+              agentName: name,
+              error: String(proofErr),
+            });
+          }
+        }
+
+        const trialRemaining = onboardingProof ? TRIAL_QUOTA - 1 : TRIAL_QUOTA;
 
         return {
           content: [{
@@ -173,15 +244,30 @@ export async function createMcpServer(ctx: McpContext) {
               success: true,
               api_key: rawKey,
               agent_name: name,
-              trial_remaining: TRIAL_QUOTA,
-              message: `Your key is ready. You have ${TRIAL_QUOTA} free on-chain certifications.`,
-              next_step: `Include this header in every subsequent MCP call: Authorization: Bearer ${rawKey}`,
-              quick_start: {
-                mcp_certify: `Call certify_file with: { "file_hash": "<sha256-of-your-file>", "filename": "output.json" }`,
-                mcp_audit: `Call audit_agent_session before any critical action`,
-                rest_example: `curl -s -X POST ${baseUrl}/api/proof -H "Authorization: Bearer ${rawKey}" -H "Content-Type: application/json" -d '{"file_hash":"${sampleHash}","filename":"output.json"}'`,
-                batch: `POST ${baseUrl}/api/batch — certify up to 100 hashes per call`,
+              trial_remaining: trialRemaining,
+              onboarding_proof: onboardingProof,
+              authorization_guide: {
+                problem: "register_trial requires NO Authorization header — it is the only tool that works without a key. Every other tool (certify_file, audit_agent_session, etc.) requires Authorization: Bearer <api_key>.",
+                solution: `Add this header to your MCP client before calling any other tool: Authorization: Bearer ${rawKey}`,
+                mcp_client_config: {
+                  mcpServers: {
+                    xproof: {
+                      url: `${baseUrl}/mcp`,
+                      headers: { Authorization: `Bearer ${rawKey}` },
+                    },
+                  },
+                },
+                what_happens_without_it: "certify_file returns UNAUTHORIZED — this is the #1 reason agents register but never certify.",
               },
+              next_step: {
+                action: "Call certify_file",
+                note: "The onboarding_proof above shows exactly what you will receive. Replace file_hash with SHA-256 of your own content.",
+                example: { file_hash: "<sha256-of-your-content>", filename: "output.json" },
+                rest_alternative: `curl -s -X POST ${baseUrl}/api/proof -H "Authorization: Bearer ${rawKey}" -H "Content-Type: application/json" -d '{"file_hash":"${onboardingHash}","filename":"output.json"}'`,
+              },
+              message: onboardingProof
+                ? `Registration complete. Your first proof is on-chain (see onboarding_proof). You have ${trialRemaining} certifications remaining. Configure Authorization: Bearer ${rawKey} in your MCP client to start certifying.`
+                : `Registration complete. You have ${trialRemaining} free certifications. Configure Authorization: Bearer ${rawKey} in your MCP client, then call certify_file.`,
             }),
           }],
         };
