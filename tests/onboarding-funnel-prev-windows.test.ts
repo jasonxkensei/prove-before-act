@@ -96,40 +96,40 @@ const T_2_DAYS_AGO = new Date(now - 2 * msPerDay).toISOString();
 
 beforeAll(async () => {
   const rowC = await pool.query<{ id: string }>(
-    `INSERT INTO users (wallet_address, trial_used)
-     VALUES ($1, 1)
+    `INSERT INTO users (wallet_address, trial_used, is_trial)
+     VALUES ($1, 1, true)
      ON CONFLICT (wallet_address)
-     DO UPDATE SET trial_used = 1
+     DO UPDATE SET trial_used = 1, is_trial = true
      RETURNING id`,
     [WALLET_C],
   );
   userIdC = rowC.rows[0].id;
 
   const rowD = await pool.query<{ id: string }>(
-    `INSERT INTO users (wallet_address, trial_used)
-     VALUES ($1, 0)
+    `INSERT INTO users (wallet_address, trial_used, is_trial)
+     VALUES ($1, 0, true)
      ON CONFLICT (wallet_address)
-     DO UPDATE SET trial_used = 0
+     DO UPDATE SET trial_used = 0, is_trial = true
      RETURNING id`,
     [WALLET_D],
   );
   userIdD = rowD.rows[0].id;
 
   const rowE = await pool.query<{ id: string }>(
-    `INSERT INTO users (wallet_address, trial_used)
-     VALUES ($1, 0)
+    `INSERT INTO users (wallet_address, trial_used, is_trial)
+     VALUES ($1, 0, true)
      ON CONFLICT (wallet_address)
-     DO UPDATE SET trial_used = 0
+     DO UPDATE SET trial_used = 0, is_trial = true
      RETURNING id`,
     [WALLET_E],
   );
   userIdE = rowE.rows[0].id;
 
   const rowF = await pool.query<{ id: string }>(
-    `INSERT INTO users (wallet_address, trial_used)
-     VALUES ($1, 1)
+    `INSERT INTO users (wallet_address, trial_used, is_trial)
+     VALUES ($1, 1, true)
      ON CONFLICT (wallet_address)
-     DO UPDATE SET trial_used = 1
+     DO UPDATE SET trial_used = 1, is_trial = true
      RETURNING id`,
     [WALLET_F],
   );

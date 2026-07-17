@@ -36,10 +36,10 @@ beforeAll(async () => {
   // trial_used = 1 so the real_certs CTE's `u.trial_used >= 1` condition is
   // satisfied — conversion must still be blocked by auth_method alone.
   const row = await pool.query<{ id: string }>(
-    `INSERT INTO users (wallet_address, trial_used)
-     VALUES ($1, 1)
+    `INSERT INTO users (wallet_address, trial_used, is_trial)
+     VALUES ($1, 1, true)
      ON CONFLICT (wallet_address)
-     DO UPDATE SET trial_used = 1
+     DO UPDATE SET trial_used = 1, is_trial = true
      RETURNING id`,
     [WALLET],
   );

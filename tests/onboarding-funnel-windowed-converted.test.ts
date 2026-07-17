@@ -52,18 +52,18 @@ const T_RECENT = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString();
 
 beforeAll(async () => {
   const rowC = await pool.query<{ id: string }>(
-    `INSERT INTO users (wallet_address, trial_used)
-     VALUES ($1, 1)
-     ON CONFLICT (wallet_address) DO UPDATE SET trial_used = 1
+    `INSERT INTO users (wallet_address, trial_used, is_trial)
+     VALUES ($1, 1, true)
+     ON CONFLICT (wallet_address) DO UPDATE SET trial_used = 1, is_trial = true
      RETURNING id`,
     [WALLET_C],
   );
   userIdC = rowC.rows[0].id;
 
   const rowD = await pool.query<{ id: string }>(
-    `INSERT INTO users (wallet_address, trial_used)
-     VALUES ($1, 1)
-     ON CONFLICT (wallet_address) DO UPDATE SET trial_used = 1
+    `INSERT INTO users (wallet_address, trial_used, is_trial)
+     VALUES ($1, 1, true)
+     ON CONFLICT (wallet_address) DO UPDATE SET trial_used = 1, is_trial = true
      RETURNING id`,
     [WALLET_D],
   );

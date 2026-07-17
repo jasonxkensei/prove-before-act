@@ -195,10 +195,9 @@ export function registerAdminRoutes(app: Express) {
 
       const funnelResult = await db.execute(sql`
         WITH onboarded AS (
-          SELECT user_id, MIN(created_at) AS registered_at
-          FROM certifications
-          WHERE auth_method = 'onboarding' AND user_id IS NOT NULL
-          GROUP BY user_id
+          SELECT id AS user_id, created_at AS registered_at
+          FROM users
+          WHERE is_trial = true
         ),
         real_certs AS (
           SELECT DISTINCT c.user_id
