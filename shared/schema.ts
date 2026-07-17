@@ -15,9 +15,7 @@ import {
   boolean,
   real,
 } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-import { relations } from "drizzle-orm";
 
 // Session storage table (required for Replit Auth)
 export const sessions = pgTable(
@@ -60,7 +58,6 @@ export const users = pgTable("users", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
 
 // Certifications table
@@ -132,24 +129,6 @@ export const certifications = pgTable("certifications", {
   check("certifications_file_hash_lowercase", sql`file_hash = lower(file_hash)`),
 ]);
 
-export const certificationsRelations = relations(certifications, ({ one }) => ({
-  user: one(users, {
-    fields: [certifications.userId],
-    references: [users.id],
-  }),
-}));
-
-export const usersRelations = relations(users, ({ many }) => ({
-  certifications: many(certifications),
-}));
-
-export const insertCertificationSchema = createInsertSchema(certifications).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export type InsertCertification = z.infer<typeof insertCertificationSchema>;
 export type Certification = typeof certifications.$inferSelect;
 
 // ============================================
@@ -178,13 +157,6 @@ export const attestations = pgTable("attestations", {
     .where(sql`status = 'active'`),
 ]);
 
-export const insertAttestationSchema = createInsertSchema(attestations).omit({
-  id: true,
-  createdAt: true,
-  revokedAt: true,
-  status: true,
-});
-export type InsertAttestation = z.infer<typeof insertAttestationSchema>;
 export type Attestation = typeof attestations.$inferSelect;
 
 // ============================================
@@ -328,7 +300,6 @@ export const acpCheckouts = pgTable("acp_checkouts", {
 ]);
 
 export type ACPCheckout = typeof acpCheckouts.$inferSelect;
-export type InsertACPCheckout = typeof acpCheckouts.$inferInsert;
 
 // API Keys table for agent authentication
 export const apiKeys = pgTable("api_keys", {
@@ -345,15 +316,7 @@ export const apiKeys = pgTable("api_keys", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const apiKeysRelations = relations(apiKeys, ({ one }) => ({
-  user: one(users, {
-    fields: [apiKeys.userId],
-    references: [users.id],
-  }),
-}));
-
 export type ApiKey = typeof apiKeys.$inferSelect;
-export type InsertApiKey = typeof apiKeys.$inferInsert;
 
 export const txQueue = pgTable("tx_queue", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -371,7 +334,6 @@ export const txQueue = pgTable("tx_queue", {
 });
 
 export type TxQueueItem = typeof txQueue.$inferSelect;
-export type InsertTxQueueItem = typeof txQueue.$inferInsert;
 
 export const visits = pgTable("visits", {
   id: serial("id").primaryKey(),
@@ -405,7 +367,6 @@ export const creditPurchases = pgTable("credit_purchases", {
 });
 
 export type CreditPurchase = typeof creditPurchases.$inferSelect;
-export type InsertCreditPurchase = typeof creditPurchases.$inferInsert;
 
 // Credit purchase intents — binds a /credits/purchase call to the initiating user
 // Prevents another account from claiming the same Base tx hash via /credits/confirm.
@@ -457,12 +418,6 @@ export const agentViolations = pgTable("agent_violations", {
   check("chk_violation_status", sql`status IN ('proposed', 'confirmed', 'rejected')`),
 ]);
 
-export const insertAgentViolationSchema = createInsertSchema(agentViolations).omit({
-  id: true,
-  detectedAt: true,
-  confirmedAt: true,
-});
-export type InsertAgentViolation = z.infer<typeof insertAgentViolationSchema>;
 export type AgentViolation = typeof agentViolations.$inferSelect;
 
 // ============================================
@@ -504,11 +459,6 @@ export const agentOutcomes = pgTable("agent_outcomes", {
   check("chk_outcome_score", sql`outcome_score >= 0 AND outcome_score <= 1`),
 ]);
 
-export const insertAgentOutcomeSchema = createInsertSchema(agentOutcomes).omit({
-  id: true,
-  submittedAt: true,
-});
-export type InsertAgentOutcome = z.infer<typeof insertAgentOutcomeSchema>;
 export type AgentOutcome = typeof agentOutcomes.$inferSelect;
 
 // Raw-SQL tables — registered here so drizzle-kit push does not try to drop them.
