@@ -4,7 +4,7 @@ import { db, pool } from "../db";
 import { getRateLimitStats } from "../pgRateLimit";
 import { logger } from "../logger";
 import { certifications, users, apiKeys, visits, txQueue as txQueueTable } from "@shared/schema";
-import { eq, desc, sql, and, gte, gt, count } from "drizzle-orm";
+import { eq, desc, sql, and, gte, gt, count, ne } from "drizzle-orm";
 import { isWalletAuthenticated } from "../walletAuth";
 import { computeTrustScoreByWallet, runLeaderboardRefreshCycle, runTrustRefreshCycle } from "../trust";
 import { getAlertConfig } from "../txAlerts";
@@ -98,18 +98,20 @@ export function registerAdminRoutes(app: Express) {
       const d7 = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       const d30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-      const [totalRow] = await db.select({ count: count() }).from(certifications);
-      const [last24hRow] = await db.select({ count: count() }).from(certifications).where(gte(certifications.createdAt, h24));
-      const [last7dRow] = await db.select({ count: count() }).from(certifications).where(gte(certifications.createdAt, d7));
-      const [last30dRow] = await db.select({ count: count() }).from(certifications).where(gte(certifications.createdAt, d30));
+      const REAL_CERT = ne(certifications.authMethod, 'onboarding');
+      const [totalRow] = await db.select({ count: count() }).from(certifications).where(REAL_CERT);
+      const [last24hRow] = await db.select({ count: count() }).from(certifications).where(and(REAL_CERT, gte(certifications.createdAt, h24)));
+      const [last7dRow] = await db.select({ count: count() }).from(certifications).where(and(REAL_CERT, gte(certifications.createdAt, d7)));
+      const [last30dRow] = await db.select({ count: count() }).from(certifications).where(and(REAL_CERT, gte(certifications.createdAt, d30)));
 
       const sourceBreakdown = await db.execute(sql`
         SELECT
           COUNT(*) FILTER (WHERE c.auth_method IN ('api_key', 'x402', 'acp') AND (u.is_trial IS NOT TRUE OR u.id IS NULL)) as api_certs,
-          COUNT(*) FILTER (WHERE u.is_trial IS TRUE) as trial_certs,
-          COUNT(*) FILTER (WHERE (u.is_trial IS NOT TRUE OR u.id IS NULL) AND (c.auth_method IS NULL OR c.auth_method NOT IN ('api_key', 'x402', 'acp'))) as user_certs
+          COUNT(*) FILTER (WHERE u.is_trial IS TRUE AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) as trial_certs,
+          COUNT(*) FILTER (WHERE (u.is_trial IS NOT TRUE OR u.id IS NULL) AND (c.auth_method IS NULL OR c.auth_method NOT IN ('api_key', 'x402', 'acp', 'onboarding'))) as user_certs
         FROM certifications c
         LEFT JOIN users u ON c.user_id = u.id
+        WHERE (c.auth_method IS NULL OR c.auth_method != 'onboarding')
       `);
       const src = (sourceBreakdown.rows[0] as Record<string, string>) || {};
       const apiCerts = parseInt(src.api_certs || "0");
@@ -144,6 +146,7 @@ export function registerAdminRoutes(app: Express) {
         SELECT DATE(created_at) as day, COUNT(*) as count
         FROM certifications
         WHERE created_at >= NOW() - INTERVAL '7 days'
+          AND (auth_method IS NULL OR auth_method != 'onboarding')
         GROUP BY DATE(created_at)
         ORDER BY day DESC
       `);
@@ -151,10 +154,10 @@ export function registerAdminRoutes(app: Express) {
       const metrics = getMetrics();
 
       const m5 = new Date(now.getTime() - 5 * 60 * 1000);
-      const [recent5mRow] = await db.select({ count: count() }).from(certifications).where(gte(certifications.createdAt, m5));
+      const [recent5mRow] = await db.select({ count: count() }).from(certifications).where(and(REAL_CERT, gte(certifications.createdAt, m5)));
 
       const d14 = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
-      const [prev7dRow] = await db.select({ count: count() }).from(certifications).where(and(gte(certifications.createdAt, d14), sql`created_at < ${d7}`));
+      const [prev7dRow] = await db.select({ count: count() }).from(certifications).where(and(REAL_CERT, gte(certifications.createdAt, d14), sql`created_at < ${d7}`));
 
       const [totalVisitsRow] = await db.select({ count: count() }).from(visits);
       const [uniqueIpsRow] = await db.select({ count: sql<number>`COUNT(DISTINCT ip_hash)` }).from(visits);
@@ -346,18 +349,20 @@ export function registerAdminRoutes(app: Express) {
       const d7 = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
       const d30 = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-      const [totalRow] = await db.select({ count: count() }).from(certifications);
-      const [last24hRow] = await db.select({ count: count() }).from(certifications).where(gte(certifications.createdAt, h24));
-      const [last7dRow] = await db.select({ count: count() }).from(certifications).where(gte(certifications.createdAt, d7));
-      const [last30dRow] = await db.select({ count: count() }).from(certifications).where(gte(certifications.createdAt, d30));
+      const REAL_CERT_ADMIN = ne(certifications.authMethod, 'onboarding');
+      const [totalRow] = await db.select({ count: count() }).from(certifications).where(REAL_CERT_ADMIN);
+      const [last24hRow] = await db.select({ count: count() }).from(certifications).where(and(REAL_CERT_ADMIN, gte(certifications.createdAt, h24)));
+      const [last7dRow] = await db.select({ count: count() }).from(certifications).where(and(REAL_CERT_ADMIN, gte(certifications.createdAt, d7)));
+      const [last30dRow] = await db.select({ count: count() }).from(certifications).where(and(REAL_CERT_ADMIN, gte(certifications.createdAt, d30)));
 
       const adminSourceBreakdown = await db.execute(sql`
         SELECT
           COUNT(*) FILTER (WHERE c.auth_method IN ('api_key', 'x402', 'acp') AND (u.is_trial IS NOT TRUE OR u.id IS NULL)) as api_certs,
-          COUNT(*) FILTER (WHERE u.is_trial IS TRUE) as trial_certs,
-          COUNT(*) FILTER (WHERE (u.is_trial IS NOT TRUE OR u.id IS NULL) AND (c.auth_method IS NULL OR c.auth_method NOT IN ('api_key', 'x402', 'acp'))) as user_certs
+          COUNT(*) FILTER (WHERE u.is_trial IS TRUE AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) as trial_certs,
+          COUNT(*) FILTER (WHERE (u.is_trial IS NOT TRUE OR u.id IS NULL) AND (c.auth_method IS NULL OR c.auth_method NOT IN ('api_key', 'x402', 'acp', 'onboarding'))) as user_certs
         FROM certifications c
         LEFT JOIN users u ON c.user_id = u.id
+        WHERE (c.auth_method IS NULL OR c.auth_method != 'onboarding')
       `);
       const adminSrc = (adminSourceBreakdown.rows[0] as Record<string, string>) || {};
       const apiCerts = parseInt(adminSrc.api_certs || "0");
@@ -399,6 +404,7 @@ export function registerAdminRoutes(app: Express) {
         SELECT DATE(created_at) as day, COUNT(*) as count
         FROM certifications
         WHERE created_at >= NOW() - INTERVAL '7 days'
+          AND (auth_method IS NULL OR auth_method != 'onboarding')
         GROUP BY DATE(created_at)
         ORDER BY day DESC
       `);

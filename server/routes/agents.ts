@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { db, pool } from "../db";
 import { logger } from "../logger";
 import { certifications, users, apiKeys } from "@shared/schema";
-import { eq, and, sql, desc } from "drizzle-orm";
+import { eq, and, sql, desc, ne } from "drizzle-orm";
 import { z } from "zod";
 import { isWalletAuthenticated } from "../walletAuth";
 import { paymentRateLimiter } from "../reliability";
@@ -684,7 +684,7 @@ export function registerAgentsRoutes(app: Express) {
         },
         last_proof: lastProofFormatted,
         proofs: {
-          total: (await db.select({ count: sql<number>`count(*)` }).from(certifications).where(eq(certifications.userId, user.id)))[0]?.count ?? 0,
+          total: (await db.select({ count: sql<number>`count(*)` }).from(certifications).where(and(eq(certifications.userId, user.id), ne(certifications.authMethod, 'onboarding'))))[0]?.count ?? 0,
           last_proof: lastProofFormatted,
         },
         webhook: user.webhookUrl

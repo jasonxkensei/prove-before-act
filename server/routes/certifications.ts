@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { db } from "../db";
 import { logger } from "../logger";
 import { certifications, users, apiKeys } from "@shared/schema";
-import { eq, desc, sql, and, count } from "drizzle-orm";
+import { eq, desc, sql, and, count, ne } from "drizzle-orm";
 import { z } from "zod";
 import { isWalletAuthenticated } from "../walletAuth";
 import { getCertificationPriceEgld } from "../pricing";
@@ -351,7 +351,7 @@ export function registerCertificationsRoutes(app: Express) {
         : [];
 
       const certCount = user
-        ? await db.select({ value: count() }).from(certifications).where(eq(certifications.userId, user.id))
+        ? await db.select({ value: count() }).from(certifications).where(and(eq(certifications.userId, user.id), ne(certifications.authMethod, 'onboarding')))
         : [{ value: 0 }];
 
       const isTrial = user?.isTrial ?? false;
