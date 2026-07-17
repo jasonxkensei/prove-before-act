@@ -2,8 +2,35 @@ import { db } from "./db";
 import { certifications, users, agentViolations } from "@shared/schema";
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { computeTrustScoreByWallet, type TrustScore } from "./trust";
+import { logger } from "./logger";
 
 export const VIOLATION_GAP_THRESHOLD_MS = 30 * 60 * 1000;
+
+const MX_API_URL = process.env.MULTIVERSX_API_URL || "https://api.multiversx.com";
+
+/**
+ * Checks whether a MultiversX transaction hash actually exists on-chain
+ * and has status "success". Returns "confirmed" | "not_found" | "failed" | "unknown".
+ * Times out after 4 seconds and returns "unknown" (so a slow API doesn't block the report).
+ */
+async function checkTxOnChain(txHash: string): Promise<"confirmed" | "not_found" | "failed" | "unknown"> {
+  if (!txHash || txHash.length < 60) return "unknown";
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 4000);
+  try {
+    const res = await fetch(`${MX_API_URL}/transactions/${txHash}`, { signal: controller.signal });
+    clearTimeout(timer);
+    if (res.status === 404) return "not_found";
+    if (!res.ok) return "unknown";
+    const tx = await res.json();
+    if (tx.status === "success") return "confirmed";
+    if (tx.status === "pending") return "unknown";
+    return "failed";
+  } catch {
+    clearTimeout(timer);
+    return "unknown";
+  }
+}
 
 export interface AuditTrailError {
   status: number;
@@ -291,6 +318,39 @@ export async function reconstructAuditTrail(
   }
 
   timeline.sort((a, b) => new Date(a.certified_at).getTime() - new Date(b.certified_at).getTime());
+
+  // ── On-chain transaction verification ────────────────────────────────────
+  // DB blockchain_status = "confirmed" is set by the confirmation poller but
+  // does NOT guarantee the tx actually exists on MultiversX (e.g. the poller
+  // may have marked it confirmed too early or the tx was dropped). We re-check
+  // every tx hash in the timeline against the live MultiversX API in parallel.
+  // Timeout = 4s per request; on timeout/error we fall back to "unknown"
+  // (conservative: doesn't flip confirmed→failed on a transient API outage).
+  const txHashesToCheck = timeline
+    .filter((e) => e.transaction_hash && e.blockchain_status === "confirmed")
+    .map((e) => e.transaction_hash as string);
+
+  const uniqueHashes = [...new Set(txHashesToCheck)];
+  const onChainResults = await Promise.all(uniqueHashes.map(checkTxOnChain));
+  const onChainMap = new Map<string, "confirmed" | "not_found" | "failed" | "unknown">(
+    uniqueHashes.map((h, i) => [h, onChainResults[i]])
+  );
+
+  // Update each timeline entry's blockchain_status with the live on-chain result
+  for (const entry of timeline) {
+    if (entry.transaction_hash && onChainMap.has(entry.transaction_hash)) {
+      const onChain = onChainMap.get(entry.transaction_hash)!;
+      if (onChain === "not_found" || onChain === "failed") {
+        entry.blockchain_status = onChain;
+        logger.warn("Timeline entry claims confirmed but tx not found on-chain", {
+          component: "audit-trail",
+          proof_id: entry.proof_id,
+          tx_hash: entry.transaction_hash,
+          onChain,
+        });
+      }
+    }
+  }
 
   const whyEntry = timeline.find((t) => t.role === "WHY");
   const whatEntry = timeline.find((t) => t.role === "WHAT");

@@ -659,6 +659,22 @@ function TimelineEntry({
                 >
                   confirmed
                 </Badge>
+              ) : entry.blockchain_status === "not_found" ? (
+                <Badge
+                  variant="outline"
+                  className="text-[10px] text-red-600 dark:text-red-400 border-red-500/30"
+                  title="This transaction hash was not found on MultiversX — the proof is not actually on-chain"
+                >
+                  not on-chain
+                </Badge>
+              ) : entry.blockchain_status === "failed" ? (
+                <Badge
+                  variant="outline"
+                  className="text-[10px] text-red-600 dark:text-red-400 border-red-500/30"
+                  title="This transaction exists on MultiversX but has a failed status"
+                >
+                  tx failed
+                </Badge>
               ) : (
                 <Badge
                   variant="outline"
@@ -1344,7 +1360,7 @@ export default function IncidentReportPage() {
                             <><span className="font-semibold">Order violation:</span>{" "}The WHAT proof was committed on-chain before the WHY proof. This reverses the Prove Before &amp; After Act guarantee — the outcome was recorded before the stated reasoning.</>}
                           {data.verification.intent_preceded_execution !== false &&
                             data.verification.all_confirmed === false &&
-                            <><span className="font-semibold">Unconfirmed proofs:</span>{" "}One or more proofs are still pending confirmation on MultiversX. This check will re-evaluate once all transactions are confirmed.</>}
+                            <><span className="font-semibold">Blockchain verification failed:</span>{" "}One or more transaction hashes could not be confirmed on MultiversX — they may be pending, not found on-chain, or the transaction failed. A proof is only valid once its transaction is confirmed on the blockchain.</>}
                           {data.verification.intent_preceded_execution !== false &&
                             data.verification.all_confirmed !== false &&
                             !data.verification.why_certified &&
