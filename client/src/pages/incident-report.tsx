@@ -159,14 +159,35 @@ function RoleBadge({ role, isContested }: { role: string; isContested?: boolean 
   );
 }
 
+// Derives a visual severity from verdict + verification.
+// "anomaly" is split into two visual levels:
+//   - "violation" (red)  → proven order reversal (WHAT before WHY on-chain)
+//   - "gap"      (amber) → WHY link not found, but no proof of fraud
+function resolveVisualSeverity(
+  verdict: any,
+  verification: any,
+): "clean" | "gap" | "violation" | "incomplete" {
+  if (!verdict) return "incomplete";
+  if (verdict.status === "clean") return "clean";
+  if (verdict.status === "anomaly") {
+    if (verification?.intent_preceded_execution === false) return "violation";
+    return "gap";
+  }
+  return "incomplete";
+}
+
 function VerdictBanner({
   verdict,
   deltaSec,
+  verification,
 }: {
   verdict: any;
   deltaSec: number | null;
+  verification: any;
 }) {
   if (!verdict) return null;
+
+  const severity = resolveVisualSeverity(verdict, verification);
 
   const config: Record<
     string,
@@ -176,7 +197,7 @@ function VerdictBanner({
       border: string;
       text: string;
       badge: string;
-      deltaColor: string;
+      label: string;
     }
   > = {
     clean: {
@@ -185,15 +206,23 @@ function VerdictBanner({
       border: "border-green-500/20",
       text: "text-green-700 dark:text-green-400",
       badge: "text-green-700 dark:text-green-300 border-green-500/30 bg-green-500/10",
-      deltaColor: "text-green-700 dark:text-green-400",
+      label: verdict.label,
     },
-    anomaly: {
+    gap: {
+      icon: ShieldQuestion,
+      bg: "bg-amber-500/5 dark:bg-amber-500/10",
+      border: "border-amber-500/20",
+      text: "text-amber-700 dark:text-amber-400",
+      badge: "text-amber-700 dark:text-amber-300 border-amber-500/30 bg-amber-500/10",
+      label: "Reasoning Link Not Found",
+    },
+    violation: {
       icon: ShieldAlert,
       bg: "bg-red-500/5 dark:bg-red-500/10",
       border: "border-red-500/20",
       text: "text-red-700 dark:text-red-400",
       badge: "text-red-700 dark:text-red-300 border-red-500/30 bg-red-500/10",
-      deltaColor: "text-red-700 dark:text-red-400",
+      label: "Order Violation Detected",
     },
     incomplete: {
       icon: ShieldQuestion,
@@ -201,16 +230,16 @@ function VerdictBanner({
       border: "border-yellow-500/20",
       text: "text-yellow-700 dark:text-yellow-400",
       badge: "text-yellow-700 dark:text-yellow-300 border-yellow-500/30 bg-yellow-500/10",
-      deltaColor: "text-yellow-700 dark:text-yellow-400",
+      label: verdict.label,
     },
   };
 
-  const c = config[verdict.status] || config.incomplete;
+  const c = config[severity];
   const Icon = c.icon;
 
   return (
     <div
-      className={`rounded-md border ${c.border} ${c.bg} p-5 mb-8`}
+      className={`rounded-md border ${c.border} ${c.bg} p-5 mb-6`}
       data-testid="verdict-banner"
     >
       <div className="flex items-start gap-4">
@@ -225,7 +254,7 @@ function VerdictBanner({
               className={`text-lg font-semibold ${c.text}`}
               data-testid="text-verdict-label"
             >
-              {verdict.label}
+              {c.label}
             </h2>
             <Badge
               variant="outline"
@@ -258,10 +287,41 @@ function VerdictBanner({
             className="text-sm text-muted-foreground"
             data-testid="text-verdict-detail"
           >
-            {verdict.detail}
+            {severity === "gap"
+              ? "The action was certified on-chain, but the system could not automatically pair a WHY (reasoning) proof to this specific action. This is often a metadata linking limitation, not evidence of misconduct."
+              : verdict.detail}
           </p>
         </div>
       </div>
+
+      {/* Human-readable explanation for non-clean verdicts */}
+      {severity === "gap" && (
+        <div className="mt-4 pt-4 border-t border-amber-500/20">
+          <p className="text-xs font-medium text-amber-700 dark:text-amber-400 mb-1.5">
+            What does this mean?
+          </p>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            xproof requires agents to anchor their reasoning (WHY) before acting (WHAT).
+            This check looks for a WHY proof linked to this specific action.
+            When WHY was certified before the action's target existed — for instance,
+            reasoning anchored before a post was published — the automatic pairing
+            can fail even if both proofs are present and valid.
+            Check the session heartbeat below, which lists all proofs from this session.
+          </p>
+        </div>
+      )}
+      {severity === "violation" && (
+        <div className="mt-4 pt-4 border-t border-red-500/20">
+          <p className="text-xs font-medium text-red-700 dark:text-red-400 mb-1.5">
+            What does this mean?
+          </p>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            The WHAT proof (action result) was committed to the MultiversX blockchain
+            before the WHY proof (reasoning). This reverses the "Prove Before Act" guarantee
+            and is recorded as an order violation in the agent's audit trail.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -287,25 +347,28 @@ function PlainSummaryBlock({
     ? formatTimestamp(data.report_generated_at)
     : null;
 
+  const severity = resolveVisualSeverity(data?.verdict, data?.verification);
+
   const verdictPhrases: Record<string, { phrase: string; cls: string }> = {
-    clean:
-      {
-        phrase: "Timeline integrity verified — intent preceded execution.",
-        cls: "text-green-700 dark:text-green-400 font-semibold",
-      },
-    anomaly:
-      {
-        phrase: "Structural anomaly detected — audit trail is incomplete or reversed.",
-        cls: "text-red-700 dark:text-red-400 font-semibold",
-      },
-    incomplete:
-      {
-        phrase: "Partial audit trail — some proofs are missing or unconfirmed.",
-        cls: "text-yellow-700 dark:text-yellow-400 font-semibold",
-      },
+    clean: {
+      phrase: "Timeline integrity verified — intent preceded execution.",
+      cls: "text-green-700 dark:text-green-400 font-semibold",
+    },
+    gap: {
+      phrase: "Reasoning link not found — the WHY proof could not be automatically paired to this action.",
+      cls: "text-amber-700 dark:text-amber-400 font-semibold",
+    },
+    violation: {
+      phrase: "Order violation — execution was recorded before the reasoning was anchored.",
+      cls: "text-red-700 dark:text-red-400 font-semibold",
+    },
+    incomplete: {
+      phrase: "Partial audit trail — some proofs are missing or unconfirmed.",
+      cls: "text-yellow-700 dark:text-yellow-400 font-semibold",
+    },
   };
 
-  const vp = verdictPhrases[verdictStatus] || verdictPhrases.incomplete;
+  const vp = verdictPhrases[severity] || verdictPhrases.incomplete;
 
   return (
     <div
@@ -1123,7 +1186,7 @@ export default function IncidentReportPage() {
 
             <PlainSummaryBlock data={data} deltaSec={deltaSec} proofId={proofId} />
 
-            <VerdictBanner verdict={data.verdict} deltaSec={deltaSec} />
+            <VerdictBanner verdict={data.verdict} deltaSec={deltaSec} verification={data.verification} />
 
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
               <Card>
@@ -1209,30 +1272,36 @@ export default function IncidentReportPage() {
                   />
                 </div>
 
-                {data.verdict?.status === "anomaly" && (
-                  <div className="mt-4 pt-4 border-t">
-                    <div className="flex items-start gap-2 text-xs text-red-600 dark:text-red-400">
-                      <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-                      <p>
-                        <span className="font-semibold">Anomaly detected:</span>{" "}
-                        {data.verification.intent_preceded_execution === false &&
-                          "The WHAT proof was committed on-chain before the WHY proof. This reverses the Prove Before Act order — the outcome was recorded before the stated reasoning."}
-                        {data.verification.intent_preceded_execution !== false &&
-                          data.verification.all_confirmed === false &&
-                          "One or more proofs have not been confirmed on MultiversX. Unconfirmed proofs cannot be independently verified."}
-                        {data.verification.intent_preceded_execution !== false &&
-                          data.verification.all_confirmed !== false &&
-                          !data.verification.why_certified &&
-                          "No WHY proof was found for this action. The agent's reasoning was not anchored before execution."}
-                        {data.verification.intent_preceded_execution !== false &&
-                          data.verification.all_confirmed !== false &&
-                          data.verification.why_certified &&
-                          !data.verification.what_certified &&
-                          "No WHAT proof was found for this action. The actual result was not anchored after execution."}
-                      </p>
+                {data.verdict?.status === "anomaly" && (() => {
+                  const sv = resolveVisualSeverity(data.verdict, data.verification);
+                  const isViolation = sv === "violation";
+                  const borderCls = isViolation ? "border-red-500/20" : "border-amber-500/20";
+                  const iconCls = isViolation ? "text-red-500 dark:text-red-400" : "text-amber-500 dark:text-amber-400";
+                  const textCls = isViolation ? "text-red-600 dark:text-red-400" : "text-amber-700 dark:text-amber-500";
+                  return (
+                    <div className={`mt-4 pt-4 border-t ${borderCls}`}>
+                      <div className={`flex items-start gap-2 text-xs ${textCls}`}>
+                        <AlertTriangle className={`h-3.5 w-3.5 shrink-0 mt-0.5 ${iconCls}`} />
+                        <p>
+                          {data.verification.intent_preceded_execution === false &&
+                            <><span className="font-semibold">Order violation:</span>{" "}The WHAT proof was committed on-chain before the WHY proof. This reverses the Prove Before Act guarantee — the outcome was recorded before the stated reasoning.</>}
+                          {data.verification.intent_preceded_execution !== false &&
+                            data.verification.all_confirmed === false &&
+                            <><span className="font-semibold">Unconfirmed proofs:</span>{" "}One or more proofs are still pending confirmation on MultiversX. This check will re-evaluate once all transactions are confirmed.</>}
+                          {data.verification.intent_preceded_execution !== false &&
+                            data.verification.all_confirmed !== false &&
+                            !data.verification.why_certified &&
+                            <><span className="font-semibold">Reasoning link not found:</span>{" "}The system could not automatically pair a WHY proof to this action. This typically happens when the WHY was certified before the action's target existed (e.g. before a post was published). Check the session heartbeat — it may reference both proofs.</>}
+                          {data.verification.intent_preceded_execution !== false &&
+                            data.verification.all_confirmed !== false &&
+                            data.verification.why_certified &&
+                            !data.verification.what_certified &&
+                            <><span className="font-semibold">Result not anchored:</span>{" "}No WHAT proof was found for this action. The actual result was not certified after execution.</>}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
               </CardContent>
             </Card>
 

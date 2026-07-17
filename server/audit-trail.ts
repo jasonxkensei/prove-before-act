@@ -237,6 +237,39 @@ export async function reconstructAuditTrail(
           session_duration_sec: hbMeta.summary ? parseSessionDuration(hbMeta.summary) : null,
           karma: hbMeta.summary ? parseKarma(hbMeta.summary) : null,
         };
+
+        // ── Heartbeat-mediated WHY fallback ────────────────────────────────
+        // Primary WHY lookup (post_id-based) can fail when the WHY was
+        // certified before the post existed — meaning the WHY metadata has no
+        // post_id even though the agent did anchor its reasoning first. The
+        // session heartbeat is the authoritative record of which proofs belong
+        // to a session, so if it references a _reasoning proof for the same
+        // action type and we still have no WHY in the timeline, use it.
+        const noWhyYet = !timeline.some((t) => t.role === "WHY");
+        if (noWhyYet && isAction && actionType) {
+          const reasoningType = actionType + "_reasoning";
+          const whyProofEntry = actionProofs.find((a: any) => {
+            const at = String(a.action_type || a.type || "");
+            return at === reasoningType;
+          });
+          const whyProofId: string | undefined =
+            whyProofEntry?.proof_id || whyProofEntry?.why_proof_id;
+          if (whyProofId) {
+            const [whyCert] = await db
+              .select()
+              .from(certifications)
+              .where(
+                and(
+                  eq(certifications.id, whyProofId),
+                  eq(certifications.userId, user.id),
+                  eq(certifications.isPublic, true),
+                ),
+              );
+            if (whyCert) {
+              timeline.unshift(formatProofEntry(whyCert, "WHY", wallet));
+            }
+          }
+        }
         break;
       }
     }
