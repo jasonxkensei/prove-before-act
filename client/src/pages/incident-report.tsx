@@ -1379,7 +1379,7 @@ export default function IncidentReportPage() {
 
               <div className="pl-1">
                 {data.timeline.map((entry: any, i: number) => {
-                  const isContested = entry.proof_id === proofId;
+                  const isContested = entry.proof_id === proofId && data.verdict?.status !== "clean";
                   const nextEntry = data.timeline[i + 1];
                   const showDelta =
                     deltaSec !== null &&
