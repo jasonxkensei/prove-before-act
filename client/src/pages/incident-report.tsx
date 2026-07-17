@@ -84,9 +84,10 @@ function CopyButton({ text, label }: { text: string; label: string }) {
 }
 
 const CHECK_EXPLANATIONS: Record<string, string> = {
-  "intent_preceded_execution": "The WHY proof was certified on-chain BEFORE the WHAT proof. This is the core Prove Before Act guarantee — the agent's reasoning is immutably timestamped before the outcome.",
-  "why_certified": "A WHY proof exists and has been committed to the MultiversX blockchain, anchoring the agent's full reasoning, context, and decision before execution.",
-  "what_certified": "A WHAT proof exists and has been committed to the MultiversX blockchain, anchoring the actual result of the action after execution.",
+  "who": "The agent's wallet address is registered and publicly identified on MultiversX. This confirms which actor performed the action.",
+  "when": "The reasoning proof was certified on-chain BEFORE the result proof. This is the core Prove Before & After Act guarantee — the agent's intent is immutably timestamped before the outcome.",
+  "why_certified": "A WHY proof (reasoning) exists and has been committed to the MultiversX blockchain, anchoring the agent's full reasoning, context, and decision before execution.",
+  "what_certified": "A WHAT proof (result) exists and has been committed to the MultiversX blockchain, anchoring the actual outcome of the action after execution.",
   "session_anchored": "A session heartbeat proof was certified, recording the broader context of this agent session — total actions, duration, and karma.",
   "all_confirmed": "Every proof in this audit trail has been confirmed on-chain by MultiversX validators. Unconfirmed proofs could indicate a pending or failed blockchain transaction.",
 };
@@ -319,7 +320,7 @@ function VerdictBanner({
           </p>
           <p className="text-xs text-muted-foreground leading-relaxed">
             The WHAT proof (action result) was committed to the MultiversX blockchain
-            before the WHY proof (reasoning). This reverses the "Prove Before Act" guarantee
+            before the WHY proof (reasoning). This reverses the "Prove Before & After Act" guarantee
             and is recorded as an order violation in the agent's audit trail.
           </p>
         </div>
@@ -486,28 +487,26 @@ function DeltaCard({
     >
       <CardContent className="p-4">
         <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
-          WHY → WHAT
+          ORDER
         </p>
         {deltaSec !== null ? (
           <>
-            <div className="flex items-baseline gap-2 mb-1">
-              <span
-                className={`text-2xl font-bold tabular-nums ${
-                  intentOk === true
-                    ? "text-green-600 dark:text-green-400"
-                    : intentOk === false
-                    ? "text-red-600 dark:text-red-400"
-                    : ""
-                }`}
-                data-testid="text-delta-seconds"
-              >
-                {deltaSec >= 0 ? `+${formatDuration(deltaSec)}` : `−${formatDuration(Math.abs(deltaSec))}`}
-              </span>
-            </div>
+            <p
+              className={`text-lg font-bold mb-1 ${
+                intentOk === true
+                  ? "text-green-600 dark:text-green-400"
+                  : intentOk === false
+                  ? "text-red-600 dark:text-red-400"
+                  : ""
+              }`}
+              data-testid="text-delta-seconds"
+            >
+              {intentOk === true ? "In order" : intentOk === false ? "Reversed" : "—"}
+            </p>
             <p className="text-xs text-muted-foreground">
               {deltaSec >= 0
-                ? "WHY anchored before WHAT"
-                : "WHAT anchored before WHY"}
+                ? `Reasoning anchored ${formatDuration(deltaSec)} before result`
+                : `Result anchored ${formatDuration(Math.abs(deltaSec))} before reasoning`}
             </p>
             <p
               className={`text-xs font-medium mt-2 ${
@@ -518,7 +517,7 @@ function DeltaCard({
                   : "text-muted-foreground"
               }`}
             >
-              {intentOk === true ? "✓ Prove Before Act confirmed" : intentOk === false ? "✗ Order violation detected" : "—"}
+              {intentOk === true ? "✓ Prove Before & After Act" : intentOk === false ? "✗ Order violation detected" : "—"}
             </p>
           </>
         ) : (
@@ -1297,29 +1296,36 @@ export default function IncidentReportPage() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8">
                   <CheckRow
+                    pass={true}
+                    label="WHO — Agent identified on-chain"
+                    tooltip={CHECK_EXPLANATIONS.who}
+                  />
+                  <CheckRow
                     pass={data.verification.intent_preceded_execution}
-                    label="Intent preceded execution (WHY before WHAT)"
-                    tooltip={CHECK_EXPLANATIONS.intent_preceded_execution}
+                    label="WHEN — Reasoning before result"
+                    tooltip={CHECK_EXPLANATIONS.when}
                   />
                   <CheckRow
                     pass={data.verification.why_certified}
-                    label="WHY proof certified on-chain"
+                    label="WHY — Reasoning proof certified"
                     tooltip={CHECK_EXPLANATIONS.why_certified}
                   />
                   <CheckRow
                     pass={data.verification.what_certified}
-                    label="WHAT proof certified on-chain"
+                    label="WHAT — Result proof certified"
                     tooltip={CHECK_EXPLANATIONS.what_certified}
+                  />
+                </div>
+                <div className="mt-3 pt-3 border-t border-border/50 grid grid-cols-1 sm:grid-cols-2 gap-x-8">
+                  <CheckRow
+                    pass={data.verification.all_confirmed}
+                    label="All proofs blockchain-confirmed"
+                    tooltip={CHECK_EXPLANATIONS.all_confirmed}
                   />
                   <CheckRow
                     pass={data.verification.session_anchored}
                     label="Session heartbeat anchored"
                     tooltip={CHECK_EXPLANATIONS.session_anchored}
-                  />
-                  <CheckRow
-                    pass={data.verification.all_confirmed}
-                    label="All proofs blockchain-confirmed"
-                    tooltip={CHECK_EXPLANATIONS.all_confirmed}
                   />
                 </div>
 
@@ -1335,7 +1341,7 @@ export default function IncidentReportPage() {
                         <AlertTriangle className={`h-3.5 w-3.5 shrink-0 mt-0.5 ${iconCls}`} />
                         <p>
                           {data.verification.intent_preceded_execution === false &&
-                            <><span className="font-semibold">Order violation:</span>{" "}The WHAT proof was committed on-chain before the WHY proof. This reverses the Prove Before Act guarantee — the outcome was recorded before the stated reasoning.</>}
+                            <><span className="font-semibold">Order violation:</span>{" "}The WHAT proof was committed on-chain before the WHY proof. This reverses the Prove Before &amp; After Act guarantee — the outcome was recorded before the stated reasoning.</>}
                           {data.verification.intent_preceded_execution !== false &&
                             data.verification.all_confirmed === false &&
                             <><span className="font-semibold">Unconfirmed proofs:</span>{" "}One or more proofs are still pending confirmation on MultiversX. This check will re-evaluate once all transactions are confirmed.</>}

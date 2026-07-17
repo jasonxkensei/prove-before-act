@@ -202,6 +202,9 @@ export async function reconstructAuditTrail(
     }
 
     const allProofIds = timeline.map((t) => t.proof_id);
+    // Extend lookup window: heartbeats can be created either before or after the
+    // contested proof (e.g. the session started long before the WHAT was published).
+    // Look 24 h back and 7 days forward from the contested proof's creation date.
     const heartbeatCandidates = await db.execute(sql`
       SELECT id, file_name, file_hash, blockchain_status, transaction_hash,
              metadata, created_at, file_type, user_id
@@ -210,17 +213,29 @@ export async function reconstructAuditTrail(
         AND blockchain_status = 'confirmed'
         AND is_public = true
         AND (metadata->>'type' = 'heartbeat' OR metadata->>'action_type' = 'heartbeat')
-        AND created_at >= ${contestedProof.createdAt}
-      ORDER BY created_at ASC
+        AND created_at >= ${contestedProof.createdAt}::timestamptz - INTERVAL '24 hours'
+        AND created_at <= ${contestedProof.createdAt}::timestamptz + INTERVAL '7 days'
+      ORDER BY ABS(EXTRACT(EPOCH FROM (created_at - ${contestedProof.createdAt}::timestamptz))) ASC
       LIMIT 10
     `);
 
     for (const hb of heartbeatCandidates.rows as any[]) {
       const hbMeta = hb.metadata || {};
       const actionProofs = hbMeta.action_proofs || hbMeta.actions || [];
-      const allIdsInHb = actionProofs.map((a: any) => a.proof_id || a.why_proof_id || a.what_proof_id).filter(Boolean);
+      // Collect ALL proof IDs referenced by the heartbeat (WHY side, WHAT side, or generic).
+      const allIdsInHb = actionProofs.flatMap((a: any) =>
+        [a.proof_id, a.why_proof_id, a.what_proof_id].filter(Boolean)
+      );
       const certifiedInSession = allIdsInHb.length;
-      if (allProofIds.some((id: string) => allIdsInHb.includes(id))) {
+      // Match if the heartbeat references any proof we already know about,
+      // OR if its action_proofs list contains an entry matching this proof's action type
+      // (handles the case where the WHAT is not yet in the heartbeat but the WHY is).
+      const matchByProofId = [...allProofIds, contestedProof.id].some((id: string) => allIdsInHb.includes(id));
+      const matchByActionType = isAction && actionType && actionProofs.some((a: any) => {
+        const at = String(a.action_type || a.type || "");
+        return at === actionType || at === actionType + "_reasoning";
+      });
+      if (matchByProofId || matchByActionType) {
         sessionHeartbeat = {
           role: "heartbeat",
           proof_id: hb.id,
