@@ -324,43 +324,6 @@ function isPrivateIp(ip: string): boolean {
   );
 }
 
-/**
- * Resolve the hostname from a webhook URL via DNS and confirm that every resolved
- * address is public (non-private, non-loopback, non-link-local, non-reserved).
- *
- * IPv4/IPv6 literals are checked directly without a DNS round-trip.
- * Returns false (= unsafe) on any resolution error — fail closed.
- *
- * NOTE: This function only validates DNS results — it does NOT pin the resolved
- * IP to the outbound socket, so on its own it leaves a DNS-rebinding window
- * between the lookup and the actual `fetch()` call. All outbound webhook
- * delivery must go through `safeWebhookFetch()`, which both validates AND
- * pins the resolved IP at the socket layer. This export is retained for
- * backwards compatibility with tests and external code paths.
- */
-export async function resolveToPublicOnly(url: string): Promise<boolean> {
-  try {
-    const { hostname } = new URL(url);
-
-    // IPv6 literal — strip brackets, check directly
-    if (hostname.startsWith("[") && hostname.endsWith("]")) {
-      return !isPrivateIp(hostname.slice(1, -1));
-    }
-
-    // IPv4 literal — check directly
-    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) {
-      return !isPrivateIp(hostname);
-    }
-
-    // Hostname — resolve all A/AAAA records and check each IP
-    const addresses = await dns.promises.lookup(hostname, { family: 0, all: true });
-    if (!addresses || addresses.length === 0) return false; // no records — fail closed
-    return addresses.every(addr => !isPrivateIp(addr.address));
-  } catch {
-    return false; // resolution failure — fail closed
-  }
-}
-
 export interface SafeWebhookFetchInit {
   method: "POST" | "PUT" | "PATCH";
   headers: Record<string, string>;

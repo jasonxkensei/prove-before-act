@@ -11,7 +11,7 @@ import {
   resetNonce,
 } from "./mx8004";
 import { logger } from "./logger";
-import { checkAndAlert } from "./txAlerts";
+import { checkAndAlertTx } from "./alerts";
 
 let workerInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -166,7 +166,7 @@ async function processNextTask(): Promise<void> {
     }
 
     await updateQueueMetrics();
-    checkAndAlert().catch(() => {});
+    checkAndAlertTx().catch(() => {});
   } catch (err: any) {
     logger.error("Worker error", { component: "tx-queue", error: err.message });
   }

@@ -7,8 +7,7 @@ import { certifications, users, apiKeys, visits, txQueue as txQueueTable } from 
 import { eq, desc, sql, and, gte, gt, count, ne } from "drizzle-orm";
 import { isWalletAuthenticated } from "../walletAuth";
 import { computeTrustScoreByWallet, runLeaderboardRefreshCycle, runTrustRefreshCycle } from "../trust";
-import { getAlertConfig } from "../txAlerts";
-import { getRateLimitAlertConfig } from "../rateLimitAlerts";
+import { getAlertConfig, getRateLimitAlertConfig } from "../alerts";
 import { getMetrics } from "../metrics";
 import { getTxQueueStats } from "../txQueue";
 import { requireAdmin, EXCLUDED_IP_HASHES, getClientIp } from "./helpers";

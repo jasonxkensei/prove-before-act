@@ -819,7 +819,7 @@ async function computeCalibrationLabelBatch(): Promise<Map<string, CalibrationLa
       ])
     );
   } catch (err: any) {
-    console.error("[leaderboard] calibration batch failed:", err?.message);
+    logger.error("[leaderboard] calibration batch failed", { error: err?.message });
     return new Map();
   }
 }

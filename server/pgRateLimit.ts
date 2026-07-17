@@ -2,7 +2,7 @@ import crypto from "crypto";
 import { pool } from "./db";
 import { logger } from "./logger";
 import { recordRateLimitFailOpen } from "./metrics";
-import { checkAndAlert } from "./rateLimitAlerts";
+import { checkAndAlertRateLimit } from "./alerts";
 
 // ── Shared fail-open logging/metrics helper ─────────────────────────────────
 // Every write path below (check/increment/decrement/resetKey) degrades to a
@@ -10,8 +10,8 @@ import { checkAndAlert } from "./rateLimitAlerts";
 // helper guarantees the log line has consistent fields, increments a counter
 // so a sustained DB outage is visible via getMetrics() instead of only
 // scattered log lines, and triggers a threshold-based operational alert (see
-// server/rateLimitAlerts.ts) when the outage is sustained rather than a
-// single blip. checkAndAlert() is cheap to call on every fail-open: it
+// server/alerts.ts) when the outage is sustained rather than a
+// single blip. checkAndAlertRateLimit() is cheap to call on every fail-open: it
 // returns immediately unless both the alert window's fail-open count exceeds
 // the configured threshold AND the cooldown since the last alert has
 // elapsed, so a sustained outage still only produces one alert per cooldown
@@ -31,7 +31,7 @@ function logRateLimitFailOpen(
     error: String(fields.error),
   });
   recordRateLimitFailOpen(op);
-  checkAndAlert().catch(() => {});
+  checkAndAlertRateLimit().catch(() => {});
 }
 
 // ── Table DDL ──────────────────────────────────────────────────────────────
