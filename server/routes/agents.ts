@@ -593,7 +593,9 @@ export function registerAgentsRoutes(app: Express) {
           claim: `POST ${baseUrl}/api/trial/claim`,
           mcp: `${baseUrl}/mcp`,
         },
-        message: `api_key ready. You have ${TRIAL_QUOTA} free on-chain certifications — use the quick_start guide below, your first proof is 1 curl call away. No wallet or payment needed.`,
+        message: onboardingProof
+          ? `api_key ready. Your first proof is already anchoring on-chain (see onboarding_proof). You have ${trialRemaining} certifications remaining — run the step 2 curl in quick_start to certify your own content.`
+          : `api_key ready. You have ${trialRemaining} free on-chain certifications — run the step 2 curl in quick_start to create your first proof. No wallet or payment needed.`,
         note: `Your proofs are fully on-chain and publicly verifiable immediately. They are anchored to a trial wallet — to link them to your real MultiversX identity, connect your wallet at ${baseUrl} and call POST ${baseUrl}/api/trial/claim.`,
       });
     } catch (error) {
