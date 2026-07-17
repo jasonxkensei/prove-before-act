@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Shield, Upload, File, CheckCircle, Loader2, ArrowLeft, Download, ExternalLink, Wallet, AlertTriangle } from "lucide-react";
-import { hashFile } from "@/lib/hashFile";
+import { hashFile } from "@/lib/hashUtils";
 import { generateProofPDF } from "@/lib/generateProofPDF";
 import { sendCertificationTransaction, watchTransaction } from "@/lib/multiversxTransaction";
 import { Link, useLocation } from "wouter";

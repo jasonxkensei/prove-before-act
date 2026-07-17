@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { hashFile } from "@/lib/hashFile";
+import { hashFile } from "@/lib/hashUtils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";

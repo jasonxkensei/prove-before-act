@@ -1538,20 +1538,6 @@ export function registerAcpRoutes(app: Express) {
   // LLM-READY ROUTES (AI-first documentation)
   // ============================================
 
-  function getNetworkLabel(chainId: string): string {
-    switch (chainId) {
-      case "1": return "mainnet";
-      case "D": return "devnet";
-      case "T": return "testnet";
-      default: return "mainnet";
-    }
-  }
-
-  function buildCanonicalId(chainId: string, txHash: string | null): string | null {
-    if (!txHash) return null;
-    return `xproof:mvx:${getNetworkLabel(chainId)}:tx:${txHash}`;
-  }
-
   // Genesis certification data (first xproof certification)
   const GENESIS_CERTIFICATION = {
     canonical_id: "xproof:mvx:mainnet:tx:f376c0809d5c8fd91f854d39cf6f9f83ac3d80231477538a1b423db0537aad7e",

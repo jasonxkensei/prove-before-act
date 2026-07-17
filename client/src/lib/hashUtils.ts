@@ -1,13 +1,16 @@
-// Utility to compute SHA-256 hash of a file client-side
-export async function computeFileHash(file: File): Promise<string> {
-  const buffer = await file.arrayBuffer();
-  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+// SHA-256 hashing utilities (client-side, uses Web Crypto API)
+
+export async function hashFile(file: File): Promise<string> {
+  const arrayBuffer = await file.arrayBuffer();
+  const hashBuffer = await crypto.subtle.digest("SHA-256", arrayBuffer);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-  return hashHex;
+  return hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
 }
 
-// Format hash for display (truncate with ellipsis)
+export async function computeFileHash(file: File): Promise<string> {
+  return hashFile(file);
+}
+
 export function formatHash(hash: string, length: number = 16): string {
   if (hash.length <= length) return hash;
   const start = Math.floor(length / 2);
@@ -15,7 +18,6 @@ export function formatHash(hash: string, length: number = 16): string {
   return `${hash.slice(0, start)}...${hash.slice(-end)}`;
 }
 
-// Copy to clipboard utility
 export async function copyToClipboard(text: string): Promise<boolean> {
   try {
     await navigator.clipboard.writeText(text);
