@@ -134,6 +134,7 @@ export function registerAdminRoutes(app: Express) {
       const statusBreakdown = await db.execute(sql`
         SELECT blockchain_status, COUNT(*) as count
         FROM certifications
+        WHERE (auth_method IS NULL OR auth_method != 'onboarding')
         GROUP BY blockchain_status
       `);
 
@@ -392,6 +393,7 @@ export function registerAdminRoutes(app: Express) {
       const statusBreakdown = await db.execute(sql`
         SELECT blockchain_status, COUNT(*) as count
         FROM certifications
+        WHERE (auth_method IS NULL OR auth_method != 'onboarding')
         GROUP BY blockchain_status
       `);
 

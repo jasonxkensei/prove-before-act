@@ -530,6 +530,24 @@ app.use((req, res, next) => {
     }
   }
 
+  async function purgeOnboardingCertifications() {
+    // Onboarding certifications (auth_method = 'onboarding') are auto-generated
+    // artifacts that anchor a fake file, not a real user proof. They are never
+    // shown in public metrics but can create discrepancies (e.g. Verified count >
+    // Total count on the stats dashboard). Delete any remaining rows so the database
+    // stays consistent with the code-level filters already in place everywhere.
+    try {
+      const result = await pool.query(
+        `DELETE FROM certifications WHERE auth_method = 'onboarding'`
+      );
+      if ((result.rowCount ?? 0) > 0) {
+        logger.info("Onboarding certifications purged", { component: "migration", deleted: result.rowCount });
+      }
+    } catch (err: any) {
+      logger.error("Onboarding certifications purge error", { component: "migration", error: err.message });
+    }
+  }
+
   // Background sweeper: release ACP certification reservations whose checkout sessions
   // have expired without being confirmed.  Runs every 5 minutes so that a hash is never
   // permanently locked by an abandoned checkout for more than ~5 minutes beyond expiry.
@@ -599,6 +617,7 @@ app.use((req, res, next) => {
     migrateAgentViolationsTable();
     migrateAgentOutcomesTable();
     purgeStaleSnapshotAttestationCounts();
+    purgeOnboardingCertifications();
     // Schema migration must complete before the refresh scheduler reads snapshots.
     // Sequence: schema → warm caches from existing snapshots (zero compute) →
     // start background scheduler (runs first cycle with jitter, then every 5 min).
