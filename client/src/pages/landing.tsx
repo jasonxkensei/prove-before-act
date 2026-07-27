@@ -265,8 +265,22 @@ export default function Landing() {
             <a href="#faq" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-faq">
               FAQ
             </a>
+            <a
+              href="#free-trial"
+              className="text-sm font-medium text-primary bg-primary/10 hover:bg-primary/20 border border-primary/20 rounded-md px-3 py-1.5 transition-colors"
+              data-testid="link-nav-start-free"
+            >
+              Start free
+            </a>
           </nav>
           <div className="flex items-center gap-3">
+            <a
+              href="#free-trial"
+              className="text-sm font-medium text-primary bg-primary/10 hover:bg-primary/20 border border-primary/20 rounded-md px-3 py-1.5 transition-colors md:hidden"
+              data-testid="link-nav-start-free-mobile"
+            >
+              Start free
+            </a>
             <a
               href="/zh"
               className="text-xs text-muted-foreground hover:text-foreground transition-colors border border-border/50 rounded-md px-2.5 py-1.5 font-mono"
