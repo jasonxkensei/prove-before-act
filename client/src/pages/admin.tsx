@@ -169,6 +169,7 @@ interface AdminStats {
   certifications: {
     total: number;
     by_source: { api: number; trial: number; user: number };
+    daily: Array<{ date: string; count: number }>;
   };
 }
 
@@ -943,28 +944,30 @@ export default function AdminDashboard() {
                   <CardTitle className="text-sm font-medium">Daily Activity (7d)</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {stats.certifications.daily.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No certifications in the last 7 days</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {stats.certifications.daily.map((day) => (
-                        <div key={day.date} className="flex items-center justify-between">
-                          <span className="text-sm text-muted-foreground">{day.date}</span>
-                          <div className="flex items-center gap-2">
-                            <div className="w-24 bg-muted rounded-full h-2">
-                              <div
-                                className="bg-primary h-2 rounded-full transition-all"
-                                style={{
-                                  width: `${Math.max(5, (day.count / Math.max(...stats.certifications.daily.map(d => d.count))) * 100)}%`,
-                                }}
-                              />
+                  {(() => {
+                    const daily = adminStats?.certifications.daily ?? stats.certifications.daily;
+                    const maxCount = daily.length > 0 ? Math.max(...daily.map(d => d.count)) : 1;
+                    return daily.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No certifications in the last 7 days</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {daily.map((day) => (
+                          <div key={day.date} className="flex items-center justify-between">
+                            <span className="text-sm text-muted-foreground">{day.date}</span>
+                            <div className="flex items-center gap-2">
+                              <div className="w-24 bg-muted rounded-full h-2">
+                                <div
+                                  className="bg-primary h-2 rounded-full transition-all"
+                                  style={{ width: `${Math.max(5, (day.count / maxCount) * 100)}%` }}
+                                />
+                              </div>
+                              <span className="font-medium text-sm w-8 text-right">{day.count}</span>
                             </div>
-                            <span className="font-medium text-sm w-8 text-right">{day.count}</span>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </CardContent>
               </Card>
             </div>
