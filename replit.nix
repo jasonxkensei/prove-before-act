@@ -1,5 +1,54 @@
 {pkgs}: {
   deps = [
+    pkgs.gst_all_1.gst-plugins-good
+    pkgs.gst_all_1.gst-vaapi
+    pkgs.libjpeg8
+    pkgs.ffmpeg
+    pkgs.gst_all_1.gst-plugins-ugly
+    pkgs.harfbuzzFull
+    pkgs.libglvnd
+    pkgs.libGL
+    pkgs.libjpeg_turbo
+    pkgs.gst_all_1.gst-libav
+    pkgs.hyphen
+    pkgs.libmanette
+    pkgs.libavif
+    pkgs.gst_all_1.gst-plugins-bad
+    pkgs.icu74
+    pkgs.libtasn1
+    pkgs.flite
+    pkgs.enchant2
+    pkgs.x264
+    pkgs.woff2
+    pkgs.nghttp2
+    pkgs.libpsl
+    pkgs.libsecret
+    pkgs.wayland
+    pkgs.zlib
+    pkgs.libpng
+    pkgs.libjpeg
+    pkgs.libepoxy
+    pkgs.libwebp
+    pkgs.libgpg-error
+    pkgs.libgcrypt
+    pkgs.libopus
+    pkgs.libevent
+    pkgs.lcms2
+    pkgs.libxslt
+    pkgs.sqlite
+    pkgs.libxml2
+    pkgs.icu
+    pkgs.graphene
+    pkgs.vulkan-loader
+    pkgs.harfbuzz
+    pkgs.gtk4
+    pkgs.gst_all_1.gst-plugins-base
+    pkgs.gst_all_1.gstreamer
+    pkgs.gcc-unwrapped
+    pkgs.fontconfig
+    pkgs.freetype
+    pkgs.xorg.libXrender
+    pkgs.gdk-pixbuf
     pkgs.systemd
     pkgs.libxkbcommon
     pkgs.xorg.libXScrnSaver
