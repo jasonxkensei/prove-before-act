@@ -296,36 +296,24 @@ export default function Landing() {
             </Badge>
           </div>
 
-          <h1 className="mb-6 text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-tight">
+          <h1 className="mb-3 text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-tight">
             Trust is
             <br />
             <span className="text-primary">programmable.</span>
           </h1>
-          
-          <p className="mx-auto mb-5 max-w-2xl text-lg md:text-xl text-muted-foreground leading-relaxed">Anchor verifiable proofs of what your agent saw, decided, and produced — on-chain, composable, API-first.</p>
 
-          {/* x402 callout — above the fold */}
-          <div className="mb-8 flex justify-center">
-            <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-4 py-1.5 text-sm" data-testid="badge-x402-hero">
-              <Zap className="h-3.5 w-3.5 text-primary shrink-0" />
-              <span className="text-muted-foreground">No API key needed — anchor + pay via <strong className="text-foreground">x402</strong> · one HTTP request · USDC on Base</span>
-            </div>
-          </div>
+          <p className="mx-auto mb-1 max-w-2xl text-base md:text-lg text-muted-foreground">
+            Built for humans and autonomous agents.
+          </p>
+
+          <p className="mx-auto mb-8 max-w-2xl text-lg md:text-xl text-muted-foreground leading-relaxed">
+            Anchor a SHA-256 hash of any file or decision on-chain. Immutable proof of what was created, by whom, and when.
+          </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button 
-              size="lg" 
-              className="text-base h-12 px-8" 
-              onClick={handleConnect}
-              data-testid="button-certify-file"
-            >
-              <Upload className="mr-2 h-5 w-5" />
-              Submit a proof
-            </Button>
-            <Button 
-              asChild 
-              variant="outline" 
-              size="lg" 
+            <Button
+              asChild
+              size="lg"
               className="text-base h-12 px-8"
               data-testid="button-free-trial-hero"
             >
@@ -334,203 +322,34 @@ export default function Landing() {
                 10 free proofs — no wallet
               </a>
             </Button>
+            <Button
+              size="lg"
+              variant="outline"
+              className="text-base h-12 px-8"
+              onClick={handleConnect}
+              data-testid="button-certify-file"
+            >
+              <Upload className="mr-2 h-5 w-5" />
+              Submit a proof
+            </Button>
           </div>
-          
 
-          <p className="mt-4 text-sm text-muted-foreground">{price} per proof • Unlimited</p>
+          <p className="mt-4 text-sm text-muted-foreground font-mono">
+            Register free → Get key → First proof in 1 curl
+          </p>
+
+          <p className="mt-2 text-sm text-muted-foreground">{price} per proof • Unlimited</p>
+
+          {/* x402 callout — above the fold */}
+          <div className="mt-6 flex justify-center">
+            <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-4 py-1.5 text-sm" data-testid="badge-x402-hero">
+              <Zap className="h-3.5 w-3.5 text-primary shrink-0" />
+              <span className="text-muted-foreground">No API key needed — anchor + pay via <strong className="text-foreground">x402</strong> · one HTTP request · USDC on Base</span>
+            </div>
+          </div>
 
         </div>
       </section>
-      {/* Machine Economy Stack */}
-      <section className="border-t bg-muted/20 py-12 md:py-16">
-        <div className="container">
-          <div className="mx-auto max-w-4xl">
-            <p className="mb-8 text-center text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-              MultiversX Machine Economy Stack
-            </p>
-            {/* Desktop: horizontal row with arrows */}
-            <div className="hidden sm:flex items-stretch gap-0">
-              {[
-                { id: "MX-8004", label: "Identity", desc: "Who is the agent?" },
-                { id: "AP2", label: "Authority", desc: "Is it authorised?" },
-                { id: "MCP", label: "Communication", desc: "What did it request?" },
-                { id: "x402", label: "Payments", desc: "What did it pay?" },
-                { id: "xProof", label: "Verifiable Intent", desc: "Why did it act?", highlight: true },
-              ].map((pillar, i) => (
-                <div key={pillar.id} className="flex items-center flex-1 min-w-0">
-                  {i > 0 && (
-                    <ChevronRight className="h-4 w-4 text-muted-foreground/30 shrink-0 mx-1" />
-                  )}
-                  <div
-                    className={`flex-1 flex flex-col items-center text-center px-3 py-5 rounded-md border h-full ${
-                      pillar.highlight
-                        ? "border-primary bg-primary/5"
-                        : "border-border/60 bg-background/60"
-                    }`}
-                    data-testid={`stack-pillar-${pillar.id}`}
-                  >
-                    <span
-                      className={`text-sm font-bold font-mono tracking-tight ${
-                        pillar.highlight ? "text-primary" : "text-foreground"
-                      }`}
-                    >
-                      {pillar.id}
-                    </span>
-                    <span
-                      className={`text-xs font-semibold mt-1 ${
-                        pillar.highlight ? "text-primary/80" : "text-muted-foreground"
-                      }`}
-                    >
-                      {pillar.label}
-                    </span>
-                    <span className="mt-1.5 text-xs text-muted-foreground/70 leading-snug">
-                      {pillar.desc}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-            {/* Mobile: vertical stack */}
-            <div className="flex flex-col gap-2 sm:hidden">
-              {[
-                { id: "MX-8004", label: "Identity", desc: "Who is the agent?" },
-                { id: "AP2", label: "Authority", desc: "Is it authorised?" },
-                { id: "MCP", label: "Communication", desc: "What did it request?" },
-                { id: "x402", label: "Payments", desc: "What did it pay?" },
-                { id: "xProof", label: "Verifiable Intent", desc: "Why did it act?", highlight: true },
-              ].map((pillar) => (
-                <div
-                  key={pillar.id}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-md border ${
-                    pillar.highlight
-                      ? "border-primary bg-primary/5"
-                      : "border-border/60 bg-background/60"
-                  }`}
-                  data-testid={`stack-pillar-${pillar.id}`}
-                >
-                  <span className={`text-sm font-bold font-mono tracking-tight w-16 shrink-0 ${pillar.highlight ? "text-primary" : "text-foreground"}`}>
-                    {pillar.id}
-                  </span>
-                  <div className="min-w-0">
-                    <span className={`text-xs font-semibold block ${pillar.highlight ? "text-primary/80" : "text-muted-foreground"}`}>
-                      {pillar.label}
-                    </span>
-                    <span className="text-xs text-muted-foreground/70">
-                      {pillar.desc}
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <p className="mt-8 text-center text-sm text-muted-foreground">
-              xproof is the accountability layer.{" "}
-              <span className="text-foreground font-medium">Every agent action, proven on-chain.</span>
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Prove Before Act + x402 Section */}
-      <section id="prove-before-act" className="py-16 md:py-20">
-        <div className="container">
-          <div className="mx-auto max-w-5xl">
-            {/* Prove Before Act */}
-            <div className="mb-12">
-              <div className="mb-8 text-center">
-                <Badge variant="outline" className="mb-4 gap-1.5">
-                  <Play className="h-3 w-3 text-primary" />
-                  Prove Before Act
-                </Badge>
-                <h2 className="mb-3 text-2xl md:text-3xl font-bold">
-                  The canonical agent accountability loop
-                </h2>
-                <p className="text-muted-foreground max-w-xl mx-auto text-sm">
-                  Anchor reasoning (WHY) on-chain <em>before</em> executing. Anchor actual result (WHAT) after. Full 4W audit trail — available to auditors, regulators, or any other agent.
-                </p>
-              </div>
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-0 sm:gap-0">
-                {[
-                  { step: "1", label: "Reason", desc: "Agent writes full reasoning + decision (WHY)", icon: Bot },
-                  { step: "2", label: "Anchor WHY", desc: "Hash → anchor on-chain before acting", icon: Blocks },
-                  { step: "3", label: "Execute", desc: "Action proceeds with immutable WHY reference", icon: Play },
-                  { step: "4", label: "Anchor WHAT", desc: "Certify actual result after execution", icon: Shield },
-                ].map((s, i) => {
-                  const Icon = s.icon;
-                  return (
-                    <div key={s.step} className="flex items-center flex-1 min-w-0 w-full sm:w-auto">
-                      {i > 0 && (
-                        <ChevronRight className="h-4 w-4 text-muted-foreground/30 shrink-0 mx-1 hidden sm:block" />
-                      )}
-                      <div className="flex-1 flex flex-col items-center text-center px-4 py-4 rounded-md border border-border/60 bg-background/60 h-full min-w-0" data-testid={`prove-step-${s.step}`}>
-                        <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
-                          <Icon className="h-4 w-4 text-primary" />
-                        </div>
-                        <span className="text-xs font-bold text-foreground">{s.label}</span>
-                        <span className="text-xs text-muted-foreground/70 mt-0.5 leading-snug">{s.desc}</span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="mt-5 text-center">
-                <Button asChild variant="outline" size="sm" data-testid="button-prove-before-act-learn">
-                  <a href="/agent-context#workflow">
-                    Copy-paste Python implementation
-                    <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-                  </a>
-                </Button>
-              </div>
-            </div>
-
-            {/* x402: pay without API key */}
-            <div className="rounded-md border border-primary/20 bg-primary/5 p-6 md:p-8" data-testid="section-x402">
-              <div className="flex flex-col md:flex-row gap-6 items-start">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10">
-                      <Zap className="h-4 w-4 text-primary" />
-                    </div>
-                    <div>
-                      <span className="text-sm font-bold text-primary font-mono">x402</span>
-                      <span className="ml-2 text-sm font-semibold">Pay without an API key</span>
-                    </div>
-                  </div>
-                  <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-                    An agent with a wallet but no xProof account can anchor its first proof in a single HTTP session. No registration, no browser, no human in the loop. The agent discovers the price, signs a USDC micro-payment on Base, and gets the proof.
-                  </p>
-                  <div className="flex items-center gap-2 flex-wrap text-xs">
-                    {["No API key", "USDC on Base", "eip155:8453", "$0.01 per proof", "Coinbase CDP compatible"].map((tag) => (
-                      <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
-                    ))}
-                  </div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <pre className="text-xs font-mono bg-background/60 border border-border/50 rounded-md p-3 leading-relaxed overflow-x-auto whitespace-pre text-foreground/80">
-{`# 1. Send without auth → get HTTP 402 with price
-POST /api/proof → 402 {"payment": {"amount": "10000", "currency": "USDC"}}
-
-# 2. Sign USDC payment on Base (eip155:8453)
-# 3. Resend with X-PAYMENT header → get proof instantly
-POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
-                  </pre>
-                  <div className="mt-3 flex gap-2">
-                    <Button asChild variant="outline" size="sm" data-testid="button-x402-learn">
-                      <a href="/agent-context#x402">
-                        Full x402 guide
-                        <ArrowRight className="ml-1.5 h-3 w-3" />
-                      </a>
-                    </Button>
-                    <Button asChild variant="ghost" size="sm" data-testid="button-x402-docs">
-                      <a href="/docs">REST docs</a>
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* Free Trial — Interactive Registration */}
       <section id="free-trial" className="border-y bg-muted/30 py-16 md:py-20">
         <div className="container">
@@ -852,6 +671,95 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
         </div>
       </section>
 
+      {/* Machine Economy Stack */}
+      <section className="border-t bg-muted/20 py-12 md:py-16">
+        <div className="container">
+          <div className="mx-auto max-w-4xl">
+            <p className="mb-8 text-center text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              MultiversX Machine Economy Stack
+            </p>
+            {/* Desktop: horizontal row with arrows */}
+            <div className="hidden sm:flex items-stretch gap-0">
+              {[
+                { id: "MX-8004", label: "Identity", desc: "Who is the agent?" },
+                { id: "AP2", label: "Authority", desc: "Is it authorised?" },
+                { id: "MCP", label: "Communication", desc: "What did it request?" },
+                { id: "x402", label: "Payments", desc: "What did it pay?" },
+                { id: "xProof", label: "Verifiable Intent", desc: "Why did it act?", highlight: true },
+              ].map((pillar, i) => (
+                <div key={pillar.id} className="flex items-center flex-1 min-w-0">
+                  {i > 0 && (
+                    <ChevronRight className="h-4 w-4 text-muted-foreground/30 shrink-0 mx-1" />
+                  )}
+                  <div
+                    className={`flex-1 flex flex-col items-center text-center px-3 py-5 rounded-md border h-full ${
+                      pillar.highlight
+                        ? "border-primary bg-primary/5"
+                        : "border-border/60 bg-background/60"
+                    }`}
+                    data-testid={`stack-pillar-${pillar.id}`}
+                  >
+                    <span
+                      className={`text-sm font-bold font-mono tracking-tight ${
+                        pillar.highlight ? "text-primary" : "text-foreground"
+                      }`}
+                    >
+                      {pillar.id}
+                    </span>
+                    <span
+                      className={`text-xs font-semibold mt-1 ${
+                        pillar.highlight ? "text-primary/80" : "text-muted-foreground"
+                      }`}
+                    >
+                      {pillar.label}
+                    </span>
+                    <span className="mt-1.5 text-xs text-muted-foreground/70 leading-snug">
+                      {pillar.desc}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Mobile: vertical stack */}
+            <div className="flex flex-col gap-2 sm:hidden">
+              {[
+                { id: "MX-8004", label: "Identity", desc: "Who is the agent?" },
+                { id: "AP2", label: "Authority", desc: "Is it authorised?" },
+                { id: "MCP", label: "Communication", desc: "What did it request?" },
+                { id: "x402", label: "Payments", desc: "What did it pay?" },
+                { id: "xProof", label: "Verifiable Intent", desc: "Why did it act?", highlight: true },
+              ].map((pillar) => (
+                <div
+                  key={pillar.id}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-md border ${
+                    pillar.highlight
+                      ? "border-primary bg-primary/5"
+                      : "border-border/60 bg-background/60"
+                  }`}
+                  data-testid={`stack-pillar-${pillar.id}`}
+                >
+                  <span className={`text-sm font-bold font-mono tracking-tight w-16 shrink-0 ${pillar.highlight ? "text-primary" : "text-foreground"}`}>
+                    {pillar.id}
+                  </span>
+                  <div className="min-w-0">
+                    <span className={`text-xs font-semibold block ${pillar.highlight ? "text-primary/80" : "text-muted-foreground"}`}>
+                      {pillar.label}
+                    </span>
+                    <span className="text-xs text-muted-foreground/70">
+                      {pillar.desc}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="mt-8 text-center text-sm text-muted-foreground">
+              xproof is the accountability layer.{" "}
+              <span className="text-foreground font-medium">Every agent action, proven on-chain.</span>
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* Use-cases */}
       <section className="border-t py-16 md:py-20">
         <div className="container">
@@ -934,6 +842,107 @@ proofs = xproof.certify_batch([
                   <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
                 </a>
               </Button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Prove Before Act + x402 Section */}
+      <section id="prove-before-act" className="py-16 md:py-20">
+        <div className="container">
+          <div className="mx-auto max-w-5xl">
+            {/* Prove Before Act */}
+            <div className="mb-12">
+              <div className="mb-8 text-center">
+                <Badge variant="outline" className="mb-4 gap-1.5">
+                  <Play className="h-3 w-3 text-primary" />
+                  Prove Before Act
+                </Badge>
+                <h2 className="mb-3 text-2xl md:text-3xl font-bold">
+                  The canonical agent accountability loop
+                </h2>
+                <p className="text-muted-foreground max-w-xl mx-auto text-sm">
+                  Anchor reasoning (WHY) on-chain <em>before</em> executing. Anchor actual result (WHAT) after. Full 4W audit trail — available to auditors, regulators, or any other agent.
+                </p>
+              </div>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-0 sm:gap-0">
+                {[
+                  { step: "1", label: "Reason", desc: "Agent writes full reasoning + decision (WHY)", icon: Bot },
+                  { step: "2", label: "Anchor WHY", desc: "Hash → anchor on-chain before acting", icon: Blocks },
+                  { step: "3", label: "Execute", desc: "Action proceeds with immutable WHY reference", icon: Play },
+                  { step: "4", label: "Anchor WHAT", desc: "Certify actual result after execution", icon: Shield },
+                ].map((s, i) => {
+                  const Icon = s.icon;
+                  return (
+                    <div key={s.step} className="flex items-center flex-1 min-w-0 w-full sm:w-auto">
+                      {i > 0 && (
+                        <ChevronRight className="h-4 w-4 text-muted-foreground/30 shrink-0 mx-1 hidden sm:block" />
+                      )}
+                      <div className="flex-1 flex flex-col items-center text-center px-4 py-4 rounded-md border border-border/60 bg-background/60 h-full min-w-0" data-testid={`prove-step-${s.step}`}>
+                        <div className="mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
+                          <Icon className="h-4 w-4 text-primary" />
+                        </div>
+                        <span className="text-xs font-bold text-foreground">{s.label}</span>
+                        <span className="text-xs text-muted-foreground/70 mt-0.5 leading-snug">{s.desc}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-5 text-center">
+                <Button asChild variant="outline" size="sm" data-testid="button-prove-before-act-learn">
+                  <a href="/agent-context#workflow">
+                    Copy-paste Python implementation
+                    <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                  </a>
+                </Button>
+              </div>
+            </div>
+
+            {/* x402: pay without API key */}
+            <div className="rounded-md border border-primary/20 bg-primary/5 p-6 md:p-8" data-testid="section-x402">
+              <div className="flex flex-col md:flex-row gap-6 items-start">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/10">
+                      <Zap className="h-4 w-4 text-primary" />
+                    </div>
+                    <div>
+                      <span className="text-sm font-bold text-primary font-mono">x402</span>
+                      <span className="ml-2 text-sm font-semibold">Pay without an API key</span>
+                    </div>
+                  </div>
+                  <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+                    An agent with a wallet but no xProof account can anchor its first proof in a single HTTP session. No registration, no browser, no human in the loop. The agent discovers the price, signs a USDC micro-payment on Base, and gets the proof.
+                  </p>
+                  <div className="flex items-center gap-2 flex-wrap text-xs">
+                    {["No API key", "USDC on Base", "eip155:8453", "$0.01 per proof", "Coinbase CDP compatible"].map((tag) => (
+                      <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <pre className="text-xs font-mono bg-background/60 border border-border/50 rounded-md p-3 leading-relaxed overflow-x-auto whitespace-pre text-foreground/80">
+{`# 1. Send without auth → get HTTP 402 with price
+POST /api/proof → 402 {"payment": {"amount": "10000", "currency": "USDC"}}
+
+# 2. Sign USDC payment on Base (eip155:8453)
+# 3. Resend with X-PAYMENT header → get proof instantly
+POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
+                  </pre>
+                  <div className="mt-3 flex gap-2">
+                    <Button asChild variant="outline" size="sm" data-testid="button-x402-learn">
+                      <a href="/agent-context#x402">
+                        Full x402 guide
+                        <ArrowRight className="ml-1.5 h-3 w-3" />
+                      </a>
+                    </Button>
+                    <Button asChild variant="ghost" size="sm" data-testid="button-x402-docs">
+                      <a href="/docs">REST docs</a>
+                    </Button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
