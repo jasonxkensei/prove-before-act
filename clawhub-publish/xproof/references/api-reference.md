@@ -78,4 +78,4 @@ Available tools: `certify_file`, `verify_proof`, `get_proof`, `discover_services
 
 ## Pricing
 
-$0.05 per certification.
+$0.01 per certification.

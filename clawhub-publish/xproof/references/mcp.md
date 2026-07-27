@@ -109,7 +109,7 @@ Use `md` format for LLM consumption -- produces human-readable Markdown with all
 
 List xProof capabilities, pricing, and usage guidance. No parameters required.
 
-**Returns:** Service description, pricing ($0.05/cert in EGLD), list of tools, certification triggers, batch API details, and supported protocols.
+**Returns:** Service description, pricing ($0.01/cert in EGLD), list of tools, certification triggers, batch API details, and supported protocols.
 
 ## Discovery
 
@@ -123,7 +123,7 @@ List xProof capabilities, pricing, and usage guidance. No parameters required.
 When exposing xProof to an LLM, use:
 
 > **Skill: Certify**
-> "Use this to create an immutable blockchain proof for a file. Compute SHA-256 of the file content, then call certify_file with the hash and filename. Cost: $0.05."
+> "Use this to create an immutable blockchain proof for a file. Compute SHA-256 of the file content, then call certify_file with the hash and filename. Cost: $0.01."
 
 > **Skill: Verify**
 > "Use this to check if a file has been certified. Pass the proof UUID to verify_proof. Returns blockchain transaction, timestamp, and verification status."
