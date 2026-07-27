@@ -165,6 +165,13 @@ interface RateLimitStats {
   namespaces: Record<string, RateLimitStatRow[]>;
 }
 
+interface AdminStats {
+  certifications: {
+    total: number;
+    by_source: { api: number; trial: number; user: number };
+  };
+}
+
 function formatResetsIn(isoDate: string): string {
   const ms = new Date(isoDate).getTime() - Date.now();
   if (ms <= 0) return "expired";
@@ -644,6 +651,13 @@ export default function AdminDashboard() {
     enabled: isAdmin,
   });
 
+  const { data: adminStats } = useQuery<AdminStats>({
+    queryKey: ["/api/admin/stats"],
+    refetchInterval: 30000,
+    retry: false,
+    enabled: isAdmin,
+  });
+
   const { data: rateLimitStats, isError: rateLimitError } = useQuery<RateLimitStats>({
     queryKey: ["/api/admin/rate-limit-stats?top=10"],
     refetchInterval: 30000,
@@ -788,38 +802,38 @@ export default function AdminDashboard() {
                   <Target className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground flex items-center gap-2"><Bot className="h-4 w-4" /> API / Agent</span>
-                      <span className="font-medium">{stats.certifications.by_source.api || 0}</span>
-                    </div>
-                    <div className="w-full bg-muted rounded-full h-2">
-                      <div
-                        className="bg-primary h-2 rounded-full transition-all"
-                        style={{ width: `${stats.certifications.total > 0 ? ((stats.certifications.by_source.api || 0) / stats.certifications.total) * 100 : 0}%` }}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground flex items-center gap-2"><Bot className="h-4 w-4" /> Trial</span>
-                      <span className="font-medium">{stats.certifications.by_source.trial || 0}</span>
-                    </div>
-                    <div className="w-full bg-muted rounded-full h-2">
-                      <div
-                        className="bg-chart-4 h-2 rounded-full transition-all"
-                        style={{ width: `${stats.certifications.total > 0 ? ((stats.certifications.by_source.trial || 0) / stats.certifications.total) * 100 : 0}%` }}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground flex items-center gap-2"><User className="h-4 w-4" /> Humans</span>
-                      <span className="font-medium">{stats.certifications.by_source.user || 0}</span>
-                    </div>
-                    <div className="w-full bg-muted rounded-full h-2">
-                      <div
-                        className="bg-chart-2 h-2 rounded-full transition-all"
-                        style={{ width: `${stats.certifications.total > 0 ? ((stats.certifications.by_source.user || 0) / stats.certifications.total) * 100 : 0}%` }}
-                      />
-                    </div>
-                  </div>
+                  {(() => {
+                    const src = adminStats?.certifications.by_source ?? stats.certifications.by_source;
+                    const total = (adminStats?.certifications.total ?? stats.certifications.total) || 1;
+                    const api = src.api || 0;
+                    const trial = src.trial || 0;
+                    const user = src.user || 0;
+                    return (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground flex items-center gap-2"><Bot className="h-4 w-4" /> API / Agent</span>
+                          <span className="font-medium">{api}</span>
+                        </div>
+                        <div className="w-full bg-muted rounded-full h-2">
+                          <div className="bg-primary h-2 rounded-full transition-all" style={{ width: `${(api / total) * 100}%` }} />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground flex items-center gap-2"><Bot className="h-4 w-4" /> Trial</span>
+                          <span className="font-medium">{trial}</span>
+                        </div>
+                        <div className="w-full bg-muted rounded-full h-2">
+                          <div className="bg-chart-4 h-2 rounded-full transition-all" style={{ width: `${(trial / total) * 100}%` }} />
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground flex items-center gap-2"><User className="h-4 w-4" /> Humans</span>
+                          <span className="font-medium">{user}</span>
+                        </div>
+                        <div className="w-full bg-muted rounded-full h-2">
+                          <div className="bg-chart-2 h-2 rounded-full transition-all" style={{ width: `${(user / total) * 100}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </CardContent>
               </Card>
 
