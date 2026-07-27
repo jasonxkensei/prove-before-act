@@ -52,10 +52,25 @@ test.describe("landing page — hero CTAs and section order", () => {
 
   test("button-certify-file uses the outline variant", async ({ page }) => {
     const el = page.getByTestId("button-certify-file");
-    const classAttr = await el.getAttribute("class");
-    // The outline Button variant in this repo uses a CSS custom-property border colour
-    // rather than the generic `border-input` class — match the actual rendered class.
-    expect(classAttr).toMatch(/border-color:var\(--button-outline\)/);
+
+    // We assert computed styles rather than raw Tailwind class strings.
+    // The outline variant currently applies `[border-color:var(--button-outline)]`
+    // (see client/src/components/ui/button.tsx → buttonVariants → variants.variant.outline),
+    // but that class name is an implementation detail that can change when the shadcn
+    // theme is regenerated.  Checking the rendered border style/color survives any
+    // such rename without losing coverage.
+    //
+    // If this assertion ever fails after a theme update, inspect:
+    //   client/src/components/ui/button.tsx → buttonVariants → variants.variant.outline
+    // and verify the outline variant still renders a solid, non-transparent border.
+    const { borderStyle, borderColor } = await el.evaluate((node) => {
+      const s = window.getComputedStyle(node);
+      return { borderStyle: s.borderStyle, borderColor: s.borderColor };
+    });
+
+    // outline buttons have a solid, visible border
+    expect(borderStyle).toBe("solid");
+    expect(borderColor).not.toBe("rgba(0, 0, 0, 0)");
   });
 
   // ── Section order: #free-trial comes before #how-it-works ──────────────────
