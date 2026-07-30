@@ -461,6 +461,39 @@ export const agentOutcomes = pgTable("agent_outcomes", {
 
 export type AgentOutcome = typeof agentOutcomes.$inferSelect;
 
+// ============================================
+// Coherence Checks — WHY→WHAT trust tracking
+// ============================================
+// One row per pre-action coherence anchor (created by the check_coherence MCP
+// tool). proof_id is the WHY proof (the anchored intent). After execution the
+// agent calls POST /api/coherence/link to attach the WHAT proof
+// (linked_proof_id) — at that point coherence_score (0–100) is computed from
+// how well the actual result matches the stated intent (initially structural
+// presence checks; extensible to semantic matching later).
+export const coherenceChecks = pgTable("coherence_checks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  // The WHY anchor proof. Cascade: if the pending WHY cert is rolled back
+  // (blockchain failure cleanup), the coherence check disappears with it.
+  proofId: varchar("proof_id").notNull().references(() => certifications.id, { onDelete: "cascade" }),
+  // The WHAT proof, nullable until linked. SET NULL: deleting the WHAT cert
+  // reverts the anchor to "unlinked" rather than destroying the anchor record.
+  linkedProofId: varchar("linked_proof_id").references(() => certifications.id, { onDelete: "set null" }),
+  // SHA-256 of the canonical coherence payload (same value as the WHY proof's file_hash).
+  intentHash: varchar("intent_hash", { length: 64 }).notNull(),
+  // 0–100, computed at link time. NULL while unlinked.
+  coherenceScore: integer("coherence_score"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  // One coherence check per WHY proof — link/lookup paths key on proof_id.
+  uniqueIndex("idx_coherence_checks_proof_unique").on(table.proofId),
+  // Per-agent history + aggregate queries: WHERE user_id ORDER BY created_at DESC.
+  index("idx_coherence_checks_user_time").on(table.userId, table.createdAt),
+  check("chk_coherence_score_range", sql`coherence_score IS NULL OR (coherence_score >= 0 AND coherence_score <= 100)`),
+]);
+
+export type CoherenceCheck = typeof coherenceChecks.$inferSelect;
+
 // Raw-SQL tables — registered here so drizzle-kit push does not try to drop them.
 // These tables are managed exclusively via raw SQL in server/nonce.ts and server/trust.ts.
 export const walletNonces = pgTable("wallet_nonces", {

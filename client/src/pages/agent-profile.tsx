@@ -144,6 +144,41 @@ interface CalibrationData {
   time_series: CalibrationPoint[];
 }
 
+interface CoherenceCheckEntry {
+  id: string;
+  why_proof_id: string;
+  linked_proof_id: string | null;
+  intent_hash: string;
+  coherence_score: number | null;
+  created_at: string;
+  why_file_name: string | null;
+  why_blockchain_status: string | null;
+  why_transaction_hash: string | null;
+  why_intent: string | null;
+  why_decision: string | null;
+  what_file_name: string | null;
+  what_blockchain_status: string | null;
+  what_transaction_hash: string | null;
+  what_created_at: string | null;
+  status: "linked" | "pending" | "divergent";
+  linked_within_1h: boolean | null;
+}
+
+interface CoherenceData {
+  wallet_address: string;
+  aggregate: {
+    total_anchors: number;
+    linked_count: number;
+    linked_within_1h: number;
+    pending_count: number;
+    divergent_count: number;
+    coherence_rate: number | null;
+    avg_coherence_score: number | null;
+  };
+  checks: CoherenceCheckEntry[];
+  total: number;
+}
+
 const TRUST_LEVEL_STYLES: Record<string, { badge: string }> = {
   Verified:  { badge: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30" },
   Trusted:   { badge: "bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30" },
@@ -1324,6 +1359,182 @@ function BadgeEmbedPanel({ wallet }: { wallet: string }) {
   );
 }
 
+const COHERENCE_STATUS_STYLES: Record<CoherenceCheckEntry["status"], { badge: string; label: string }> = {
+  linked:    { badge: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30", label: "Linked" },
+  pending:   { badge: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400 border-yellow-500/30", label: "Pending" },
+  divergent: { badge: "bg-destructive/15 text-destructive border-destructive/30", label: "Divergent" },
+};
+
+function CoherenceStatusBadge({ status }: { status: CoherenceCheckEntry["status"] }) {
+  const style = COHERENCE_STATUS_STYLES[status];
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium ${style.badge}`}>
+      {status === "linked" && <CheckCircle2 className="h-3 w-3" />}
+      {status === "pending" && <Clock className="h-3 w-3" />}
+      {status === "divergent" && <AlertTriangle className="h-3 w-3" />}
+      {style.label}
+    </span>
+  );
+}
+
+function CoherenceCard({ data }: { data: CoherenceData }) {
+  const [expanded, setExpanded] = useState(false);
+  const { aggregate, checks } = data;
+  const visible = expanded ? checks : checks.slice(0, 5);
+
+  return (
+    <Card data-testid="card-coherence">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Target className="h-4 w-4" />
+          Coherence
+          <span className="ml-auto">
+            {aggregate.coherence_rate !== null ? (
+              <Badge
+                className={
+                  aggregate.coherence_rate >= 70
+                    ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                    : aggregate.coherence_rate >= 40
+                    ? "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400"
+                    : "bg-destructive/15 text-destructive"
+                }
+                data-testid="badge-coherence-rate"
+              >
+                {aggregate.coherence_rate}% coherent
+              </Badge>
+            ) : (
+              <Badge variant="secondary" data-testid="badge-coherence-rate">
+                No mature anchors yet
+              </Badge>
+            )}
+          </span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="rounded-md bg-muted/30 p-3 text-center">
+            <p className="text-2xl font-bold tabular-nums" data-testid="text-coherence-anchors">
+              {aggregate.total_anchors}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">WHY anchors</p>
+          </div>
+          <div className="rounded-md bg-muted/30 p-3 text-center">
+            <p className="text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400" data-testid="text-coherence-linked">
+              {aggregate.linked_count}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">Linked WHAT</p>
+          </div>
+          <div className="rounded-md bg-muted/30 p-3 text-center">
+            <p className={`text-2xl font-bold tabular-nums ${aggregate.divergent_count > 0 ? "text-destructive" : ""}`} data-testid="text-coherence-divergent">
+              {aggregate.divergent_count}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">Divergent</p>
+          </div>
+          <div className="rounded-md bg-muted/30 p-3 text-center">
+            <p className="text-2xl font-bold tabular-nums" data-testid="text-coherence-avg-score">
+              {aggregate.avg_coherence_score !== null ? aggregate.avg_coherence_score : "—"}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">Avg score / 100</p>
+          </div>
+        </div>
+
+        <div className="space-y-3" data-testid="list-coherence-timeline">
+          {visible.map((check) => (
+            <div key={check.id} className="rounded-md border bg-muted/30 p-3" data-testid={`row-coherence-${check.id}`}>
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  {/* WHY side */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded bg-blue-500/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-blue-700 dark:text-blue-400">WHY</span>
+                    <a
+                      href={`/proof/${check.why_proof_id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="truncate text-sm font-medium hover:underline"
+                      data-testid={`link-coherence-why-${check.id}`}
+                    >
+                      {check.why_intent || check.why_file_name || check.why_proof_id.slice(0, 12)}
+                    </a>
+                    <StatusIcon status={check.why_blockchain_status} />
+                  </div>
+                  {check.why_decision && (
+                    <p className="truncate pl-1 text-xs text-muted-foreground">
+                      Decision: {check.why_decision}
+                    </p>
+                  )}
+                  {/* WHAT side */}
+                  <div className="flex flex-wrap items-center gap-2 pl-1">
+                    <span className="text-muted-foreground">→</span>
+                    <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">WHAT</span>
+                    {check.linked_proof_id ? (
+                      <>
+                        <a
+                          href={`/proof/${check.linked_proof_id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="truncate text-sm hover:underline"
+                          data-testid={`link-coherence-what-${check.id}`}
+                        >
+                          {check.what_file_name || check.linked_proof_id.slice(0, 12)}
+                        </a>
+                        <StatusIcon status={check.what_blockchain_status} />
+                        {check.linked_within_1h === false && (
+                          <span className="text-[10px] text-muted-foreground">(linked after 1h window)</span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">
+                        {check.status === "pending" ? "awaiting result…" : "no result anchored"}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex shrink-0 flex-col items-end gap-1.5">
+                  <CoherenceStatusBadge status={check.status} />
+                  {check.coherence_score !== null && (
+                    <span className="text-xs font-semibold tabular-nums" data-testid={`text-coherence-score-${check.id}`}>
+                      {check.coherence_score}/100
+                    </span>
+                  )}
+                  <span className="text-[10px] text-muted-foreground">
+                    {formatDistanceToNow(new Date(check.created_at), { addSuffix: true })}
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {checks.length > 5 && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full"
+            onClick={() => setExpanded((v) => !v)}
+            data-testid="button-coherence-expand"
+          >
+            {expanded ? (
+              <>
+                <ChevronUp className="mr-1 h-3.5 w-3.5" /> Show less
+              </>
+            ) : (
+              <>
+                <ChevronDown className="mr-1 h-3.5 w-3.5" /> Show all {checks.length}
+              </>
+            )}
+          </Button>
+        )}
+
+        <p className="text-xs text-muted-foreground">
+          Coherence tracks whether this agent&apos;s anchored intent (WHY, via check_coherence) is
+          followed by a matching on-chain result (WHAT) within 1 hour. Divergent anchors never
+          received a linked result.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function AgentProfilePage() {
   const params = useParams<{ wallet: string }>();
   const wallet = params.wallet;
@@ -1369,6 +1580,16 @@ export default function AgentProfilePage() {
     enabled: !!wallet,
     staleTime: 30 * 1000,
     refetchOnWindowFocus: true,
+  });
+
+  const { data: coherenceData } = useQuery<CoherenceData>({
+    queryKey: ["/api/agents", wallet, "coherence"],
+    queryFn: () => fetch(`/api/agents/${wallet}/coherence?limit=50`).then((r) => {
+      if (!r.ok) throw new Error("coherence_fetch_failed");
+      return r.json();
+    }),
+    enabled: !!wallet,
+    staleTime: 30 * 1000,
   });
 
   function copyWallet() {
@@ -1636,6 +1857,11 @@ export default function AgentProfilePage() {
                   </p>
                 </CardContent>
               </Card>
+            )}
+
+            {/* Coherence — WHY→WHAT timeline */}
+            {coherenceData && coherenceData.aggregate.total_anchors > 0 && (
+              <CoherenceCard data={coherenceData} />
             )}
 
             {/* Confidence Calibration */}

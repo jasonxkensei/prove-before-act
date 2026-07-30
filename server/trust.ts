@@ -25,6 +25,12 @@ export interface TrustScore {
   lastCertAt: string | null;
   violationPenalty: number;
   violations: { fault: number; breach: number; proposed: number };
+  // Coherence signal — % of WHY anchors (coherence_checks) that received a
+  // linked WHAT within 1h. Null when the agent has no mature anchors yet.
+  // Persisted into trust_score_snapshots via full_trust_data (jsonb).
+  coherenceRate: number | null;
+  coherenceAnchors: number;
+  coherenceBonus: number;
 }
 
 export function getTrustLevel(score: number): TrustLevel {
@@ -69,6 +75,73 @@ async function computeViolationPenalty(walletAddress: string): Promise<{ penalty
     return { penalty, fault: faultConfirmed, breach: breachConfirmed, proposed };
   } catch {
     return { penalty: 0, fault: 0, breach: 0, proposed: 0 };
+  }
+}
+
+// ── Coherence signal ─────────────────────────────────────────────────────────
+// coherence_rate = % of WHY anchors (coherence_checks rows) that got a linked
+// WHAT proof within 1h of the anchor. Anchors younger than 1h that are still
+// unlinked are excluded from the denominator — they haven't had their full
+// window yet. Weight is intentionally minor (max +25 pts, vs. up to +150 for
+// attestations and +200 for transparency): coherence is a new signal and the
+// linking behavior is still being adopted by agents.
+export const COHERENCE_RATE_BONUS_MAX = 25;
+
+export function coherenceBonusFromRate(rate: number | null): number {
+  if (rate === null) return 0;
+  return Math.round((Math.max(0, Math.min(100, rate)) / 100) * COHERENCE_RATE_BONUS_MAX);
+}
+
+async function computeCoherenceSignal(userId: string): Promise<{ rate: number | null; anchors: number }> {
+  try {
+    const rows = await db.execute(sql`
+      SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE cc.linked_proof_id IS NULL AND cc.created_at > NOW() - INTERVAL '1 hour')::int AS pending,
+        COUNT(*) FILTER (WHERE cc.linked_proof_id IS NOT NULL AND wt.created_at >= cc.created_at AND wt.created_at <= cc.created_at + INTERVAL '1 hour')::int AS linked_1h
+      FROM coherence_checks cc
+      LEFT JOIN certifications wt ON wt.id = cc.linked_proof_id
+      WHERE cc.user_id = ${userId}
+    `);
+    const r = rows.rows[0] as any;
+    const total = Number(r?.total || 0);
+    const pending = Number(r?.pending || 0);
+    const linked1h = Number(r?.linked_1h || 0);
+    const mature = total - pending;
+    if (mature <= 0) return { rate: null, anchors: total };
+    return { rate: Math.round((linked1h / mature) * 100), anchors: total };
+  } catch {
+    return { rate: null, anchors: 0 };
+  }
+}
+
+async function computeCoherenceSignalBatch(userIds: string[]): Promise<Map<string, { rate: number | null; anchors: number }>> {
+  if (userIds.length === 0) return new Map();
+  try {
+    const result = await pool.query<{ user_id: string; total: number; pending: number; linked_1h: number }>(
+      `SELECT
+         cc.user_id::text AS user_id,
+         COUNT(*)::int AS total,
+         COUNT(*) FILTER (WHERE cc.linked_proof_id IS NULL AND cc.created_at > NOW() - INTERVAL '1 hour')::int AS pending,
+         COUNT(*) FILTER (WHERE cc.linked_proof_id IS NOT NULL AND wt.created_at >= cc.created_at AND wt.created_at <= cc.created_at + INTERVAL '1 hour')::int AS linked_1h
+       FROM coherence_checks cc
+       LEFT JOIN certifications wt ON wt.id = cc.linked_proof_id
+       WHERE cc.user_id = ANY($1)
+       GROUP BY cc.user_id`,
+      [userIds],
+    );
+    const out = new Map<string, { rate: number | null; anchors: number }>();
+    for (const row of result.rows) {
+      const total = Number(row.total || 0);
+      const mature = total - Number(row.pending || 0);
+      out.set(row.user_id, {
+        rate: mature > 0 ? Math.round((Number(row.linked_1h || 0) / mature) * 100) : null,
+        anchors: total,
+      });
+    }
+    return out;
+  } catch {
+    return new Map();
   }
 }
 
@@ -297,17 +370,19 @@ export async function computeTrustScore(userId: string): Promise<TrustScore> {
   const [user] = await db.select({ walletAddress: users.walletAddress }).from(users).where(eq(users.id, userId));
   const walletAddress = user?.walletAddress || "";
 
-  const [streakWeeks, attestationResult, transparencyCounts, violationResult] = await Promise.all([
+  const [streakWeeks, attestationResult, transparencyCounts, violationResult, coherenceResult] = await Promise.all([
     computeStreakWeeks(userId),
     computeAttestationBonus(walletAddress),
     computeTransparencyCounts(userId),
     computeViolationPenalty(walletAddress),
+    computeCoherenceSignal(userId),
   ]);
 
   const { bonus: attestationBonus, count: activeAttestations } = attestationResult;
   const { metadataCount, auditCount } = transparencyCounts;
   const tBonus = computeTransparencyBonus(metadataCount, auditCount);
-  const rawScore = computeScore(confirmed, last30d, streakWeeks, firstAt, lastAt, attestationBonus, tBonus);
+  const coherenceBonus = coherenceBonusFromRate(coherenceResult.rate);
+  const rawScore = computeScore(confirmed, last30d, streakWeeks, firstAt, lastAt, attestationBonus, tBonus) + coherenceBonus;
   const score = Math.max(0, rawScore + violationResult.penalty);
 
   return {
@@ -326,6 +401,9 @@ export async function computeTrustScore(userId: string): Promise<TrustScore> {
     lastCertAt: lastAt ? lastAt.toISOString() : null,
     violationPenalty: violationResult.penalty,
     violations: { fault: violationResult.fault, breach: violationResult.breach, proposed: violationResult.proposed },
+    coherenceRate: coherenceResult.rate,
+    coherenceAnchors: coherenceResult.anchors,
+    coherenceBonus,
   };
 }
 
@@ -400,6 +478,9 @@ export interface LeaderboardEntry {
   violationCount: number;
   violationPenalty: number;
   calibrationLabel: CalibrationLabel | null;
+  // Optional so pre-existing snapshots/tests without the field remain valid.
+  coherenceRate?: number | null;
+  coherenceBonus?: number;
 }
 
 export interface LeaderboardFilters {
@@ -470,13 +551,14 @@ async function computeAllLeaderboardEntries(): Promise<LeaderboardEntry[]> {
   const cutoff7d = new Date();
   cutoff7d.setDate(cutoff7d.getDate() - 7);
 
-  const [streakMap, attestationMap, oldScoreMap, prevLevelMap, violationMap, calibrationMap] = await Promise.all([
+  const [streakMap, attestationMap, oldScoreMap, prevLevelMap, violationMap, calibrationMap, coherenceMap] = await Promise.all([
     computeStreakWeeksBatch(userIds),
     computeAttestationBonusBatch(walletAddresses),
     getOldScoreBatch(walletAddresses, cutoff7d),
     getPreviousLevelBatch(walletAddresses),
     computeViolationPenaltyBatch(walletAddresses),
     computeCalibrationLabelBatch(),
+    computeCoherenceSignalBatch(userIds),
   ]);
 
   const entries: LeaderboardEntry[] = allRows.map((row) => {
@@ -492,7 +574,11 @@ async function computeAllLeaderboardEntries(): Promise<LeaderboardEntry[]> {
     const aCount = Number(row.audit_count || 0);
     const tBonus = computeTransparencyBonus(mCount, aCount);
     const vResult = violationMap.get(row.wallet_address) || { penalty: 0, fault: 0, breach: 0, proposed: 0 };
-    const rawScore = computeScore(confirmed, last30d, streakWeeks, firstAt, lastAt, attestationBonus, tBonus);
+    // Same coherence weighting as computeTrustScore — keeps leaderboard scores
+    // consistent with per-wallet profile scores.
+    const cResult = coherenceMap.get(row.id) || { rate: null, anchors: 0 };
+    const cBonus = coherenceBonusFromRate(cResult.rate);
+    const rawScore = computeScore(confirmed, last30d, streakWeeks, firstAt, lastAt, attestationBonus, tBonus) + cBonus;
     const score = Math.max(0, rawScore + vResult.penalty);
 
     return {
@@ -518,6 +604,8 @@ async function computeAllLeaderboardEntries(): Promise<LeaderboardEntry[]> {
       violationCount: vResult.fault + vResult.breach,
       violationPenalty: vResult.penalty,
       calibrationLabel: calibrationMap.get(row.id) ?? null,
+      coherenceRate: cResult.rate,
+      coherenceBonus: cBonus,
     };
   });
 

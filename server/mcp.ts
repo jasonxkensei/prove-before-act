@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import crypto from "crypto";
 import { db, pool } from "./db";
-import { certifications, apiKeys, users, agentOutcomes, MAX_ONCHAIN_FILENAME_LEN, MAX_ONCHAIN_AUTHOR_LEN, sha256HexSchema } from "@shared/schema";
+import { certifications, apiKeys, users, agentOutcomes, coherenceChecks, MAX_ONCHAIN_FILENAME_LEN, MAX_ONCHAIN_AUTHOR_LEN, sha256HexSchema } from "@shared/schema";
 import { eq, sql, and, or } from "drizzle-orm";
 import { recordOnBlockchain } from "./blockchain";
 import { getCertificationPriceUsd } from "./pricing";
@@ -18,6 +18,7 @@ import {
   buildX402Block, buildPrepaidCreditsBlock, buildTrialExhaustedMessage, buildPaymentRequiredMessage,
 } from "./routes/helpers";
 import { pgCheckRateLimit } from "./pgRateLimit";
+import { buildCoherenceAnchor } from "./coherence-anchor";
 
 interface McpContext {
   baseUrl: string;
@@ -1755,17 +1756,14 @@ export async function createMcpServer(ctx: McpContext) {
           return mcpErr({ error: "UNAUTHORIZED", message: "API key has no associated account. Call register_trial to get a fresh key." });
         }
 
-        // Build the coherence payload and hash it deterministically
-        const coherencePayload = {
-          type: "coherence_check",
-          role: "WHY",
-          intent,
-          context,
-          decision,
-          ...(who ? { who } : {}),
-        };
-        const payloadJson = JSON.stringify(coherencePayload, Object.keys(coherencePayload).sort() as any);
-        const coherenceAnchor = crypto.createHash("sha256").update(payloadJson).digest("hex");
+        // Build the coherence payload and hash it deterministically. The
+        // anchor is scoped to the calling account (owner identity is part of
+        // the hashed payload) so identical payloads from different accounts
+        // can never collide on the globally-unique certifications.file_hash —
+        // see server/coherence-anchor.ts for the full rationale.
+        const ownerWallet = await getApiKeyOwnerWallet({ userId: auth.userId }).catch(() => null);
+        const ownerIdent = ownerWallet || auth.userId;
+        const { anchor: coherenceAnchor, effectiveWho } = buildCoherenceAnchor({ intent, context, decision, who, ownerIdent });
 
         // Billing — identical gates as certify_file
         const trialInfo = await getTrialUser({ userId: auth.userId });
@@ -1775,7 +1773,6 @@ export async function createMcpServer(ctx: McpContext) {
           if (balance <= 0) return await mcpTrialExhausted(baseUrl);
           mcpCreditInfo = { userId: auth.userId, balance };
         } else if (!trialInfo) {
-          const ownerWallet = await getApiKeyOwnerWallet({ userId: auth.userId });
           if (!ownerWallet || !isAdminWallet(ownerWallet)) {
             const balance = await getUserCreditBalance(auth.userId);
             if (balance <= 0) return await mcpPaymentRequired(baseUrl);
@@ -1787,8 +1784,14 @@ export async function createMcpServer(ctx: McpContext) {
         let creditConsumed = false;
 
         // Idempotency check — same payload = same hash = same anchor.
+        // Scoped to the caller's own rows: an idempotent success must never
+        // point at another account's proof (the caller couldn't link it).
+        // The owner-scoped hash already guarantees cross-account uniqueness;
+        // the userId filter is defense-in-depth.
         // Mirror certify_file: ACP pending reservations (unpaid) are NOT valid idempotent hits.
-        const [existing] = await db.select().from(certifications).where(eq(certifications.fileHash, coherenceAnchor));
+        const [existing] = await db.select().from(certifications).where(
+          and(eq(certifications.fileHash, coherenceAnchor), eq(certifications.userId, auth.userId)),
+        );
         if (existing) {
           const isAcpReservation = existing.authMethod === "acp" && existing.blockchainStatus === "pending" && !existing.transactionHash;
           if (isAcpReservation) {
@@ -1804,8 +1807,10 @@ export async function createMcpServer(ctx: McpContext) {
 
             const dispResult = await tryDisplaceAcpReservation(coherenceAnchor);
             if (dispResult !== "displaced") {
-              // Race: re-fetch to determine actual state.
-              const [nowExisting] = await db.select().from(certifications).where(eq(certifications.fileHash, coherenceAnchor));
+              // Race: re-fetch to determine actual state (caller-owned rows only).
+              const [nowExisting] = await db.select().from(certifications).where(
+                and(eq(certifications.fileHash, coherenceAnchor), eq(certifications.userId, auth.userId)),
+              );
               if (nowExisting) {
                 const nowIsAcp = nowExisting.authMethod === "acp" && nowExisting.blockchainStatus === "pending" && !nowExisting.transactionHash;
                 if (nowIsAcp) {
@@ -1815,9 +1820,17 @@ export async function createMcpServer(ctx: McpContext) {
                   else if (mcpCreditInfo) await refundCredit(mcpCreditInfo.userId).catch(() => {});
                   return mcpErr({ error: "RETRY_REQUIRED", message: "An unpaid ACP reservation was blocking this coherence anchor. It has been cleared — please retry your request." });
                 }
-                // Another caller already anchored this hash — refund and return as idempotent success.
+                // A concurrent request from this account already anchored this
+                // payload — refund and return as idempotent success.
                 if (trialInfo && !mcpCreditInfo) await refundTrialCredit(trialInfo.userId).catch(() => {});
                 else if (mcpCreditInfo) await refundCredit(mcpCreditInfo.userId).catch(() => {});
+                // Ensure the coherence_checks row exists so the anchor is linkable.
+                await db.insert(coherenceChecks).values({
+                  userId: auth.userId,
+                  proofId: nowExisting.id,
+                  intentHash: nowExisting.fileHash,
+                  createdAt: nowExisting.createdAt ?? new Date(),
+                }).onConflictDoNothing().catch(() => {});
                 return {
                   content: [{
                     type: "text" as const,
@@ -1838,6 +1851,14 @@ export async function createMcpServer(ctx: McpContext) {
             // displaced or no_row: fall through to certify.
           } else {
             // Non-ACP row (confirmed, pending-with-tx, api_key, etc.): valid idempotent hit.
+            // Backfill the coherence_checks row if missing (e.g. anchor created
+            // before coherence tracking existed) so the WHY stays linkable.
+            await db.insert(coherenceChecks).values({
+              userId: auth.userId,
+              proofId: existing.id,
+              intentHash: existing.fileHash,
+              createdAt: existing.createdAt ?? new Date(),
+            }).onConflictDoNothing().catch(() => {});
             return {
               content: [{
                 type: "text" as const,
@@ -1874,7 +1895,7 @@ export async function createMcpServer(ctx: McpContext) {
             fileName: `coherence-check-${Date.now()}.json`,
             fileHash: coherenceAnchor,
             fileType: "json",
-            authorName: (who || "AI Agent").slice(0, MAX_ONCHAIN_AUTHOR_LEN),
+            authorName: effectiveWho.slice(0, MAX_ONCHAIN_AUTHOR_LEN),
             blockchainStatus: "pending",
             isPublic: true,
             authMethod: "api_key",
@@ -1883,7 +1904,7 @@ export async function createMcpServer(ctx: McpContext) {
               role: "WHY",
               intent: intent.slice(0, 500),
               decision: decision.slice(0, 500),
-              ...(who ? { who } : {}),
+              who: effectiveWho,
             },
           }).returning();
         } catch (insertErr: any) {
@@ -1891,14 +1912,29 @@ export async function createMcpServer(ctx: McpContext) {
           else if (mcpCreditInfo) await refundCredit(mcpCreditInfo.userId).catch(() => {});
           const isUniqueViolation = insertErr?.code === "23505" || insertErr?.message?.includes("unique");
           if (isUniqueViolation) {
-            const [dup] = await db.select().from(certifications).where(eq(certifications.fileHash, coherenceAnchor));
-            if (dup) return { content: [{ type: "text" as const, text: JSON.stringify({ proof_id: dup.id, coherence_anchor: dup.fileHash, timestamp: dup.createdAt?.toISOString(), verify_url: `${baseUrl}/proof/${dup.id}`, metadata: { type: "coherence_check", role: "WHY" }, message: "Coherence check already anchored." }) }] };
+            // Only a caller-owned duplicate is a valid idempotent success — never
+            // hand out another account's proof_id.
+            const [dup] = await db.select().from(certifications).where(
+              and(eq(certifications.fileHash, coherenceAnchor), eq(certifications.userId, auth.userId)),
+            );
+            if (dup) {
+              await db.insert(coherenceChecks).values({
+                userId: auth.userId,
+                proofId: dup.id,
+                intentHash: dup.fileHash,
+                createdAt: dup.createdAt ?? new Date(),
+              }).onConflictDoNothing().catch(() => {});
+              return { content: [{ type: "text" as const, text: JSON.stringify({ proof_id: dup.id, coherence_anchor: dup.fileHash, timestamp: dup.createdAt?.toISOString(), verify_url: `${baseUrl}/proof/${dup.id}`, metadata: { type: "coherence_check", role: "WHY" }, message: "Coherence check already anchored." }) }] };
+            }
+            // Hash collision with a row owned by another account (should be
+            // impossible now that the owner identity is part of the hash).
+            return mcpErr({ error: "HASH_COLLISION", message: "This coherence anchor hash is already in use by another account. Credit refunded — retry with a distinct payload (e.g. set a unique 'who')." });
           }
           return mcpErr({ error: "DB_ERROR", message: "Failed to reserve coherence anchor. Credit refunded." });
         }
 
         // Blockchain write — fire and forget (same pattern as certify_file)
-        recordOnBlockchain(coherenceAnchor, `coherence-why-${pendingCert.id}.json`, (who || "AI Agent").slice(0, MAX_ONCHAIN_AUTHOR_LEN))
+        recordOnBlockchain(coherenceAnchor, `coherence-why-${pendingCert.id}.json`, effectiveWho.slice(0, MAX_ONCHAIN_AUTHOR_LEN))
           .then(async (txResult) => {
             await db.update(certifications).set({
               transactionHash: txResult.transactionHash,
@@ -1912,6 +1948,21 @@ export async function createMcpServer(ctx: McpContext) {
             if (trialInfo && !mcpCreditInfo) await refundTrialCredit(trialInfo.userId).catch(() => {});
             else if (mcpCreditInfo) await refundCredit(mcpCreditInfo.userId).catch(() => {});
           });
+
+        // Record the pre-action anchor in coherence_checks so the WHY→WHAT
+        // link (POST /api/coherence/link) and per-agent coherence history can
+        // track it. Best-effort: a failure here must not break the anchor
+        // itself (the WHY proof is the source of truth; the link endpoint can
+        // lazily recreate this row from the proof's metadata).
+        try {
+          await db.insert(coherenceChecks).values({
+            userId: auth.userId,
+            proofId: pendingCert.id,
+            intentHash: coherenceAnchor,
+          }).onConflictDoNothing();
+        } catch (ccErr) {
+          logger.warn("check_coherence: coherence_checks insert failed (non-fatal)", { proofId: pendingCert.id, error: String(ccErr) });
+        }
 
         logger.info("check_coherence WHY proof anchored", {
           proofId: pendingCert.id,
@@ -1932,6 +1983,7 @@ export async function createMcpServer(ctx: McpContext) {
               next_step: {
                 action: `Execute your decision, then call certify_file to anchor the WHAT proof`,
                 link_why_to_what: `Include "why_proof_id": "${pendingCert.id}" in your certify_file metadata to complete the 4W Prove Before Act loop`,
+                complete_the_link: `After certifying the WHAT, POST ${baseUrl}/api/coherence/link with {"why_proof_id":"${pendingCert.id}","what_proof_id":"<your WHAT proof_id>"} (Authorization: Bearer <api_key>) to compute your coherence score`,
               },
               message: `Coherence check anchored. WHY proof is on-chain (confirmation in ~6s). Proceed with: ${decision.slice(0, 120)}`,
             }),

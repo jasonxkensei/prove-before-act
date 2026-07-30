@@ -25,6 +25,7 @@ import { registerTrustRoutes } from "./routes/trust";
 import { registerAttestationsRoutes } from "./routes/attestations";
 import { registerStandardRoutes } from "./routes/standard";
 import { registerCalibrationRoutes } from "./routes/calibration";
+import { registerCoherenceRoutes } from "./routes/coherence";
 
 const recentVisits = new Map<string, number>();
 setInterval(() => {
@@ -119,6 +120,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerAttestationsRoutes(app);
   registerStandardRoutes(app);
   registerCalibrationRoutes(app);
+  registerCoherenceRoutes(app);
 
   const httpServer = createServer(app);
 
