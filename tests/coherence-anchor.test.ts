@@ -238,3 +238,107 @@ describe("linked_within_1h excludes inverted timelines (WHAT before WHY)", () =>
     expect(trust!.coherenceBonus).toBe(coherenceBonusFromRate(50));
   });
 });
+
+describe("divergent anchors lower the trust score (divergence penalty)", () => {
+  // Regression guard: WHY anchors flagged divergent (divergent_at IS NOT NULL)
+  // must produce a non-zero divergenceRate and a negative divergencePenalty in
+  // computeTrustScore. An agent with zero divergent anchors must have penalty=0.
+  const runId = crypto.randomBytes(6).toString("hex");
+  const userId = `coh-divpen-${runId}`;
+  const wallet = `erd1trialcohDiv${runId}`;
+
+  async function seedAnchor(opts: { linked: boolean; divergent: boolean; agoInterval: string }) {
+    const whyId = crypto.randomUUID();
+    await pool.query(
+      `INSERT INTO certifications (id, user_id, file_name, file_hash, blockchain_status, is_public, metadata, created_at)
+       VALUES ($1, $2, 'why.json', $3, 'confirmed', true, '{"type":"coherence_check"}', NOW() - $4::interval)`,
+      [whyId, userId, crypto.randomBytes(32).toString("hex"), opts.agoInterval],
+    );
+    let linkedProofId: string | null = null;
+    if (opts.linked) {
+      const whatId = crypto.randomUUID();
+      await pool.query(
+        `INSERT INTO certifications (id, user_id, file_name, file_hash, blockchain_status, is_public, metadata, created_at)
+         VALUES ($1, $2, 'what.json', $3, 'confirmed', true, '{}', NOW() - $4::interval)`,
+        [whatId, userId, crypto.randomBytes(32).toString("hex"), opts.agoInterval],
+      );
+      linkedProofId = whatId;
+    }
+    await pool.query(
+      `INSERT INTO coherence_checks (user_id, proof_id, linked_proof_id, intent_hash, coherence_score, created_at, divergent_at)
+       VALUES ($1, $2, $3, $4, $5, NOW() - $6::interval, $7)`,
+      [
+        userId, whyId, linkedProofId,
+        crypto.randomBytes(32).toString("hex"),
+        opts.linked ? 65 : null,
+        opts.agoInterval,
+        opts.divergent ? new Date() : null,
+      ],
+    );
+    return whyId;
+  }
+
+  beforeAll(async () => {
+    await pool.query(`INSERT INTO users (id, wallet_address, is_public_profile) VALUES ($1, $2, true)`, [userId, wallet]);
+    // 1 linked anchor (not divergent) + 2 divergent anchors → divergence_rate = 2/3 ≈ 67%
+    await seedAnchor({ linked: true,  divergent: false, agoInterval: "4 hours" });
+    await seedAnchor({ linked: false, divergent: true,  agoInterval: "5 hours" });
+    await seedAnchor({ linked: false, divergent: true,  agoInterval: "6 hours" });
+  });
+
+  afterAll(async () => {
+    await pool.query(`DELETE FROM coherence_checks WHERE user_id = $1`, [userId]);
+    await pool.query(`DELETE FROM certifications WHERE user_id = $1`, [userId]);
+    await pool.query(`DELETE FROM trust_score_snapshots WHERE wallet_address = $1`, [wallet]);
+    await pool.query(`DELETE FROM users WHERE id = $1`, [userId]);
+  });
+
+  it("divergenceRate is non-null and reflects the seeded ratio", async () => {
+    const { computeTrustScore } = await import("../server/trust");
+    const trust = await computeTrustScore(userId);
+    expect(trust.divergenceRate).not.toBeNull();
+    // 2 divergent of 3 mature = 66.67% → rounds to 67%
+    expect(trust.divergenceRate).toBe(67);
+  });
+
+  it("divergencePenalty is negative (non-zero) when any anchors are divergent", async () => {
+    const { computeTrustScore, divergencePenaltyFromRate } = await import("../server/trust");
+    const trust = await computeTrustScore(userId);
+    expect(trust.divergencePenalty).toBe(divergencePenaltyFromRate(trust.divergenceRate));
+    expect(trust.divergencePenalty).toBeLessThan(0);
+  });
+
+  it("an agent with zero divergent anchors has divergencePenalty = 0", async () => {
+    // Seed a separate user with only linked (non-divergent) anchors.
+    const cleanId = `coh-nodiv-${runId}`;
+    const cleanWallet = `erd1trialcohNodiv${runId}`;
+    await pool.query(`INSERT INTO users (id, wallet_address, is_public_profile) VALUES ($1, $2, true)`, [cleanId, cleanWallet]);
+    try {
+      const whatId = crypto.randomUUID();
+      const whyId = crypto.randomUUID();
+      await pool.query(
+        `INSERT INTO certifications (id, user_id, file_name, file_hash, blockchain_status, is_public, metadata, created_at)
+         VALUES ($1, $2, 'why.json', $3, 'confirmed', true, '{"type":"coherence_check"}', NOW() - INTERVAL '3 hours')`,
+        [whyId, cleanId, crypto.randomBytes(32).toString("hex")],
+      );
+      await pool.query(
+        `INSERT INTO certifications (id, user_id, file_name, file_hash, blockchain_status, is_public, metadata, created_at)
+         VALUES ($1, $2, 'what.json', $3, 'confirmed', true, '{}', NOW() - INTERVAL '2 hours 30 minutes')`,
+        [whatId, cleanId, crypto.randomBytes(32).toString("hex")],
+      );
+      await pool.query(
+        `INSERT INTO coherence_checks (user_id, proof_id, linked_proof_id, intent_hash, coherence_score, created_at, divergent_at)
+         VALUES ($1, $2, $3, $4, 65, NOW() - INTERVAL '3 hours', NULL)`,
+        [cleanId, whyId, whatId, crypto.randomBytes(32).toString("hex")],
+      );
+      const { computeTrustScore } = await import("../server/trust");
+      const trust = await computeTrustScore(cleanId);
+      expect(trust.divergencePenalty).toBe(0);
+      expect(trust.divergenceRate).toBe(0);
+    } finally {
+      await pool.query(`DELETE FROM coherence_checks WHERE user_id = $1`, [cleanId]);
+      await pool.query(`DELETE FROM certifications WHERE user_id = $1`, [cleanId]);
+      await pool.query(`DELETE FROM users WHERE id = $1`, [cleanId]);
+    }
+  });
+});

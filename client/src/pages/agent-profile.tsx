@@ -89,6 +89,8 @@ interface AgentProfile {
   coherenceRate?: number | null;
   coherenceAnchors?: number;
   coherenceBonus?: number;
+  divergenceRate?: number | null;
+  divergencePenalty?: number;
   firstCertAt: string | null;
   lastCertAt: string | null;
   recentCertifications: {
@@ -598,6 +600,19 @@ function ScoreBreakdown({ agent }: { agent: AgentProfile }) {
             ? `${agent.coherenceRate}% WHY→WHAT linked within 1h`
             : "WHY→WHAT link rate",
           Icon: Target,
+          isPenalty: false,
+        }]
+      : []),
+    ...((agent.divergencePenalty ?? 0) < 0
+      ? [{
+          label: "Divergence penalty",
+          value: agent.divergencePenalty ?? 0,
+          cap: -25 as number | null,
+          detail: agent.divergenceRate !== null && agent.divergenceRate !== undefined
+            ? `${agent.divergenceRate}% of mature WHY anchors unlinked past TTL`
+            : "Broken Prove-Before-Act loops",
+          Icon: AlertTriangle,
+          isPenalty: true,
         }]
       : []),
   ];
@@ -612,16 +627,16 @@ function ScoreBreakdown({ agent }: { agent: AgentProfile }) {
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-3">
-          {components.map(({ label, value, cap, detail, Icon }) => (
+          {components.map(({ label, value, cap, detail, Icon, isPenalty }) => (
             <div key={label} className="space-y-1.5" data-testid={`breakdown-${label.toLowerCase().replace(/\s+/g, "-")}`}>
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  <span className="text-sm">{label}</span>
+                  <Icon className={`h-3.5 w-3.5 shrink-0 ${isPenalty ? "text-destructive" : "text-muted-foreground"}`} />
+                  <span className={`text-sm ${isPenalty ? "text-destructive" : ""}`}>{label}</span>
                   <span className="truncate text-xs text-muted-foreground hidden sm:inline">{detail}</span>
                 </div>
-                <span className="shrink-0 tabular-nums text-sm font-medium">
-                  +{value}
+                <span className={`shrink-0 tabular-nums text-sm font-medium ${isPenalty ? "text-destructive" : ""}`}>
+                  {isPenalty ? value : `+${value}`}
                   {cap !== null && (
                     <span className="text-xs text-muted-foreground"> /{cap}</span>
                   )}
@@ -629,8 +644,11 @@ function ScoreBreakdown({ agent }: { agent: AgentProfile }) {
               </div>
               <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                 <div
-                  className="h-full rounded-full bg-primary"
-                  style={{ width: `${cap !== null ? Math.min(100, (value / cap) * 100) : value > 0 ? 100 : 0}%` }}
+                  className={`h-full rounded-full ${isPenalty ? "bg-destructive" : "bg-primary"}`}
+                  style={{ width: isPenalty
+                    ? `${cap !== null ? Math.min(100, (Math.abs(value) / Math.abs(cap)) * 100) : Math.abs(value) > 0 ? 100 : 0}%`
+                    : `${cap !== null ? Math.min(100, (value / cap) * 100) : value > 0 ? 100 : 0}%`
+                  }}
                 />
               </div>
             </div>

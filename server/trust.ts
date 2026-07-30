@@ -31,6 +31,11 @@ export interface TrustScore {
   coherenceRate: number | null;
   coherenceAnchors: number;
   coherenceBonus: number;
+  // Divergence signal — % of mature anchors that were flagged divergent (WHY
+  // declared but no WHAT linked after the TTL). Null when there are no mature
+  // anchors. Applied as a bounded negative penalty (max −25 pts).
+  divergenceRate: number | null;
+  divergencePenalty: number;
 }
 
 export function getTrustLevel(score: number): TrustLevel {
@@ -92,13 +97,27 @@ export function coherenceBonusFromRate(rate: number | null): number {
   return Math.round((Math.max(0, Math.min(100, rate)) / 100) * COHERENCE_RATE_BONUS_MAX);
 }
 
-async function computeCoherenceSignal(userId: string): Promise<{ rate: number | null; anchors: number }> {
+// Divergence penalty — mirrors the coherence bonus but works in the negative
+// direction. Anchors flagged divergent (WHY declared but no WHAT linked after
+// the TTL) carry a bounded penalty so agents that constantly break the
+// Prove-Before-Act loop cannot mask the behaviour behind a zero-coherence score.
+// Max penalty −25 pts (symmetric with the +25 coherence bonus).
+export const COHERENCE_DIVERGENCE_PENALTY_MAX = 25;
+
+export function divergencePenaltyFromRate(rate: number | null): number {
+  if (rate === null) return 0;
+  const penalty = -Math.round((Math.max(0, Math.min(100, rate)) / 100) * COHERENCE_DIVERGENCE_PENALTY_MAX);
+  return penalty === 0 ? 0 : penalty; // avoid JS -0
+}
+
+async function computeCoherenceSignal(userId: string): Promise<{ rate: number | null; anchors: number; divergentCount: number; divergenceRate: number | null }> {
   try {
     const rows = await db.execute(sql`
       SELECT
         COUNT(*)::int AS total,
         COUNT(*) FILTER (WHERE cc.linked_proof_id IS NULL AND cc.created_at > NOW() - INTERVAL '1 hour')::int AS pending,
-        COUNT(*) FILTER (WHERE cc.linked_proof_id IS NOT NULL AND wt.created_at >= cc.created_at AND wt.created_at <= cc.created_at + INTERVAL '1 hour')::int AS linked_1h
+        COUNT(*) FILTER (WHERE cc.linked_proof_id IS NOT NULL AND wt.created_at >= cc.created_at AND wt.created_at <= cc.created_at + INTERVAL '1 hour')::int AS linked_1h,
+        COUNT(*) FILTER (WHERE cc.divergent_at IS NOT NULL)::int AS diverged
       FROM coherence_checks cc
       LEFT JOIN certifications wt ON wt.id = cc.linked_proof_id
       WHERE cc.user_id = ${userId}
@@ -107,36 +126,46 @@ async function computeCoherenceSignal(userId: string): Promise<{ rate: number | 
     const total = Number(r?.total || 0);
     const pending = Number(r?.pending || 0);
     const linked1h = Number(r?.linked_1h || 0);
+    const divergentCount = Number(r?.diverged || 0);
     const mature = total - pending;
-    if (mature <= 0) return { rate: null, anchors: total };
-    return { rate: Math.round((linked1h / mature) * 100), anchors: total };
+    if (mature <= 0) return { rate: null, anchors: total, divergentCount, divergenceRate: null };
+    return {
+      rate: Math.round((linked1h / mature) * 100),
+      anchors: total,
+      divergentCount,
+      divergenceRate: Math.round((divergentCount / mature) * 100),
+    };
   } catch {
-    return { rate: null, anchors: 0 };
+    return { rate: null, anchors: 0, divergentCount: 0, divergenceRate: null };
   }
 }
 
-async function computeCoherenceSignalBatch(userIds: string[]): Promise<Map<string, { rate: number | null; anchors: number }>> {
+async function computeCoherenceSignalBatch(userIds: string[]): Promise<Map<string, { rate: number | null; anchors: number; divergentCount: number; divergenceRate: number | null }>> {
   if (userIds.length === 0) return new Map();
   try {
-    const result = await pool.query<{ user_id: string; total: number; pending: number; linked_1h: number }>(
+    const result = await pool.query<{ user_id: string; total: number; pending: number; linked_1h: number; diverged: number }>(
       `SELECT
          cc.user_id::text AS user_id,
          COUNT(*)::int AS total,
          COUNT(*) FILTER (WHERE cc.linked_proof_id IS NULL AND cc.created_at > NOW() - INTERVAL '1 hour')::int AS pending,
-         COUNT(*) FILTER (WHERE cc.linked_proof_id IS NOT NULL AND wt.created_at >= cc.created_at AND wt.created_at <= cc.created_at + INTERVAL '1 hour')::int AS linked_1h
+         COUNT(*) FILTER (WHERE cc.linked_proof_id IS NOT NULL AND wt.created_at >= cc.created_at AND wt.created_at <= cc.created_at + INTERVAL '1 hour')::int AS linked_1h,
+         COUNT(*) FILTER (WHERE cc.divergent_at IS NOT NULL)::int AS diverged
        FROM coherence_checks cc
        LEFT JOIN certifications wt ON wt.id = cc.linked_proof_id
        WHERE cc.user_id = ANY($1)
        GROUP BY cc.user_id`,
       [userIds],
     );
-    const out = new Map<string, { rate: number | null; anchors: number }>();
+    const out = new Map<string, { rate: number | null; anchors: number; divergentCount: number; divergenceRate: number | null }>();
     for (const row of result.rows) {
       const total = Number(row.total || 0);
+      const divergentCount = Number(row.diverged || 0);
       const mature = total - Number(row.pending || 0);
       out.set(row.user_id, {
         rate: mature > 0 ? Math.round((Number(row.linked_1h || 0) / mature) * 100) : null,
         anchors: total,
+        divergentCount,
+        divergenceRate: mature > 0 ? Math.round((divergentCount / mature) * 100) : null,
       });
     }
     return out;
@@ -382,8 +411,9 @@ export async function computeTrustScore(userId: string): Promise<TrustScore> {
   const { metadataCount, auditCount } = transparencyCounts;
   const tBonus = computeTransparencyBonus(metadataCount, auditCount);
   const coherenceBonus = coherenceBonusFromRate(coherenceResult.rate);
+  const divergencePenalty = divergencePenaltyFromRate(coherenceResult.divergenceRate);
   const rawScore = computeScore(confirmed, last30d, streakWeeks, firstAt, lastAt, attestationBonus, tBonus) + coherenceBonus;
-  const score = Math.max(0, rawScore + violationResult.penalty);
+  const score = Math.max(0, rawScore + violationResult.penalty + divergencePenalty);
 
   return {
     score,
@@ -404,6 +434,8 @@ export async function computeTrustScore(userId: string): Promise<TrustScore> {
     coherenceRate: coherenceResult.rate,
     coherenceAnchors: coherenceResult.anchors,
     coherenceBonus,
+    divergenceRate: coherenceResult.divergenceRate,
+    divergencePenalty,
   };
 }
 
@@ -481,6 +513,8 @@ export interface LeaderboardEntry {
   // Optional so pre-existing snapshots/tests without the field remain valid.
   coherenceRate?: number | null;
   coherenceBonus?: number;
+  divergenceRate?: number | null;
+  divergencePenalty?: number;
 }
 
 export interface LeaderboardFilters {
@@ -576,10 +610,11 @@ async function computeAllLeaderboardEntries(): Promise<LeaderboardEntry[]> {
     const vResult = violationMap.get(row.wallet_address) || { penalty: 0, fault: 0, breach: 0, proposed: 0 };
     // Same coherence weighting as computeTrustScore — keeps leaderboard scores
     // consistent with per-wallet profile scores.
-    const cResult = coherenceMap.get(row.id) || { rate: null, anchors: 0 };
+    const cResult = coherenceMap.get(row.id) || { rate: null, anchors: 0, divergentCount: 0, divergenceRate: null };
     const cBonus = coherenceBonusFromRate(cResult.rate);
+    const cDivPenalty = divergencePenaltyFromRate(cResult.divergenceRate);
     const rawScore = computeScore(confirmed, last30d, streakWeeks, firstAt, lastAt, attestationBonus, tBonus) + cBonus;
-    const score = Math.max(0, rawScore + vResult.penalty);
+    const score = Math.max(0, rawScore + vResult.penalty + cDivPenalty);
 
     return {
       walletAddress: row.wallet_address,
@@ -606,6 +641,8 @@ async function computeAllLeaderboardEntries(): Promise<LeaderboardEntry[]> {
       calibrationLabel: calibrationMap.get(row.id) ?? null,
       coherenceRate: cResult.rate,
       coherenceBonus: cBonus,
+      divergenceRate: cResult.divergenceRate,
+      divergencePenalty: cDivPenalty,
     };
   });
 
