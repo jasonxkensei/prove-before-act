@@ -86,6 +86,9 @@ interface AgentProfile {
   transparencyBonus?: number;
   metadataCount?: number;
   auditCount?: number;
+  coherenceRate?: number | null;
+  coherenceAnchors?: number;
+  coherenceBonus?: number;
   firstCertAt: string | null;
   lastCertAt: string | null;
   recentCertifications: {
@@ -586,6 +589,17 @@ function ScoreBreakdown({ agent }: { agent: AgentProfile }) {
       detail: `${agent.transparencyTier ?? "Tier 1"} — ${agent.metadataCount ?? 0} metadata, ${agent.auditCount ?? 0} audits`,
       Icon: Shield,
     },
+    ...((agent.coherenceBonus ?? 0) > 0
+      ? [{
+          label: "Coherence",
+          value: agent.coherenceBonus ?? 0,
+          cap: 25 as number | null,
+          detail: agent.coherenceRate !== null && agent.coherenceRate !== undefined
+            ? `${agent.coherenceRate}% WHY→WHAT linked within 1h`
+            : "WHY→WHAT link rate",
+          Icon: Target,
+        }]
+      : []),
   ];
 
   return (

@@ -41,6 +41,8 @@ interface LeaderboardEntry {
   violationCount?: number;
   violationPenalty?: number;
   calibrationLabel?: "calibrated" | "overconfident" | "underconfident" | null;
+  coherenceRate?: number | null;
+  coherenceBonus?: number;
 }
 
 interface LeaderboardResponse {
@@ -557,6 +559,28 @@ export default function Leaderboard() {
                                 </Link>
                               </TooltipTrigger>
                               <TooltipContent>View calibration dashboard</TooltipContent>
+                            </Tooltip>
+                          )}
+                          {entry.coherenceRate !== null && entry.coherenceRate !== undefined && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Badge
+                                  data-testid={`badge-coherence-${entry.walletAddress}`}
+                                  className={`border text-[10px] px-1.5 py-0 font-medium ${
+                                    entry.coherenceRate >= 70
+                                      ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
+                                      : entry.coherenceRate >= 40
+                                        ? "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30"
+                                        : "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30"
+                                  }`}
+                                >
+                                  {entry.coherenceRate}% coherent
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-xs text-center">
+                                Share of WHY anchors linked to a WHAT proof within 1h
+                                {(entry.coherenceBonus ?? 0) > 0 ? ` (+${entry.coherenceBonus} pts)` : ""}
+                              </TooltipContent>
                             </Tooltip>
                           )}
                         </div>
