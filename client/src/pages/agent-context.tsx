@@ -916,7 +916,7 @@ print(f"Trade executed. Proof: https://xproof.app{outcome['verify_url']}")`} />
 
           {/* check_coherence step by step */}
           <div className="flex items-center gap-1.5 flex-wrap text-xs">
-            {["1. Write intent+context+decision", "→", "2. call check_coherence", "→", "3. get proof_id (WHY)", "→", "4. execute", "→", "5. certify_file (WHAT) + link why_proof_id"].map((s, i) => (
+            {["1. Write intent+context+decision", "→", "2. call check_coherence", "→", "3. get proof_id (WHY)", "→", "4. execute", "→", "5. certify_file (WHAT) + why_proof_id", "→", "6. POST /api/coherence/link"].map((s, i) => (
               <span key={i} className={s === "→" ? "text-muted-foreground/40" : "rounded bg-primary/10 text-primary px-2 py-1 font-medium"}>{s}</span>
             ))}
           </div>
@@ -971,6 +971,27 @@ what_resp = requests.post(f"{BASE}/api/proof",
         }
     }).json()
 
+# ── Step 4: Close the loop — POST /api/coherence/link ─────────────────────────
+# Without this call the WHY anchor stays unlinked: it shows as "divergent"
+# in your public coherence history after 1h, and after the 2h TTL it is also
+# flagged as a proposed fault violation — both hurt your coherence rate.
+link_resp = requests.post(f"{BASE}/api/coherence/link",
+    headers={"Authorization": f"Bearer {API_KEY}"},
+    json={"why_proof_id": why_proof_id, "what_proof_id": what_resp["proof_id"]})
+
+if link_resp.status_code == 200:
+    data = link_resp.json()
+    print(f"Coherence score: {data['coherence_check']['coherence_score']}/100")
+elif link_resp.status_code == 409:
+    # ALREADY_LINKED — this WHY anchor is linked to a different WHAT.
+    # (Re-linking the SAME pair returns 200 with already_linked=true.)
+    print("Anchor already linked:", link_resp.json()["message"])
+elif link_resp.status_code == 400:
+    # NOT_A_COHERENCE_ANCHOR — why_proof_id is a regular proof, not a WHY
+    # anchor. Create the WHY via check_coherence (or metadata.type =
+    # "coherence_check") before linking.
+    print("Link rejected:", link_resp.json()["error"])
+
 print(f"WHY: {BASE}/proof/{why_proof_id}")
 print(f"WHAT: {BASE}/proof/{what_resp['proof_id']}")`} />
 
@@ -979,6 +1000,9 @@ print(f"WHAT: {BASE}/proof/{what_resp['proof_id']}")`} />
             <ul className="text-xs text-muted-foreground space-y-0.5 ml-2">
               <li>• WHY proof: intent + context + decision, anchored before action — auditors can reconstruct the exact state at decision time</li>
               <li>• WHAT proof: result hash linked to WHY via <code className="font-mono bg-muted px-1 rounded">why_proof_id</code> — any deviation from intent is permanently visible</li>
+              <li>• Link call: <code className="font-mono bg-muted px-1 rounded">POST /api/coherence/link</code> records the WHY→WHAT pair and computes a coherence score (0–100). Unlinked anchors show as <strong className="text-foreground">divergent</strong> in public history after 1h; after the 2h TTL they are also flagged as proposed fault violations</li>
+              <li>• Error cases: <code className="font-mono bg-muted px-1 rounded">409 ALREADY_LINKED</code> (anchor linked to a different WHAT), <code className="font-mono bg-muted px-1 rounded">400 NOT_A_COHERENCE_ANCHOR</code> (WHY was not created as a coherence anchor)</li>
+              <li>• Public history: <code className="font-mono bg-muted px-1 rounded">GET /api/agents/&#123;wallet&#125;/coherence</code> — per-anchor status (linked / pending / divergent) + aggregate coherence rate</li>
               <li>• Both proofs are public, independently verifiable at <code className="font-mono bg-muted px-1 rounded">xproof.app/proof/&#123;id&#125;</code></li>
             </ul>
           </div>

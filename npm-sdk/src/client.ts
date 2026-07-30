@@ -33,10 +33,11 @@ import type {
   PolicyViolation,
   PolicyCheckResult,
   ReversibilityClass,
+  CoherenceLinkResult,
 } from "./types.js";
 import { JURISDICTION_TYPES } from "./types.js";
 
-const VERSION = "0.1.10";
+const VERSION = "0.1.11";
 const DEFAULT_BASE_URL = "https://xproof.app";
 const DEFAULT_TIMEOUT = 30_000;
 
@@ -334,6 +335,74 @@ export class XProofClient {
       fieldsAbsent: (data.fields_absent as string[]) || [],
       totalAnchors: (data.total_anchors as number) || stages.length,
       stages,
+    };
+  }
+
+  /**
+   * Close the WHY→WHAT coherence loop: link a WHY anchor (created via the
+   * `check_coherence` MCP tool, or a proof certified with
+   * `metadata.type = "coherence_check"`) to the WHAT proof of the executed
+   * action. Full loop: check_coherence → act → certifyHash (with
+   * `metadata.why_proof_id`) → linkCoherence.
+   *
+   * Without this call the WHY anchor stays unlinked: it shows as
+   * "divergent" in the public coherence history after 1 hour, and after the
+   * 2-hour TTL it is additionally flagged as a proposed fault violation —
+   * both lower the agent's public coherence rate.
+   *
+   * Idempotent: re-linking the same pair resolves with `alreadyLinked: true`.
+   *
+   * @param whyProofId - UUID of the WHY coherence anchor.
+   * @param whatProofId - UUID of the WHAT proof (the executed result).
+   * @throws ConflictError (HTTP 409 `ALREADY_LINKED`) if the anchor is
+   *   already linked to a *different* WHAT proof.
+   * @throws ValidationError (HTTP 400 `NOT_A_COHERENCE_ANCHOR`) if
+   *   `whyProofId` is a regular proof, not a coherence anchor — create the
+   *   WHY via check_coherence or with `metadata.type = "coherence_check"`.
+   * @throws NotFoundError (HTTP 404) if either proof does not exist or
+   *   belongs to another account.
+   */
+  async linkCoherence(
+    whyProofId: string,
+    whatProofId: string
+  ): Promise<CoherenceLinkResult> {
+    this.requireAuth();
+    if (!whyProofId || !whyProofId.trim())
+      throw new ValidationError("whyProofId is required", {});
+    if (!whatProofId || !whatProofId.trim())
+      throw new ValidationError("whatProofId is required", {});
+
+    const data = await this.request("POST", "/api/coherence/link", {
+      body: { why_proof_id: whyProofId, what_proof_id: whatProofId },
+    });
+
+    const cc = (data.coherence_check as Record<string, unknown>) || {};
+    const sb = data.score_breakdown as Record<string, unknown> | undefined;
+    return {
+      success: (data.success as boolean) ?? false,
+      alreadyLinked: (data.already_linked as boolean) ?? false,
+      coherenceCheck: {
+        id: (cc.id as string) ?? "",
+        whyProofId: (cc.why_proof_id as string) ?? whyProofId,
+        linkedProofId: (cc.linked_proof_id as string) ?? null,
+        intentHash: (cc.intent_hash as string) ?? "",
+        coherenceScore:
+          cc.coherence_score != null ? (cc.coherence_score as number) : null,
+        createdAt: (cc.created_at as string) ?? null,
+      },
+      scoreBreakdown: sb
+        ? {
+            linked: (sb.linked as boolean) ?? false,
+            whatWithin1h: (sb.what_within_1h as boolean) ?? false,
+            whatReferencesWhy: (sb.what_references_why as boolean) ?? false,
+            whatConfirmedOnChain:
+              (sb.what_confirmed_on_chain as boolean) ?? false,
+            executionPrecededIntent:
+              (sb.execution_preceded_intent as boolean) ?? false,
+          }
+        : null,
+      message: (data.message as string) ?? "",
+      raw: data,
     };
   }
 

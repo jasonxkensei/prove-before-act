@@ -256,6 +256,41 @@ class PolicyCheckResult:
 
 
 @dataclass
+class CoherenceLinkResult:
+    """Result of closing the WHY→WHAT coherence loop via POST /api/coherence/link."""
+
+    success: bool = False
+    already_linked: bool = False
+    coherence_check_id: str = ""
+    why_proof_id: str = ""
+    linked_proof_id: Optional[str] = None
+    intent_hash: str = ""
+    coherence_score: Optional[int] = None
+    created_at: Optional[str] = None
+    score_breakdown: dict[str, Any] = field(default_factory=dict)
+    message: str = ""
+    raw: dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "CoherenceLinkResult":
+        """Create a CoherenceLinkResult from an API response dictionary."""
+        cc = data.get("coherence_check") or {}
+        return cls(
+            success=data.get("success", False),
+            already_linked=data.get("already_linked", False),
+            coherence_check_id=cc.get("id", ""),
+            why_proof_id=cc.get("why_proof_id", ""),
+            linked_proof_id=cc.get("linked_proof_id"),
+            intent_hash=cc.get("intent_hash", ""),
+            coherence_score=cc.get("coherence_score"),
+            created_at=cc.get("created_at"),
+            score_breakdown=data.get("score_breakdown") or {},
+            message=data.get("message", ""),
+            raw=data,
+        )
+
+
+@dataclass
 class Certification:
     """Represents a blockchain-anchored certification."""
 

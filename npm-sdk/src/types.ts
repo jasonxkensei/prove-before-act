@@ -184,6 +184,32 @@ export interface PolicyCheckResult {
   raw: Record<string, unknown>;
 }
 
+export interface CoherenceScoreBreakdown {
+  linked: boolean;
+  whatWithin1h: boolean;
+  whatReferencesWhy: boolean;
+  whatConfirmedOnChain: boolean;
+  executionPrecededIntent: boolean;
+}
+
+export interface CoherenceCheckRecord {
+  id: string;
+  whyProofId: string;
+  linkedProofId: string | null;
+  intentHash: string;
+  coherenceScore: number | null;
+  createdAt: string | null;
+}
+
+export interface CoherenceLinkResult {
+  success: boolean;
+  alreadyLinked: boolean;
+  coherenceCheck: CoherenceCheckRecord;
+  scoreBreakdown: CoherenceScoreBreakdown | null;
+  message: string;
+  raw: Record<string, unknown>;
+}
+
 export interface BatchFileEntry {
   fileHash: string;
   fileName?: string;

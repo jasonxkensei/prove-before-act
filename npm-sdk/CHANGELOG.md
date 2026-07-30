@@ -2,6 +2,17 @@
 
 All notable changes to `@xproof/xproof` will be documented here.
 
+## [0.1.11] — 2026-07-30
+
+### Added
+
+- **`linkCoherence(whyProofId, whatProofId)`** — closes the WHY→WHAT coherence loop via `POST /api/coherence/link`. Full loop: `check_coherence` (WHY) → act → `certifyHash` with `metadata.why_proof_id` (WHAT) → `linkCoherence`. Returns a `CoherenceLinkResult` with the coherence score (0–100) and per-criterion `scoreBreakdown`. Idempotent — re-linking the same pair resolves with `alreadyLinked: true`. Throws `ConflictError` (409 `ALREADY_LINKED`) when the anchor is linked to a different WHAT, and `ValidationError` (400 `NOT_A_COHERENCE_ANCHOR`) when the WHY proof is not a coherence anchor.
+- New exported types: `CoherenceLinkResult`, `CoherenceCheckRecord`, `CoherenceScoreBreakdown`.
+
+### Changed
+
+- **User-Agent** header updated to `xproof-js/0.1.11`.
+
 ## [0.1.10] — 2026-06-19
 
 ### Changed

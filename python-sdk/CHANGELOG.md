@@ -7,6 +7,20 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.2.11] — 2026-07-30
+
+### Fixed
+
+- Fallback `__version__` strings in `xproof/__init__.py` and `xproof/client.py` were stale (`0.2.7`); now kept in lockstep with `pyproject.toml`.
+- Clarified `link_coherence` docstring: an unlinked WHY anchor shows as **divergent** in the public coherence history after 1 hour; after the 2-hour TTL it is additionally flagged as a proposed fault violation.
+
+## [0.2.10] — 2026-07-30
+
+### Added
+
+- **`XProofClient.link_coherence(why_proof_id, what_proof_id)`** — closes the WHY→WHAT coherence loop via `POST /api/coherence/link`. Full loop: `check_coherence` (WHY) → act → `certify_hash` with `metadata.why_proof_id` (WHAT) → `link_coherence`. Returns a `CoherenceLinkResult` with the coherence score (0–100) and per-criterion `score_breakdown`. Idempotent — re-linking the same pair returns `already_linked=True`. Raises `ConflictError` (409 `ALREADY_LINKED`) when the anchor is linked to a different WHAT, and `ValidationError` (400 `NOT_A_COHERENCE_ANCHOR`) when the WHY proof is not a coherence anchor.
+- New exported model: `CoherenceLinkResult`.
+
 ## [0.2.9] — 2026-06-19
 
 ### Changed

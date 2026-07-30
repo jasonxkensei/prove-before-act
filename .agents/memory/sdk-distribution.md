@@ -42,3 +42,5 @@ description: How to publish xproof SDKs to PyPI, npm, GitHub, and clawhub/OpenCl
 - **Record:** Update `clawhub-publish/PUBLISHED.md` with commit SHAs
 - **Secret:** `GITHUB_PERSONAL_ACCESS_TOKEN`
 - **Skill repo URL:** https://github.com/jasonxkensei/xproof-openclaw-skill
+- **Before publishing to GitHub:** verify the token first with `GET /user`; if it returns 401 the user must refresh the secret. Record any pending skill publish in `clawhub-publish/PUBLISHED.md` so the next release can catch up.
+- **Python release rule:** bumping `pyproject.toml` alone breaks `tests/test_version.py` — the fallback `__version__` strings in `xproof/__init__.py` and `xproof/client.py` must be bumped in lockstep.

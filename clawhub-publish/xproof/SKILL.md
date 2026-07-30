@@ -1,6 +1,6 @@
 ---
 name: xproof
-version: 3.2.2
+version: 3.3.0
 description: Prove Before & After Act — WHO from MX-8004 identity, WHAT/WHEN/WHY from xProof. Full 4W audit trail, trust score, violations layer. REST API, MCP, x402. $0.01/proof flat. No proof = no critical action.
 homepage: https://xproof.app
 metadata: {"xproof":{"category":"proof,security,compliance,accountability,prove-before-act","api_base":"https://xproof.app"}}
@@ -142,7 +142,41 @@ x402 is not a separate skill -- it is a payment method. When you call `POST /api
 
 ---
 
-## 2. Webhooks
+## 2. Coherence Loop — close the WHY→WHAT link
+
+Anchoring the WHY and the WHAT is not enough: you must **link** them. An unlinked WHY anchor shows as **divergent** in your public coherence history after 1 hour, and after the 2-hour TTL it is additionally flagged as a proposed fault violation — both lower your public coherence rate.
+
+**Full loop:** `check_coherence` (WHY) → execute → `certify_file` with `metadata.why_proof_id` (WHAT) → `POST /api/coherence/link`.
+
+```bash
+# Step 4 — close the loop (API key required; both proofs must be yours)
+curl -X POST https://xproof.app/api/coherence/link \
+  -H "Authorization: Bearer pm_..." \
+  -H "Content-Type: application/json" \
+  -d '{"why_proof_id": "<UUID from check_coherence>", "what_proof_id": "<UUID from certify_file>"}'
+# → 200 {"success": true, "coherence_check": {"coherence_score": 85, ...},
+#        "score_breakdown": {"linked": true, "what_within_1h": true,
+#                            "what_references_why": true, "what_confirmed_on_chain": false,
+#                            "execution_preceded_intent": false}}
+```
+
+**Score (0–100):** 50 for linking + 15 if WHAT within 1h of WHY + 20 if WHAT's `metadata.why_proof_id` references the WHY + 15 if WHAT confirmed on-chain. WHAT certified *before* the WHY → base halved to 25.
+
+**Error cases:**
+
+| Status | Error | Meaning |
+|:--|:--|:--|
+| `409` | `ALREADY_LINKED` | WHY anchor already linked to a *different* WHAT. Re-linking the same pair returns 200 with `already_linked: true` (idempotent). |
+| `400` | `NOT_A_COHERENCE_ANCHOR` | `why_proof_id` is a regular proof. Create the WHY via the `check_coherence` MCP tool, or certify with `metadata.type = "coherence_check"`. |
+| `404` | `WHY_PROOF_NOT_FOUND` / `WHAT_PROOF_NOT_FOUND` | Proof missing or owned by another account. |
+
+**SDK helpers:** `client.link_coherence(why_proof_id, what_proof_id)` (Python `xproof` ≥ 0.2.10) · `client.linkCoherence(whyProofId, whatProofId)` (npm `@xproof/xproof` ≥ 0.1.11).
+
+**Check your history:** `GET https://xproof.app/api/agents/<wallet>/coherence` — public; per-anchor status (`linked` / `pending` / `divergent`) + aggregate coherence rate.
+
+---
+
+## 3. Webhooks
 
 Supply an optional `webhook_url` field on `POST /api/proof` or `POST /api/batch` to receive a callback when the proof is confirmed on-chain.
 
@@ -245,6 +279,11 @@ curl https://xproof.app/api/proof/<proof_id>
 curl -X POST https://xproof.app/api/batch \
   -H "Authorization: Bearer pm_..." \
   -d '{"files":[{"file_hash":"...","filename":"a.txt"},{"file_hash":"...","filename":"b.txt"}]}'
+
+# Close the WHY→WHAT coherence loop (after check_coherence + certify_file)
+curl -X POST https://xproof.app/api/coherence/link \
+  -H "Authorization: Bearer pm_..." \
+  -d '{"why_proof_id":"<why-uuid>","what_proof_id":"<what-uuid>"}'
 
 # Health check
 curl https://xproof.app/api/acp/health

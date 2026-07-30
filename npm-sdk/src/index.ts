@@ -34,5 +34,8 @@ export type {
   ContextDrift,
   JurisdictionType,
   TimingBreakdown,
+  CoherenceScoreBreakdown,
+  CoherenceCheckRecord,
+  CoherenceLinkResult,
 } from "./types.js";
 export { hashFile, hashBuffer, hashString } from "./hash.js";

@@ -18,6 +18,7 @@ from .models import (
     BatchResultSummary,
     Certification,
     CertifyEntry,
+    CoherenceLinkResult,
     ConfidenceTrail,
     ConfidenceTrailStage,
     ContextDrift,
@@ -40,7 +41,7 @@ try:
 
     __version__ = _pkg_version("xproof")
 except Exception:
-    __version__ = "0.2.7"  # fallback when running from uninstalled source
+    __version__ = "0.2.11"  # fallback when running from uninstalled source
 
 __all__ = [
     "XProofClient",
@@ -50,6 +51,7 @@ __all__ = [
     "CertifyEntry",
     "PathCertifyEntry",
     "Certification",
+    "CoherenceLinkResult",
     "BatchResult",
     "BatchResultSummary",
     "ConfidenceTrail",

@@ -2,6 +2,25 @@
 
 ---
 
+## v3.3.0 — 2026-07-30 (PENDING LIVE PUBLISH)
+
+**Target repo:** https://github.com/jasonxkensei/xproof-openclaw-skill  
+**Branch:** main
+
+| Item | Value |
+|---|---|
+| SKILL.md SHA (live) | _not yet published — `GITHUB_PERSONAL_ACCESS_TOKEN` returned 401 Bad credentials on 2026-07-30; retry after refreshing the token_ |
+
+### Changes in v3.3.0
+
+- **New "Coherence Loop" section** — documents the full WHY→WHAT loop: `check_coherence` → act → `certify_file` with `metadata.why_proof_id` → `POST /api/coherence/link`
+- **Error cases table** — `409 ALREADY_LINKED`, `400 NOT_A_COHERENCE_ANCHOR`, `404` ownership cases; idempotent re-link behavior
+- **Score formula** — 50 link + 15 within-1h + 20 references-why + 15 on-chain; base halved when execution preceded intent
+- **SDK helpers referenced** — Python `link_coherence` (xproof ≥ 0.2.10), npm `linkCoherence` (@xproof/xproof ≥ 0.1.11)
+- **Cheatsheet** — added the link curl command
+
+---
+
 ## v3.2.0 — 2026-06-22
 
 **Target repo:** https://github.com/jasonxkensei/xproof-openclaw-skill  

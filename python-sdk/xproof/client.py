@@ -25,6 +25,7 @@ from .models import (
     ConfidenceTrail,
     ContextDrift,
     PathCertifyEntry,
+    CoherenceLinkResult,
     PolicyCheckResult,
     PricingInfo,
     RegistrationResult,
@@ -38,7 +39,7 @@ try:
 
     __version__ = _pkg_version("xproof")
 except Exception:
-    __version__ = "0.2.7"  # fallback when running from uninstalled source
+    __version__ = "0.2.11"  # fallback when running from uninstalled source
 
 DEFAULT_BASE_URL = "https://xproof.app"
 DEFAULT_TIMEOUT = 30
@@ -638,6 +639,49 @@ class XProofClient:
         """
         data = self._request("GET", f"/api/proof/hash/{file_hash}", auth_required=False)
         return Certification.from_dict(data)
+
+    def link_coherence(self, why_proof_id: str, what_proof_id: str) -> CoherenceLinkResult:
+        """Close the WHY→WHAT coherence loop via ``POST /api/coherence/link``.
+
+        Full loop: ``check_coherence`` (WHY anchor) → execute → certify the
+        result with ``metadata.why_proof_id`` (WHAT) → ``link_coherence``.
+        Without this call the WHY anchor stays unlinked: it shows as
+        "divergent" in the public coherence history after 1 hour, and after
+        the 2-hour TTL it is additionally flagged as a proposed fault
+        violation — both lower the agent's public coherence rate.
+
+        Idempotent: re-linking the same pair returns a result with
+        ``already_linked = True``.
+
+        Args:
+            why_proof_id: UUID of the WHY coherence anchor (created via the
+                ``check_coherence`` MCP tool, or a proof certified with
+                ``metadata.type = "coherence_check"``).
+            what_proof_id: UUID of the WHAT proof (the executed result).
+
+        Returns:
+            A :class:`CoherenceLinkResult` with the coherence score (0–100)
+            and per-criterion ``score_breakdown``.
+
+        Raises:
+            ConflictError: HTTP 409 ``ALREADY_LINKED`` — the WHY anchor is
+                already linked to a *different* WHAT proof.
+            ValidationError: HTTP 400 ``NOT_A_COHERENCE_ANCHOR`` — the WHY
+                proof is a regular proof, not a coherence anchor (or the ids
+                are invalid/identical).
+            NotFoundError: HTTP 404 — either proof does not exist or belongs
+                to another account.
+        """
+        if not why_proof_id or not why_proof_id.strip():
+            raise ValidationError("why_proof_id is required")
+        if not what_proof_id or not what_proof_id.strip():
+            raise ValidationError("what_proof_id is required")
+        data = self._request(
+            "POST",
+            "/api/coherence/link",
+            json={"why_proof_id": why_proof_id, "what_proof_id": what_proof_id},
+        )
+        return CoherenceLinkResult.from_dict(data)
 
     def get_pricing(self) -> PricingInfo:
         """Retrieve current pricing information.

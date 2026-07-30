@@ -1,6 +1,6 @@
 {
   "name": "@xproof/xproof",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "Official SDK for the xProof blockchain certification API — proof and accountability layer for autonomous agents",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",

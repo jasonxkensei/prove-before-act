@@ -870,7 +870,57 @@ MCP tool that implements the **Prove Before Act** pattern. Pass your intent, con
 | WHAT | certify_file          | After act    | Result/output hash                |
 | WHEN | MultiversX timestamp  | Automatic    | Immutable block timestamp         |
 
-Link WHY → WHAT by including \`"why_proof_id": "<proof_id from check_coherence>"\` in your \`certify_file\` metadata call.
+Link WHY → WHAT by including \`"why_proof_id": "<proof_id from check_coherence>"\` in your \`certify_file\` metadata call, **then close the loop with \`POST /api/coherence/link\`** (see below). Without the link call, your WHY anchor stays unlinked: it shows as **divergent** in your public coherence history after 1h, and after the 2h TTL it is additionally flagged as a proposed \`fault\` violation — both lower your public coherence rate.
+
+### Closing the loop — POST /api/coherence/link
+
+The full loop is: \`check_coherence\` (WHY) → execute → \`certify_file\` with \`metadata.why_proof_id\` (WHAT) → \`POST /api/coherence/link\`. The link call is what records the WHY→WHAT pair and computes your coherence score.
+
+Auth: API key (\`Bearer pm_...\`). Both proofs must belong to your account. Idempotent: re-linking the same pair returns \`already_linked: true\`.
+
+\`\`\`bash
+curl -X POST ${baseUrl}/api/coherence/link \\
+  -H "Authorization: Bearer pm_YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"why_proof_id": "<UUID from check_coherence>", "what_proof_id": "<UUID from certify_file>"}'
+\`\`\`
+
+**Response (200):**
+\`\`\`json
+{
+  "success": true,
+  "coherence_check": {
+    "id": "…", "why_proof_id": "…", "linked_proof_id": "…",
+    "intent_hash": "…", "coherence_score": 85, "created_at": "ISO-8601"
+  },
+  "score_breakdown": {
+    "linked": true,
+    "what_within_1h": true,
+    "what_references_why": true,
+    "what_confirmed_on_chain": false,
+    "execution_preceded_intent": false
+  },
+  "message": "WHY→WHAT link recorded. Coherence score: 85/100."
+}
+\`\`\`
+
+**Coherence score:** 50 base for linking + 15 if the WHAT was certified within 1h of the WHY + 20 if the WHAT's \`metadata.why_proof_id\` references the WHY + 15 if the WHAT is confirmed on-chain. If the WHAT was certified *before* the WHY anchor, the base is halved (25) and the timing bonus withheld.
+
+**Error cases:**
+
+\`409 ALREADY_LINKED\` — the WHY anchor is already linked to a *different* WHAT. Linking the same pair again returns 200 with \`already_linked: true\`.
+\`\`\`json
+{ "error": "ALREADY_LINKED", "message": "This WHY anchor is already linked to proof <uuid>" }
+\`\`\`
+
+\`400 NOT_A_COHERENCE_ANCHOR\` — \`why_proof_id\` is a regular proof, not a WHY anchor. Create the WHY with the \`check_coherence\` MCP tool, or via REST with \`metadata.type = "coherence_check"\`.
+\`\`\`json
+{ "error": "NOT_A_COHERENCE_ANCHOR", "message": "why_proof_id is not a coherence anchor. Create the WHY with the check_coherence MCP tool (or certify with metadata.type = \\"coherence_check\\") before linking." }
+\`\`\`
+
+Also: \`400 INVALID_REQUEST\` (non-UUID ids, or identical ids), \`404 WHY_PROOF_NOT_FOUND\` / \`404 WHAT_PROOF_NOT_FOUND\` (proof missing or owned by another account).
+
+**Check your history:** \`GET ${baseUrl}/api/agents/{wallet}/coherence\` — public, paginated (\`limit\`, \`offset\`). Returns per-anchor status (\`linked\` | \`pending\` <1h | \`divergent\` ≥1h unlinked) plus aggregate \`coherence_rate\` and \`avg_coherence_score\`.
 
 ### require_coherence_anchor — Policy gate for orchestrators
 
