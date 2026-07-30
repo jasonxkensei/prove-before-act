@@ -34,7 +34,9 @@ interface FleetAgent {
 }
 
 interface FleetResponse {
-  org_prefix: string;
+  org_prefix?: string;
+  fleet_slug?: string;
+  fleet_name?: string;
   fleet: {
     agent_count: number;
     total_anchors: number;
@@ -83,13 +85,28 @@ function ScoreRing({ score }: { score: number | null }) {
   );
 }
 
+type FleetMode = "prefix" | "slug";
+
+const PREFIX_REGEX = /^[a-z0-9]{6,62}$/;
+const SLUG_REGEX = /^[a-z0-9][a-z0-9-]{1,58}[a-z0-9]$/;
+
 export default function FleetPage() {
   const [, navigate] = useLocation();
-  const initialOrg = typeof window !== "undefined"
-    ? new URLSearchParams(window.location.search).get("org") ?? ""
-    : "";
-  const [orgInput, setOrgInput] = useState(initialOrg);
-  const [org, setOrg] = useState(initialOrg);
+  const initialParams = typeof window !== "undefined"
+    ? new URLSearchParams(window.location.search)
+    : new URLSearchParams();
+  const initialFleet = initialParams.get("fleet") ?? "";
+  const initialOrg = initialParams.get("org") ?? "";
+  const initialMode: FleetMode = initialFleet ? "slug" : "prefix";
+  const [mode, setMode] = useState<FleetMode>(initialMode);
+  const [orgInput, setOrgInput] = useState(initialFleet || initialOrg);
+  const [query, setQuery] = useState<{ mode: FleetMode; value: string } | null>(
+    initialFleet
+      ? { mode: "slug", value: initialFleet }
+      : initialOrg
+        ? { mode: "prefix", value: initialOrg }
+        : null,
+  );
 
   useEffect(() => {
     document.title = "Fleet Coherence | xproof";
@@ -97,26 +114,33 @@ export default function FleetPage() {
 
   // Keep the URL shareable
   useEffect(() => {
-    const qs = org ? `?org=${encodeURIComponent(org)}` : "";
+    const qs = query
+      ? `?${query.mode === "slug" ? "fleet" : "org"}=${encodeURIComponent(query.value)}`
+      : "";
     window.history.replaceState(null, "", `${window.location.pathname}${qs}`);
-  }, [org]);
+  }, [query]);
 
-  const validOrg = /^[a-z0-9]{6,62}$/.test(org);
+  const validQuery = query !== null &&
+    (query.mode === "slug" ? SLUG_REGEX.test(query.value) : PREFIX_REGEX.test(query.value));
 
   const { data, isLoading, error } = useQuery<FleetResponse>({
-    queryKey: ["/api/fleet/coherence", org],
-    enabled: validOrg,
+    queryKey: ["/api/fleet/coherence", query?.mode, query?.value],
+    enabled: validQuery,
     queryFn: async () => {
-      const res = await fetch(`/api/fleet/coherence?org=${encodeURIComponent(org)}`);
+      const param = query!.mode === "slug" ? "fleet" : "org";
+      const res = await fetch(`/api/fleet/coherence?${param}=${encodeURIComponent(query!.value)}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.message || "Failed to load fleet coherence");
       return json;
     },
   });
 
+  const trimmedInput = orgInput.trim().toLowerCase();
+  const inputValid = mode === "slug" ? SLUG_REGEX.test(trimmedInput) : PREFIX_REGEX.test(trimmedInput);
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    setOrg(orgInput.trim().toLowerCase());
+    setQuery({ mode, value: trimmedInput });
   };
 
   return (
@@ -151,45 +175,69 @@ export default function FleetPage() {
         </div>
 
         <form onSubmit={submit} className="mb-8 flex flex-wrap items-center gap-3">
+          <div className="flex rounded-md border p-0.5">
+            <Button
+              type="button"
+              size="sm"
+              variant={mode === "prefix" ? "secondary" : "ghost"}
+              data-testid="button-mode-prefix"
+              onClick={() => setMode("prefix")}
+            >
+              Wallet prefix
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={mode === "slug" ? "secondary" : "ghost"}
+              data-testid="button-mode-slug"
+              onClick={() => setMode("slug")}
+            >
+              Fleet name
+            </Button>
+          </div>
           <div className="relative flex-1 min-w-64">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               data-testid="input-org-prefix"
-              placeholder="Organization wallet prefix (e.g. erd1acme…) — min 6 characters"
+              placeholder={mode === "slug"
+                ? "Registered fleet slug (e.g. acme-agents)"
+                : "Organization wallet prefix (e.g. erd1acme…) — min 6 characters"}
               value={orgInput}
               onChange={(e) => setOrgInput(e.target.value)}
               className="pl-9 font-mono"
             />
           </div>
-          <Button type="submit" data-testid="button-load-fleet" disabled={!/^[a-z0-9]{6,62}$/.test(orgInput.trim().toLowerCase())}>
+          <Button type="submit" data-testid="button-load-fleet" disabled={!inputValid}>
             View fleet
           </Button>
         </form>
 
-        {!org && (
+        {!query && (
           <Card>
             <CardContent className="flex flex-col items-center gap-4 py-16 text-center">
               <Network className="h-12 w-12 text-muted-foreground/40" />
               <div>
                 <p className="font-medium text-muted-foreground">
-                  Enter an organization wallet prefix to load its fleet.
+                  Enter an organization wallet prefix or a registered fleet slug to load its fleet.
                 </p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  All agents whose wallet address starts with the prefix (and have a public profile)
-                  are aggregated into one coherence view.
+                  Prefix mode aggregates all agents whose wallet address starts with the prefix.
+                  Registered fleets aggregate the exact member wallets added via{" "}
+                  <code className="font-mono text-xs">POST /api/fleets</code> — no shared prefix needed.
+                  Only public profiles are included.
                 </p>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {org && isLoading && (
+        {query && isLoading && (
           <div className="flex items-center justify-center py-20">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
           </div>
         )}
 
-        {org && error instanceof Error && (
+        {query && error instanceof Error && (
           <Card>
             <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
               <AlertTriangle className="h-8 w-8 text-amber-500" />
@@ -198,7 +246,7 @@ export default function FleetPage() {
           </Card>
         )}
 
-        {org && data && (
+        {query && data && (
           <>
             {/* Fleet summary */}
             <Card className="mb-8">
@@ -208,7 +256,12 @@ export default function FleetPage() {
                     <ScoreRing score={data.fleet.fleet_score} />
                     <div>
                       <p className="text-xs uppercase tracking-wide text-muted-foreground">Fleet score</p>
-                      <p className="font-mono text-sm mt-1" data-testid="text-org-prefix">{data.org_prefix}…</p>
+                      <p className="font-mono text-sm mt-1" data-testid="text-org-prefix">
+                        {data.fleet_slug ? (data.fleet_name || data.fleet_slug) : `${data.org_prefix}…`}
+                      </p>
+                      {data.fleet_slug && (
+                        <p className="font-mono text-xs text-muted-foreground" data-testid="text-fleet-slug">{data.fleet_slug}</p>
+                      )}
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <p className="mt-1 text-xs text-muted-foreground cursor-help underline decoration-dotted underline-offset-2">
@@ -255,7 +308,9 @@ export default function FleetPage() {
                   <Bot className="h-12 w-12 text-muted-foreground/40" />
                   <div>
                     <p className="font-medium text-muted-foreground" data-testid="text-fleet-empty">
-                      No public agent profiles match this prefix.
+                      {data.fleet_slug
+                        ? "No registered member of this fleet has a public agent profile."
+                        : "No public agent profiles match this prefix."}
                     </p>
                     <p className="mt-1 text-sm text-muted-foreground">
                       Agents opt in by setting <code className="font-mono text-xs">is_public_profile = true</code>{" "}

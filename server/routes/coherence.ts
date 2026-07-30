@@ -2,7 +2,7 @@ import { type Express } from "express";
 import { z } from "zod";
 import { db } from "../db";
 import { logger } from "../logger";
-import { coherenceChecks, certifications, users } from "@shared/schema";
+import { coherenceChecks, certifications, users, fleets, fleetMembers } from "@shared/schema";
 import { eq, and, sql, isNull } from "drizzle-orm";
 import { validateApiKey } from "./helpers";
 import { publicReadRateLimiter } from "../reliability";
@@ -165,12 +165,14 @@ export function registerCoherenceRoutes(app: Express) {
     }
   });
 
-  // ── GET /api/fleet/coherence?org=<wallet_prefix> — fleet coherence view ────
-  // Coherence Artisan: aggregate WHY→WHAT coherence across every agent whose
-  // wallet shares an organization prefix. Public (leaderboard-style) — only
-  // agents with is_public_profile = true are included, so no private account's
-  // behavior is exposed. Returns per-agent coherence stats plus a fleet-level
-  // score.
+  // ── GET /api/fleet/coherence?org=<prefix> | ?fleet=<slug> — fleet view ─────
+  // Coherence Artisan: aggregate WHY→WHAT coherence across a fleet of agents.
+  // Two selection modes:
+  //   org=<wallet_prefix> — every agent whose wallet shares the prefix
+  //   fleet=<slug>        — the explicitly registered members of a named fleet
+  // Public (leaderboard-style) — only agents with is_public_profile = true are
+  // included, so no private account's behavior is exposed. Returns per-agent
+  // coherence stats plus a fleet-level score.
   //
   // Fleet score = 70% fleet coherence rate (share of mature WHY anchors that
   // got their WHAT within 1h) + 30% average coherence score (quality of the
@@ -179,14 +181,46 @@ export function registerCoherenceRoutes(app: Express) {
   app.get("/api/fleet/coherence", publicReadRateLimiter, async (req, res) => {
     try {
       const org = String(req.query.org || "").trim().toLowerCase();
-      // Bech32 wallet prefixes are lowercase alphanumeric. Minimum 6 chars so
-      // a bare "erd1" cannot aggregate the entire platform into one "fleet".
-      if (!/^[a-z0-9]{6,62}$/.test(org)) {
+      const fleetSlug = String(req.query.fleet || "").trim().toLowerCase();
+
+      if (org && fleetSlug) {
         return res.status(400).json({
-          error: "INVALID_ORG_PREFIX",
-          message: "org must be a 6-62 character lowercase alphanumeric wallet prefix (e.g. erd1acme)",
+          error: "AMBIGUOUS_FLEET_SELECTOR",
+          message: "Provide either org (wallet prefix) or fleet (registered fleet slug), not both",
         });
       }
+
+      let registeredFleet: { id: string; name: string; slug: string } | null = null;
+      if (fleetSlug) {
+        if (!/^[a-z0-9][a-z0-9-]{1,58}[a-z0-9]$/.test(fleetSlug)) {
+          return res.status(400).json({
+            error: "INVALID_FLEET_SLUG",
+            message: "fleet must be a 3-60 character slug: lowercase letters, digits and hyphens",
+          });
+        }
+        const [f] = await db
+          .select({ id: fleets.id, name: fleets.name, slug: fleets.slug })
+          .from(fleets)
+          .where(eq(fleets.slug, fleetSlug));
+        if (!f) {
+          return res.status(404).json({ error: "FLEET_NOT_FOUND", message: "No registered fleet with this slug" });
+        }
+        registeredFleet = f;
+      } else {
+        // Bech32 wallet prefixes are lowercase alphanumeric. Minimum 6 chars so
+        // a bare "erd1" cannot aggregate the entire platform into one "fleet".
+        if (!/^[a-z0-9]{6,62}$/.test(org)) {
+          return res.status(400).json({
+            error: "INVALID_ORG_PREFIX",
+            message: "org must be a 6-62 character lowercase alphanumeric wallet prefix (e.g. erd1acme), or pass fleet=<slug> for a registered fleet",
+          });
+        }
+      }
+
+      // Same shape for both modes — only the agent-selection predicate differs.
+      const agentFilter = registeredFleet
+        ? sql`u.wallet_address IN (SELECT fm.wallet_address FROM fleet_members fm WHERE fm.fleet_id = ${registeredFleet.id})`
+        : sql`u.wallet_address LIKE ${org + "%"}`;
 
       const FLEET_MAX_AGENTS = 50;
       const result = await db.execute(sql`
@@ -204,7 +238,7 @@ export function registerCoherenceRoutes(app: Express) {
         FROM users u
         LEFT JOIN coherence_checks cc ON cc.user_id = u.id
         LEFT JOIN certifications wt ON wt.id = cc.linked_proof_id
-        WHERE u.wallet_address LIKE ${org + "%"}
+        WHERE ${agentFilter}
           AND u.is_public_profile = true
         GROUP BY u.wallet_address, u.agent_name
         ORDER BY COUNT(cc.id) DESC, u.wallet_address ASC
@@ -257,7 +291,9 @@ export function registerCoherenceRoutes(app: Express) {
       else if (fleetRate !== null) fleetScore = fleetRate;
 
       return res.json({
-        org_prefix: org,
+        org_prefix: registeredFleet ? undefined : org,
+        fleet_slug: registeredFleet?.slug,
+        fleet_name: registeredFleet?.name,
         fleet: {
           agent_count: agents.length,
           total_anchors: fleetTotals.total,
@@ -273,7 +309,9 @@ export function registerCoherenceRoutes(app: Express) {
         },
         agents,
         note: agents.length === 0
-          ? "No public agent profiles match this prefix. Agents opt in via PATCH /api/user/agent-profile with is_public_profile = true."
+          ? (registeredFleet
+              ? "No registered member of this fleet has a public agent profile. Agents opt in via PATCH /api/user/agent-profile with is_public_profile = true."
+              : "No public agent profiles match this prefix. Agents opt in via PATCH /api/user/agent-profile with is_public_profile = true.")
           : undefined,
       });
     } catch (err: any) {

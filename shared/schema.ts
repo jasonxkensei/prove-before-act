@@ -540,6 +540,44 @@ export const leaderboardSnapshot = pgTable("leaderboard_snapshot", {
   check("single_row", sql`id = 1`),
 ]);
 
+// ============================================
+// Fleets — registered named fleets (Coherence Artisan)
+// ============================================
+// An organization creates a fleet (stable slug) and registers member wallet
+// addresses explicitly, instead of relying on a shared wallet-address prefix.
+// GET /api/fleet/coherence?fleet=<slug> aggregates over the registered members.
+export const fleets = pgTable("fleets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  ownerUserId: varchar("owner_user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: varchar("name", { length: 80 }).notNull(),
+  slug: varchar("slug", { length: 60 }).notNull().unique(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("idx_fleets_owner").on(table.ownerUserId),
+  // Slugs are lowercase alphanumeric + hyphen, 3-60 chars — enforced at DB level
+  // so a raw insert can never create a slug the lookup regex would reject.
+  check("chk_fleet_slug_format", sql`slug ~ '^[a-z0-9][a-z0-9-]{1,58}[a-z0-9]$'`),
+]);
+
+export type Fleet = typeof fleets.$inferSelect;
+
+export const fleetMembers = pgTable("fleet_members", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  fleetId: varchar("fleet_id").notNull().references(() => fleets.id, { onDelete: "cascade" }),
+  walletAddress: varchar("wallet_address").notNull(),
+  // How wallet control was proven when the member was added:
+  // "owner_wallet" (the fleet owner's own session wallet) | "signature" (Ed25519
+  // ownership signature) | "api_key" (a valid API key of the member's account).
+  proofMethod: varchar("proof_method").notNull(),
+  addedAt: timestamp("added_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("idx_fleet_members_unique").on(table.fleetId, table.walletAddress),
+  index("idx_fleet_members_wallet").on(table.walletAddress),
+  check("chk_fleet_member_proof_method", sql`proof_method IN ('owner_wallet', 'signature', 'api_key')`),
+]);
+
+export type FleetMember = typeof fleetMembers.$inferSelect;
+
 // rate_limit_counters — persistent rate-limit state for PgRateLimitStore.
 // Created via raw SQL in server/pgRateLimit.ts (ensureRateLimitTable).
 // Bucket key format: "{namespace}:{key}:{window_start_unix_ms}"
