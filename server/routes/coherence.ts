@@ -165,6 +165,123 @@ export function registerCoherenceRoutes(app: Express) {
     }
   });
 
+  // ── GET /api/fleet/coherence?org=<wallet_prefix> — fleet coherence view ────
+  // Coherence Artisan: aggregate WHY→WHAT coherence across every agent whose
+  // wallet shares an organization prefix. Public (leaderboard-style) — only
+  // agents with is_public_profile = true are included, so no private account's
+  // behavior is exposed. Returns per-agent coherence stats plus a fleet-level
+  // score.
+  //
+  // Fleet score = 70% fleet coherence rate (share of mature WHY anchors that
+  // got their WHAT within 1h) + 30% average coherence score (quality of the
+  // links that were made). Rationale: closing the loop at all matters more
+  // than how gracefully it was closed.
+  app.get("/api/fleet/coherence", publicReadRateLimiter, async (req, res) => {
+    try {
+      const org = String(req.query.org || "").trim().toLowerCase();
+      // Bech32 wallet prefixes are lowercase alphanumeric. Minimum 6 chars so
+      // a bare "erd1" cannot aggregate the entire platform into one "fleet".
+      if (!/^[a-z0-9]{6,62}$/.test(org)) {
+        return res.status(400).json({
+          error: "INVALID_ORG_PREFIX",
+          message: "org must be a 6-62 character lowercase alphanumeric wallet prefix (e.g. erd1acme)",
+        });
+      }
+
+      const FLEET_MAX_AGENTS = 50;
+      const result = await db.execute(sql`
+        SELECT
+          u.wallet_address,
+          u.agent_name,
+          COUNT(cc.id)::int AS total_anchors,
+          COUNT(cc.id) FILTER (WHERE cc.linked_proof_id IS NOT NULL)::int AS linked_count,
+          COUNT(cc.id) FILTER (WHERE cc.linked_proof_id IS NOT NULL AND wt.created_at >= cc.created_at AND wt.created_at <= cc.created_at + INTERVAL '1 hour')::int AS linked_within_1h,
+          COUNT(cc.id) FILTER (WHERE cc.linked_proof_id IS NULL AND cc.created_at > NOW() - INTERVAL '1 hour')::int AS pending_count,
+          COUNT(cc.id) FILTER (WHERE cc.linked_proof_id IS NULL AND cc.created_at <= NOW() - INTERVAL '1 hour')::int AS divergent_count,
+          COUNT(cc.id) FILTER (WHERE cc.divergent_at IS NOT NULL)::int AS flagged_divergent_count,
+          ROUND(AVG(cc.coherence_score) FILTER (WHERE cc.coherence_score IS NOT NULL))::int AS avg_score,
+          MAX(cc.created_at) AS last_anchor_at
+        FROM users u
+        LEFT JOIN coherence_checks cc ON cc.user_id = u.id
+        LEFT JOIN certifications wt ON wt.id = cc.linked_proof_id
+        WHERE u.wallet_address LIKE ${org + "%"}
+          AND u.is_public_profile = true
+        GROUP BY u.wallet_address, u.agent_name
+        ORDER BY COUNT(cc.id) DESC, u.wallet_address ASC
+        LIMIT ${FLEET_MAX_AGENTS}
+      `);
+
+      const agents = (result.rows as any[]).map((r) => {
+        const total = Number(r.total_anchors || 0);
+        const pending = Number(r.pending_count || 0);
+        const linked1h = Number(r.linked_within_1h || 0);
+        const mature = total - pending;
+        return {
+          wallet_address: r.wallet_address as string,
+          agent_name: (r.agent_name as string | null) ?? null,
+          total_anchors: total,
+          linked_count: Number(r.linked_count || 0),
+          linked_within_1h: linked1h,
+          pending_count: pending,
+          divergent_count: Number(r.divergent_count || 0),
+          flagged_divergent_count: Number(r.flagged_divergent_count || 0),
+          coherence_rate: mature > 0 ? Math.round((linked1h / mature) * 100) : null,
+          avg_coherence_score: r.avg_score !== null && r.avg_score !== undefined ? Number(r.avg_score) : null,
+          last_anchor_at: r.last_anchor_at ? new Date(r.last_anchor_at).toISOString() : null,
+        };
+      });
+
+      // Fleet aggregates over the SAME agents returned above (post-LIMIT), so
+      // the fleet numbers always reconcile with the per-agent rows shown.
+      const fleetTotals = agents.reduce(
+        (acc, a) => {
+          acc.total += a.total_anchors;
+          acc.linked += a.linked_count;
+          acc.linked1h += a.linked_within_1h;
+          acc.pending += a.pending_count;
+          acc.divergent += a.divergent_count;
+          acc.flaggedDivergent += a.flagged_divergent_count;
+          if (a.avg_coherence_score !== null) {
+            acc.scoreSum += a.avg_coherence_score * a.linked_count;
+            acc.scoreWeight += a.linked_count;
+          }
+          return acc;
+        },
+        { total: 0, linked: 0, linked1h: 0, pending: 0, divergent: 0, flaggedDivergent: 0, scoreSum: 0, scoreWeight: 0 },
+      );
+      const fleetMature = fleetTotals.total - fleetTotals.pending;
+      const fleetRate = fleetMature > 0 ? Math.round((fleetTotals.linked1h / fleetMature) * 100) : null;
+      const fleetAvgScore = fleetTotals.scoreWeight > 0 ? Math.round(fleetTotals.scoreSum / fleetTotals.scoreWeight) : null;
+      let fleetScore: number | null = null;
+      if (fleetRate !== null && fleetAvgScore !== null) fleetScore = Math.round(0.7 * fleetRate + 0.3 * fleetAvgScore);
+      else if (fleetRate !== null) fleetScore = fleetRate;
+
+      return res.json({
+        org_prefix: org,
+        fleet: {
+          agent_count: agents.length,
+          total_anchors: fleetTotals.total,
+          linked_count: fleetTotals.linked,
+          linked_within_1h: fleetTotals.linked1h,
+          pending_count: fleetTotals.pending,
+          divergent_count: fleetTotals.divergent,
+          flagged_divergent_count: fleetTotals.flaggedDivergent,
+          coherence_rate: fleetRate,
+          avg_coherence_score: fleetAvgScore,
+          fleet_score: fleetScore,
+          score_formula: "fleet_score = round(0.7 × coherence_rate + 0.3 × avg_coherence_score)",
+        },
+        agents,
+        note: agents.length === 0
+          ? "No public agent profiles match this prefix. Agents opt in via PATCH /api/user/agent-profile with is_public_profile = true."
+          : undefined,
+      });
+    } catch (err: any) {
+      logger.error("GET /api/fleet/coherence error", { error: err?.message ?? String(err) });
+      return res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to load fleet coherence" });
+    }
+  });
+
   // ── GET /api/agents/:wallet/coherence — public coherence history ───────────
   // Paginated list of WHY anchors with linked WHAT results and aggregate score.
   // Status per anchor: linked | pending (<1h old, unlinked) | divergent (≥1h, unlinked).

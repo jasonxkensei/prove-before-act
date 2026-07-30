@@ -543,6 +543,99 @@ print(f"WHAT: https://xproof.app/proof/{what_resp['proof_id']}")`}
           </div>
         </section>
 
+        {/* ── Coherence Artisan ─────────────────────────────────────────────── */}
+        <section id="coherence-artisan" className="border-t py-16 md:py-20">
+          <div className="container">
+            <div className="mx-auto max-w-4xl">
+              <div className="mb-10 text-center">
+                <Badge variant="outline" className="mb-4 gap-1.5">
+                  <Network className="h-3 w-3 text-primary" />
+                  Coherence Artisan
+                </Badge>
+                <h2 className="mb-3 text-2xl md:text-3xl font-bold">
+                  The organizational layer: fleet-level coherence
+                </h2>
+                <p className="text-muted-foreground max-w-2xl mx-auto">
+                  Individual agents anchor their own WHY→WHAT loops. The Coherence Artisan is the
+                  role — an orchestrator agent or a human operator — that ensures the{" "}
+                  <strong className="text-foreground">global coherence of the whole fleet</strong>:
+                  every action traceable to an intent, every divergence surfaced, no execution
+                  without an anchor.
+                </p>
+              </div>
+
+              <div className="grid gap-6 md:grid-cols-2">
+                {/* Fleet view */}
+                <div className="rounded-md border border-border/60 bg-muted/20 p-6 flex flex-col">
+                  <div className="mb-3 flex items-center gap-2">
+                    <Eye className="h-5 w-5 text-primary" />
+                    <h3 className="text-sm font-semibold">See: the fleet coherence view</h3>
+                  </div>
+                  <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+                    One dashboard for the whole organization. Every agent sharing your wallet
+                    prefix, its coherence rate, its divergent anchors, and a fleet-level score —
+                    the single number that answers "is our agent network staying aligned?"
+                  </p>
+                  <CodeBlock
+                    lang="bash"
+                    code={`curl "https://xproof.app/api/fleet/coherence?org=erd1acme"`}
+                  />
+                  <div className="mt-auto pt-4">
+                    <Button asChild size="sm">
+                      <a href="/fleet">
+                        Open the fleet view
+                        <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                      </a>
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Policy gate */}
+                <div className="rounded-md border border-primary/30 bg-primary/5 p-6 flex flex-col">
+                  <div className="mb-3 flex items-center gap-2">
+                    <Shield className="h-5 w-5 text-primary" />
+                    <h3 className="text-sm font-semibold">
+                      Enforce: the <code className="font-mono text-xs bg-muted px-1 rounded">require_coherence_anchor</code> policy gate
+                    </h3>
+                  </div>
+                  <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+                    Before delegating a sub-action, the orchestrator asks: does a valid, unexpired
+                    WHY anchor exist for this intent? If not — the action is blocked until{" "}
+                    <code className="font-mono text-xs bg-muted px-1 rounded">check_coherence</code>{" "}
+                    is called. No anchor, no execution.
+                  </p>
+                  <CodeBlock
+                    lang="json"
+                    code={`{
+  "name": "require_coherence_anchor",
+  "arguments": {
+    "intent_hash": "<coherence_anchor from check_coherence>"
+  }
+}
+// → { "allowed": true, "anchor_id": "…", "expires_at": "…" }
+// → { "allowed": false, "reason": "NO_ANCHOR",
+//     "required_action": "check_coherence" }`}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-6 rounded-md border border-amber-500/20 bg-amber-500/5 p-5 flex items-start gap-4">
+                <Zap className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-semibold mb-1">Divergence is detected automatically</p>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    A background scan flags every WHY anchor that stays unlinked past its window
+                    (default 2 hours) as <strong className="text-foreground">divergent</strong> — a
+                    declared intent with no proven result. Divergences appear in the fleet view and
+                    on the agent's public profile as proposed violations, so a broken
+                    Prove-Before-Act loop can never go unnoticed.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* ── CTA ───────────────────────────────────────────────────────────── */}
         <section className="border-t py-16 md:py-20">
           <div className="container">

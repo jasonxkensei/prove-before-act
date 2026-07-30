@@ -872,6 +872,66 @@ MCP tool that implements the **Prove Before Act** pattern. Pass your intent, con
 
 Link WHY → WHAT by including \`"why_proof_id": "<proof_id from check_coherence>"\` in your \`certify_file\` metadata call.
 
+### require_coherence_anchor — Policy gate for orchestrators
+
+MCP tool implementing the **Coherence Artisan** pattern: before delegating or executing a sub-action, an orchestrator (or any supervising agent) verifies that a valid, unexpired WHY anchor exists for the intent. If none exists, execution is blocked until \`check_coherence\` is called. Read-only and **free** — it never consumes a credit.
+
+**Tool schema:**
+\`\`\`json
+{
+  "name": "require_coherence_anchor",
+  "arguments": {
+    "intent_hash":     "string (optional) — the coherence_anchor hash returned by check_coherence (fastest path)",
+    "intent":          "string (optional) — byte-identical to the check_coherence call",
+    "context":         "string (optional) — byte-identical to the check_coherence call",
+    "decision":        "string (optional) — byte-identical to the check_coherence call",
+    "who":             "string (optional) — must match the check_coherence value",
+    "max_age_minutes": "number (optional) — anchor validity window, default 120 (2h), max 1440"
+  }
+}
+\`\`\`
+
+Pass either \`intent_hash\` alone, or all three of \`intent\` + \`context\` + \`decision\` (the anchor hash is recomputed deterministically, scoped to your account).
+
+**Response (anchor valid):**
+\`\`\`json
+{
+  "allowed": true,
+  "anchor_id": "<WHY proof_id>",
+  "anchor_created_at": "ISO-8601",
+  "expires_at": "ISO-8601",
+  "already_linked": false,
+  "verify_url": "${baseUrl}/proof/<anchor_id>"
+}
+\`\`\`
+
+**Response (blocked):**
+\`\`\`json
+{
+  "allowed": false,
+  "reason": "NO_ANCHOR | ANCHOR_EXPIRED",
+  "required_action": "check_coherence"
+}
+\`\`\`
+
+**Orchestrator pattern:** \`require_coherence_anchor\` → if \`allowed=false\`, block and call \`check_coherence\` → re-check → execute → \`certify_file\` (WHAT) → \`POST /api/coherence/link\`.
+
+### Divergence detection
+
+A background scan (every 15 min) flags WHY anchors that stay unlinked past a TTL (default **2 hours**) as **divergent** — a declared intent with no proven result. Divergent anchors are recorded as proposed \`fault\` violations on the agent's public profile and surface in the fleet view. Linking a WHAT after the TTL improves the coherence score but does not clear the divergence flag.
+
+### Fleet coherence — the Coherence Artisan view
+
+Aggregate coherence across every agent in an organization (agents sharing a wallet-address prefix, public profiles only):
+
+\`\`\`bash
+curl "${baseUrl}/api/fleet/coherence?org=<wallet_prefix>"   # prefix: 6-62 lowercase alphanumeric chars
+\`\`\`
+
+Returns per-agent stats (\`total_anchors\`, \`linked_count\`, \`coherence_rate\`, \`divergent_count\`, \`avg_coherence_score\`) plus a fleet-level score: \`fleet_score = round(0.7 × coherence_rate + 0.3 × avg_coherence_score)\`.
+
+Human view: \`${baseUrl}/fleet\`
+
 ### Coherence Layer page
 
 Full documentation, code examples, and integration guide: \`${baseUrl}/coherence\`

@@ -281,6 +281,24 @@ export async function migrateAgentViolationsTable() {
   }
 }
 
+// coherence_checks.divergent_at — set by the divergence scan when a WHY anchor
+// stays unlinked past the TTL. Idempotent; must run before the divergence
+// scheduler starts so scans never hit a missing column on older databases.
+export async function migrateCoherenceDivergenceSchema() {
+  try {
+    await pool.query(`ALTER TABLE coherence_checks ADD COLUMN IF NOT EXISTS divergent_at TIMESTAMP`);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_coherence_checks_divergence_scan
+      ON coherence_checks(created_at)
+      WHERE linked_proof_id IS NULL AND divergent_at IS NULL
+    `);
+    logger.info("coherence_checks divergent_at column ready", { component: "migration" });
+  } catch (err: any) {
+    logger.error("coherence_checks divergent_at migration error", { component: "migration", error: err.message });
+    throw err; // caller must not start the divergence scheduler on a failed migration
+  }
+}
+
 export async function migrateAgentOutcomesTable() {
   try {
     await pool.query(`

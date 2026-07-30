@@ -3,7 +3,7 @@ import { z } from "zod";
 import crypto from "crypto";
 import { db, pool } from "./db";
 import { certifications, apiKeys, users, agentOutcomes, coherenceChecks, MAX_ONCHAIN_FILENAME_LEN, MAX_ONCHAIN_AUTHOR_LEN, sha256HexSchema } from "@shared/schema";
-import { eq, sql, and, or } from "drizzle-orm";
+import { eq, sql, and, or, desc } from "drizzle-orm";
 import { recordOnBlockchain } from "./blockchain";
 import { getCertificationPriceUsd } from "./pricing";
 import { logger } from "./logger";
@@ -1991,6 +1991,113 @@ export async function createMcpServer(ctx: McpContext) {
         };
       } catch (err: any) {
         logger.error("check_coherence MCP tool error", { error: String(err) });
+        return mcpErr({ error: "INTERNAL_ERROR", message: String(err) });
+      }
+    }
+  );
+
+  // ── require_coherence_anchor ──────────────────────────────────────────────
+  // Policy gate for orchestrators / fleet supervisors (the Coherence Artisan
+  // pattern): before delegating or executing a sub-action, check whether a
+  // valid, unexpired WHY anchor already exists for the given intent. Returns
+  // { allowed: true/false, anchor_id?, expires_at? }. When allowed=false the
+  // orchestrator should block execution and require a check_coherence call
+  // first. Read-only and free — it never consumes credits.
+  server.tool(
+    "require_coherence_anchor",
+    `Policy gate: verify a valid, unexpired coherence anchor (WHY proof) exists for a given intent BEFORE allowing an action to execute. Call this from an orchestrator before delegating a sub-action. Pass either the exact intent_hash (the coherence_anchor returned by check_coherence) or the same intent + context + decision payload (the anchor hash is recomputed deterministically). Returns { allowed, anchor_id, expires_at }. If allowed=false, block execution and call check_coherence first. Free — no credit consumed.`,
+    {
+      intent_hash: sha256HexSchema.optional().describe("The coherence_anchor hash returned by check_coherence (64 hex chars). Fastest path — pass this if you have it."),
+      intent: z.string().min(1).max(2000).optional().describe("The stated goal — must be byte-identical to the check_coherence call (used with context + decision to recompute the anchor hash)"),
+      context: z.string().min(1).max(4000).optional().describe("The facts considered — must be byte-identical to the check_coherence call"),
+      decision: z.string().min(1).max(2000).optional().describe("The action to execute — must be byte-identical to the check_coherence call"),
+      who: z.string().max(200).optional().describe("Agent identifier — must match the value used in check_coherence (default: derived from API key owner)"),
+      max_age_minutes: z.number().int().min(1).max(1440).optional().describe("Anchor validity window in minutes (default 120 = 2h). Anchors older than this are considered expired/divergent."),
+    },
+    async ({ intent_hash, intent, context, decision, who, max_age_minutes }) => {
+      try {
+        if (!auth.valid || !auth.keyHash || !auth.userId) {
+          return mcpErr({ error: "UNAUTHORIZED", message: "API key required — anchors are scoped to the calling account. Call register_trial (free) to get a key." });
+        }
+
+        // Resolve the anchor hash: either given directly, or recomputed from
+        // the payload exactly the way check_coherence computed it.
+        let anchorHash: string;
+        if (intent_hash) {
+          anchorHash = intent_hash;
+        } else if (intent && context && decision) {
+          const ownerWallet = await getApiKeyOwnerWallet({ userId: auth.userId }).catch(() => null);
+          const ownerIdent = ownerWallet || auth.userId;
+          anchorHash = buildCoherenceAnchor({ intent, context, decision, who, ownerIdent }).anchor;
+        } else {
+          return mcpErr({
+            error: "INVALID_REQUEST",
+            message: "Pass either intent_hash (from check_coherence) or all three of intent + context + decision so the anchor hash can be recomputed.",
+          });
+        }
+
+        const ttlMinutes = max_age_minutes ?? 120;
+
+        // Most recent anchor for this intent, scoped to the caller's account —
+        // one account can never satisfy the gate with another account's anchor.
+        const [row] = await db.select().from(coherenceChecks)
+          .where(and(eq(coherenceChecks.userId, auth.userId), eq(coherenceChecks.intentHash, anchorHash)))
+          .orderBy(desc(coherenceChecks.createdAt))
+          .limit(1);
+
+        if (!row) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: JSON.stringify({
+                allowed: false,
+                reason: "NO_ANCHOR",
+                message: "No coherence anchor exists for this intent. Block execution and call check_coherence (intent + context + decision) to anchor the WHY first.",
+                required_action: "check_coherence",
+              }),
+            }],
+          };
+        }
+
+        const createdAtMs = row.createdAt ? new Date(row.createdAt).getTime() : 0;
+        const expiresAtMs = createdAtMs + ttlMinutes * 60_000;
+        const expired = Date.now() > expiresAtMs;
+
+        if (expired) {
+          return {
+            content: [{
+              type: "text" as const,
+              text: JSON.stringify({
+                allowed: false,
+                reason: "ANCHOR_EXPIRED",
+                message: `A coherence anchor exists but is older than ${ttlMinutes} minutes. Block execution and call check_coherence again to re-anchor the intent.`,
+                anchor_id: row.proofId,
+                anchor_created_at: row.createdAt ? new Date(row.createdAt).toISOString() : null,
+                expired_at: new Date(expiresAtMs).toISOString(),
+                required_action: "check_coherence",
+              }),
+            }],
+          };
+        }
+
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({
+              allowed: true,
+              anchor_id: row.proofId,
+              coherence_check_id: row.id,
+              anchor_created_at: row.createdAt ? new Date(row.createdAt).toISOString() : null,
+              expires_at: new Date(expiresAtMs).toISOString(),
+              already_linked: !!row.linkedProofId,
+              coherence_score: row.coherenceScore,
+              verify_url: `${baseUrl}/proof/${row.proofId}`,
+              message: "Valid coherence anchor found — execution may proceed. After the action, anchor the WHAT with certify_file and link it via POST /api/coherence/link.",
+            }),
+          }],
+        };
+      } catch (err: any) {
+        logger.error("require_coherence_anchor MCP tool error", { error: String(err) });
         return mcpErr({ error: "INTERNAL_ERROR", message: String(err) });
       }
     }

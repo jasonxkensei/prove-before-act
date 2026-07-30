@@ -34,6 +34,7 @@ const AgentCalibrationPage = lazy(() => import("@/pages/agent-calibration"));
 const AgentContextPage = lazy(() => import("@/pages/agent-context"));
 const AgentContextZhPage = lazy(() => import("@/pages/agent-context-zh"));
 const CoherencePage = lazy(() => import("@/pages/coherence"));
+const FleetPage = lazy(() => import("@/pages/fleet"));
 
 function Router() {
   const { isAuthenticated, isLoading } = useWalletAuth();
@@ -90,6 +91,7 @@ function Router() {
           <Route path="/agent-context" component={AgentContextPage} />
           <Route path="/agent-context/zh" component={AgentContextZhPage} />
           <Route path="/coherence" component={CoherencePage} />
+          <Route path="/fleet" component={FleetPage} />
           <Route path="/stats" component={AdminDashboard} />
           <Route path="/admin" component={AdminDashboard} />
           <Route>
@@ -130,6 +132,7 @@ function Router() {
         <Route path="/agent-context" component={AgentContextPage} />
         <Route path="/agent-context/zh" component={AgentContextZhPage} />
         <Route path="/coherence" component={CoherencePage} />
+        <Route path="/fleet" component={FleetPage} />
         <Route path="/zh" component={LandingZh} />
         <Route component={NotFound} />
       </Switch>

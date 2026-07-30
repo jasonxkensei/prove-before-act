@@ -483,12 +483,20 @@ export const coherenceChecks = pgTable("coherence_checks", {
   intentHash: varchar("intent_hash", { length: 64 }).notNull(),
   // 0–100, computed at link time. NULL while unlinked.
   coherenceScore: integer("coherence_score"),
+  // Set by the scheduled divergence scan when a WHY anchor stays unlinked past
+  // the configured TTL (default 2h). NULL = never flagged. Linking after the
+  // flag does NOT clear it — the divergence event happened and stays recorded.
+  divergentAt: timestamp("divergent_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   // One coherence check per WHY proof — link/lookup paths key on proof_id.
   uniqueIndex("idx_coherence_checks_proof_unique").on(table.proofId),
   // Per-agent history + aggregate queries: WHERE user_id ORDER BY created_at DESC.
   index("idx_coherence_checks_user_time").on(table.userId, table.createdAt),
+  // Divergence scan: rows still unlinked and not yet flagged, oldest first.
+  index("idx_coherence_checks_divergence_scan")
+    .on(table.createdAt)
+    .where(sql`linked_proof_id IS NULL AND divergent_at IS NULL`),
   check("chk_coherence_score_range", sql`coherence_score IS NULL OR (coherence_score >= 0 AND coherence_score <= 100)`),
 ]);
 

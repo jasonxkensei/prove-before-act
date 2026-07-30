@@ -13,12 +13,14 @@ import {
 import { startTxQueueWorker } from "./txQueue";
 import { ensureRateLimitTable } from "./pgRateLimit";
 import { warmCachesFromSnapshots, startTrustRefreshScheduler } from "./trust";
+import { startCoherenceDivergenceScheduler } from "./coherence-divergence";
 import { requestIdMiddleware, logger } from "./logger";
 import { x402PriceConfigWarning, x402NetworkConfigWarning } from "./routes/helpers";
 import {
   runDailyMaintenance,
   migrateSystemUserCertifications,
   migrateAgentViolationsTable,
+  migrateCoherenceDivergenceSchema,
   migrateAgentOutcomesTable,
   migrateTrustSnapshotSchema,
   purgeStaleSnapshotAttestationCounts,
@@ -158,6 +160,11 @@ app.use((req, res, next) => {
     // start background scheduler (runs first cycle with jitter, then every 5 min).
     // Daily maintenance continues to run independently once per day.
     migrateTrustSnapshotSchema().then(() => warmCachesFromSnapshots()).then(() => startTrustRefreshScheduler());
+    // Schema migration (adds divergent_at on older DBs) must complete before
+    // the divergence scheduler starts scanning; skip the scheduler if it fails.
+    migrateCoherenceDivergenceSchema()
+      .then(() => startCoherenceDivergenceScheduler())
+      .catch(() => log("coherence divergence scheduler not started (migration failed)"));
     runDailyMaintenance();
     setInterval(runDailyMaintenance, 24 * 60 * 60 * 1000);
     sweepExpiredAcpReservations();
