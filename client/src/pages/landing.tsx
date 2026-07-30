@@ -262,6 +262,9 @@ export default function Landing() {
               <Bot className="h-3.5 w-3.5" />
               For Agents
             </a>
+            <a href="/coherence" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-coherence">
+              Coherence
+            </a>
             <a href="#faq" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-faq">
               FAQ
             </a>

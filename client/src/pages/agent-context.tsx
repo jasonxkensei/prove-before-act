@@ -76,6 +76,7 @@ export default function AgentContextPage() {
     privacy: true,
     fleet: true,
     workflow: true,
+    coherence: true,
     moltbook: true,
     keyfields: true,
     integrations: true,
@@ -878,6 +879,117 @@ print(f"Trade executed. Proof: https://xproof.app{outcome['verify_url']}")`} />
               <li>• 4W audit trail is automatically rendered on the proof page</li>
               <li>• If the agent is compromised or behaves unexpectedly, you have a full forensic record</li>
             </ul>
+          </div>
+        </div>
+      ),
+    },
+    {
+      id: "coherence",
+      icon: Play,
+      title: "Coherence Layer — anchor your WHY before acting",
+      badge: "New",
+      content: (
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            The <strong className="text-foreground">Coherence Layer</strong> closes the 4W loop.
+            xProof already answers WHAT (certify_file) and WHEN (block timestamp). MX-8004 answers WHO.{" "}
+            <code className="font-mono text-xs bg-muted px-1 rounded">check_coherence</code> answers WHY —
+            anchoring your agent's intent, context, and decision on-chain <em>before</em> acting.
+          </p>
+
+          {/* Full 4W loop */}
+          <div className="grid gap-2 sm:grid-cols-4 text-xs">
+            {[
+              { w: "WHO", tool: "MX-8004", when: "Registration", role: "Identity", dim: true },
+              { w: "WHY", tool: "check_coherence", when: "Before act", role: "Coherence", dim: false },
+              { w: "WHAT", tool: "certify_file", when: "After act", role: "Proof", dim: true },
+              { w: "WHEN", tool: "MultiversX block", when: "Automatic", role: "Timestamp", dim: true },
+            ].map((item) => (
+              <div key={item.w} className={`rounded-md border p-3 ${item.dim ? "bg-muted/20 border-border/50" : "bg-primary/5 border-primary/30"}`}>
+                <div className={`text-lg font-bold mb-1 ${item.dim ? "text-foreground" : "text-primary"}`}>{item.w}</div>
+                <div className="font-mono text-[10px] text-muted-foreground mb-0.5">{item.tool}</div>
+                <div className="text-muted-foreground/70">{item.when}</div>
+                <div className={`text-[10px] font-medium mt-1 ${item.dim ? "" : "text-primary"}`}>{item.role}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* check_coherence step by step */}
+          <div className="flex items-center gap-1.5 flex-wrap text-xs">
+            {["1. Write intent+context+decision", "→", "2. call check_coherence", "→", "3. get proof_id (WHY)", "→", "4. execute", "→", "5. certify_file (WHAT) + link why_proof_id"].map((s, i) => (
+              <span key={i} className={s === "→" ? "text-muted-foreground/40" : "rounded bg-primary/10 text-primary px-2 py-1 font-medium"}>{s}</span>
+            ))}
+          </div>
+
+          {/* Code examples */}
+          <CodeBlock lang="python" code={`import hashlib, json, requests
+
+API_KEY = "pm_YOUR_KEY"
+BASE = "https://xproof.app"
+
+# ── Step 1: Anchor WHY via check_coherence MCP tool ──────────────────────────
+# MCP call: { "name": "check_coherence", "arguments": { ... } }
+# REST equivalent — hash the payload and certify with coherence metadata:
+coherence_payload = {
+    "type": "coherence_check",
+    "role": "WHY",
+    "intent": "Optimize portfolio allocation for Q3",
+    "context": "BTC RSI=38, allocation 2.1% (below 3% cap), vol_30d=0.42, policy v3.1 approved",
+    "decision": "BUY 0.5 BTC at market — increases allocation to 2.8%",
+    "who": "trading-agent-v2",
+}
+anchor = hashlib.sha256(
+    json.dumps(coherence_payload, sort_keys=True).encode()
+).hexdigest()
+
+why_resp = requests.post(f"{BASE}/api/proof",
+    headers={"Authorization": f"Bearer {API_KEY}"},
+    json={
+        "file_hash": anchor,
+        "filename": "coherence-check.json",
+        "metadata": {**coherence_payload, "what": coherence_payload["decision"], "why": coherence_payload["intent"]}
+    }).json()
+
+why_proof_id = why_resp["proof_id"]
+# → prf_coherence_abc123 — immutable WHY is now on-chain
+
+# ── Step 2: Execute (action proceeds because WHY is anchored) ─────────────────
+result = execute_trade("BUY", "BTC", 0.5)
+
+# ── Step 3: Anchor WHAT — link back to WHY ────────────────────────────────────
+what_hash = hashlib.sha256(json.dumps(result, sort_keys=True).encode()).hexdigest()
+what_resp = requests.post(f"{BASE}/api/proof",
+    headers={"Authorization": f"Bearer {API_KEY}"},
+    json={
+        "file_hash": what_hash,
+        "filename": "trade-result.json",
+        "metadata": {
+            "who": "trading-agent-v2",
+            "what": "Executed BUY 0.5 BTC",
+            "why_proof_id": why_proof_id,   # ← links WHAT to WHY
+            "role": "WHAT",
+        }
+    }).json()
+
+print(f"WHY: {BASE}/proof/{why_proof_id}")
+print(f"WHAT: {BASE}/proof/{what_resp['proof_id']}")`} />
+
+          <div className="rounded-md border border-primary/20 bg-primary/5 p-3">
+            <p className="text-xs font-semibold mb-1.5">Full loop on-chain</p>
+            <ul className="text-xs text-muted-foreground space-y-0.5 ml-2">
+              <li>• WHY proof: intent + context + decision, anchored before action — auditors can reconstruct the exact state at decision time</li>
+              <li>• WHAT proof: result hash linked to WHY via <code className="font-mono bg-muted px-1 rounded">why_proof_id</code> — any deviation from intent is permanently visible</li>
+              <li>• Both proofs are public, independently verifiable at <code className="font-mono bg-muted px-1 rounded">xproof.app/proof/&#123;id&#125;</code></li>
+            </ul>
+          </div>
+
+          <div className="flex gap-2">
+            <Button asChild variant="outline" size="sm" data-testid="button-coherence-page">
+              <a href="/coherence">
+                <ArrowRight className="mr-1.5 h-3.5 w-3.5" />
+                Coherence Layer docs
+              </a>
+            </Button>
           </div>
         </div>
       ),

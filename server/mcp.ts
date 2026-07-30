@@ -1714,6 +1714,236 @@ export async function createMcpServer(ctx: McpContext) {
     }
   );
 
+  // ── check_coherence ───────────────────────────────────────────────────────
+  // Anchor an agent's WHY reasoning before executing an action.
+  // Implements the Prove Before Act / Coherence Layer pattern:
+  //   1. Agent writes intent + context + decision
+  //   2. check_coherence hashes the payload and anchors it on-chain as a WHY proof
+  //   3. Agent executes, then calls certify_file to anchor the WHAT result
+  // The two proofs can be linked via metadata.why_proof_id for full 4W audit trail.
+  server.tool(
+    "check_coherence",
+    `Anchor your agent's reasoning as an immutable WHY proof BEFORE executing an action. Implements the Prove Before Act / Coherence Layer pattern. Pass intent (goal), context (facts considered), and decision (action about to execute). Receives: proof_id, coherence_anchor (SHA-256 of the payload), timestamp. Link the returned proof_id to your WHAT proof via certify_file metadata.why_proof_id to complete the full 4W audit trail. Cost: $${currentPriceUsd} per anchor (same as certify_file).`,
+    {
+      intent: z
+        .string()
+        .min(1)
+        .max(2000)
+        .describe("The agent's stated goal or objective for this action (e.g. 'Optimize portfolio allocation for Q3')"),
+      context: z
+        .string()
+        .min(1)
+        .max(4000)
+        .describe("Relevant facts, constraints, and inputs considered before the decision (e.g. 'BTC RSI=38, allocation 2.1%, policy v3.1')"),
+      decision: z
+        .string()
+        .min(1)
+        .max(2000)
+        .describe("The specific action the agent is about to execute (e.g. 'BUY 0.5 BTC at market')"),
+      who: z
+        .string()
+        .max(200)
+        .optional()
+        .describe("Agent identifier — wallet address, agent name, or model id (default: derived from API key owner)"),
+    },
+    async ({ intent, context, decision, who }) => {
+      try {
+        if (!auth.valid || !auth.keyHash) {
+          return mcpErr({ error: "UNAUTHORIZED", message: "API key required. Call register_trial (free, no wallet) to get 10 free anchors instantly." });
+        }
+        if (!auth.userId) {
+          return mcpErr({ error: "UNAUTHORIZED", message: "API key has no associated account. Call register_trial to get a fresh key." });
+        }
+
+        // Build the coherence payload and hash it deterministically
+        const coherencePayload = {
+          type: "coherence_check",
+          role: "WHY",
+          intent,
+          context,
+          decision,
+          ...(who ? { who } : {}),
+        };
+        const payloadJson = JSON.stringify(coherencePayload, Object.keys(coherencePayload).sort() as any);
+        const coherenceAnchor = crypto.createHash("sha256").update(payloadJson).digest("hex");
+
+        // Billing — identical gates as certify_file
+        const trialInfo = await getTrialUser({ userId: auth.userId });
+        let mcpCreditInfo: { userId: string; balance: number } | null = null;
+        if (trialInfo && trialInfo.remaining <= 0) {
+          const balance = await getUserCreditBalance(auth.userId);
+          if (balance <= 0) return await mcpTrialExhausted(baseUrl);
+          mcpCreditInfo = { userId: auth.userId, balance };
+        } else if (!trialInfo) {
+          const ownerWallet = await getApiKeyOwnerWallet({ userId: auth.userId });
+          if (!ownerWallet || !isAdminWallet(ownerWallet)) {
+            const balance = await getUserCreditBalance(auth.userId);
+            if (balance <= 0) return await mcpPaymentRequired(baseUrl);
+            mcpCreditInfo = { userId: auth.userId, balance };
+          }
+        }
+
+        // Track whether the atomic credit debit has already been performed.
+        let creditConsumed = false;
+
+        // Idempotency check — same payload = same hash = same anchor.
+        // Mirror certify_file: ACP pending reservations (unpaid) are NOT valid idempotent hits.
+        const [existing] = await db.select().from(certifications).where(eq(certifications.fileHash, coherenceAnchor));
+        if (existing) {
+          const isAcpReservation = existing.authMethod === "acp" && existing.blockchainStatus === "pending" && !existing.transactionHash;
+          if (isAcpReservation) {
+            // ACP reservation: consume credit first, then displace, then fall through to insert.
+            if (trialInfo && !mcpCreditInfo) {
+              const consumed = await atomicConsumeTrialCredit(trialInfo.userId);
+              if (!consumed) return await mcpTrialExhausted(baseUrl);
+            } else if (mcpCreditInfo) {
+              const consumed = await atomicConsumeCredit(mcpCreditInfo.userId);
+              if (!consumed) return await mcpInsufficientCredits(baseUrl);
+            }
+            creditConsumed = true;
+
+            const dispResult = await tryDisplaceAcpReservation(coherenceAnchor);
+            if (dispResult !== "displaced") {
+              // Race: re-fetch to determine actual state.
+              const [nowExisting] = await db.select().from(certifications).where(eq(certifications.fileHash, coherenceAnchor));
+              if (nowExisting) {
+                const nowIsAcp = nowExisting.authMethod === "acp" && nowExisting.blockchainStatus === "pending" && !nowExisting.transactionHash;
+                if (nowIsAcp) {
+                  // Still an ACP reservation — try once more, then ask caller to retry.
+                  await tryDisplaceAcpReservation(coherenceAnchor).catch(() => {});
+                  if (trialInfo && !mcpCreditInfo) await refundTrialCredit(trialInfo.userId).catch(() => {});
+                  else if (mcpCreditInfo) await refundCredit(mcpCreditInfo.userId).catch(() => {});
+                  return mcpErr({ error: "RETRY_REQUIRED", message: "An unpaid ACP reservation was blocking this coherence anchor. It has been cleared — please retry your request." });
+                }
+                // Another caller already anchored this hash — refund and return as idempotent success.
+                if (trialInfo && !mcpCreditInfo) await refundTrialCredit(trialInfo.userId).catch(() => {});
+                else if (mcpCreditInfo) await refundCredit(mcpCreditInfo.userId).catch(() => {});
+                return {
+                  content: [{
+                    type: "text" as const,
+                    text: JSON.stringify({
+                      proof_id: nowExisting.id,
+                      coherence_anchor: nowExisting.fileHash,
+                      timestamp: nowExisting.createdAt?.toISOString(),
+                      blockchain_status: nowExisting.blockchainStatus,
+                      verify_url: `${baseUrl}/proof/${nowExisting.id}`,
+                      metadata: { type: "coherence_check", role: "WHY" },
+                      message: "Coherence check already anchored for this exact payload (idempotent).",
+                    }),
+                  }],
+                };
+              }
+              // Row gone (no_row) — fall through to insert below.
+            }
+            // displaced or no_row: fall through to certify.
+          } else {
+            // Non-ACP row (confirmed, pending-with-tx, api_key, etc.): valid idempotent hit.
+            return {
+              content: [{
+                type: "text" as const,
+                text: JSON.stringify({
+                  proof_id: existing.id,
+                  coherence_anchor: existing.fileHash,
+                  timestamp: existing.createdAt?.toISOString(),
+                  blockchain_status: existing.blockchainStatus,
+                  verify_url: `${baseUrl}/proof/${existing.id}`,
+                  metadata: { type: "coherence_check", role: "WHY" },
+                  message: "Coherence check already anchored for this exact payload (idempotent).",
+                }),
+              }],
+            };
+          }
+        }
+
+        // Atomically consume credit BEFORE blockchain write (skip if already consumed during ACP displacement).
+        if (!creditConsumed) {
+          if (trialInfo && !mcpCreditInfo) {
+            const consumed = await atomicConsumeTrialCredit(trialInfo.userId);
+            if (!consumed) return await mcpTrialExhausted(baseUrl);
+          } else if (mcpCreditInfo) {
+            const consumed = await atomicConsumeCredit(mcpCreditInfo.userId);
+            if (!consumed) return await mcpInsufficientCredits(baseUrl);
+          }
+        }
+
+        // Insert pending certification
+        let pendingCert: (typeof certifications)["$inferSelect"];
+        try {
+          [pendingCert] = await db.insert(certifications).values({
+            userId: auth.userId,
+            fileName: `coherence-check-${Date.now()}.json`,
+            fileHash: coherenceAnchor,
+            fileType: "json",
+            authorName: (who || "AI Agent").slice(0, MAX_ONCHAIN_AUTHOR_LEN),
+            blockchainStatus: "pending",
+            isPublic: true,
+            authMethod: "api_key",
+            metadata: {
+              type: "coherence_check",
+              role: "WHY",
+              intent: intent.slice(0, 500),
+              decision: decision.slice(0, 500),
+              ...(who ? { who } : {}),
+            },
+          }).returning();
+        } catch (insertErr: any) {
+          if (trialInfo && !mcpCreditInfo) await refundTrialCredit(trialInfo.userId).catch(() => {});
+          else if (mcpCreditInfo) await refundCredit(mcpCreditInfo.userId).catch(() => {});
+          const isUniqueViolation = insertErr?.code === "23505" || insertErr?.message?.includes("unique");
+          if (isUniqueViolation) {
+            const [dup] = await db.select().from(certifications).where(eq(certifications.fileHash, coherenceAnchor));
+            if (dup) return { content: [{ type: "text" as const, text: JSON.stringify({ proof_id: dup.id, coherence_anchor: dup.fileHash, timestamp: dup.createdAt?.toISOString(), verify_url: `${baseUrl}/proof/${dup.id}`, metadata: { type: "coherence_check", role: "WHY" }, message: "Coherence check already anchored." }) }] };
+          }
+          return mcpErr({ error: "DB_ERROR", message: "Failed to reserve coherence anchor. Credit refunded." });
+        }
+
+        // Blockchain write — fire and forget (same pattern as certify_file)
+        recordOnBlockchain(coherenceAnchor, `coherence-why-${pendingCert.id}.json`, (who || "AI Agent").slice(0, MAX_ONCHAIN_AUTHOR_LEN))
+          .then(async (txResult) => {
+            await db.update(certifications).set({
+              transactionHash: txResult.transactionHash,
+              transactionUrl: txResult.transactionUrl,
+              blockchainStatus: "confirmed",
+              ...(txResult.latencyMs != null ? { blockchainLatencyMs: txResult.latencyMs } : {}),
+            }).where(eq(certifications.id, pendingCert.id)).catch(() => {});
+          })
+          .catch(async () => {
+            await db.delete(certifications).where(eq(certifications.id, pendingCert.id)).catch(() => {});
+            if (trialInfo && !mcpCreditInfo) await refundTrialCredit(trialInfo.userId).catch(() => {});
+            else if (mcpCreditInfo) await refundCredit(mcpCreditInfo.userId).catch(() => {});
+          });
+
+        logger.info("check_coherence WHY proof anchored", {
+          proofId: pendingCert.id,
+          userId: auth.userId,
+          coherenceAnchor,
+        });
+
+        return {
+          content: [{
+            type: "text" as const,
+            text: JSON.stringify({
+              proof_id: pendingCert.id,
+              coherence_anchor: coherenceAnchor,
+              timestamp: pendingCert.createdAt?.toISOString(),
+              blockchain_status: "pending",
+              verify_url: `${baseUrl}/proof/${pendingCert.id}`,
+              metadata: { type: "coherence_check", role: "WHY" },
+              next_step: {
+                action: `Execute your decision, then call certify_file to anchor the WHAT proof`,
+                link_why_to_what: `Include "why_proof_id": "${pendingCert.id}" in your certify_file metadata to complete the 4W Prove Before Act loop`,
+              },
+              message: `Coherence check anchored. WHY proof is on-chain (confirmation in ~6s). Proceed with: ${decision.slice(0, 120)}`,
+            }),
+          }],
+        };
+      } catch (err: any) {
+        logger.error("check_coherence MCP tool error", { error: String(err) });
+        return mcpErr({ error: "INTERNAL_ERROR", message: String(err) });
+      }
+    }
+  );
+
   return server;
 }
 

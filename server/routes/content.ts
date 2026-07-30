@@ -820,6 +820,62 @@ Third-party certifying bodies (MHRA, ISO, SOC2, FCA, etc.) can issue on-chain-an
 
 \`score = confirmed_certs × 10 + last_30d_certs × 5 + seniority_bonus (max 150) + streak_bonus (max 100) + attestation_bonus (max 150, weighted by issuer level)\`
 
+## Coherence Layer
+
+The Coherence Layer is xProof's evolution from "prove what happened" to "maintain alignment between intent, decision, and result." It answers the 4W question that was previously missing: **WHY** did the agent act?
+
+### check_coherence — Anchor your WHY before acting
+
+MCP tool that implements the **Prove Before Act** pattern. Pass your intent, context, and decision BEFORE executing. Receive an immutable WHY proof on-chain. Then link it to your WHAT proof via \`certify_file\`.
+
+**Tool schema:**
+\`\`\`json
+{
+  "name": "check_coherence",
+  "arguments": {
+    "intent":   "string — the agent's goal or objective",
+    "context":  "string — facts, constraints, and inputs considered",
+    "decision": "string — the specific action about to execute",
+    "who":      "string (optional) — agent identifier"
+  }
+}
+\`\`\`
+
+**Response:**
+\`\`\`json
+{
+  "proof_id":          "prf_coherence_...",
+  "coherence_anchor":  "<sha256-of-payload>",
+  "timestamp":         "ISO-8601",
+  "blockchain_status": "pending",
+  "verify_url":        "/proof/prf_coherence_...",
+  "metadata":          { "type": "coherence_check", "role": "WHY" },
+  "next_step": {
+    "action": "Execute your decision, then call certify_file to anchor the WHAT proof",
+    "link_why_to_what": "Include proof_id in certify_file metadata.why_proof_id"
+  }
+}
+\`\`\`
+
+**Cost:** \$${priceUsd} per anchor (same as certify_file). First 10 via trial are free.
+
+**Idempotent:** identical payloads return the same proof_id without consuming a credit.
+
+### The full 4W Prove Before Act loop
+
+| W    | Tool                  | When         | Role                              |
+|------|-----------------------|--------------|-----------------------------------|
+| WHO  | MX-8004 / SIGIL NFT   | Registration | Agent identity, on-chain          |
+| WHY  | check_coherence       | Before act   | Intent + context + decision hash  |
+| WHAT | certify_file          | After act    | Result/output hash                |
+| WHEN | MultiversX timestamp  | Automatic    | Immutable block timestamp         |
+
+Link WHY → WHAT by including \`"why_proof_id": "<proof_id from check_coherence>"\` in your \`certify_file\` metadata call.
+
+### Coherence Layer page
+
+Full documentation, code examples, and integration guide: \`${baseUrl}/coherence\`
+
 ## Genesis
 
 xproof's first certification (self-referential proof of concept):
