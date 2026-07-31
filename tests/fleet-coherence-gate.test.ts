@@ -453,3 +453,164 @@ describe("runCoherenceDivergenceScan — flagging, dedupe, trial exemption", () 
     expect(vRows.length).toBe(0);
   });
 });
+
+// ── GET /api/fleet/coherence?fleet=<slug> — registered-fleet path ─────────────
+
+describe("GET /api/fleet/coherence?fleet=<slug> — registered-fleet member scoping", () => {
+  const runId = crypto.randomBytes(4).toString("hex");
+
+  // Fleet slug: must satisfy `^[a-z0-9][a-z0-9-]{1,58}[a-z0-9]$`
+  const fleetSlug = `fleet-reg-${runId}`;
+  const fleetName = `Registered Fleet ${runId}`;
+
+  // Owner seeds the fleet row.
+  const ownerId   = `freg-own-${runId}`;
+  const ownerWallet = `erd1fregown${runId}`;
+
+  // Public member A — linked anchor within 1h.
+  const memberAId     = `freg-ma-${runId}`;
+  const memberAWallet = `erd1fregma${runId}`;
+
+  // Public member B — divergent anchor (unlinked, >1h old).
+  const memberBId     = `freg-mb-${runId}`;
+  const memberBWallet = `erd1fregmb${runId}`;
+
+  // Private member C — registered in fleet_members but is_public_profile=false.
+  // Must be excluded from all fleet-coherence output.
+  const memberCId     = `freg-mc-${runId}`;
+  const memberCWallet = `erd1fregmc${runId}`;
+
+  // Non-member D — public profile, wallet shares the "erd1fregm" prefix with
+  // all three members, but is NOT listed in fleet_members.  It must never
+  // appear when querying by fleet slug (only the prefix mode would include it).
+  const nonMemberId     = `freg-nm-${runId}`;
+  const nonMemberWallet = `erd1fregmnm${runId}`;
+
+  let fleetId: string;
+
+  // Proof IDs
+  const aWhy  = crypto.randomUUID();
+  const aWhat = crypto.randomUUID();
+  const bWhy  = crypto.randomUUID();
+  const cWhy  = crypto.randomUUID();
+  const nWhy  = crypto.randomUUID();
+
+  beforeAll(async () => {
+    // Insert users
+    await insertUser(ownerId,     ownerWallet,    true);
+    await insertUser(memberAId,   memberAWallet,  true,  "agent-a");
+    await insertUser(memberBId,   memberBWallet,  true,  "agent-b");
+    await insertUser(memberCId,   memberCWallet,  false, "agent-c-private");
+    await insertUser(nonMemberId, nonMemberWallet, true, "agent-nonmember");
+
+    // Insert fleet
+    const { rows } = await pool.query<{ id: string }>(
+      `INSERT INTO fleets (owner_user_id, name, slug) VALUES ($1, $2, $3) RETURNING id`,
+      [ownerId, fleetName, fleetSlug],
+    );
+    fleetId = rows[0].id;
+
+    // Register A, B, C as members (NOT the non-member D)
+    for (const w of [memberAWallet, memberBWallet, memberCWallet]) {
+      await pool.query(
+        `INSERT INTO fleet_members (fleet_id, wallet_address, proof_method) VALUES ($1, $2, 'api_key')`,
+        [fleetId, w],
+      );
+    }
+
+    // Member A: linked within 1h (WHY 90m ago, WHAT 30m ago → Δ=60m), score 80
+    await insertCert({ id: aWhy,  userId: memberAId, minsAgo: 90 });
+    await insertCert({ id: aWhat, userId: memberAId, minsAgo: 30 });
+    await insertCheck({ userId: memberAId, proofId: aWhy, linkedProofId: aWhat, coherenceScore: 80, minsAgo: 90 });
+
+    // Member B: divergent (unlinked, 200m old — past 1h window)
+    await insertCert({ id: bWhy, userId: memberBId, minsAgo: 200 });
+    await insertCheck({ userId: memberBId, proofId: bWhy, minsAgo: 200 });
+
+    // Private member C: anchor that must be invisible to the fleet view
+    await insertCert({ id: cWhy, userId: memberCId, minsAgo: 30 });
+    await insertCheck({ userId: memberCId, proofId: cWhy, minsAgo: 30 });
+
+    // Non-member D: anchor — must be invisible even though wallet shares prefix
+    await insertCert({ id: nWhy, userId: nonMemberId, minsAgo: 30 });
+    await insertCheck({ userId: nonMemberId, proofId: nWhy, minsAgo: 30 });
+  });
+
+  afterAll(async () => {
+    // Remove fleet membership + fleet row first (FK cascade handles members)
+    await pool.query(`DELETE FROM fleets WHERE id = $1`, [fleetId]);
+    await cleanup(
+      [ownerId, memberAId, memberBId, memberCId, nonMemberId],
+      [ownerWallet, memberAWallet, memberBWallet, memberCWallet, nonMemberWallet],
+    );
+  });
+
+  it("returns 200 with fleet_slug and fleet_name from the registered fleet row", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?fleet=${fleetSlug}`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.fleet_slug).toBe(fleetSlug);
+    expect(body.fleet_name).toBe(fleetName);
+    // org_prefix must be absent when using registered-fleet mode
+    expect(body.org_prefix).toBeUndefined();
+  });
+
+  it("includes only the two public registered members (A and B) — not C or the non-member", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?fleet=${fleetSlug}`);
+    const body = await res.json();
+
+    expect(body.fleet.agent_count).toBe(2);
+    const wallets: string[] = body.agents.map((a: any) => a.wallet_address);
+    expect(wallets).toContain(memberAWallet);
+    expect(wallets).toContain(memberBWallet);
+    // Private registered member must be excluded (is_public_profile = false)
+    expect(wallets).not.toContain(memberCWallet);
+    // Non-member must be excluded even though wallet shares the "erd1fregm" prefix
+    expect(wallets).not.toContain(nonMemberWallet);
+  });
+
+  it("fleet aggregates reflect only the two public members' anchors", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?fleet=${fleetSlug}`);
+    const body = await res.json();
+
+    // A: 1 anchor (linked); B: 1 anchor (divergent, unlinked).  C and D excluded.
+    expect(body.fleet.total_anchors).toBe(2);
+    expect(body.fleet.linked_count).toBe(1);
+    // A's link is within 1h; B is unlinked → linked_within_1h = 1
+    expect(body.fleet.linked_within_1h).toBe(1);
+    // B's anchor is >1h old and unlinked → divergent
+    expect(body.fleet.divergent_count).toBe(1);
+  });
+
+  it("member A's per-agent row has correct coherence_rate and avg_coherence_score", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?fleet=${fleetSlug}`);
+    const body = await res.json();
+    const a = body.agents.find((x: any) => x.wallet_address === memberAWallet);
+    expect(a).toBeDefined();
+    expect(a.total_anchors).toBe(1);
+    expect(a.linked_within_1h).toBe(1);
+    expect(a.coherence_rate).toBe(100); // 1 mature, 1 linked within 1h
+    expect(a.avg_coherence_score).toBe(80);
+  });
+
+  it("404 FLEET_NOT_FOUND for an unknown slug", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?fleet=no-such-fleet-xyz`);
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.error).toBe("FLEET_NOT_FOUND");
+  });
+
+  it("the same prefix via ?org= includes the non-member (prefix mode is broader than fleet mode)", async () => {
+    // Verify the non-member IS visible in prefix mode — confirming the fleet
+    // mode's exclusion is due to member scoping, not missing anchors or privacy.
+    const sharedPrefix = "erd1fregm"; // prefix shared by A, B, C, D wallets
+    const res = await fetch(`${BASE}/api/fleet/coherence?org=${sharedPrefix}`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const wallets: string[] = body.agents.map((a: any) => a.wallet_address);
+    // Non-member D is public and shares the prefix — must appear in org mode
+    expect(wallets).toContain(nonMemberWallet);
+    // Fleet mode returned only 2; org mode sees at least 3 (A, B, D — C is private)
+    expect(body.fleet.agent_count).toBeGreaterThanOrEqual(3);
+  });
+});
