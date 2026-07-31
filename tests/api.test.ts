@@ -535,6 +535,49 @@ describe("xproof API", () => {
     });
   });
 
+  describe("/agent-context.md — 4W phrase coverage", () => {
+    // Guards against silent drift between the agent-context document and the
+    // llms* sources. If the 4W table or MX-8004 attribution is edited in
+    // agent-context but not in llms.txt (or vice versa), CI catches it here.
+
+    const KEY_PHRASES = [
+      "MX-8004",
+      "WHO",
+      "WHAT",
+      "WHEN",
+      "WHY",
+      "agent-context",
+    ] as const;
+
+    it("GET /agent-context.md returns 200 with markdown content-type", async () => {
+      const res = await fetch(`${BASE_URL}/agent-context.md`);
+      expect(res.status).toBe(200);
+      const contentType = res.headers.get("content-type");
+      expect(contentType).toContain("text/markdown");
+    });
+
+    it("GET /agent-context.md contains all key 4W phrases and MX-8004 attribution", async () => {
+      const res = await fetch(`${BASE_URL}/agent-context.md`);
+      expect(res.status).toBe(200);
+      const text = await res.text();
+      for (const phrase of KEY_PHRASES) {
+        expect(text, `Expected /agent-context.md to contain "${phrase}"`).toContain(phrase);
+      }
+    });
+
+    it("4W breakdown header appears identically in /llms.txt, /llms-full.txt, and /agent-context.md", async () => {
+      const HEADER = "4W breakdown — WHO from MX-8004, WHAT/WHEN/WHY from xProof:";
+      const [r1, r2, r3] = await Promise.all([
+        fetch(`${BASE_URL}/llms.txt`).then((r) => r.text()),
+        fetch(`${BASE_URL}/llms-full.txt`).then((r) => r.text()),
+        fetch(`${BASE_URL}/agent-context.md`).then((r) => r.text()),
+      ]);
+      expect(r1, `Expected /llms.txt to contain the 4W breakdown header`).toContain(HEADER);
+      expect(r2, `Expected /llms-full.txt to contain the 4W breakdown header`).toContain(HEADER);
+      expect(r3, `Expected /agent-context.md to contain the 4W breakdown header`).toContain(HEADER);
+    });
+  });
+
   describe("4W split description consistency — llms.txt and llms-full.txt", () => {
     // These tests guard against silent drift: if the 4W breakdown or the
     // agent-context link is edited in one source but not the other, CI catches

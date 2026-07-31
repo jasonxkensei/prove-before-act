@@ -4558,6 +4558,17 @@ For agents without an API key yet — use register_trial:
 
 The 4W audit trail is automatically rendered on the public proof page when you include at least one of the four fields in metadata:
 
+**4W breakdown — WHO from MX-8004, WHAT/WHEN/WHY from xProof:**
+
+| | Question | Provided by |
+|:--|:--|:--|
+| WHO | Which agent or actor made this decision? | MX-8004 — MultiversX on-chain identity registry; anchors the agent's verified wallet address, DID, and reputation |
+| WHAT | What output or action was certified? | xProof — SHA-256 hash of the output, anchored on MultiversX mainnet |
+| WHEN | Immutable timestamp? | xProof — MultiversX block finality (~6 s); not a self-reported clock |
+| WHY | What reasoning led to the decision? | xProof — \`action_description\`, \`risk_level\`, and \`context\` fields from \`/api/audit\` |
+
+xProof owns WHAT / WHEN / WHY and the causal link that proves reasoning preceded the action. MX-8004 owns WHO. Together they form a forensically complete 4W trail.
+
 - **WHO**: Which agent, model, or actor made this decision
 - **WHAT**: What action or output was certified
 - **WHEN**: Immutable on-chain timestamp from MultiversX block
