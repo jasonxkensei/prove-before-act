@@ -856,3 +856,179 @@ describe("POST /api/coherence/link — lazy coherence_checks creation + concurre
     expect(deltaSeconds).toBeLessThanOrEqual(2);
   });
 });
+
+// ── GET /api/agents/:wallet/coherence — response shape + pagination ───────────
+//
+// The timeline endpoint has full shape + pagination coverage (Task #536).
+// This describe block provides the symmetrical coverage for the coherence
+// history endpoint so that a rename of `checks` → `anchors` or the accidental
+// removal of `total`, `limit`, or `offset` from the JSON response is caught
+// before agents fail in production.
+
+describe("GET /api/agents/:wallet/coherence — response shape and pagination (Task #539)", () => {
+  /**
+   * Fixture: one public-profile user with three WHY-only coherence anchors
+   * (no linked WHAT proofs, so all three are either pending or divergent).
+   * Two anchors are backdated past the 1-hour window (divergent); one is fresh
+   * (pending). The aggregate query JOINs coherence_checks → certifications on
+   * wy.is_public = true, so all three certs use the default is_public = true.
+   */
+  const run = crypto.randomBytes(5).toString("hex");
+  const userId = `shape-test-${run}`;
+  const wallet = `erd1shapetest${run}`;
+
+  // Three WHY cert IDs — one per coherence anchor.
+  const why1Id = crypto.randomUUID();
+  const why2Id = crypto.randomUUID();
+  const why3Id = crypto.randomUUID();
+
+  beforeAll(async () => {
+    await insertUser(userId, wallet, true /* isPublicProfile */);
+
+    // Insert three public WHY certs at different ages.
+    await insertCert({ id: why1Id, userId, minsAgo: 180 }); // 3 h ago → divergent
+    await insertCert({ id: why2Id, userId, minsAgo: 90  }); // 1.5 h ago → divergent
+    await insertCert({ id: why3Id, userId, minsAgo: 5   }); // 5 min ago → pending
+
+    // Insert matching coherence_checks rows (no linked proof → unlinked).
+    await insertCoherenceCheck({ userId, proofId: why1Id, minsAgo: 180 });
+    await insertCoherenceCheck({ userId, proofId: why2Id, minsAgo: 90  });
+    await insertCoherenceCheck({ userId, proofId: why3Id, minsAgo: 5   });
+  });
+
+  afterAll(async () => {
+    await cleanup([userId], [wallet]);
+  });
+
+  // ── Default response shape ────────────────────────────────────────────────
+
+  it("GET /api/agents/:wallet/coherence returns 200 for a public-profile user with anchors", async () => {
+    const res = await fetch(`${BASE}/api/agents/${wallet}/coherence`);
+    expect(res.status).toBe(200);
+  });
+
+  it("response body contains wallet_address equal to the requested wallet", async () => {
+    const res = await fetch(`${BASE}/api/agents/${wallet}/coherence`);
+    const body = await res.json();
+    expect(body.wallet_address).toBe(wallet);
+  });
+
+  it("response body contains a checks array", async () => {
+    const res = await fetch(`${BASE}/api/agents/${wallet}/coherence`);
+    const body = await res.json();
+    expect(Array.isArray(body.checks), "checks must be an array").toBe(true);
+  });
+
+  it("total reflects the full count of anchors (3), not the page size", async () => {
+    const res = await fetch(`${BASE}/api/agents/${wallet}/coherence`);
+    const body = await res.json();
+    expect(typeof body.total, "total must be a number").toBe("number");
+    expect(body.total).toBe(3);
+  });
+
+  it("default limit is 50 and default offset is 0", async () => {
+    const res = await fetch(`${BASE}/api/agents/${wallet}/coherence`);
+    const body = await res.json();
+    expect(body.limit,  "default limit must be 50").toBe(50);
+    expect(body.offset, "default offset must be 0").toBe(0);
+  });
+
+  it("checks contains all 3 seeded anchors with the default limit", async () => {
+    const res = await fetch(`${BASE}/api/agents/${wallet}/coherence`);
+    const body = await res.json();
+    expect(body.checks.length).toBe(3);
+  });
+
+  it("response body contains an aggregate object with total_anchors, linked_count, pending_count, divergent_count, coherence_rate", async () => {
+    const res = await fetch(`${BASE}/api/agents/${wallet}/coherence`);
+    const body = await res.json();
+    const agg = body.aggregate;
+    expect(agg).toBeDefined();
+    expect(typeof agg.total_anchors).toBe("number");
+    expect(typeof agg.linked_count).toBe("number");
+    expect(typeof agg.pending_count).toBe("number");
+    expect(typeof agg.divergent_count).toBe("number");
+    // coherence_rate is null when no mature anchors are linked; the field must exist.
+    expect("coherence_rate" in agg, "coherence_rate field must be present").toBe(true);
+  });
+
+  it("aggregate.total_anchors === total (both reflect the same count)", async () => {
+    const res = await fetch(`${BASE}/api/agents/${wallet}/coherence`);
+    const body = await res.json();
+    expect(body.aggregate.total_anchors).toBe(body.total);
+  });
+
+  it("checks are ordered by created_at DESC — most recent anchor first", async () => {
+    const res = await fetch(`${BASE}/api/agents/${wallet}/coherence`);
+    const body = await res.json();
+    const checks = body.checks as Array<{ created_at: string }>;
+    expect(checks.length).toBeGreaterThanOrEqual(2);
+    const ts0 = new Date(checks[0].created_at).getTime();
+    const ts1 = new Date(checks[1].created_at).getTime();
+    expect(ts0).toBeGreaterThanOrEqual(ts1);
+  });
+
+  // ── Pagination: limit=1 ───────────────────────────────────────────────────
+
+  it("limit=1 returns exactly 1 check and echoes limit=1", async () => {
+    const res = await fetch(`${BASE}/api/agents/${wallet}/coherence?limit=1`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.limit).toBe(1);
+    expect(body.checks.length).toBe(1);
+  });
+
+  it("limit=1 still returns total=3 (total is the full count, not the page size)", async () => {
+    const res = await fetch(`${BASE}/api/agents/${wallet}/coherence?limit=1`);
+    const body = await res.json();
+    expect(body.total).toBe(3);
+  });
+
+  // ── Pagination: offset=1 limit=1 ─────────────────────────────────────────
+
+  it("offset=1 limit=1 returns the second anchor and total=3", async () => {
+    const res = await fetch(`${BASE}/api/agents/${wallet}/coherence?limit=1&offset=1`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.limit).toBe(1);
+    expect(body.offset).toBe(1);
+    expect(body.total).toBe(3);
+    expect(body.checks.length).toBe(1);
+  });
+
+  it("offset=1 limit=1 returns a different anchor than offset=0 limit=1", async () => {
+    const [res0, res1] = await Promise.all([
+      fetch(`${BASE}/api/agents/${wallet}/coherence?limit=1&offset=0`).then((r) => r.json()),
+      fetch(`${BASE}/api/agents/${wallet}/coherence?limit=1&offset=1`).then((r) => r.json()),
+    ]);
+    const id0 = (res0.checks as Array<{ id: string }>)[0]?.id;
+    const id1 = (res1.checks as Array<{ id: string }>)[0]?.id;
+    expect(id0).toBeDefined();
+    expect(id1).toBeDefined();
+    expect(id0).not.toBe(id1);
+  });
+
+  it("offset beyond total returns empty checks array and correct total", async () => {
+    const res = await fetch(`${BASE}/api/agents/${wallet}/coherence?limit=10&offset=100`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.checks.length).toBe(0);
+    expect(body.total).toBe(3);
+    expect(body.offset).toBe(100);
+  });
+
+  // ── Private profile and unknown wallet ───────────────────────────────────
+
+  it("private-profile user returns 404", async () => {
+    const privRun   = crypto.randomBytes(5).toString("hex");
+    const privId     = `priv-shape-${privRun}`;
+    const privWallet = `erd1privshape${privRun}`;
+    await insertUser(privId, privWallet, false /* isPublicProfile */);
+    try {
+      const res = await fetch(`${BASE}/api/agents/${privWallet}/coherence`);
+      expect(res.status).toBe(404);
+    } finally {
+      await cleanup([privId], [privWallet]);
+    }
+  });
+});
