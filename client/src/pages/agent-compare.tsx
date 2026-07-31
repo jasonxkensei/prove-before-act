@@ -30,6 +30,8 @@ interface CompareAgent {
   activeAttestations: number;
   coherenceRate?: number | null;
   coherenceBonus?: number;
+  divergenceRate?: number | null;
+  divergencePenalty?: number;
   firstCertAt: string | null;
   lastCertAt: string | null;
 }
@@ -359,6 +361,26 @@ export default function AgentComparePage() {
         return (
           <span className={isMax ? "text-emerald-600 dark:text-emerald-400 font-semibold" : ""}>
             {rate}% <span className="text-muted-foreground font-normal">(+{bonus} pts)</span>
+          </span>
+        );
+      },
+    },
+    {
+      label: "Divergence",
+      render: (agent) => {
+        const rate = agent.divergenceRate;
+        const penalty = agent.divergencePenalty ?? 0;
+        if (rate === null || rate === undefined) {
+          return <span className="text-muted-foreground text-xs">No data</span>;
+        }
+        const rates = agents
+          .map(a => a.divergenceRate)
+          .filter((v): v is number => v !== null && v !== undefined);
+        const min = rates.length ? Math.min(...rates) : null;
+        const isMin = min !== null && rate === min && rates.filter(v => v === min).length < agents.length;
+        return (
+          <span className={isMin ? "text-emerald-600 dark:text-emerald-400 font-semibold" : ""}>
+            {rate}% <span className="text-muted-foreground font-normal">({penalty} pts)</span>
           </span>
         );
       },
