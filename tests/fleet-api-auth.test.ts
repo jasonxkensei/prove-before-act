@@ -363,3 +363,120 @@ describe("PATCH /api/fleets/:slug — input validation (authenticated owner)", (
     expect(body.fleet.name).toBe(name80);
   });
 });
+
+// ── GET /api/fleets — owner isolation (no cross-user data leak) ───────────────
+//
+// The handler filters by ownerUserId: `WHERE owner_user_id = <caller's id>`.
+// A bug that dropped the WHERE clause (or used the wrong user id) would expose
+// every fleet in the database to any authenticated caller.
+//
+// This describe block creates two independent owners, each with their own fleet,
+// and asserts that each owner's GET /api/fleets response contains only their own
+// fleet — never the other owner's slug or member data.
+
+describe("GET /api/fleets — authenticated caller sees only their own fleets (no cross-user leak)", () => {
+  const run = runHex();
+
+  const ownerAWallet = `erd1getleakA${run}`;
+  const ownerAId     = `get-leak-a-${run}`;
+
+  const ownerBWallet = `erd1getleakB${run}`;
+  const ownerBId     = `get-leak-b-${run}`;
+
+  let cookieA: string;
+  let cookieB: string;
+  let slugA: string;
+  let slugB: string;
+
+  beforeAll(async () => {
+    await insertUser(ownerAId, ownerAWallet);
+    await insertUser(ownerBId, ownerBWallet);
+
+    [cookieA, cookieB] = await Promise.all([
+      createTestSession(ownerAWallet),
+      createTestSession(ownerBWallet),
+    ]);
+
+    // Each owner creates exactly one fleet.
+    const [resA, resB] = await Promise.all([
+      fetch(`${BASE}/api/fleets`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: cookieA },
+        body: JSON.stringify({ name: `Leak Test Fleet A ${run}` }),
+      }),
+      fetch(`${BASE}/api/fleets`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Cookie: cookieB },
+        body: JSON.stringify({ name: `Leak Test Fleet B ${run}` }),
+      }),
+    ]);
+    expect(resA.status).toBe(201);
+    expect(resB.status).toBe(201);
+    slugA = (await resA.json()).fleet.slug;
+    slugB = (await resB.json()).fleet.slug;
+  });
+
+  afterAll(async () => {
+    // Cascade deletes fleets and fleet_members.
+    await cleanupUsers([ownerAWallet, ownerBWallet]);
+  });
+
+  it("owner A's GET /api/fleets contains their own fleet slug", async () => {
+    const res = await fetch(`${BASE}/api/fleets`, { headers: { Cookie: cookieA } });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const slugs = (body.fleets as any[]).map((f: any) => f.slug);
+    expect(slugs).toContain(slugA);
+  });
+
+  it("owner A's GET /api/fleets does NOT contain owner B's fleet slug", async () => {
+    const res = await fetch(`${BASE}/api/fleets`, { headers: { Cookie: cookieA } });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const slugs = (body.fleets as any[]).map((f: any) => f.slug);
+    expect(
+      slugs,
+      "owner A must not see owner B's fleet — cross-user data leak",
+    ).not.toContain(slugB);
+  });
+
+  it("owner B's GET /api/fleets contains their own fleet slug", async () => {
+    const res = await fetch(`${BASE}/api/fleets`, { headers: { Cookie: cookieB } });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const slugs = (body.fleets as any[]).map((f: any) => f.slug);
+    expect(slugs).toContain(slugB);
+  });
+
+  it("owner B's GET /api/fleets does NOT contain owner A's fleet slug", async () => {
+    const res = await fetch(`${BASE}/api/fleets`, { headers: { Cookie: cookieB } });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const slugs = (body.fleets as any[]).map((f: any) => f.slug);
+    expect(
+      slugs,
+      "owner B must not see owner A's fleet — cross-user data leak",
+    ).not.toContain(slugA);
+  });
+
+  it("owner A's response contains no fleet objects with owner B's slug (deep check)", async () => {
+    const res = await fetch(`${BASE}/api/fleets`, { headers: { Cookie: cookieA } });
+    const body = await res.json();
+    // Stringify the full response to catch leaks in nested objects (members, etc.)
+    const raw = JSON.stringify(body);
+    expect(
+      raw,
+      "owner B's slug must not appear anywhere in owner A's response body",
+    ).not.toContain(slugB);
+  });
+
+  it("owner B's response contains no fleet objects with owner A's slug (deep check)", async () => {
+    const res = await fetch(`${BASE}/api/fleets`, { headers: { Cookie: cookieB } });
+    const body = await res.json();
+    const raw = JSON.stringify(body);
+    expect(
+      raw,
+      "owner A's slug must not appear anywhere in owner B's response body",
+    ).not.toContain(slugA);
+  });
+});
