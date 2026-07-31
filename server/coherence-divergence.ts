@@ -91,13 +91,28 @@ export async function runCoherenceDivergenceScan(): Promise<{ flagged: number; v
           LIMIT 1
         `);
         if (existing.rows.length > 0) continue;
+
+        // Escalation rule: if this wallet already has a prior divergence fault
+        // (proposed OR confirmed, for any proof), this second miss is inserted
+        // as 'confirmed' so the −150 penalty applies automatically.
+        const priorFault = await db.execute(sql`
+          SELECT id FROM agent_violations
+          WHERE wallet_address = ${row.wallet_address}
+            AND type = 'fault'
+            AND status IN ('proposed', 'confirmed')
+            AND reason LIKE ${COHERENCE_DIVERGENCE_REASON_PREFIX + "%"}
+          LIMIT 1
+        `);
+        const isRepeatOffender = priorFault.rows.length > 0;
+
         await db.insert(agentViolations).values({
           walletAddress: row.wallet_address,
           proofId: row.proof_id,
           type: "fault",
-          status: "proposed",
+          status: isRepeatOffender ? "confirmed" : "proposed",
           reason,
-          autoConfirmed: false,
+          autoConfirmed: isRepeatOffender,
+          ...(isRepeatOffender ? { confirmedAt: new Date() } : {}),
         });
         violations++;
       } catch (vErr) {
