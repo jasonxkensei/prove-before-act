@@ -225,4 +225,141 @@ describe("Fleet mutation endpoints — authenticated non-owner → 403", () => {
     const slugs = (body.fleets as any[]).map((f: any) => f.slug);
     expect(slugs).toContain(fleetSlug);
   });
+
+  it("PATCH /api/fleets/:slug — intruder gets 403 NOT_FLEET_OWNER", async () => {
+    const res = await fetch(`${BASE}/api/fleets/${fleetSlug}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Cookie: intruderCookie },
+      body: JSON.stringify({ name: "Intruder Rename Attempt" }),
+    });
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toBe("NOT_FLEET_OWNER");
+  });
+});
+
+// ── PATCH /api/fleets/:slug — auth and validation guards ─────────────────────
+
+describe("PATCH /api/fleets/:slug — unauthenticated → 401", () => {
+  const slug = `patch-auth-${runHex()}`;
+
+  it("PATCH with no session cookie returns 401", async () => {
+    // isWalletAuthenticated fires before any body parsing or DB lookup.
+    const res = await fetch(`${BASE}/api/fleets/${slug}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: "New Name" }),
+    });
+    expect(res.status).toBe(401);
+  });
+});
+
+describe("PATCH /api/fleets/:slug — input validation (authenticated owner)", () => {
+  const run = runHex();
+  const ownerWallet = `erd1patchvalidowner${run}`;
+  const ownerId     = `patch-valid-owner-${run}`;
+
+  let ownerCookie: string;
+  let fleetSlug: string;
+
+  beforeAll(async () => {
+    await insertUser(ownerId, ownerWallet);
+    ownerCookie = await createTestSession(ownerWallet);
+
+    const res = await fetch(`${BASE}/api/fleets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: ownerCookie },
+      body: JSON.stringify({ name: `Patch Validation Fleet ${run}` }),
+    });
+    expect(res.status).toBe(201);
+    fleetSlug = (await res.json()).fleet.slug;
+  });
+
+  afterAll(async () => {
+    await cleanupUsers([ownerWallet]);
+  });
+
+  it("name of 1 character → 400 INVALID_INPUT (min 2 chars)", async () => {
+    const res = await fetch(`${BASE}/api/fleets/${fleetSlug}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Cookie: ownerCookie },
+      body: JSON.stringify({ name: "X" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("INVALID_INPUT");
+    expect(body.message).toMatch(/at least 2/i);
+  });
+
+  it("empty string name → 400 INVALID_INPUT", async () => {
+    const res = await fetch(`${BASE}/api/fleets/${fleetSlug}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Cookie: ownerCookie },
+      body: JSON.stringify({ name: "" }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("INVALID_INPUT");
+  });
+
+  it("name of 81 characters → 400 INVALID_INPUT (max 80 chars)", async () => {
+    const res = await fetch(`${BASE}/api/fleets/${fleetSlug}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Cookie: ownerCookie },
+      body: JSON.stringify({ name: "A".repeat(81) }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("INVALID_INPUT");
+    expect(body.message).toMatch(/at most 80/i);
+  });
+
+  it("missing name field → 400 INVALID_INPUT", async () => {
+    const res = await fetch(`${BASE}/api/fleets/${fleetSlug}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Cookie: ownerCookie },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("INVALID_INPUT");
+  });
+
+  it("successful PATCH returns 200 with { fleet: { id, name, slug } }", async () => {
+    const newName = `Renamed Fleet ${run}`;
+    const res = await fetch(`${BASE}/api/fleets/${fleetSlug}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Cookie: ownerCookie },
+      body: JSON.stringify({ name: newName }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.fleet).toBeDefined();
+    expect(body.fleet.name).toBe(newName);
+    expect(body.fleet.slug).toBe(fleetSlug);
+    expect(typeof body.fleet.id).toBe("string");
+  });
+
+  it("name with exactly 2 characters is accepted (boundary)", async () => {
+    const res = await fetch(`${BASE}/api/fleets/${fleetSlug}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Cookie: ownerCookie },
+      body: JSON.stringify({ name: "AB" }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.fleet.name).toBe("AB");
+  });
+
+  it("name with exactly 80 characters is accepted (boundary)", async () => {
+    const name80 = "B".repeat(80);
+    const res = await fetch(`${BASE}/api/fleets/${fleetSlug}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Cookie: ownerCookie },
+      body: JSON.stringify({ name: name80 }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.fleet.name).toBe(name80);
+  });
 });
