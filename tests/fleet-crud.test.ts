@@ -874,3 +874,81 @@ describe("fleet_members index coverage — coherence subquery stays indexed", ()
     expect(plan).toMatch(/Index(?:\s+Only)?\s+Scan|Bitmap(?:\s+Heap)?\s+Scan/i);
   });
 });
+
+// ── DELETE /api/fleets/:slug/members/:wallet — 404 MEMBER_NOT_FOUND ───────────
+//
+// The handler returns 404 MEMBER_NOT_FOUND when db.delete().returning() yields
+// no rows (server/routes/fleets.ts line ~297). The existing test suite only
+// exercises the 403 ownership guard or deletes a wallet that was previously
+// added. Neither path reaches the 404 branch.
+//
+// A refactor that silently returns 200 when no row is deleted (e.g. switching
+// from .returning() to .execute()) would go undetected without this test.
+
+describe("DELETE /api/fleets/:slug/members/:wallet — 404 MEMBER_NOT_FOUND", () => {
+  const run = runHex();
+  const { walletAddress: ownerWallet } = makeEd25519TestWallet();
+  const ownerId = `del-404-${run}`;
+  const slug    = `del-404-fleet-${run}`;
+  let cookie: string;
+
+  // A real bech32 wallet that will be added then removed (for the double-remove test).
+  const { walletAddress: memberWallet, signMessage: signMember } = makeEd25519TestWallet();
+
+  // A wallet that is never added at all.
+  const { walletAddress: ghostWallet } = makeEd25519TestWallet();
+
+  beforeAll(async () => {
+    await insertUser(ownerId, ownerWallet);
+    cookie = await createTestSession(ownerWallet);
+
+    const res = await fetch(`${BASE}/api/fleets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: cookie },
+      body: JSON.stringify({ name: `Delete 404 Fleet ${run}`, slug }),
+    });
+    expect(res.status).toBe(201);
+
+    // Add memberWallet so the double-remove test can later remove it.
+    const msg = `xproof-fleet-member:${slug}:${memberWallet}`;
+    const addRes = await fetch(`${BASE}/api/fleets/${slug}/members`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: cookie },
+      body: JSON.stringify({ wallet_address: memberWallet, signature: signMember(msg) }),
+    });
+    expect(addRes.status).toBe(201);
+  });
+
+  afterAll(() => cleanupUsers([ownerWallet]));
+
+  it("removing a wallet that was never added returns 404 MEMBER_NOT_FOUND", async () => {
+    const res = await fetch(
+      `${BASE}/api/fleets/${slug}/members/${encodeURIComponent(ghostWallet)}`,
+      { method: "DELETE", headers: { Cookie: cookie } },
+    );
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.error).toBe("MEMBER_NOT_FOUND");
+  });
+
+  it("successfully removing a member returns 200", async () => {
+    const res = await fetch(
+      `${BASE}/api/fleets/${slug}/members/${encodeURIComponent(memberWallet)}`,
+      { method: "DELETE", headers: { Cookie: cookie } },
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+  });
+
+  it("removing the same wallet a second time (double-remove) returns 404 MEMBER_NOT_FOUND", async () => {
+    // memberWallet was removed in the previous test; removing it again must 404.
+    const res = await fetch(
+      `${BASE}/api/fleets/${slug}/members/${encodeURIComponent(memberWallet)}`,
+      { method: "DELETE", headers: { Cookie: cookie } },
+    );
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.error).toBe("MEMBER_NOT_FOUND");
+  });
+});
