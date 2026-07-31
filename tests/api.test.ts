@@ -616,6 +616,55 @@ describe("xproof API", () => {
         "Expected /agent-context HTML to contain the '4W Responsibility Split' section heading",
       ).toContain("4W Responsibility Split");
     });
+
+    it("GET /agent-context HTML table attributes WHO to MX-8004 and WHAT/WHEN/WHY to xProof — row-level binding matches canonical markdown header", async () => {
+      // The markdown sources encode the attribution as:
+      //   "4W breakdown — WHO from MX-8004, WHAT/WHEN/WHY from xProof:"
+      // The HTML renders it as a <table> with one <tr> per dimension.
+      // This test parses each table row and asserts the row-level provider bindings
+      // so that a swapped attribution (e.g. WHO→xProof, WHAT→MX-8004) fails
+      // deterministically — a pure co-occurrence check cannot catch that inversion.
+      const MARKDOWN_HEADER = "4W breakdown — WHO from MX-8004, WHAT/WHEN/WHY from xProof:";
+
+      const [llmsTxt, llmsFullTxt, agentContextMd, agentContextHtml] = await Promise.all([
+        fetch(`${BASE_URL}/llms.txt`).then((r) => r.text()),
+        fetch(`${BASE_URL}/llms-full.txt`).then((r) => r.text()),
+        fetch(`${BASE_URL}/agent-context.md`).then((r) => r.text()),
+        fetch(`${BASE_URL}/agent-context`).then((r) => r.text()),
+      ]);
+
+      // Markdown sources must all carry the canonical header.
+      expect(llmsTxt,        "llms.txt must contain the canonical 4W header").toContain(MARKDOWN_HEADER);
+      expect(llmsFullTxt,    "llms-full.txt must contain the canonical 4W header").toContain(MARKDOWN_HEADER);
+      expect(agentContextMd, "agent-context.md must contain the canonical 4W header").toContain(MARKDOWN_HEADER);
+
+      // Extract <tr>…</tr> chunks from the HTML.
+      // Each chunk represents one row of the 4W responsibility table.
+      const trChunks = agentContextHtml.match(/<tr[\s\S]*?<\/tr>/gi) ?? [];
+
+      // Helper: find the row whose text contains `dimension` and return its text.
+      const rowFor = (dimension: string): string =>
+        trChunks.find((chunk) => chunk.includes(`>${dimension}<`) || chunk.includes(`>${dimension}</`)) ?? "";
+
+      const whoRow  = rowFor("WHO");
+      const whatRow = rowFor("WHAT");
+      const whenRow = rowFor("WHEN");
+      const whyRow  = rowFor("WHY");
+
+      // WHO row must name MX-8004 as the provider — not xProof.
+      expect(whoRow,  "WHO table row must attribute WHO to MX-8004").toContain("MX-8004");
+      expect(whoRow,  "WHO table row must NOT attribute WHO to xProof (attribution inversion)").not.toContain("xProof");
+
+      // WHAT, WHEN, WHY rows must each name xProof — not MX-8004.
+      expect(whatRow, "WHAT table row must attribute WHAT to xProof").toContain("xProof");
+      expect(whatRow, "WHAT table row must NOT attribute WHAT to MX-8004 (attribution inversion)").not.toContain("MX-8004");
+
+      expect(whenRow, "WHEN table row must attribute WHEN to xProof").toContain("xProof");
+      expect(whenRow, "WHEN table row must NOT attribute WHEN to MX-8004 (attribution inversion)").not.toContain("MX-8004");
+
+      expect(whyRow,  "WHY table row must attribute WHY to xProof").toContain("xProof");
+      expect(whyRow,  "WHY table row must NOT attribute WHY to MX-8004 (attribution inversion)").not.toContain("MX-8004");
+    });
   });
 
   describe("4W split description consistency — llms.txt and llms-full.txt", () => {
