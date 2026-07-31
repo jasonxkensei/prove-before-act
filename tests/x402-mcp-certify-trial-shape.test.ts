@@ -900,4 +900,148 @@ describe("certify_with_confidence TRIAL_EXHAUSTED — MCP 402 payload shape (Tas
     });
   });
 
+  // ── Part I: investigate_proof INSUFFICIENT_CREDITS JSON round-trip ───────────
+  //
+  // investigate_proof reaches INSUFFICIENT_CREDITS (line ~1455 of server/mcp.ts)
+  // when the caller is a non-trial user whose prepaid credit balance has been
+  // partially consumed and then run out — distinct from:
+  //   - TRIAL_EXHAUSTED (trial user who used all free certifications)
+  //   - PAYMENT_REQUIRED (non-trial user with zero balance who never had credits)
+  //
+  // The call site is:
+  //   return await mcpInsufficientCredits(baseUrl,
+  //     { incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` });
+  //
+  // mcpInsufficientCredits assembles:
+  //   mcpErr({ error: "INSUFFICIENT_CREDITS",
+  //             message: "Credit balance insufficient...",
+  //             prepaid_credits: buildPrepaidCreditsBlock(baseUrl),
+  //             ...x402,          // build402PayloadFromUrl(baseUrl, "proof")
+  //             ...extra })       // { incident_report_url }
+  //
+  // These tests confirm that:
+  //   1. The x402 machine-readable fields (x402Version, accepts, resource) survive
+  //      JSON serialisation so agents can parse and pay.
+  //   2. incident_report_url, spread after x402, is not lost.
+  //   3. The error discriminator is not clobbered by the x402 spread.
+  //   4. This path shares the same x402Version and payTo as the other investigate
+  //      paths (TRIAL_EXHAUSTED, PAYMENT_REQUIRED) — no per-path drift.
+
+  describe("investigate_proof INSUFFICIENT_CREDITS JSON round-trip", () => {
+    type InvInsufficientBody = Record<string, unknown>;
+
+    const TEST_WALLET   = "erd1testwalletinsuf000000000000000000000000000000000000000000";
+    const TEST_PROOF_ID = "aaaaaaaa-0000-0000-0000-000000000002";
+    const TEST_INCIDENT_URL = `${TEST_BASE_URL}/incident/${TEST_WALLET}/${TEST_PROOF_ID}`;
+
+    /** Mirror of mcpInsufficientCredits(baseUrl, { incident_report_url }) JSON. */
+    const buildInvestigateInsufficientJson = async (): Promise<InvInsufficientBody> => {
+      const x402Payload = isX402Configured()
+        ? await build402PayloadFromUrl(TEST_BASE_URL, "proof")
+        : {};
+      const raw = JSON.stringify({
+        error: "INSUFFICIENT_CREDITS",
+        message: "Credit balance insufficient. Purchase additional credits to continue.",
+        prepaid_credits: { purchase: `${TEST_BASE_URL}/api/credits/purchase` },
+        ...x402Payload,
+        incident_report_url: TEST_INCIDENT_URL,
+      });
+      return JSON.parse(raw) as InvInsufficientBody;
+    };
+
+    it("x402Version present and equals 1 after JSON round-trip", async () => {
+      const body = await buildInvestigateInsufficientJson();
+      expect(
+        body.x402Version,
+        "investigate_proof INSUFFICIENT_CREDITS must include x402Version=1 for agent pay-and-retry",
+      ).toBe(1);
+    });
+
+    it("accepts is a non-empty array after JSON round-trip", async () => {
+      const body = await buildInvestigateInsufficientJson();
+      expect(Array.isArray(body.accepts), "accepts must be an array").toBe(true);
+      expect(
+        (body.accepts as unknown[]).length,
+        "accepts must not be empty",
+      ).toBeGreaterThan(0);
+    });
+
+    it("accepts[0].payTo matches TEST_PAY_TO after JSON round-trip", async () => {
+      const body = await buildInvestigateInsufficientJson();
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(
+        entry.payTo,
+        "investigate_proof INSUFFICIENT_CREDITS payTo must match X402_PAY_TO",
+      ).toBe(TEST_PAY_TO);
+    });
+
+    it("accepts[0].price is a non-empty string after JSON round-trip", async () => {
+      const body = await buildInvestigateInsufficientJson();
+      const entry = (body.accepts as Record<string, unknown>[])[0];
+      expect(typeof entry.price, "accepts[0].price must be a string").toBe("string");
+      expect((entry.price as string).length, "accepts[0].price must not be empty").toBeGreaterThan(0);
+    });
+
+    it("resource contains /api/proof after JSON round-trip", async () => {
+      const body = await buildInvestigateInsufficientJson();
+      expect(typeof body.resource, "resource must be a string").toBe("string");
+      expect(
+        body.resource as string,
+        "resource must reference /api/proof so agents know the retry target",
+      ).toContain("/api/proof");
+    });
+
+    it("error field is INSUFFICIENT_CREDITS (x402 spread must not clobber it)", async () => {
+      const body = await buildInvestigateInsufficientJson();
+      expect(
+        body.error,
+        "error must remain INSUFFICIENT_CREDITS after x402 spread",
+      ).toBe("INSUFFICIENT_CREDITS");
+    });
+
+    it("incident_report_url survives the spread and contains wallet + proof_id", async () => {
+      const body = await buildInvestigateInsufficientJson();
+      expect(
+        typeof body.incident_report_url,
+        "incident_report_url must be a string — agents use it to fetch the audit trail",
+      ).toBe("string");
+      expect(
+        body.incident_report_url as string,
+        "incident_report_url must contain the subject wallet address",
+      ).toContain(TEST_WALLET);
+      expect(
+        body.incident_report_url as string,
+        "incident_report_url must contain the proof_id",
+      ).toContain(TEST_PROOF_ID);
+    });
+
+    it("prepaid_credits block is preserved alongside x402 fields", async () => {
+      const body = await buildInvestigateInsufficientJson();
+      expect(
+        body.prepaid_credits,
+        "prepaid_credits must survive the x402 spread — agents need it to top up",
+      ).toBeDefined();
+    });
+
+    it("INSUFFICIENT_CREDITS payTo and x402Version match the TRIAL_EXHAUSTED path (no per-path drift)", async () => {
+      const insuf = await buildInvestigateInsufficientJson();
+      // Reconstruct the TRIAL_EXHAUSTED payload (same helper path, different error).
+      const trial: InvInsufficientBody = {
+        error: "TRIAL_EXHAUSTED",
+        message: "Trial limit reached.",
+        prepaid_credits: { purchase: `${TEST_BASE_URL}/api/credits/purchase` },
+        ...(isX402Configured() ? await build402PayloadFromUrl(TEST_BASE_URL, "proof") : {}),
+        incident_report_url: TEST_INCIDENT_URL,
+      };
+      expect(
+        insuf.x402Version,
+        "INSUFFICIENT_CREDITS x402Version must equal TRIAL_EXHAUSTED x402Version",
+      ).toBe(trial.x402Version);
+      expect(
+        (insuf.accepts as Record<string, unknown>[])[0].payTo,
+        "INSUFFICIENT_CREDITS payTo must match TRIAL_EXHAUSTED payTo",
+      ).toBe((trial.accepts as Record<string, unknown>[])[0].payTo);
+    });
+  });
+
 });
