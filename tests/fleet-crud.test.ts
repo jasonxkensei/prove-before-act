@@ -952,3 +952,158 @@ describe("DELETE /api/fleets/:slug/members/:wallet — 404 MEMBER_NOT_FOUND", ()
     expect(body.error).toBe("MEMBER_NOT_FOUND");
   });
 });
+
+// ── GET /api/fleet/coherence?fleet=<slug> — public response shape ─────────────
+//
+// The endpoint is intentionally public (no auth required). It must:
+//   - Return 200 with per-agent coherence stats for unauthenticated callers
+//   - NOT expose proof_method, added_at, or any internal fleet_members column
+//   - Only include agents with is_public_profile = true
+//
+// Seeding bypasses HTTP for speed: fleet_members rows are inserted via SQL so
+// proof-of-ownership is not exercised here (covered by other test files).
+
+describe("GET /api/fleet/coherence?fleet=<slug> — public response shape and field exposure (Task #541)", () => {
+  const run = runHex();
+  const { walletAddress: ownerWallet } = makeEd25519TestWallet();
+  const ownerId = `fc-coh-owner-${run}`;
+  const slug    = `fleet-coh-shape-${run}`;
+
+  // Two members with is_public_profile = true
+  const { walletAddress: memberWalletA } = makeEd25519TestWallet();
+  const { walletAddress: memberWalletB } = makeEd25519TestWallet();
+  const memberIdA = `fc-coh-mem-a-${run}`;
+  const memberIdB = `fc-coh-mem-b-${run}`;
+
+  let fleetId: string;
+  let ownerCookie: string;
+
+  beforeAll(async () => {
+    // Create owner and fleet via HTTP
+    await insertUser(ownerId, ownerWallet);
+    ownerCookie = await createTestSession(ownerWallet);
+
+    const res = await fetch(`${BASE}/api/fleets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: ownerCookie },
+      body: JSON.stringify({ name: `Fleet Coh Shape ${run}`, slug }),
+    });
+    expect(res.status).toBe(201);
+    fleetId = (await res.json()).fleet.id;
+
+    // Insert two public-profile member users directly
+    await pool.query(
+      `INSERT INTO users (id, wallet_address, is_public_profile)
+       VALUES ($1, $2, true), ($3, $4, true)`,
+      [memberIdA, memberWalletA, memberIdB, memberWalletB],
+    );
+
+    // Insert fleet_member rows directly (bypasses proof; proof_method is stored here)
+    await pool.query(
+      `INSERT INTO fleet_members (fleet_id, wallet_address, proof_method)
+       VALUES ($1, $2, 'signature'), ($1, $3, 'api_key')`,
+      [fleetId, memberWalletA, memberWalletB],
+    );
+  });
+
+  afterAll(async () => {
+    await pool.query(`DELETE FROM fleet_members WHERE fleet_id = $1`, [fleetId]);
+    await cleanupUsers([ownerId, memberIdA, memberIdB]);
+  });
+
+  it("unauthenticated GET returns 200 (endpoint is public)", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?fleet=${slug}`);
+    expect(res.status).toBe(200);
+  });
+
+  it("response includes fleet_slug and fleet_name", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?fleet=${slug}`);
+    const body = await res.json();
+    expect(body.fleet_slug).toBe(slug);
+    expect(typeof body.fleet_name).toBe("string");
+  });
+
+  it("response includes a fleet aggregate object with agent_count and fleet_score fields", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?fleet=${slug}`);
+    const body = await res.json();
+    expect(body.fleet).toBeDefined();
+    expect(typeof body.fleet.agent_count).toBe("number");
+    expect("fleet_score" in body.fleet).toBe(true);
+    expect("coherence_rate" in body.fleet).toBe(true);
+  });
+
+  it("response includes an agents array containing the two public-profile members", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?fleet=${slug}`);
+    const body = await res.json();
+    expect(Array.isArray(body.agents)).toBe(true);
+    const wallets = (body.agents as any[]).map((a: any) => a.wallet_address);
+    expect(wallets).toContain(memberWalletA);
+    expect(wallets).toContain(memberWalletB);
+  });
+
+  it("each agent entry contains only the documented public fields (wallet_address, agent_name, coherence stats)", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?fleet=${slug}`);
+    const body = await res.json();
+    const PUBLIC_FIELDS = new Set([
+      "wallet_address", "agent_name", "total_anchors", "linked_count",
+      "linked_within_1h", "pending_count", "divergent_count",
+      "flagged_divergent_count", "coherence_rate", "avg_coherence_score",
+      "last_anchor_at",
+    ]);
+    for (const agent of body.agents as any[]) {
+      for (const key of Object.keys(agent)) {
+        expect(
+          PUBLIC_FIELDS.has(key),
+          `Agent entry must not expose field "${key}" — not part of the public contract`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it("proof_method is NOT present on any agent entry", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?fleet=${slug}`);
+    const body = await res.json();
+    for (const agent of body.agents as any[]) {
+      expect(
+        "proof_method" in agent,
+        `proof_method must not be exposed — reveals how ${agent.wallet_address} was verified`,
+      ).toBe(false);
+    }
+  });
+
+  it("added_at is NOT present on any agent entry", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?fleet=${slug}`);
+    const body = await res.json();
+    for (const agent of body.agents as any[]) {
+      expect("added_at" in agent, "added_at must not be exposed").toBe(false);
+    }
+  });
+
+  it("no internal ID fields (id, user_id, fleet_id) are present on any agent entry", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?fleet=${slug}`);
+    const body = await res.json();
+    for (const agent of body.agents as any[]) {
+      expect("id"       in agent, "id must not be exposed").toBe(false);
+      expect("user_id"  in agent, "user_id must not be exposed").toBe(false);
+      expect("fleet_id" in agent, "fleet_id must not be exposed").toBe(false);
+    }
+  });
+
+  it("deep JSON scan: proof_method values ('signature', 'api_key', 'owner_wallet') absent from full response", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?fleet=${slug}`);
+    const raw = await res.text();
+    // The raw response must not contain the literal proof_method values used
+    // when seeding (one member was added with 'signature', the other 'api_key').
+    // If the field leaked in ANY nested structure this assertion catches it.
+    const body = JSON.parse(raw);
+    const agentsSection = JSON.stringify(body.agents);
+    expect(agentsSection).not.toContain('"proof_method"');
+  });
+
+  it("unknown fleet slug returns 404 FLEET_NOT_FOUND", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?fleet=does-not-exist-${run}`);
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.error).toBe("FLEET_NOT_FOUND");
+  });
+});
