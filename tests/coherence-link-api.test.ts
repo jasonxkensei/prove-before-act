@@ -649,3 +649,94 @@ describe("GET /api/agents/:wallet/coherence — pagination limits", () => {
     expect(body.offset).toBe(2);
   });
 });
+
+// ── Genuine concurrent-link race test ─────────────────────────────────────────
+// Two requests arrive simultaneously for the same WHY anchor with different
+// WHAT proofs.  The atomic UPDATE … WHERE linked_proof_id IS NULL guarantees
+// exactly one can win; the loser must receive a 409 ALREADY_LINKED (or a 200
+// with already_linked: true if it happens to retry the same winner WHAT).
+// Both responses must report the same linked_proof_id (the winner's WHAT).
+
+describe("POST /api/coherence/link — genuine concurrent race", () => {
+  const runId = crypto.randomBytes(6).toString("hex");
+  const userId = `coh-race-${runId}`;
+  const wallet = `erd1cohrace${runId}`;
+  const rawKey = `pm_cohrace_${crypto.randomBytes(12).toString("hex")}`;
+
+  // One WHY anchor, two competing WHAT proofs.
+  const whyId = crypto.randomUUID();
+  const whatIdA = crypto.randomUUID();
+  const whatIdB = crypto.randomUUID();
+
+  beforeAll(async () => {
+    await insertUser(userId, wallet);
+    await insertApiKey(userId, rawKey);
+
+    // WHY anchor — coherence_check cert with a coherence_checks row (unlinked).
+    await insertCert({
+      id: whyId,
+      userId,
+      minsAgo: 10,
+      metadata: { type: "coherence_check", role: "WHY", intent: "race intent", decision: "race decision" },
+    });
+    await insertCoherenceCheck({ userId, proofId: whyId, minsAgo: 10 });
+
+    // Two competing WHAT proofs.
+    await insertCert({ id: whatIdA, userId, minsAgo: 5, blockchainStatus: "confirmed" });
+    await insertCert({ id: whatIdB, userId, minsAgo: 5, blockchainStatus: "confirmed" });
+  });
+
+  afterAll(async () => {
+    await cleanup([userId], [wallet]);
+  });
+
+  it("exactly one WHAT wins and both responses agree on the winner", async () => {
+    // Fire both link requests simultaneously.
+    const [resA, resB] = await Promise.all([
+      postLink(rawKey, whyId, whatIdA),
+      postLink(rawKey, whyId, whatIdB),
+    ]);
+
+    const [bodyA, bodyB] = await Promise.all([resA.json(), resB.json()]);
+
+    // Each response must be either a 200 success/already_linked or a 409 conflict.
+    const isOk = (status: number, body: any) =>
+      status === 200 && body.success === true;
+    const isConflict = (status: number, body: any) =>
+      (status === 409 && body.error === "ALREADY_LINKED") ||
+      (status === 200 && body.already_linked === true);
+
+    expect(isOk(resA.status, bodyA) || isConflict(resA.status, bodyA)).toBe(true);
+    expect(isOk(resB.status, bodyB) || isConflict(resB.status, bodyB)).toBe(true);
+
+    // At least one must have won outright (200 without already_linked).
+    const aWon = resA.status === 200 && !bodyA.already_linked;
+    const bWon = resB.status === 200 && !bodyB.already_linked;
+    expect(aWon || bWon).toBe(true);
+
+    // At most one can win outright — they cannot both return a fresh success.
+    expect(aWon && bWon).toBe(false);
+
+    // Determine the winner's WHAT id from the winning response.
+    const winnerBody = aWon ? bodyA : bodyB;
+    const winnerWhatId = winnerBody.coherence_check.linked_proof_id;
+    expect([whatIdA, whatIdB]).toContain(winnerWhatId);
+
+    // The loser's response (if a 409) must reference the same winner WHAT id.
+    const loserStatus = aWon ? resB.status : resA.status;
+    const loserBody = aWon ? bodyB : bodyA;
+    if (loserStatus === 409) {
+      expect(loserBody.message).toContain(winnerWhatId);
+    } else {
+      // Loser got 200 already_linked — must agree on the same WHAT.
+      expect(loserBody.coherence_check.linked_proof_id).toBe(winnerWhatId);
+    }
+
+    // Confirm the DB row matches the winner.
+    const { rows } = await pool.query(
+      `SELECT linked_proof_id FROM coherence_checks WHERE proof_id = $1`,
+      [whyId],
+    );
+    expect(rows[0]?.linked_proof_id).toBe(winnerWhatId);
+  });
+});

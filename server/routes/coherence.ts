@@ -142,7 +142,10 @@ export function registerCoherenceRoutes(app: Express) {
         if (current?.linkedProofId === what_proof_id) {
           return res.json({ success: true, already_linked: true, coherence_check: serializeCheck(current) });
         }
-        return res.status(409).json({ error: "ALREADY_LINKED", message: "This WHY anchor was linked by a concurrent request" });
+        return res.status(409).json({
+          error: "ALREADY_LINKED",
+          message: `This WHY anchor is already linked to proof ${current?.linkedProofId}`,
+        });
       }
 
       logger.info("Coherence WHY→WHAT linked", { coherenceCheckId: updated.id, whyProofId: why_proof_id, whatProofId: what_proof_id, score, userId });
