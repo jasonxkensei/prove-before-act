@@ -677,6 +677,143 @@ describe("DELETE /api/fleets/:slug — fleet deletion cascades members", () => {
   });
 });
 
+// ── Fleet-count limit boundary (MAX_FLEETS_PER_USER = 10) ────────────────────
+
+describe("POST /api/fleets — fleet-count limit fires at exactly MAX_FLEETS_PER_USER", () => {
+  /**
+   * Verifies the >= comparison in the fleet-count check:
+   *   if (Number(fleetCount) >= MAX_FLEETS_PER_USER) → 409 FLEET_LIMIT_REACHED
+   *
+   * Strategy:
+   *   1. Insert MAX_FLEETS_PER_USER-1 (9) fleet rows directly via SQL.
+   *   2. POST the MAXth fleet via HTTP → must succeed with 201.
+   *   3. POST the (MAX+1)th fleet via HTTP → must return 409 FLEET_LIMIT_REACHED.
+   */
+  const run = runHex();
+  const { walletAddress: ownerWallet } = makeEd25519TestWallet();
+  const ownerId = `fl-limit-${run}`;
+  let cookie: string;
+
+  beforeAll(async () => {
+    await insertUser(ownerId, ownerWallet);
+    cookie = await createTestSession(ownerWallet);
+
+    // Insert MAX_FLEETS_PER_USER-1 = 9 fleet rows directly (bypass HTTP for speed)
+    for (let i = 1; i <= 9; i++) {
+      await pool.query(
+        `INSERT INTO fleets (owner_user_id, name, slug)
+         VALUES ($1, $2, $3)`,
+        [ownerId, `Bulk Fleet ${i} ${run}`, `bulk-fleet-${i}-${run}`],
+      );
+    }
+  });
+
+  afterAll(() => cleanupUsers([ownerWallet]));
+
+  it("201: the MAXth (10th) fleet creation succeeds", async () => {
+    const res = await fetch(`${BASE}/api/fleets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: cookie },
+      body: JSON.stringify({ name: `Max Fleet ${run}`, slug: `max-fleet-${run}` }),
+    });
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.fleet).toBeDefined();
+  });
+
+  it("409 FLEET_LIMIT_REACHED: the (MAX+1)th (11th) fleet creation is rejected", async () => {
+    const res = await fetch(`${BASE}/api/fleets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: cookie },
+      body: JSON.stringify({ name: `Over Limit Fleet ${run}`, slug: `over-limit-fleet-${run}` }),
+    });
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toBe("FLEET_LIMIT_REACHED");
+  });
+});
+
+// ── Fleet-size limit boundary (MAX_FLEET_MEMBERS = 100) ──────────────────────
+
+describe("POST /api/fleets/:slug/members — member-count limit fires at exactly MAX_FLEET_MEMBERS", () => {
+  /**
+   * Verifies the >= comparison in the member-count check:
+   *   if (Number(memberCount) >= MAX_FLEET_MEMBERS) → 409 MEMBER_LIMIT_REACHED
+   *
+   * Strategy:
+   *   1. Create a fleet via HTTP.
+   *   2. Insert MAX_FLEET_MEMBERS-1 (99) fleet_member rows directly via SQL.
+   *   3. POST the MAXth member via HTTP → must succeed with 201.
+   *   4. POST the (MAX+1)th member via HTTP → must return 409 MEMBER_LIMIT_REACHED.
+   */
+  const run = runHex();
+  const { walletAddress: ownerWallet } = makeEd25519TestWallet();
+  const ownerId = `ml-limit-${run}`;
+  const slug = `member-limit-fleet-${run}`;
+  let cookie: string;
+  let fleetId: string;
+
+  // Two real bech32 wallets used for the boundary HTTP calls
+  const maxWallet  = makeEd25519TestWallet();
+  const overWallet = makeEd25519TestWallet();
+
+  beforeAll(async () => {
+    await insertUser(ownerId, ownerWallet);
+    cookie = await createTestSession(ownerWallet);
+
+    // Create the fleet
+    const res = await fetch(`${BASE}/api/fleets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: cookie },
+      body: JSON.stringify({ name: `Member Limit Fleet ${run}`, slug }),
+    });
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    fleetId = body.fleet.id;
+
+    // Insert MAX_FLEET_MEMBERS-1 = 99 member rows directly (bypass HTTP for speed)
+    for (let i = 0; i < 99; i++) {
+      // Addresses don't need to be real bech32 for direct SQL inserts
+      const fakeWallet = `erd1bulkmember${String(i).padStart(5, "0")}${run}`;
+      await pool.query(
+        `INSERT INTO fleet_members (fleet_id, wallet_address, proof_method)
+         VALUES ($1, $2, 'owner_wallet')
+         ON CONFLICT DO NOTHING`,
+        [fleetId, fakeWallet],
+      );
+    }
+  });
+
+  afterAll(() => cleanupUsers([ownerWallet]));
+
+  it("201: the MAXth (100th) member addition succeeds (signature proof)", async () => {
+    const { walletAddress, signMessage } = maxWallet;
+    const msg = `xproof-fleet-member:${slug}:${walletAddress}`;
+    const res = await fetch(`${BASE}/api/fleets/${slug}/members`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: cookie },
+      body: JSON.stringify({ wallet_address: walletAddress, signature: signMessage(msg) }),
+    });
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.success).toBe(true);
+    expect(body.member.wallet_address).toBe(walletAddress);
+  });
+
+  it("409 MEMBER_LIMIT_REACHED: the (MAX+1)th (101st) member addition is rejected", async () => {
+    const { walletAddress, signMessage } = overWallet;
+    const msg = `xproof-fleet-member:${slug}:${walletAddress}`;
+    const res = await fetch(`${BASE}/api/fleets/${slug}/members`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: cookie },
+      body: JSON.stringify({ wallet_address: walletAddress, signature: signMessage(msg) }),
+    });
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error).toBe("MEMBER_LIMIT_REACHED");
+  });
+});
+
 // ── Index coverage check ──────────────────────────────────────────────────────
 
 describe("fleet_members index coverage — coherence subquery stays indexed", () => {
