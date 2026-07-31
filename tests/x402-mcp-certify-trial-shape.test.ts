@@ -899,4 +899,5 @@ describe("certify_with_confidence TRIAL_EXHAUSTED — MCP 402 payload shape (Tas
       ).toBe((cfTrial.accepts as Record<string, unknown>[])[0].payTo);
     });
   });
+
 });
