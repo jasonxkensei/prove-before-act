@@ -656,6 +656,10 @@ describe("GET /api/agents/:wallet/coherence — pagination limits", () => {
 // exactly one can win; the loser must receive a 409 ALREADY_LINKED (or a 200
 // with already_linked: true if it happens to retry the same winner WHAT).
 // Both responses must report the same linked_proof_id (the winner's WHAT).
+//
+// NOTE: This test covers the case where a coherence_checks row already exists
+// before the concurrent requests arrive.  See the "lazy-creation race" suite
+// below for the harder path where the row doesn't exist yet.
 
 describe("POST /api/coherence/link — genuine concurrent race", () => {
   const runId = crypto.randomBytes(6).toString("hex");
@@ -738,5 +742,116 @@ describe("POST /api/coherence/link — genuine concurrent race", () => {
       [whyId],
     );
     expect(rows[0]?.linked_proof_id).toBe(winnerWhatId);
+  });
+});
+
+// ── Lazy coherence_checks creation + concurrent-link race ─────────────────────
+// Harder scenario: the WHY anchor was created via REST (metadata.type =
+// "coherence_check" on the cert) so NO coherence_checks row exists yet when
+// both requests arrive.  Each request hits the INSERT … ON CONFLICT DO NOTHING
+// path, then the atomic UPDATE … WHERE linked_proof_id IS NULL.
+//
+// Invariants that must hold:
+//   1. Exactly one coherence_checks row is created for the WHY anchor.
+//   2. Exactly one WHAT wins the link; the loser gets a 409 or already_linked.
+//   3. Both responses agree on which WHAT is linked (the winner's ID).
+
+describe("POST /api/coherence/link — lazy coherence_checks creation + concurrent race", () => {
+  const runId = crypto.randomBytes(6).toString("hex");
+  const userId = `coh-lazy-${runId}`;
+  const wallet = `erd1cohlazy${runId}`;
+  const rawKey = `pm_cohlazy_${crypto.randomBytes(12).toString("hex")}`;
+
+  // WHY cert: REST-created anchor — has metadata.type=coherence_check but
+  // deliberately has NO coherence_checks row seeded.
+  const whyId = crypto.randomUUID();
+  // Two competing WHAT proofs (confirmed, within 1h of the WHY anchor).
+  const whatIdA = crypto.randomUUID();
+  const whatIdB = crypto.randomUUID();
+
+  beforeAll(async () => {
+    await insertUser(userId, wallet);
+    await insertApiKey(userId, rawKey);
+
+    // WHY cert only — no coherence_checks row inserted.
+    await insertCert({
+      id: whyId,
+      userId,
+      minsAgo: 15,
+      metadata: { type: "coherence_check", role: "WHY", intent: "lazy race intent", decision: "lazy race decision" },
+    });
+
+    // Two competing WHAT proofs — both confirmed, both within 1h window.
+    await insertCert({ id: whatIdA, userId, minsAgo: 10, blockchainStatus: "confirmed" });
+    await insertCert({ id: whatIdB, userId, minsAgo: 10, blockchainStatus: "confirmed" });
+  });
+
+  afterAll(async () => {
+    await cleanup([userId], [wallet]);
+  });
+
+  it("creates exactly one coherence_checks row even when both requests race to insert it", async () => {
+    // Fire both link requests simultaneously, before either has created the row.
+    const [resA, resB] = await Promise.all([
+      postLink(rawKey, whyId, whatIdA),
+      postLink(rawKey, whyId, whatIdB),
+    ]);
+
+    const [bodyA, bodyB] = await Promise.all([resA.json(), resB.json()]);
+
+    // Each response must be a valid success or a recognised conflict.
+    const isSuccess  = (status: number, body: any) => status === 200 && body.success === true;
+    const isConflict = (status: number, body: any) =>
+      (status === 409 && body.error === "ALREADY_LINKED") ||
+      (status === 200 && body.already_linked === true);
+
+    expect(isSuccess(resA.status, bodyA) || isConflict(resA.status, bodyA)).toBe(true);
+    expect(isSuccess(resB.status, bodyB) || isConflict(resB.status, bodyB)).toBe(true);
+
+    // At least one must have won outright.
+    const aWon = resA.status === 200 && !bodyA.already_linked;
+    const bWon = resB.status === 200 && !bodyB.already_linked;
+    expect(aWon || bWon).toBe(true);
+
+    // Both cannot win outright.
+    expect(aWon && bWon).toBe(false);
+
+    // Identify winner.
+    const winnerWhatId = (aWon ? bodyA : bodyB).coherence_check.linked_proof_id;
+    expect([whatIdA, whatIdB]).toContain(winnerWhatId);
+
+    // Loser must reference the same winner WHAT id.
+    const loserStatus = aWon ? resB.status : resA.status;
+    const loserBody   = aWon ? bodyB : bodyA;
+    if (loserStatus === 409) {
+      expect(loserBody.message).toContain(winnerWhatId);
+    } else {
+      expect(loserBody.coherence_check.linked_proof_id).toBe(winnerWhatId);
+    }
+
+    // ── Invariant 1: exactly one coherence_checks row for this WHY anchor ──
+    const { rows: checkRows } = await pool.query(
+      `SELECT id, linked_proof_id FROM coherence_checks WHERE proof_id = $1`,
+      [whyId],
+    );
+    expect(checkRows.length).toBe(1);
+
+    // ── Invariant 2: the single row's linked_proof_id matches the winner ──
+    expect(checkRows[0]?.linked_proof_id).toBe(winnerWhatId);
+  });
+
+  it("the lazy-created row preserves the WHY cert's backdated timestamp", async () => {
+    // The coherence_checks row was created by the race above.
+    // Its created_at must be within 2 s of the WHY cert's created_at so the
+    // 1-hour coherence window is anchored to the real anchor time, not now.
+    const { rows } = await pool.query(
+      `SELECT ABS(EXTRACT(EPOCH FROM (cc.created_at - c.created_at)))::int AS delta_s
+       FROM coherence_checks cc
+       JOIN certifications c ON c.id = cc.proof_id
+       WHERE cc.proof_id = $1`,
+      [whyId],
+    );
+    const deltaSeconds = Number(rows[0]?.delta_s ?? 9999);
+    expect(deltaSeconds).toBeLessThanOrEqual(2);
   });
 });
