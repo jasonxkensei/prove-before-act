@@ -258,12 +258,25 @@ export function registerFleetsRoutes(app: Express) {
         });
       }
 
+      // Idempotent pre-check: if the wallet is already a member, return success
+      // immediately without consulting the capacity gate. This ensures that
+      // legitimate re-adds are never blocked by MEMBER_LIMIT_REACHED — a fleet
+      // at exactly MAX_FLEET_MEMBERS must still accept idempotent re-submissions
+      // of existing members. The count check below only gates genuinely new adds.
+      const [alreadyMember] = await db.select().from(fleetMembers)
+        .where(and(eq(fleetMembers.fleetId, fleet.id), eq(fleetMembers.walletAddress, walletAddress)));
+      if (alreadyMember) {
+        return res.json({ success: true, already_member: true, member: serializeMember(alreadyMember) });
+      }
+
       const [{ value: memberCount }] = await db.select({ value: count() }).from(fleetMembers).where(eq(fleetMembers.fleetId, fleet.id));
       if (Number(memberCount) >= MAX_FLEET_MEMBERS) {
         return res.status(409).json({ error: "MEMBER_LIMIT_REACHED", message: `A fleet can have at most ${MAX_FLEET_MEMBERS} member wallets` });
       }
 
-      // Idempotent add.
+      // Idempotent add — onConflictDoNothing handles the narrow concurrent-insert
+      // race where two requests both pass the pre-check and count check but only
+      // one wins the INSERT. The loser falls through to the already_member path.
       const [inserted] = await db.insert(fleetMembers)
         .values({ fleetId: fleet.id, walletAddress, proofMethod })
         .onConflictDoNothing()

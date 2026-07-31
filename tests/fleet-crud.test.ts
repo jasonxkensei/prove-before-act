@@ -812,6 +812,29 @@ describe("POST /api/fleets/:slug/members — member-count limit fires at exactly
     const body = await res.json();
     expect(body.error).toBe("MEMBER_LIMIT_REACHED");
   });
+
+  it("200 already_member: re-POSTing the 100th wallet at capacity is NOT blocked by MEMBER_LIMIT_REACHED", async () => {
+    /**
+     * The fleet is now at exactly 100 members. Re-submitting the 100th wallet
+     * (maxWallet, already inserted by the first test) must return the idempotent
+     * already_member response — NOT 409 MEMBER_LIMIT_REACHED.
+     *
+     * The capacity gate must only block genuinely NEW additions. A refactor that
+     * moves the count check before the membership pre-check would fail this test.
+     */
+    const { walletAddress, signMessage } = maxWallet;
+    const msg = `xproof-fleet-member:${slug}:${walletAddress}`;
+    const res = await fetch(`${BASE}/api/fleets/${slug}/members`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: cookie },
+      body: JSON.stringify({ wallet_address: walletAddress, signature: signMessage(msg) }),
+    });
+    expect(res.status, "idempotent re-add of an existing member must return 200, not 409").toBe(200);
+    const body = await res.json();
+    expect(body.already_member, "already_member must be true").toBe(true);
+    expect(body.success, "success must be true").toBe(true);
+    expect(body.member.wallet_address).toBe(walletAddress);
+  });
 });
 
 // ── Index coverage check ──────────────────────────────────────────────────────
