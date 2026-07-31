@@ -1032,3 +1032,143 @@ describe("GET /api/agents/:wallet/coherence — response shape and pagination (T
     }
   });
 });
+
+// ── GET /api/agents/:wallet/coherence — per-item field shape (Task #542) ──────
+//
+// The top-level envelope is confirmed by Task #539. This describe block drills
+// into individual items inside body.checks to assert that the fields agents
+// depend on (status, why_proof_id, linked_proof_id, intent_hash, coherence_score)
+// are present and semantically correct for:
+//   - a LINKED anchor  (WHY + WHAT linked, status === 'linked')
+//   - a DIVERGENT anchor (WHY with no WHAT, created > 1 h ago, status === 'divergent')
+//
+// The SELECT in server/routes/coherence.ts lines 392-424 returns raw SQL rows;
+// if any field is renamed or dropped there, the assertions below fail.
+
+describe("GET /api/agents/:wallet/coherence — per-item field shape (Task #542)", () => {
+  const run = crypto.randomBytes(5).toString("hex");
+  const userId = `item-shape-${run}`;
+  const wallet = `erd1itemshape${run}`;
+
+  // WHY cert for the linked anchor
+  const whyLinkedId  = crypto.randomUUID();
+  // WHAT cert linked to the above WHY
+  const whatId       = crypto.randomUUID();
+  // WHY cert for the divergent anchor (old, no WHAT)
+  const whyDivId     = crypto.randomUUID();
+
+  let linkedCheckIntentHash: string;
+  let divCheckIntentHash: string;
+
+  beforeAll(async () => {
+    await insertUser(userId, wallet, true);
+
+    // Linked anchor: WHY created 90 min ago, WHAT created 30 min later (within 1h window)
+    await insertCert({ id: whyLinkedId, userId, minsAgo: 90 });
+    await insertCert({ id: whatId,      userId, minsAgo: 60 });
+
+    // Divergent anchor: WHY created 150 min ago, no WHAT
+    await insertCert({ id: whyDivId, userId, minsAgo: 150 });
+
+    // Generate intent hashes in JS (gen_random_bytes requires pgcrypto extension).
+    linkedCheckIntentHash = crypto.randomBytes(32).toString("hex");
+    divCheckIntentHash    = crypto.randomBytes(32).toString("hex");
+
+    // Insert coherence_checks with pre-generated intent hashes.
+    await pool.query(
+      `INSERT INTO coherence_checks
+         (user_id, proof_id, linked_proof_id, intent_hash, coherence_score, created_at)
+       VALUES ($1, $2, $3, $4, 88, NOW() - INTERVAL '90 minutes')`,
+      [userId, whyLinkedId, whatId, linkedCheckIntentHash],
+    );
+    await pool.query(
+      `INSERT INTO coherence_checks
+         (user_id, proof_id, linked_proof_id, intent_hash, coherence_score, created_at)
+       VALUES ($1, $2, NULL, $3, NULL, NOW() - INTERVAL '150 minutes')`,
+      [userId, whyDivId, divCheckIntentHash],
+    );
+  });
+
+  afterAll(async () => {
+    await cleanup([userId], [wallet]);
+  });
+
+  // Helper: fetch and return the checks array
+  async function getChecks(): Promise<any[]> {
+    const res = await fetch(`http://127.0.0.1:5000/api/agents/${wallet}/coherence`);
+    const body = await res.json();
+    return body.checks as any[];
+  }
+
+  it("GET returns 200 and both anchors appear in checks", async () => {
+    const res = await fetch(`http://127.0.0.1:5000/api/agents/${wallet}/coherence`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.checks.length).toBe(2);
+  });
+
+  it("every check item contains id, why_proof_id, intent_hash, and status", async () => {
+    const checks = await getChecks();
+    for (const item of checks) {
+      expect(typeof item.id,           `id must be a string on item ${JSON.stringify(item)}`).toBe("string");
+      expect(typeof item.why_proof_id, `why_proof_id must be a string`).toBe("string");
+      expect(typeof item.intent_hash,  `intent_hash must be a string`).toBe("string");
+      expect(["linked", "pending", "divergent"], `status must be one of the three valid values`).toContain(item.status);
+    }
+  });
+
+  it("every check item contains created_at as an ISO string", async () => {
+    const checks = await getChecks();
+    for (const item of checks) {
+      expect(typeof item.created_at, "created_at must be a string").toBe("string");
+      expect(() => new Date(item.created_at).toISOString()).not.toThrow();
+    }
+  });
+
+  it("every check item contains coherence_score (number or null)", async () => {
+    const checks = await getChecks();
+    for (const item of checks) {
+      expect(
+        item.coherence_score === null || typeof item.coherence_score === "number",
+        `coherence_score must be null or number, got ${typeof item.coherence_score}`,
+      ).toBe(true);
+    }
+  });
+
+  it("linked anchor: status === 'linked' and linked_proof_id is non-null", async () => {
+    const checks = await getChecks();
+    const linked = checks.find((c) => c.why_proof_id === whyLinkedId);
+    expect(linked, "linked anchor must appear in checks").toBeDefined();
+    expect(linked.status).toBe("linked");
+    expect(linked.linked_proof_id).not.toBeNull();
+    expect(linked.linked_proof_id).toBe(whatId);
+  });
+
+  it("linked anchor: coherence_score is a number (88)", async () => {
+    const checks = await getChecks();
+    const linked = checks.find((c) => c.why_proof_id === whyLinkedId);
+    expect(linked.coherence_score).toBe(88);
+  });
+
+  it("divergent anchor: status === 'divergent' and linked_proof_id is null", async () => {
+    const checks = await getChecks();
+    const div = checks.find((c) => c.why_proof_id === whyDivId);
+    expect(div, "divergent anchor must appear in checks").toBeDefined();
+    expect(div.status).toBe("divergent");
+    expect(div.linked_proof_id).toBeNull();
+  });
+
+  it("divergent anchor: coherence_score is null (no WHAT proof linked)", async () => {
+    const checks = await getChecks();
+    const div = checks.find((c) => c.why_proof_id === whyDivId);
+    expect(div.coherence_score).toBeNull();
+  });
+
+  it("intent_hash values match what was inserted (field is not fabricated)", async () => {
+    const checks = await getChecks();
+    const linked = checks.find((c) => c.why_proof_id === whyLinkedId);
+    const div    = checks.find((c) => c.why_proof_id === whyDivId);
+    expect(linked.intent_hash).toBe(linkedCheckIntentHash);
+    expect(div.intent_hash).toBe(divCheckIntentHash);
+  });
+});
