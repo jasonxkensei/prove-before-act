@@ -503,3 +503,149 @@ describe("GET /api/agents/:wallet/coherence — status, aggregate, rate denomina
     expect(typeof body.offset).toBe("number");
   });
 });
+
+// ── GET /api/agents/:wallet/coherence — pagination limits ──────────────────────
+//
+// Guards the server-side caps in server/routes/coherence.ts lines 329–334:
+//   limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50))
+//   offset > MAX_COHERENCE_OFFSET (10 000) → 400
+// These caps are the only protection against unbounded table scans from
+// unauthenticated requests; a refactor that relaxes them must be caught.
+
+describe("GET /api/agents/:wallet/coherence — pagination limits", () => {
+  const runId = crypto.randomBytes(6).toString("hex");
+  const userId = `coh-pag-${runId}`;
+  const wallet = `erd1cohpag${runId}`;
+
+  // Seed 3 anchors (linked/pending/divergent) — same shape as the status suite.
+  // 3 rows is enough to verify limit=1 returns 1 row while total still shows 3.
+  beforeAll(async () => {
+    await insertUser(userId, wallet, true);
+
+    // Anchor 1 — linked, 30min ago, score=65.
+    const why1 = crypto.randomUUID();
+    const what1 = crypto.randomUUID();
+    const hash1 = crypto.randomBytes(32).toString("hex");
+    await pool.query(
+      `INSERT INTO certifications (id, user_id, file_name, file_hash, blockchain_status, is_public, metadata, created_at)
+       VALUES ($1,$2,'why.json',$3,'confirmed',true,$4, NOW() - INTERVAL '30 minutes')`,
+      [why1, userId, hash1, JSON.stringify({ type: "coherence_check" })],
+    );
+    await pool.query(
+      `INSERT INTO certifications (id, user_id, file_name, file_hash, blockchain_status, is_public, metadata, created_at)
+       VALUES ($1,$2,'what.json',$3,'confirmed',true,'{}', NOW() - INTERVAL '25 minutes')`,
+      [what1, userId, crypto.randomBytes(32).toString("hex")],
+    );
+    await pool.query(
+      `INSERT INTO coherence_checks (user_id, proof_id, linked_proof_id, intent_hash, coherence_score, created_at)
+       VALUES ($1,$2,$3,$4,65, NOW() - INTERVAL '30 minutes')`,
+      [userId, why1, what1, hash1],
+    );
+
+    // Anchor 2 — pending, 10min ago (within 1h, unlinked).
+    const why2 = crypto.randomUUID();
+    const hash2 = crypto.randomBytes(32).toString("hex");
+    await pool.query(
+      `INSERT INTO certifications (id, user_id, file_name, file_hash, blockchain_status, is_public, metadata, created_at)
+       VALUES ($1,$2,'why.json',$3,'pending',true,$4, NOW() - INTERVAL '10 minutes')`,
+      [why2, userId, hash2, JSON.stringify({ type: "coherence_check" })],
+    );
+    await pool.query(
+      `INSERT INTO coherence_checks (user_id, proof_id, intent_hash, created_at)
+       VALUES ($1,$2,$3, NOW() - INTERVAL '10 minutes')`,
+      [userId, why2, hash2],
+    );
+
+    // Anchor 3 — divergent, 2h ago (past 1h, unlinked).
+    const why3 = crypto.randomUUID();
+    const hash3 = crypto.randomBytes(32).toString("hex");
+    await pool.query(
+      `INSERT INTO certifications (id, user_id, file_name, file_hash, blockchain_status, is_public, metadata, created_at)
+       VALUES ($1,$2,'why.json',$3,'confirmed',true,$4, NOW() - INTERVAL '2 hours')`,
+      [why3, userId, hash3, JSON.stringify({ type: "coherence_check" })],
+    );
+    await pool.query(
+      `INSERT INTO coherence_checks (user_id, proof_id, intent_hash, created_at)
+       VALUES ($1,$2,$3, NOW() - INTERVAL '2 hours')`,
+      [userId, why3, hash3],
+    );
+  });
+
+  afterAll(async () => {
+    await cleanup([userId], [wallet]);
+  });
+
+  it("offset > 10 000 → 400 regardless of wallet (guard fires before DB lookup)", async () => {
+    // Use the seeded wallet so we know the user exists and this is purely an
+    // offset-cap error, not a 404.
+    const res = await fetch(
+      `${BASE}/api/agents/${wallet}/coherence?offset=10001`,
+    );
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.message).toMatch(/offset must be <= 10000/i);
+  });
+
+  it("offset exactly at the cap (10 000) is accepted → 200", async () => {
+    const res = await fetch(
+      `${BASE}/api/agents/${wallet}/coherence?offset=10000`,
+    );
+    // 10 000 is the inclusive boundary; the server allows it.
+    expect(res.status).toBe(200);
+  });
+
+  it("limit=1 returns exactly 1 check even though 3 anchors exist", async () => {
+    const res = await fetch(
+      `${BASE}/api/agents/${wallet}/coherence?limit=1`,
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.checks.length).toBe(1);
+    expect(body.limit).toBe(1);
+  });
+
+  it("total reflects all anchors (3), not just the current page, when limit=1", async () => {
+    const res = await fetch(
+      `${BASE}/api/agents/${wallet}/coherence?limit=1`,
+    );
+    const body = await res.json();
+    // total comes from the aggregate query, which ignores limit/offset.
+    expect(body.total).toBe(3);
+  });
+
+  it("limit=101 is silently clamped to 100 — the response limit field shows 100", async () => {
+    const res = await fetch(
+      `${BASE}/api/agents/${wallet}/coherence?limit=101`,
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // Server clamps: Math.min(100, 101) → 100.
+    expect(body.limit).toBe(100);
+    // Only 3 anchors exist, so checks is a subset of 100.
+    expect(body.checks.length).toBeLessThanOrEqual(100);
+  });
+
+  it("limit=0 falls back to the default (50) because 0 is falsy in the || guard", async () => {
+    // Server: `Math.min(100, Math.max(1, Number(req.query.limit) || 50))`
+    // Number("0") = 0, which is falsy → `0 || 50` = 50 → limit = 50.
+    const res = await fetch(
+      `${BASE}/api/agents/${wallet}/coherence?limit=0`,
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.limit).toBe(50);
+  });
+
+  it("offset=2 skips the two most-recent anchors (checks has 1 row)", async () => {
+    // 3 anchors exist; offset=2 should return only the oldest one.
+    const res = await fetch(
+      `${BASE}/api/agents/${wallet}/coherence?offset=2&limit=50`,
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.checks.length).toBe(1);
+    // total is still the full count (3), independent of offset.
+    expect(body.total).toBe(3);
+    expect(body.offset).toBe(2);
+  });
+});
