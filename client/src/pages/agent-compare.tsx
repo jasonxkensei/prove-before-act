@@ -28,6 +28,8 @@ interface CompareAgent {
   certLast30d: number;
   streakWeeks: number;
   activeAttestations: number;
+  coherenceRate?: number | null;
+  coherenceBonus?: number;
   firstCertAt: string | null;
   lastCertAt: string | null;
 }
@@ -339,6 +341,26 @@ export default function AgentComparePage() {
       render: (agent) => {
         const max = numericMax(a => a.activeAttestations);
         return <HighlightCell value={agent.activeAttestations} isMax={agent.activeAttestations === max && agents.filter(a => a.activeAttestations === max).length < agents.length} format="number" />;
+      },
+    },
+    {
+      label: "Coherence",
+      render: (agent) => {
+        const rate = agent.coherenceRate;
+        const bonus = agent.coherenceBonus ?? 0;
+        if (rate === null || rate === undefined) {
+          return <span className="text-muted-foreground text-xs">No data</span>;
+        }
+        const rates = agents
+          .map(a => a.coherenceRate)
+          .filter((v): v is number => v !== null && v !== undefined);
+        const max = rates.length ? Math.max(...rates) : null;
+        const isMax = max !== null && rate === max && rates.filter(v => v === max).length < agents.length;
+        return (
+          <span className={isMax ? "text-emerald-600 dark:text-emerald-400 font-semibold" : ""}>
+            {rate}% <span className="text-muted-foreground font-normal">(+{bonus} pts)</span>
+          </span>
+        );
       },
     },
     {
