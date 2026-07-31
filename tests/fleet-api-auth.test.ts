@@ -480,3 +480,64 @@ describe("GET /api/fleets — authenticated caller sees only their own fleets (n
     ).not.toContain(slugA);
   });
 });
+
+// ── Unknown slug → 404 FLEET_NOT_FOUND ───────────────────────────────────────
+//
+// getOwnedFleet() returns 404 FLEET_NOT_FOUND when no fleet matches the slug.
+// This block confirms that an authenticated fleet owner who typos a slug
+// receives a clear 404, not a 500 or a misleading 403 NOT_FLEET_OWNER.
+//
+// A refactor that collapsed the "no row found" and "wrong owner" branches of
+// getOwnedFleet would go undetected without these tests.
+
+describe("Fleet mutation endpoints — unknown slug → 404 FLEET_NOT_FOUND", () => {
+  const run = runHex();
+  const ownerWallet = `erd1unknownslug${run}`;
+  const ownerId     = `unknown-slug-owner-${run}`;
+  // A slug that is never inserted into the DB.
+  const missingSlug = `definitely-no-such-fleet-${run}`;
+  const memberWallet = `erd1unknownmember${run}`;
+
+  let ownerCookie: string;
+
+  beforeAll(async () => {
+    await insertUser(ownerId, ownerWallet);
+    ownerCookie = await createTestSession(ownerWallet);
+  });
+
+  afterAll(async () => {
+    await cleanupUsers([ownerWallet]);
+  });
+
+  it("PATCH /api/fleets/:slug — non-existent slug → 404 FLEET_NOT_FOUND", async () => {
+    const res = await fetch(`${BASE}/api/fleets/${missingSlug}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Cookie: ownerCookie },
+      body: JSON.stringify({ name: "New Name" }),
+    });
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.error).toBe("FLEET_NOT_FOUND");
+  });
+
+  it("DELETE /api/fleets/:slug — non-existent slug → 404 FLEET_NOT_FOUND", async () => {
+    const res = await fetch(`${BASE}/api/fleets/${missingSlug}`, {
+      method: "DELETE",
+      headers: { Cookie: ownerCookie },
+    });
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.error).toBe("FLEET_NOT_FOUND");
+  });
+
+  it("POST /api/fleets/:slug/members — non-existent slug → 404 FLEET_NOT_FOUND", async () => {
+    const res = await fetch(`${BASE}/api/fleets/${missingSlug}/members`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: ownerCookie },
+      body: JSON.stringify({ wallet_address: memberWallet }),
+    });
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.error).toBe("FLEET_NOT_FOUND");
+  });
+});
