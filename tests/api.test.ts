@@ -578,6 +578,46 @@ describe("xproof API", () => {
     });
   });
 
+  describe("/agent-context HTML page — 4W phrase coverage and MX-8004 attribution", () => {
+    // Guards against silent drift between the human-readable /agent-context HTML
+    // page and the agent-facing markdown sources. The HTML is generated from
+    // renderAgentContextPage (server/prerender.ts) which is a separate template
+    // from content.ts — edits to one do not propagate to the other automatically.
+
+    it("GET /agent-context returns 200 with HTML content-type", async () => {
+      const res = await fetch(`${BASE_URL}/agent-context`);
+      expect(res.status).toBe(200);
+      const contentType = res.headers.get("content-type");
+      expect(contentType).toContain("text/html");
+    });
+
+    it("GET /agent-context contains all four 4W labels (WHO, WHAT, WHEN, WHY)", async () => {
+      const res = await fetch(`${BASE_URL}/agent-context`);
+      const html = await res.text();
+      for (const label of ["WHO", "WHAT", "WHEN", "WHY"] as const) {
+        expect(html, `Expected /agent-context HTML to contain "${label}"`).toContain(label);
+      }
+    });
+
+    it("GET /agent-context contains MX-8004 attribution", async () => {
+      const res = await fetch(`${BASE_URL}/agent-context`);
+      const html = await res.text();
+      expect(
+        html,
+        "Expected /agent-context HTML to credit MX-8004 as the WHO provider — same as agent-context.md",
+      ).toContain("MX-8004");
+    });
+
+    it("GET /agent-context contains the 4W breakdown section heading", async () => {
+      const res = await fetch(`${BASE_URL}/agent-context`);
+      const html = await res.text();
+      expect(
+        html,
+        "Expected /agent-context HTML to contain the '4W Responsibility Split' section heading",
+      ).toContain("4W Responsibility Split");
+    });
+  });
+
   describe("4W split description consistency — llms.txt and llms-full.txt", () => {
     // These tests guard against silent drift: if the 4W breakdown or the
     // agent-context link is edited in one source but not the other, CI catches

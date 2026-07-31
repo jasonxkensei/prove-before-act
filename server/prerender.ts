@@ -971,6 +971,21 @@ Resend + X-PAYMENT: &lt;base64-signed-payment&gt; → 200 {"proof_id": "..."}</c
     </ul>
   </section>
 
+  <section id="4w-split">
+    <h2>4W Responsibility Split: MX-8004 vs xProof</h2>
+    <p>The 4W audit trail is delivered by two complementary systems. Understanding the split is important when building agents that need forensically complete provenance:</p>
+    <table>
+      <thead><tr><th></th><th>Question</th><th>Provided by</th></tr></thead>
+      <tbody>
+        <tr><td><strong>WHO</strong></td><td>Which agent or actor made this decision?</td><td><strong>MX-8004</strong> — MultiversX on-chain identity registry; anchors the agent's verified wallet address, DID, and reputation</td></tr>
+        <tr><td><strong>WHAT</strong></td><td>What output or action was certified?</td><td><strong>xProof</strong> — SHA-256 hash of the output, anchored on MultiversX mainnet</td></tr>
+        <tr><td><strong>WHEN</strong></td><td>Immutable timestamp?</td><td><strong>xProof</strong> — MultiversX block finality (~6 s); not a self-reported clock</td></tr>
+        <tr><td><strong>WHY</strong></td><td>What reasoning led to the decision?</td><td><strong>xProof</strong> — <code>action_description</code>, <code>risk_level</code>, and <code>context</code> fields from <code>/api/audit</code></td></tr>
+      </tbody>
+    </table>
+    <p>xProof owns <strong>WHAT / WHEN / WHY</strong> and the causal link that proves reasoning preceded the action. MX-8004 owns <strong>WHO</strong>. Together they form a forensically complete 4W trail.</p>
+  </section>
+
   <section>
     <h2>Key metadata fields</h2>
     <table>
