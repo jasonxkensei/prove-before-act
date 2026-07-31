@@ -145,6 +145,35 @@ export function registerFleetsRoutes(app: Express) {
     }
   });
 
+  // ── PATCH /api/fleets/:slug — rename a fleet (display name only) ───────────
+  app.patch("/api/fleets/:slug", isWalletAuthenticated, async (req: any, res) => {
+    try {
+      const user = await getSessionUser(req);
+      if (!user) return res.status(401).json({ error: "UNAUTHORIZED", message: "No account for this session wallet" });
+
+      const parsed = z.object({
+        name: z.string().trim().min(2, "name must be at least 2 characters").max(80, "name must be at most 80 characters"),
+      }).safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "INVALID_INPUT", message: parsed.error.issues[0]?.message ?? "Invalid input" });
+      }
+
+      const { fleet, error } = await getOwnedFleet(String(req.params.slug || "").toLowerCase(), user.id);
+      if (!fleet) return res.status(error!.status).json(error!.body);
+
+      const [updated] = await db.update(fleets)
+        .set({ name: parsed.data.name })
+        .where(eq(fleets.id, fleet.id))
+        .returning({ id: fleets.id, name: fleets.name, slug: fleets.slug });
+
+      logger.info("Fleet renamed", { fleetId: fleet.id, slug: fleet.slug, name: parsed.data.name, ownerUserId: user.id });
+      return res.json({ fleet: updated });
+    } catch (err: any) {
+      logger.error("PATCH /api/fleets/:slug error", { error: err?.message ?? String(err) });
+      return res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to rename fleet" });
+    }
+  });
+
   // ── DELETE /api/fleets/:slug — delete a fleet (members cascade) ────────────
   app.delete("/api/fleets/:slug", isWalletAuthenticated, async (req: any, res) => {
     try {

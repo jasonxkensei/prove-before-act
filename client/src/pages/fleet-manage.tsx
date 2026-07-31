@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import {
   Network, Plus, Trash2, UserPlus, Loader2, ShieldCheck,
-  ChevronDown, ChevronUp, Copy, X, ArrowRight,
+  ChevronDown, ChevronUp, Copy, X, ArrowRight, Pencil, Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -240,6 +240,47 @@ function FleetCard({ fleet, sessionWallet, onDeleteRequest }: FleetCardProps) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [addingMember, setAddingMember] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [draftName, setDraftName] = useState(fleet.name);
+
+  const renameMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const res = await apiRequest("PATCH", `/api/fleets/${fleet.slug}`, { name });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["/api/fleets"] });
+      toast({ title: "Fleet renamed", description: `Fleet is now called "${data.fleet.name}".` });
+      setRenaming(false);
+    },
+    onError: (err: Error) => {
+      let msg = err.message;
+      try {
+        const inner = JSON.parse(msg.replace(/^\d+: /, ""));
+        msg = inner.message || msg;
+      } catch { /* raw */ }
+      toast({ title: "Failed to rename fleet", description: msg, variant: "destructive" });
+    },
+  });
+
+  function startRename() {
+    setDraftName(fleet.name);
+    setRenaming(true);
+  }
+
+  function cancelRename() {
+    setDraftName(fleet.name);
+    setRenaming(false);
+  }
+
+  function submitRename() {
+    const trimmed = draftName.trim();
+    if (trimmed.length < 2) {
+      toast({ title: "Name too short", description: "Fleet name must be at least 2 characters.", variant: "destructive" });
+      return;
+    }
+    renameMutation.mutate(trimmed);
+  }
 
   const removeMutation = useMutation({
     mutationFn: async (walletAddress: string) => {
@@ -258,8 +299,56 @@ function FleetCard({ fleet, sessionWallet, onDeleteRequest }: FleetCardProps) {
     <Card data-testid={`card-fleet-${fleet.slug}`}>
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-4">
-          <div>
-            <CardTitle className="text-base">{fleet.name}</CardTitle>
+          <div className="min-w-0 flex-1">
+            {renaming ? (
+              <div className="flex items-center gap-2">
+                <Input
+                  value={draftName}
+                  onChange={(e) => setDraftName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") submitRename();
+                    if (e.key === "Escape") cancelRename();
+                  }}
+                  className="h-7 text-sm font-semibold"
+                  autoFocus
+                  data-testid={`input-rename-fleet-${fleet.slug}`}
+                  disabled={renameMutation.isPending}
+                />
+                <Button
+                  variant="ghost" size="icon"
+                  className="h-7 w-7 shrink-0 text-primary hover:text-primary"
+                  onClick={submitRename}
+                  disabled={renameMutation.isPending}
+                  data-testid={`button-save-rename-${fleet.slug}`}
+                  title="Save name"
+                >
+                  {renameMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                </Button>
+                <Button
+                  variant="ghost" size="icon"
+                  className="h-7 w-7 shrink-0"
+                  onClick={cancelRename}
+                  disabled={renameMutation.isPending}
+                  data-testid={`button-cancel-rename-${fleet.slug}`}
+                  title="Cancel"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 group">
+                <CardTitle className="text-base">{fleet.name}</CardTitle>
+                <Button
+                  variant="ghost" size="icon"
+                  className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={startRename}
+                  data-testid={`button-rename-fleet-${fleet.slug}`}
+                  title="Rename fleet"
+                >
+                  <Pencil className="h-3 w-3" />
+                </Button>
+              </div>
+            )}
             <CardDescription className="font-mono text-xs mt-0.5">
               slug: {fleet.slug}
               {fleet.created_at && (
