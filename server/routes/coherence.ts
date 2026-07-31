@@ -101,7 +101,24 @@ export function registerCoherenceRoutes(app: Express) {
             // measured from when the WHY was anchored, not from this backfill.
             createdAt: whyCert.createdAt ?? new Date(),
           }).onConflictDoNothing().returning();
-        } catch { /* fall through to re-select below */ }
+        } catch (insertErr: any) {
+          // Only absorb unique-constraint conflicts (two concurrent requests
+          // racing to insert the same row). Any other error — FK violation,
+          // connection timeout, disk error — must be surfaced immediately so
+          // production failures don't silently become a generic 500 DB_ERROR
+          // with no root-cause information in logs.
+          const pgCode = insertErr?.code ?? insertErr?.cause?.code;
+          if (pgCode !== "23505") {
+            logger.error("coherence_checks lazy backfill INSERT failed (non-conflict)", {
+              error: insertErr?.message ?? String(insertErr),
+              code: pgCode,
+              whyProofId: why_proof_id,
+            });
+            throw insertErr;
+          }
+          // pgCode === "23505": another concurrent request won the INSERT race;
+          // fall through to the re-select below to obtain the row they created.
+        }
         if (!checkRow) {
           [checkRow] = await db.select().from(coherenceChecks).where(eq(coherenceChecks.proofId, why_proof_id));
         }
