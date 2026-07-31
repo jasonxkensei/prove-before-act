@@ -534,4 +534,37 @@ describe("xproof API", () => {
       expect([401, 402]).toContain(res.status);
     });
   });
+
+  describe("4W split description consistency — llms.txt and llms-full.txt", () => {
+    // These tests guard against silent drift: if the 4W breakdown or the
+    // agent-context link is edited in one source but not the other, CI catches
+    // it here before it reaches agents or external documentation consumers.
+
+    const KEY_PHRASES = [
+      "MX-8004",
+      "WHO",
+      "WHAT",
+      "WHEN",
+      "WHY",
+      "agent-context",
+    ] as const;
+
+    it("GET /llms.txt contains all key 4W phrases and agent-context link", async () => {
+      const res = await fetch(`${BASE_URL}/llms.txt`);
+      expect(res.status).toBe(200);
+      const text = await res.text();
+      for (const phrase of KEY_PHRASES) {
+        expect(text, `Expected /llms.txt to contain "${phrase}"`).toContain(phrase);
+      }
+    });
+
+    it("GET /llms-full.txt contains all key 4W phrases and agent-context link", async () => {
+      const res = await fetch(`${BASE_URL}/llms-full.txt`);
+      expect(res.status).toBe(200);
+      const text = await res.text();
+      for (const phrase of KEY_PHRASES) {
+        expect(text, `Expected /llms-full.txt to contain "${phrase}"`).toContain(phrase);
+      }
+    });
+  });
 });
