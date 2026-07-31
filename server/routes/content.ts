@@ -159,6 +159,7 @@ The proof is self-verifiable without relying on xproof infrastructure.
 - \`/learn/proof-of-existence.md\` - What is proof of existence
 - \`/learn/verification.md\` - How to verify proofs
 - \`/learn/api.md\` - API documentation
+- \`/agent-context\` - Agent-first deep-dive: production patterns, retry policy, 4W audit trail walkthrough, x402 payment, cost, MCP examples, and framework integrations (LangChain, CrewAI, AutoGen, LlamaIndex, OpenAI Agents SDK, Fetch.ai)
 
 ## Simplified Certification (POST /api/proof)
 
@@ -323,6 +324,21 @@ Add the Bazaar MCP to your config and search for xproof:
   }
 }
 \`\`\`
+
+## 4W Responsibility Split: MX-8004 vs xProof
+
+The 4W audit trail is delivered by two complementary systems. Understanding the split is important when building agents that need forensically complete provenance:
+
+| | Question | Provided by |
+|:--|:--|:--|
+| **W**HO | Which agent or actor made this decision? | **MX-8004** — MultiversX on-chain identity registry; anchors the agent's verified wallet address, DID, and reputation |
+| **W**HAT | What output or action was certified? | **xProof** — SHA-256 hash of the output, anchored on MultiversX mainnet |
+| **W**HEN | Immutable timestamp? | **xProof** — MultiversX block finality (~6 s); not a self-reported clock |
+| **W**HY | What reasoning led to the decision? | **xProof** — \`action_description\`, \`risk_level\`, and \`context\` fields from \`/api/audit\` |
+
+xProof owns **WHAT / WHEN / WHY** and the causal link that proves reasoning preceded the action. MX-8004 owns **WHO**. Together they form a forensically complete 4W trail.
+
+> **Agent reference**: \`${baseUrl}/agent-context\` — 13 Q&A sections written specifically for autonomous agents: production deployment patterns, retry policy, x402 payment walkthrough, 4W audit trail deep-dive, privacy model, fleet monitoring, latency benchmarks, and framework integration examples (LangChain, CrewAI, AutoGen, LlamaIndex, OpenAI Agents SDK, Fetch.ai).
 
 ## MX-8004 Integration (Trustless Agents Standard)
 
