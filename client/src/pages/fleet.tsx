@@ -11,7 +11,9 @@ import {
   Clock,
   Link2,
   ArrowRight,
+  Settings2,
 } from "lucide-react";
+import { useWalletAuth } from "@/hooks/useWalletAuth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -91,6 +93,7 @@ const PREFIX_REGEX = /^[a-z0-9]{6,62}$/;
 const SLUG_REGEX = /^[a-z0-9][a-z0-9-]{1,58}[a-z0-9]$/;
 
 export default function FleetPage() {
+  const { isAuthenticated } = useWalletAuth();
   const [, navigate] = useLocation();
   const initialParams = typeof window !== "undefined"
     ? new URLSearchParams(window.location.search)
@@ -157,6 +160,14 @@ export default function FleetPage() {
             <Button asChild variant="ghost" size="sm" data-testid="link-nav-leaderboard">
               <Link href="/leaderboard">Leaderboard</Link>
             </Button>
+            {isAuthenticated && (
+              <Button asChild variant="outline" size="sm" className="gap-1.5" data-testid="link-nav-manage-fleets">
+                <Link href="/fleets">
+                  <Settings2 className="h-3.5 w-3.5" />
+                  Manage my fleets
+                </Link>
+              </Button>
+            )}
           </nav>
         </div>
       </header>
