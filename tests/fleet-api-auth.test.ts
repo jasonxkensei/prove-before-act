@@ -124,6 +124,11 @@ describe("Fleet mutation endpoints — unauthenticated (no session cookie) → 4
     );
     expect(res.status).toBe(401);
   });
+
+  it("GET /api/fleets → 401", async () => {
+    const res = await fetch(`${BASE}/api/fleets`);
+    expect(res.status).toBe(401);
+  });
 });
 
 // ── Non-owner (valid session, wrong account) → 403 ───────────────────────────
