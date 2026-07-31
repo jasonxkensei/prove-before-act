@@ -794,7 +794,8 @@ resp = requests.post("${baseUrl}/api/batch",
 </html>`;
 }
 
-function renderAgentContextPage(baseUrl: string): string {
+async function renderAgentContextPage(baseUrl: string): Promise<string> {
+  const priceUsd = await getCertificationPriceUsd();
   const title = "xProof Agent Context — On-chain accountability layer for autonomous agents";
   const description = "xProof anchors your agent's intent before execution on MultiversX. Prove Before Act: no API key needed via x402, 4W audit trail, MCP native. Free trial: 10 proofs, no wallet.";
 
@@ -986,6 +987,84 @@ Resend + X-PAYMENT: &lt;base64-signed-payment&gt; → 200 {"proof_id": "..."}</c
     <p>xProof owns <strong>WHAT / WHEN / WHY</strong> and the causal link that proves reasoning preceded the action. MX-8004 owns <strong>WHO</strong>. Together they form a forensically complete 4W trail.</p>
   </section>
 
+  <section id="coherence-layer">
+    <h2>Coherence Layer — Prove Before Act</h2>
+    <p>The Coherence Layer closes the loop between intent and result. Before executing, an agent anchors its <strong>WHY</strong> (intent, context, decision) on-chain with <code>check_coherence</code>. After executing, it anchors the <strong>WHAT</strong> (output hash) with <code>certify_file</code> and links the pair with <code>POST /api/coherence/link</code>. An unlinked WHY anchor becomes <strong>divergent</strong> after 1 hour — a declared intent with no proven result.</p>
+
+    <h3>check_coherence — Anchor your WHY before acting</h3>
+    <p>MCP tool that implements the <strong>Prove Before Act</strong> pattern. Pass your intent, context, and decision <em>before</em> executing. Receive an immutable WHY proof on-chain. Then link it to your WHAT proof via <code>certify_file</code>.</p>
+    <p><strong>Cost:</strong> $${priceUsd.toFixed(2)} per anchor (same as certify_file). First 10 via trial are free. <strong>Idempotent:</strong> identical payloads return the same proof_id without consuming a credit.</p>
+
+    <table>
+      <thead><tr><th>Argument</th><th>Type</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>intent</code></td><td>string</td><td>The agent's goal or objective</td></tr>
+        <tr><td><code>context</code></td><td>string</td><td>Facts, constraints, and inputs considered</td></tr>
+        <tr><td><code>decision</code></td><td>string</td><td>The specific action about to execute</td></tr>
+        <tr><td><code>who</code></td><td>string (optional)</td><td>Agent identifier</td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>Response fields:</strong> <code>proof_id</code>, <code>coherence_anchor</code> (SHA-256 of payload), <code>timestamp</code>, <code>blockchain_status</code>, <code>verify_url</code>, <code>next_step.link_why_to_what</code> — include <code>proof_id</code> in <code>certify_file</code> metadata as <code>why_proof_id</code>.</p>
+
+    <h3>The full 4W Prove Before Act loop</h3>
+    <table>
+      <thead><tr><th>W</th><th>Tool</th><th>When</th><th>Role</th></tr></thead>
+      <tbody>
+        <tr><td><strong>WHO</strong></td><td>MX-8004 / SIGIL NFT</td><td>Registration</td><td>Agent identity, on-chain</td></tr>
+        <tr><td><strong>WHY</strong></td><td><code>check_coherence</code></td><td>Before act</td><td>Intent + context + decision hash</td></tr>
+        <tr><td><strong>WHAT</strong></td><td><code>certify_file</code></td><td>After act</td><td>Result / output hash</td></tr>
+        <tr><td><strong>WHEN</strong></td><td>MultiversX timestamp</td><td>Automatic</td><td>Immutable block timestamp</td></tr>
+      </tbody>
+    </table>
+
+    <p>Link WHY → WHAT by including <code>"why_proof_id": "&lt;proof_id from check_coherence&gt;"</code> in your <code>certify_file</code> metadata call, then close the loop with <code>POST /api/coherence/link</code>. Without the link call, your WHY anchor stays unlinked: it shows as <strong>divergent</strong> in your public coherence history after 1 h, and after the 2 h TTL it is additionally flagged as a proposed <code>fault</code> violation — both lower your public coherence rate.</p>
+
+    <h3>Closing the loop — POST /api/coherence/link</h3>
+    <p>The full loop is: <code>check_coherence</code> (WHY) → execute → <code>certify_file</code> with <code>metadata.why_proof_id</code> (WHAT) → <code>POST /api/coherence/link</code>. The link call records the WHY→WHAT pair and computes your coherence score.</p>
+    <p>Auth: API key (<code>Bearer pm_…</code>). Both proofs must belong to your account. Idempotent: re-linking the same pair returns <code>already_linked: true</code>.</p>
+    <pre><code>POST ${baseUrl}/api/coherence/link
+Authorization: Bearer pm_YOUR_API_KEY
+Content-Type: application/json
+
+{ "why_proof_id": "&lt;UUID from check_coherence&gt;", "what_proof_id": "&lt;UUID from certify_file&gt;" }</code></pre>
+
+    <p><strong>Coherence score:</strong> 50 base for linking + 15 if WHAT was certified within 1 h of WHY + 20 if <code>metadata.why_proof_id</code> references the WHY + 15 if WHAT is confirmed on-chain. If WHAT was certified <em>before</em> the WHY anchor, the base is halved (25) and timing bonus withheld.</p>
+
+    <p><strong>Error cases:</strong> <code>409 ALREADY_LINKED</code> — WHY is already linked to a different WHAT. <code>400 NOT_A_COHERENCE_ANCHOR</code> — <code>why_proof_id</code> is a regular proof; create the WHY with <code>check_coherence</code> or <code>metadata.type = "coherence_check"</code>.</p>
+
+    <p><strong>Check your history:</strong> <code>GET ${baseUrl}/api/agents/{wallet}/coherence</code> — public, paginated (<code>limit</code>, <code>offset</code>). Returns per-anchor status (<code>linked</code> | <code>pending</code> &lt;1 h | <code>divergent</code> ≥1 h unlinked) plus aggregate <code>coherence_rate</code> and <code>avg_coherence_score</code>.</p>
+
+    <h3>require_coherence_anchor — Coherence Artisan policy gate</h3>
+    <p>MCP tool for orchestrators: before delegating or executing a sub-action, verify that a valid, unexpired WHY anchor exists for the intent. If none exists, execution is blocked until <code>check_coherence</code> is called. <strong>Read-only and free</strong> — never consumes a credit.</p>
+
+    <table>
+      <thead><tr><th>Argument</th><th>Type</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>intent_hash</code></td><td>string (optional)</td><td>The <code>coherence_anchor</code> hash returned by <code>check_coherence</code> — fastest path</td></tr>
+        <tr><td><code>intent</code> / <code>context</code> / <code>decision</code></td><td>strings (optional)</td><td>Byte-identical to the <code>check_coherence</code> call; anchor hash is recomputed deterministically</td></tr>
+        <tr><td><code>who</code></td><td>string (optional)</td><td>Must match the <code>check_coherence</code> value</td></tr>
+        <tr><td><code>max_age_minutes</code></td><td>number (optional)</td><td>Anchor validity window, default 120 (2 h), max 1440</td></tr>
+      </tbody>
+    </table>
+
+    <p><strong>Anchor valid:</strong> returns <code>allowed: true</code>, <code>anchor_id</code>, <code>anchor_created_at</code>, <code>expires_at</code>, <code>already_linked</code>, <code>verify_url</code>.</p>
+    <p><strong>Blocked:</strong> returns <code>allowed: false</code>, <code>reason: "NO_ANCHOR | ANCHOR_EXPIRED"</code>, <code>required_action: "check_coherence"</code>.</p>
+    <p><strong>Orchestrator pattern:</strong> <code>require_coherence_anchor</code> → if <code>allowed=false</code>, block and call <code>check_coherence</code> → re-check → execute → <code>certify_file</code> (WHAT) → <code>POST /api/coherence/link</code>.</p>
+
+    <h3>Divergence detection</h3>
+    <p>A background scan (every 15 min) flags WHY anchors that stay unlinked past the TTL (default <strong>2 hours</strong>) as <strong>divergent</strong> — a declared intent with no proven result. Divergent anchors are recorded as proposed <code>fault</code> violations on the agent's public profile and surface in the fleet view. Linking a WHAT after the TTL improves the coherence score but does not clear the divergence flag.</p>
+
+    <h3>Fleet coherence — the Coherence Artisan view</h3>
+    <p>Aggregate coherence across every agent in an organization. Two modes:</p>
+    <ul>
+      <li><code>GET ${baseUrl}/api/fleet/coherence?org=&lt;wallet_prefix&gt;</code> — every public agent whose wallet shares the prefix (6–62 lowercase alphanumeric chars)</li>
+      <li><code>GET ${baseUrl}/api/fleet/coherence?fleet=&lt;slug&gt;</code> — the explicitly registered members of a named fleet</li>
+    </ul>
+    <p>Returns per-agent stats (<code>total_anchors</code>, <code>linked_count</code>, <code>coherence_rate</code>, <code>divergent_count</code>, <code>avg_coherence_score</code>) plus a fleet-level score: <code>fleet_score = round(0.7 × coherence_rate + 0.3 × avg_coherence_score)</code>.</p>
+    <p>Full documentation, code examples, and integration guide: <a href="${baseUrl}/coherence">${baseUrl}/coherence</a></p>
+  </section>
+
   <section>
     <h2>Key metadata fields</h2>
     <table>
@@ -1166,7 +1245,7 @@ export function prerenderMiddleware() {
         .set("Content-Type", "text/html; charset=utf-8")
         .set("Cache-Control", "public, max-age=300")
         .set("Link", agentLinksHeader)
-        .send(renderAgentContextPage(baseUrl));
+        .send(await renderAgentContextPage(baseUrl));
     }
 
     // /agents/zh is a dedicated MCP doc page for Chinese-speaking agents —
