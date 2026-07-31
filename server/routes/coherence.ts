@@ -329,7 +329,20 @@ export function registerCoherenceRoutes(app: Express) {
   app.get("/api/agents/:wallet/coherence", publicReadRateLimiter, async (req, res) => {
     try {
       const { wallet } = req.params;
-      const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
+      // When limit is explicitly supplied, it must be a positive integer.
+      // `Number("0") || 50` would silently return 50 for limit=0, hiding the
+      // agent's intent. Reject it clearly so agents that probe the total field
+      // via limit=0 get a useful error instead of a surprise default page.
+      let limit: number;
+      if (req.query.limit !== undefined && req.query.limit !== "") {
+        const parsed = Number(req.query.limit);
+        if (!Number.isInteger(parsed) || parsed < 1) {
+          return res.status(400).json({ error: "INVALID_PARAM", message: "limit must be a positive integer" });
+        }
+        limit = Math.min(100, parsed);
+      } else {
+        limit = 50;
+      }
       // Same unauthenticated-offset cap rationale as /api/agents/:wallet/timeline.
       const MAX_COHERENCE_OFFSET = 10_000;
       const offset = Math.max(0, Number(req.query.offset) || 0);

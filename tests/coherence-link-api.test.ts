@@ -625,15 +625,16 @@ describe("GET /api/agents/:wallet/coherence — pagination limits", () => {
     expect(body.checks.length).toBeLessThanOrEqual(100);
   });
 
-  it("limit=0 falls back to the default (50) because 0 is falsy in the || guard", async () => {
-    // Server: `Math.min(100, Math.max(1, Number(req.query.limit) || 50))`
-    // Number("0") = 0, which is falsy → `0 || 50` = 50 → limit = 50.
+  it("limit=0 → 400 INVALID_PARAM (0 is not a positive integer)", async () => {
+    // An agent passing limit=0 to probe the total field cheaply must receive a
+    // clear error rather than silently getting the default 50-row page.
     const res = await fetch(
       `${BASE}/api/agents/${wallet}/coherence?limit=0`,
     );
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body.limit).toBe(50);
+    expect(body.error).toBe("INVALID_PARAM");
+    expect(body.message).toMatch(/positive integer/i);
   });
 
   it("offset=2 skips the two most-recent anchors (checks has 1 row)", async () => {

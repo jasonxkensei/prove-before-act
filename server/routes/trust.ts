@@ -136,7 +136,20 @@ export function registerTrustRoutes(app: Express) {
   app.get("/api/agents/:wallet/timeline", publicReadRateLimiter, async (req, res) => {
     try {
       const { wallet } = req.params;
-      const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
+      // When limit is explicitly supplied, it must be a positive integer.
+      // `Number("0") || 50` would silently return 50 for limit=0, hiding the
+      // caller's intent. Reject it clearly so agents get a useful error instead
+      // of a surprise default page.
+      let limit: number;
+      if (req.query.limit !== undefined && req.query.limit !== "") {
+        const parsed = Number(req.query.limit);
+        if (!Number.isInteger(parsed) || parsed < 1) {
+          return res.status(400).json({ error: "INVALID_PARAM", message: "limit must be a positive integer" });
+        }
+        limit = Math.min(100, parsed);
+      } else {
+        limit = 50;
+      }
       // Cap offset on this unauthenticated endpoint so callers cannot force
       // PostgreSQL to walk past arbitrarily large numbers of confirmed public
       // certifications before returning a tiny page. With limit<=100 this
