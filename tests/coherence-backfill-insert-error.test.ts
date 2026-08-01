@@ -365,6 +365,113 @@ describe(
   },
 );
 
+// ── Select sequence: 23505 with rolled-back winner (re-select returns []) ──────
+// INSERT throws 23505 but the concurrent winner subsequently rolled back, so
+// the re-select at line 123 finds nothing.  The route must return
+// 500 { error: "DB_ERROR" } — not a silent 200 or an unhandled crash.
+const SELECT_SEQUENCE_23505_EMPTY_RESELECT = [
+  [fakeWhyCert],  // 0 — WHY cert
+  [fakeWhatCert], // 1 — WHAT cert
+  [],             // 2 — coherenceChecks: no row → triggers INSERT
+  [],             // 3 — re-select after 23505 absorbed: winner rolled back
+];
+
+function configure23505EmptyReselectMocks() {
+  let callIndex = 0;
+  mockSelect.mockImplementation(() => {
+    const idx = callIndex++;
+    const builder: any = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockImplementation(() =>
+        Promise.resolve(SELECT_SEQUENCE_23505_EMPTY_RESELECT[idx] ?? []),
+      ),
+    };
+    return builder;
+  });
+
+  // INSERT throws 23505 — concurrent winner already inserted but then rolled back.
+  mockInsert.mockReturnValue({
+    values: vi.fn().mockReturnValue({
+      onConflictDoNothing: vi.fn().mockReturnValue({
+        returning: vi.fn().mockRejectedValue(UNIQUE_VIOLATION_ERR),
+      }),
+    }),
+  });
+}
+
+describe(
+  "POST /api/coherence/link — 23505 INSERT race with rolled-back winner returns 500 DB_ERROR",
+  () => {
+    let request: ReturnType<typeof supertest>;
+
+    beforeAll(async () => {
+      configure23505EmptyReselectMocks();
+
+      const express = (await import("express")).default;
+      const app = express();
+      app.use(express.json());
+
+      const { registerCoherenceRoutes } = await import(
+        "../server/routes/coherence"
+      );
+      registerCoherenceRoutes(app);
+
+      request = supertest(app);
+    });
+
+    afterEach(() => {
+      mockLoggerError.mockClear();
+      mockLoggerInfo.mockClear();
+      mockLoggerWarn.mockClear();
+      configure23505EmptyReselectMocks();
+    });
+
+    it("responds HTTP 500 — re-select after absorbed 23505 finds no row", async () => {
+      const res = await request
+        .post("/api/coherence/link")
+        .set("Content-Type", "application/json")
+        .set("Authorization", `Bearer pm_test_stub`)
+        .send({ why_proof_id: FAKE_WHY_ID, what_proof_id: FAKE_WHAT_ID });
+
+      expect(
+        res.status,
+        "when the re-select after a 23505 race returns nothing, the route must return HTTP 500",
+      ).toBe(500);
+    });
+
+    it("body.error is 'DB_ERROR' — the DB_ERROR branch (lines 125-127) is reached", async () => {
+      const res = await request
+        .post("/api/coherence/link")
+        .set("Content-Type", "application/json")
+        .set("Authorization", `Bearer pm_test_stub`)
+        .send({ why_proof_id: FAKE_WHY_ID, what_proof_id: FAKE_WHAT_ID });
+
+      expect(
+        res.body.error,
+        "the DB_ERROR branch must fire, not INTERNAL_ERROR or a silent 200",
+      ).toBe("DB_ERROR");
+      expect(res.body.error).not.toBe("INTERNAL_ERROR");
+    });
+
+    it("logger.error is NOT called — DB_ERROR branch responds directly without logging", async () => {
+      // The DB_ERROR branch (lines 125-127 of coherence.ts) returns the JSON
+      // response directly; it does NOT call logger.error.  Confirming silence
+      // here means the test would fail if the branch were accidentally changed
+      // to call logger.error (which would indicate a different code path).
+      await request
+        .post("/api/coherence/link")
+        .set("Content-Type", "application/json")
+        .set("Authorization", `Bearer pm_test_stub`)
+        .send({ why_proof_id: FAKE_WHY_ID, what_proof_id: FAKE_WHAT_ID });
+
+      expect(
+        mockLoggerError.mock.calls.length,
+        "logger.error must NOT be called in the DB_ERROR branch — it returns the response directly",
+      ).toBe(0);
+    });
+  },
+);
+
 // ── Suite: 23505 concurrent-race path ─────────────────────────────────────────
 // When a concurrent request wins the INSERT race, the loser receives a 23505
 // unique_violation.  The narrowed catch must silently absorb this error, then
