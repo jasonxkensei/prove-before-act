@@ -1256,3 +1256,52 @@ describe("GET /api/fleet/coherence?fleet=<slug> — LIMIT=50 cap hides members b
     expect(body.fleet.agent_count).toBe(50);
   });
 });
+
+// ── GET /api/fleet/coherence?org= — LIMIT=50 cap (Task #555) ─────────────────
+// Seeds 51 public-profile users whose wallet addresses share a common prefix,
+// then confirms the org-prefix branch of the coherence handler also caps the
+// returned agent list at 50 and reports agent_count === 50.
+
+describe("GET /api/fleet/coherence?org= — LIMIT=50 cap hides members beyond slot 50", () => {
+  const run = runHex();
+  // Prefix must be 6-62 lowercase alphanumeric chars; embed the run id so
+  // parallel test runs never collide on the same prefix.
+  const orgPrefix = `erd1orgcap${run}`; // e.g. "erd1orgcap3f9a12b4c7"
+  const SEED_COUNT = 51;
+
+  // Generate 51 wallet addresses that all start with orgPrefix.
+  const members = Array.from({ length: SEED_COUNT }, (_, i) => ({
+    id: `orgcap50-mem-${run}-${String(i).padStart(2, "0")}`,
+    wallet: `${orgPrefix}mem${String(i).padStart(2, "0")}`,
+  }));
+
+  beforeAll(async () => {
+    // Bulk-insert 51 public-profile user rows with the shared wallet prefix.
+    const userPlaceholders = members
+      .map((_, i) => `($${i * 2 + 1}, $${i * 2 + 2}, true)`)
+      .join(", ");
+    const userParams = members.flatMap((m) => [m.id, m.wallet]);
+    await pool.query(
+      `INSERT INTO users (id, wallet_address, is_public_profile) VALUES ${userPlaceholders}`,
+      userParams,
+    );
+  });
+
+  afterAll(async () => {
+    await cleanupUsers(members.map((m) => m.wallet));
+  });
+
+  it("body.agents contains exactly 50 entries even though 51 public users share the prefix", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?org=${orgPrefix}`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect((body.agents as any[]).length).toBe(50);
+  });
+
+  it("fleet.agent_count equals 50 (reflects the capped agent list, not the full prefix count)", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?org=${orgPrefix}`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.fleet.agent_count).toBe(50);
+  });
+});
