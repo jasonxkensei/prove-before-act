@@ -314,17 +314,14 @@ export default function Landing() {
           </div>
 
           <h1 className="mb-3 text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-tight">
-            Trust is
+            Prove Before Act —
             <br />
-            <span className="text-primary">programmable.</span>
+            <span className="text-primary">accountability for&nbsp;agents.</span>
           </h1>
 
-          <p className="mx-auto mb-1 max-w-2xl text-base md:text-lg text-muted-foreground">
-            Built for humans and autonomous agents.
-          </p>
-
           <p className="mx-auto mb-8 max-w-2xl text-lg md:text-xl text-muted-foreground leading-relaxed">
-            Anchor a SHA-256 hash of any file or decision on-chain. Immutable proof of what was created, by whom, and when.
+            Anchor your agent's reasoning on-chain before it executes.{" "}
+            {price}/proof · 10 free certs · no wallet needed.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -334,28 +331,28 @@ export default function Landing() {
               className="text-base h-12 px-8"
               data-testid="button-free-trial-hero"
             >
-              <a href="#free-trial">
+              <a href="/agents">
                 <Bot className="mr-2 h-4 w-4" />
-                10 free proofs — no wallet
+                Get started — agents
               </a>
             </Button>
             <Button
+              asChild
               size="lg"
               variant="outline"
               className="text-base h-12 px-8"
-              onClick={handleConnect}
               data-testid="button-certify-file"
             >
-              <Upload className="mr-2 h-5 w-5" />
-              Submit a proof
+              <a href="/certify">
+                <Upload className="mr-2 h-5 w-5" />
+                Certify a file
+              </a>
             </Button>
           </div>
 
           <p className="mt-4 text-sm text-muted-foreground font-mono">
             Register free → Get key → First proof in 1 curl
           </p>
-
-          <p className="mt-2 text-sm text-muted-foreground">{price} per proof • Unlimited</p>
 
           {/* x402 callout — above the fold */}
           <div className="mt-6 flex justify-center">

@@ -421,7 +421,7 @@ print(f"WHAT: https://xproof.app/proof/{what_resp['proof_id']}")`}
                   {
                     w: "WHO",
                     question: "Who is the agent?",
-                    answer: "MX-8004 / SIGIL — identity layer, soulbound NFT, verifiable on MultiversX",
+                    answer: "MX-8004 — identity layer, verifiable on MultiversX",
                     role: "Identity",
                     highlight: false,
                   },

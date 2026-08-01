@@ -71,8 +71,7 @@ const dualCertCode = `async function certifyAndAct(agent: AgentContext) {
   // ── Step 1: Certify WHY (before acting) ──
   const reasoning = {
     action_type: 'comment_reasoning',
-    agent: agent.sigilId,                    // SIGIL identity
-    sigil_profile: agent.sigilProfileUrl,    // public SIGIL profile
+    agent: agent.agentId,                    // agent identity (MX-8004)
     prompt_hash: sha256(agent.prompt),       // hash of the prompt, not the prompt itself
     trigger_content_hash: sha256(agent.trigger), // hash of what triggered this action
     decision_chain: [                        // auditable reasoning steps
@@ -115,7 +114,7 @@ const dualCertCode = `async function certifyAndAct(agent: AgentContext) {
       filename: 'action_comment_' + Date.now() + '.json',
       metadata: {
         action_type: 'comment',
-        agent: agent.sigilId,
+        agent: agent.agentId,
         why_proof_id: whyProof.proof_id,     // links WHAT back to WHY
         target_author: result.targetAuthor,
         content_preview: result.content.slice(0, 80),
@@ -145,8 +144,7 @@ async function certifyHeartbeat(
 ): Promise<string> {
   const heartbeat = {
     session_id: crypto.randomUUID(),
-    agent: agent.sigilId,
-    sigil_profile: agent.sigilProfileUrl,
+    agent: agent.agentId,
     wallet: agent.walletAddress,
     action_count: actions.length,
     actions: actions.map(a => ({
@@ -487,7 +485,7 @@ export default function Docs4WPage() {
               Here is a real session output — every link is verifiable on-chain.
             </p>
             <div className="rounded-md border bg-muted/30 p-4 font-mono text-xs leading-relaxed space-y-1">
-              <p className="text-muted-foreground">WHO : <span className="text-foreground">xproof-agent-verify-hpyhbs (SIGIL)</span></p>
+              <p className="text-muted-foreground">WHO : <span className="text-foreground">xproof-agent-verify-hpyhbs (MX-8004)</span></p>
               <p className="text-muted-foreground">WHAT: <span className="text-foreground">SHA-256 hash per action (xProof)</span></p>
               <p className="text-muted-foreground">WHEN: <span className="text-foreground">MultiversX block timestamp</span></p>
               <p className="text-muted-foreground">WHY : <span className="text-foreground">Decision chain anchored before every action</span></p>
