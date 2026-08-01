@@ -60,6 +60,34 @@ const CONNECTION_FAILURE_ERR = Object.assign(
   { code: "08006" },
 );
 
+// Simulated Postgres unique_violation — code 23505 means another concurrent
+// request already inserted the same coherence_checks row.  The narrowed catch
+// must silently absorb this so the re-select can fetch the winner's row.
+const UNIQUE_VIOLATION_ERR = Object.assign(
+  new Error("duplicate key value violates unique constraint"),
+  { code: "23505" },
+);
+
+// The row that the concurrent winner inserted; returned by the re-select.
+const FAKE_CHECK_ID = crypto.randomUUID();
+const fakeConcurrentWinnerRow = {
+  id: FAKE_CHECK_ID,
+  userId: FAKE_USER_ID,
+  proofId: FAKE_WHY_ID,
+  intentHash: FAKE_FILE_HASH,
+  linkedProofId: null,
+  coherenceScore: null,
+  createdAt: new Date(Date.now() - 30 * 60 * 1000),
+  updatedAt: new Date(),
+};
+
+// What db.update().returning() produces after linking succeeds.
+const fakeUpdatedRow = {
+  ...fakeConcurrentWinnerRow,
+  linkedProofId: FAKE_WHAT_ID,
+  coherenceScore: 100,
+};
+
 const fakeWhyCert = {
   id: FAKE_WHY_ID,
   userId: FAKE_USER_ID,
@@ -91,10 +119,11 @@ const fakeWhatCert = {
 };
 
 // ── vi.hoisted — fn references must exist before vi.mock factories run ────────
-const { mockSelect, mockInsert, mockLoggerError, mockLoggerInfo, mockLoggerWarn } =
+const { mockSelect, mockInsert, mockUpdate, mockLoggerError, mockLoggerInfo, mockLoggerWarn } =
   vi.hoisted(() => ({
     mockSelect:      vi.fn(),
     mockInsert:      vi.fn(),
+    mockUpdate:      vi.fn(),
     mockLoggerError: vi.fn(),
     mockLoggerInfo:  vi.fn(),
     mockLoggerWarn:  vi.fn(),
@@ -117,8 +146,7 @@ vi.mock("../server/db.js", () => ({
   db: {
     select: mockSelect,
     insert: mockInsert,
-    // update is not called by the route handler itself (only by validateApiKey,
-    // which is fully mocked above), so no stub needed.
+    update: mockUpdate,
   },
   pool: { query: vi.fn().mockResolvedValue({ rows: [] }) },
 }));
@@ -172,6 +200,48 @@ function configureMocks() {
     values: vi.fn().mockReturnValue({
       onConflictDoNothing: vi.fn().mockReturnValue({
         returning: vi.fn().mockRejectedValue(CONNECTION_FAILURE_ERR),
+      }),
+    }),
+  });
+}
+
+// ── 23505 concurrent-race mock configuration ──────────────────────────────────
+// SELECT sequence for the 23505 path has a 4th call: the re-select that fetches
+// the row the concurrent winner inserted.
+const SELECT_SEQUENCE_23505 = [
+  [fakeWhyCert],           // 0 — WHY cert
+  [fakeWhatCert],          // 1 — WHAT cert
+  [],                      // 2 — coherenceChecks: no row → triggers INSERT
+  [fakeConcurrentWinnerRow], // 3 — re-select after 23505 absorbed: winner's row
+];
+
+function configure23505Mocks() {
+  let callIndex = 0;
+  mockSelect.mockImplementation(() => {
+    const idx = callIndex++;
+    const builder: any = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockImplementation(() =>
+        Promise.resolve(SELECT_SEQUENCE_23505[idx] ?? []),
+      ),
+    };
+    return builder;
+  });
+
+  // INSERT throws 23505 — concurrent winner already committed the same row.
+  mockInsert.mockReturnValue({
+    values: vi.fn().mockReturnValue({
+      onConflictDoNothing: vi.fn().mockReturnValue({
+        returning: vi.fn().mockRejectedValue(UNIQUE_VIOLATION_ERR),
+      }),
+    }),
+  });
+
+  // UPDATE succeeds — the route links WHAT→WHY on the winner's row.
+  mockUpdate.mockReturnValue({
+    set: vi.fn().mockReturnValue({
+      where: vi.fn().mockReturnValue({
+        returning: vi.fn().mockResolvedValue([fakeUpdatedRow]),
       }),
     }),
   });
@@ -291,6 +361,82 @@ describe(
         "the backfill INSERT error must produce a dedicated log line, " +
           "not just the generic outer-catch line",
       ).toBeGreaterThan(0);
+    });
+  },
+);
+
+// ── Suite: 23505 concurrent-race path ─────────────────────────────────────────
+// When a concurrent request wins the INSERT race, the loser receives a 23505
+// unique_violation.  The narrowed catch must silently absorb this error, then
+// the re-select (line 123) fetches the winner's row so the route can continue
+// normally and return HTTP 200.  If the guard `if (pgCode !== "23505") throw`
+// is accidentally inverted, this path would re-throw and surface HTTP 500.
+
+describe(
+  "POST /api/coherence/link — concurrent 23505 INSERT is silently absorbed, re-select wins",
+  () => {
+    let request: ReturnType<typeof supertest>;
+
+    beforeAll(async () => {
+      configure23505Mocks();
+
+      const express = (await import("express")).default;
+      const app = express();
+      app.use(express.json());
+
+      const { registerCoherenceRoutes } = await import(
+        "../server/routes/coherence"
+      );
+      registerCoherenceRoutes(app);
+
+      request = supertest(app);
+    });
+
+    afterEach(() => {
+      mockLoggerError.mockClear();
+      mockLoggerInfo.mockClear();
+      mockLoggerWarn.mockClear();
+      configure23505Mocks();
+    });
+
+    // ── HTTP response contract ────────────────────────────────────────────────
+
+    it("responds HTTP 200 — the concurrent winner's row is used, not an error", async () => {
+      const res = await request
+        .post("/api/coherence/link")
+        .set("Content-Type", "application/json")
+        .set("Authorization", `Bearer pm_test_stub`)
+        .send({ why_proof_id: FAKE_WHY_ID, what_proof_id: FAKE_WHAT_ID });
+
+      expect(
+        res.status,
+        "a 23505 concurrent INSERT must be absorbed and produce HTTP 200, not 500",
+      ).toBe(200);
+    });
+
+    it("body.success is true — the route completed the link using the winner's row", async () => {
+      const res = await request
+        .post("/api/coherence/link")
+        .set("Content-Type", "application/json")
+        .set("Authorization", `Bearer pm_test_stub`)
+        .send({ why_proof_id: FAKE_WHY_ID, what_proof_id: FAKE_WHAT_ID });
+
+      expect(res.body.success).toBe(true);
+    });
+
+    // ── Logger contract ───────────────────────────────────────────────────────
+
+    it("logger.error is NOT called — 23505 is a normal concurrent race, not an unexpected failure", async () => {
+      await request
+        .post("/api/coherence/link")
+        .set("Content-Type", "application/json")
+        .set("Authorization", `Bearer pm_test_stub`)
+        .send({ why_proof_id: FAKE_WHY_ID, what_proof_id: FAKE_WHAT_ID });
+
+      expect(
+        mockLoggerError.mock.calls.length,
+        "logger.error must NOT be called when a 23505 unique_violation is silently absorbed",
+      ).toBe(0);
     });
   },
 );
