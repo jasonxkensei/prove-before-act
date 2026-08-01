@@ -570,6 +570,109 @@ describe("GET /api/agents/:wallet/coherence — fresh unlinked anchor shows stat
   });
 });
 
+// ── GET /api/agents/:wallet/coherence — 1-hour boundary flips to 'divergent' ───
+//
+// Guards the exact boundary of the CASE expression in server/routes/coherence.ts:
+//   WHEN cc.created_at > NOW() - INTERVAL '1 hour' THEN 'pending'   (strict >)
+//   ELSE 'divergent'
+//
+// Strategy: seed the row with a fixed absolute timestamp (seedTime) captured
+// from the DB. Then exercise the route with a pinned reference clock via the
+// _asOf test hook, so both the seed and the comparison share the same origin
+// and wall-clock drift between setup and query is eliminated.
+//
+//  - _asOf = seedTime + 1h exactly:
+//      created_at > asOf - 1h  →  seedTime > seedTime  →  FALSE  →  'divergent'
+//      (if > were >=: seedTime >= seedTime → TRUE → 'pending' — test catches it)
+//
+//  - _asOf = seedTime + 1h − 1s  (mutation-sensitivity cross-check):
+//      created_at > asOf - 1h  →  seedTime > seedTime - 1s  →  TRUE  →  'pending'
+//      Proves the boundary matters: one second inside the window flips the result.
+
+describe("GET /api/agents/:wallet/coherence — anchor at exactly 1 hour flips to 'divergent'", () => {
+  const runId = crypto.randomBytes(6).toString("hex");
+  const userId = `coh-bnd-${runId}`;
+  const wallet = `erd1cohbnd${runId}`;
+  const why1hId = crypto.randomUUID();
+  let seedTime: Date;  // absolute timestamp captured from the DB
+
+  beforeAll(async () => {
+    await insertUser(userId, wallet, true);
+
+    // Capture the DB's current time as a fixed anchor so all subsequent
+    // calculations share the same origin without any wall-clock drift.
+    const { rows } = await pool.query<{ now: Date }>(`SELECT NOW() AS now`);
+    seedTime = rows[0].now;
+
+    // WHY cert + coherence_checks row seeded at exactly seedTime (age = 0).
+    // The test will advance the reference clock via _asOf to simulate the
+    // passage of exactly 1 hour without waiting.
+    const intentHash = crypto.randomBytes(32).toString("hex");
+    await pool.query(
+      `INSERT INTO certifications
+         (id, user_id, file_name, file_hash, blockchain_status, is_public, metadata, created_at)
+       VALUES ($1,$2,'coherence-check.json',$3,'confirmed',true,$4,$5::timestamptz)`,
+      [
+        why1hId,
+        userId,
+        crypto.randomBytes(32).toString("hex"),
+        JSON.stringify({ type: "coherence_check", role: "WHY", intent: "boundary intent", decision: "boundary decision" }),
+        seedTime.toISOString(),
+      ],
+    );
+    await pool.query(
+      `INSERT INTO coherence_checks (user_id, proof_id, intent_hash, created_at)
+       VALUES ($1,$2,$3,$4::timestamptz)`,
+      [userId, why1hId, intentHash, seedTime.toISOString()],
+    );
+  });
+
+  afterAll(async () => {
+    await cleanup([userId], [wallet]);
+  });
+
+  // Helper: build the _asOf ISO string offset from seedTime by deltaMs.
+  function asOf(deltaMs: number): string {
+    return new Date(seedTime.getTime() + deltaMs).toISOString();
+  }
+
+  it("anchor at exactly 1 hour has status='divergent', not 'pending'", async () => {
+    // _asOf = seedTime + 1h: created_at > asOf - 1h → seedTime > seedTime → FALSE → 'divergent'
+    const res = await fetch(
+      `${BASE}/api/agents/${wallet}/coherence?_asOf=${encodeURIComponent(asOf(60 * 60 * 1000))}`,
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const row = body.checks.find((c: any) => c.why_proof_id === why1hId);
+    expect(row).toBeDefined();
+    expect(row.status).toBe("divergent");
+  });
+
+  it("anchor at exactly 1 hour is counted in aggregate.divergent_count, not pending_count", async () => {
+    // Same _asOf = seedTime + 1h.
+    const res = await fetch(
+      `${BASE}/api/agents/${wallet}/coherence?_asOf=${encodeURIComponent(asOf(60 * 60 * 1000))}`,
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.aggregate.divergent_count).toBeGreaterThanOrEqual(1);
+    expect(body.aggregate.pending_count).toBe(0);
+  });
+
+  it("mutation-sensitivity: one second before the boundary the anchor is still 'pending'", async () => {
+    // _asOf = seedTime + 1h − 1s: created_at > asOf - 1h → seedTime > seedTime - 1s → TRUE → 'pending'
+    // If the boundary check ever changes to < 1h or is removed, this test fails.
+    const res = await fetch(
+      `${BASE}/api/agents/${wallet}/coherence?_asOf=${encodeURIComponent(asOf(60 * 60 * 1000 - 1000))}`,
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const row = body.checks.find((c: any) => c.why_proof_id === why1hId);
+    expect(row).toBeDefined();
+    expect(row.status).toBe("pending");
+  });
+});
+
 // ── GET /api/agents/:wallet/coherence — pagination limits ──────────────────────
 //
 // Guards the server-side caps in server/routes/coherence.ts lines 329–334:

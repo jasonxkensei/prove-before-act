@@ -367,6 +367,24 @@ export function registerCoherenceRoutes(app: Express) {
         return res.status(400).json({ message: `offset must be <= ${MAX_COHERENCE_OFFSET}` });
       }
 
+      // Test-only clock injection: _asOf allows integration tests to pin the
+      // reference timestamp so boundary conditions (e.g. created_at === asOf - 1h)
+      // are deterministic regardless of wall-clock drift between seed and query.
+      // Rejected in production to prevent callers from bypassing the 1-hour window.
+      // nowExpr is a factory because drizzle sql fragments are stateful and must
+      // not be shared across multiple db.execute() calls.
+      let nowExpr: () => ReturnType<typeof sql>;
+      if (process.env.NODE_ENV !== "production" && typeof req.query._asOf === "string") {
+        const asOf = new Date(req.query._asOf);
+        if (isNaN(asOf.getTime())) {
+          return res.status(400).json({ error: "INVALID_PARAM", message: "_asOf must be a valid ISO timestamp" });
+        }
+        const asOfIso = asOf.toISOString();
+        nowExpr = () => sql`${asOfIso}::timestamptz`;
+      } else {
+        nowExpr = () => sql`NOW()`;
+      }
+
       const [user] = await db
         .select({ id: users.id, isPublicProfile: users.isPublicProfile })
         .from(users)
@@ -381,8 +399,8 @@ export function registerCoherenceRoutes(app: Express) {
             COUNT(*)::int AS total_anchors,
             COUNT(*) FILTER (WHERE cc.linked_proof_id IS NOT NULL)::int AS linked_count,
             COUNT(*) FILTER (WHERE cc.linked_proof_id IS NOT NULL AND wt.created_at >= cc.created_at AND wt.created_at <= cc.created_at + INTERVAL '1 hour')::int AS linked_within_1h,
-            COUNT(*) FILTER (WHERE cc.linked_proof_id IS NULL AND cc.created_at > NOW() - INTERVAL '1 hour')::int AS pending_count,
-            COUNT(*) FILTER (WHERE cc.linked_proof_id IS NULL AND cc.created_at <= NOW() - INTERVAL '1 hour')::int AS divergent_count,
+            COUNT(*) FILTER (WHERE cc.linked_proof_id IS NULL AND cc.created_at > ${nowExpr()} - INTERVAL '1 hour')::int AS pending_count,
+            COUNT(*) FILTER (WHERE cc.linked_proof_id IS NULL AND cc.created_at <= ${nowExpr()} - INTERVAL '1 hour')::int AS divergent_count,
             ROUND(AVG(cc.coherence_score) FILTER (WHERE cc.coherence_score IS NOT NULL))::int AS avg_score
           FROM coherence_checks cc
           JOIN certifications wy ON wy.id = cc.proof_id AND wy.is_public = true
@@ -408,7 +426,7 @@ export function registerCoherenceRoutes(app: Express) {
             wt.created_at          AS what_created_at,
             CASE
               WHEN cc.linked_proof_id IS NOT NULL THEN 'linked'
-              WHEN cc.created_at > NOW() - INTERVAL '1 hour' THEN 'pending'
+              WHEN cc.created_at > ${nowExpr()} - INTERVAL '1 hour' THEN 'pending'
               ELSE 'divergent'
             END AS status,
             CASE
