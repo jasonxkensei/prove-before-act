@@ -310,3 +310,193 @@ describe(
     });
   },
 );
+
+// ── Second describe: lost-race re-select branch (Task #552) ───────────────────
+//
+// Exercises server/routes/coherence.ts lines 157-165:
+//
+//   if (!updated) {
+//     const [current] = await db.select()…where(eq(coherenceChecks.id, checkRow.id));
+//     if (current?.linkedProofId === what_proof_id) {
+//       return res.json({ success: true, already_linked: true, … });
+//     }
+//     return res.status(409).json({ error: "ALREADY_LINKED", message: … });
+//   }
+//
+// db.update() returns [] (caller lost the atomic race).  The follow-on re-select
+// determines which branch is taken:
+//   • different linkedProofId → 409 ALREADY_LINKED
+//   • same    linkedProofId   → 200 already_linked: true  (idempotent re-link)
+//
+// SELECT call order (validateApiKey bypassed, coherenceChecks row exists):
+//   0 — certifications WHY  (Promise.all[0])
+//   1 — certifications WHAT (Promise.all[1])
+//   2 — coherenceChecks     → [fakeCheckRow]  (existing unlinked row)
+//   3 — coherenceChecks     → re-select after UPDATE returns []
+
+describe(
+  "POST /api/coherence/link — lost-race re-select branch (Task #552)",
+  () => {
+    // A distinct UUID representing the proof that WON the concurrent race.
+    const FAKE_WINNER_PROOF_ID = crypto.randomUUID();
+
+    // Row returned by the re-select when ANOTHER caller already linked the anchor.
+    const linkedByWinner = {
+      ...fakeCheckRow,
+      linkedProofId: FAKE_WINNER_PROOF_ID,
+      coherenceScore: 65,
+    };
+
+    // Row returned by the re-select when THIS caller previously linked the same pair
+    // (idempotent: why→what pair is identical).
+    const linkedBySelf = {
+      ...fakeCheckRow,
+      linkedProofId: FAKE_WHAT_ID,
+      coherenceScore: 85,
+    };
+
+    let request: ReturnType<typeof supertest>;
+
+    // Configure mocks so UPDATE returns [] (lost race) and the 4th SELECT returns
+    // the given re-selected row.
+    function configureRaceMocks(reselectedRow: typeof fakeCheckRow) {
+      let callIndex = 0;
+      const SEQ = [
+        [fakeWhyCert],     // 0 — WHY cert
+        [fakeWhatCert],    // 1 — WHAT cert
+        [fakeCheckRow],    // 2 — coherenceChecks (unlinked, skips INSERT)
+        [reselectedRow],   // 3 — re-select after empty UPDATE
+      ];
+
+      mockSelect.mockImplementation(() => {
+        const idx = callIndex++;
+        const builder: any = {
+          from: vi.fn().mockReturnThis(),
+          where: vi.fn().mockImplementation(() =>
+            Promise.resolve(SEQ[idx] ?? []),
+          ),
+        };
+        return builder;
+      });
+
+      // insert is not called (coherenceChecks row already exists).
+      mockInsert.mockReturnValue({
+        values: vi.fn().mockReturnValue({
+          onConflictDoNothing: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([]),
+          }),
+        }),
+      });
+
+      // UPDATE returns [] — simulates losing the concurrent INSERT/UPDATE race.
+      mockUpdate.mockReturnValue({
+        set: vi.fn().mockReturnValue({
+          where: vi.fn().mockReturnValue({
+            returning: vi.fn().mockResolvedValue([]),
+          }),
+        }),
+      });
+    }
+
+    beforeAll(async () => {
+      configureRaceMocks(linkedByWinner);
+
+      const express = (await import("express")).default;
+      const app = express();
+      app.use(express.json());
+      const { registerCoherenceRoutes } = await import(
+        "../server/routes/coherence"
+      );
+      registerCoherenceRoutes(app);
+      request = supertest(app);
+    });
+
+    afterEach(() => {
+      mockSelect.mockClear();
+      mockInsert.mockClear();
+      mockUpdate.mockClear();
+      mockLoggerError.mockClear();
+      mockLoggerInfo.mockClear();
+      mockLoggerWarn.mockClear();
+      // Reset to the "winner" scenario so each test starts from a known state.
+      configureRaceMocks(linkedByWinner);
+    });
+
+    // ── 409 path: another caller already linked the anchor ───────────────────
+
+    it("responds HTTP 409 when UPDATE returns [] and re-select finds a different linkedProofId", async () => {
+      const res = await request
+        .post("/api/coherence/link")
+        .set("Content-Type", "application/json")
+        .set("Authorization", "Bearer pm_test_stub")
+        .send({ why_proof_id: FAKE_WHY_ID, what_proof_id: FAKE_WHAT_ID });
+
+      expect(
+        res.status,
+        "losing the atomic UPDATE race must produce HTTP 409, not 500",
+      ).toBe(409);
+    });
+
+    it("body.error is 'ALREADY_LINKED' when another caller won the race", async () => {
+      const res = await request
+        .post("/api/coherence/link")
+        .set("Content-Type", "application/json")
+        .set("Authorization", "Bearer pm_test_stub")
+        .send({ why_proof_id: FAKE_WHY_ID, what_proof_id: FAKE_WHAT_ID });
+
+      expect(res.body.error).toBe("ALREADY_LINKED");
+    });
+
+    it("body.message names the winning proof ID so callers know what they collided with", async () => {
+      const res = await request
+        .post("/api/coherence/link")
+        .set("Content-Type", "application/json")
+        .set("Authorization", "Bearer pm_test_stub")
+        .send({ why_proof_id: FAKE_WHY_ID, what_proof_id: FAKE_WHAT_ID });
+
+      expect(typeof res.body.message).toBe("string");
+      expect(
+        res.body.message,
+        "the 409 message must reference the winning proof ID",
+      ).toContain(FAKE_WINNER_PROOF_ID);
+    });
+
+    it("db.update is called once (guard UPDATE runs before the re-select branch)", async () => {
+      await request
+        .post("/api/coherence/link")
+        .set("Content-Type", "application/json")
+        .set("Authorization", "Bearer pm_test_stub")
+        .send({ why_proof_id: FAKE_WHY_ID, what_proof_id: FAKE_WHAT_ID });
+
+      expect(mockUpdate).toHaveBeenCalledTimes(1);
+    });
+
+    // ── 200 path: same pair re-submitted (idempotent re-link) ────────────────
+
+    it("responds HTTP 200 with already_linked: true when re-select finds the same what_proof_id", async () => {
+      configureRaceMocks(linkedBySelf);
+      const res = await request
+        .post("/api/coherence/link")
+        .set("Content-Type", "application/json")
+        .set("Authorization", "Bearer pm_test_stub")
+        .send({ why_proof_id: FAKE_WHY_ID, what_proof_id: FAKE_WHAT_ID });
+
+      expect(res.status).toBe(200);
+      expect(
+        res.body.already_linked,
+        "idempotent re-link of the same pair must set already_linked: true",
+      ).toBe(true);
+    });
+
+    it("body.success is true on the idempotent re-link path", async () => {
+      configureRaceMocks(linkedBySelf);
+      const res = await request
+        .post("/api/coherence/link")
+        .set("Content-Type", "application/json")
+        .set("Authorization", "Bearer pm_test_stub")
+        .send({ why_proof_id: FAKE_WHY_ID, what_proof_id: FAKE_WHAT_ID });
+
+      expect(res.body.success).toBe(true);
+    });
+  },
+);
