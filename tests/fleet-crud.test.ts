@@ -1188,3 +1188,71 @@ describe("GET /api/fleet/coherence?fleet=<slug> — private-profile members are 
     expect(body.fleet.agent_count).toBe(1);
   });
 });
+
+describe("GET /api/fleet/coherence?fleet=<slug> — LIMIT=50 cap hides members beyond the 50th slot (Task #549)", () => {
+  const run = runHex();
+  const { walletAddress: ownerWallet } = makeEd25519TestWallet();
+  const ownerId = `fc-cap50-owner-${run}`;
+  const slug    = `fleet-cap50-${run}`;
+
+  // 51 members: all public-profile so only the LIMIT drives the truncation
+  const SEED_COUNT = 51;
+  const members = Array.from({ length: SEED_COUNT }, (_, i) => ({
+    id:     `fc-cap50-mem-${run}-${String(i).padStart(2, "0")}`,
+    wallet: makeEd25519TestWallet().walletAddress,
+  }));
+
+  let fleetId: string;
+  let ownerCookie: string;
+
+  beforeAll(async () => {
+    await insertUser(ownerId, ownerWallet);
+    ownerCookie = await createTestSession(ownerWallet);
+
+    const res = await fetch(`${BASE}/api/fleets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: ownerCookie },
+      body: JSON.stringify({ name: `Fleet Cap50 ${run}`, slug }),
+    });
+    expect(res.status).toBe(201);
+    fleetId = (await res.json()).fleet.id;
+
+    // Bulk-insert 51 public-profile user rows (bypasses HTTP member-count gate)
+    const userPlaceholders = members
+      .map((_, i) => `($${i * 2 + 1}, $${i * 2 + 2}, true)`)
+      .join(", ");
+    const userParams = members.flatMap((m) => [m.id, m.wallet]);
+    await pool.query(
+      `INSERT INTO users (id, wallet_address, is_public_profile) VALUES ${userPlaceholders}`,
+      userParams,
+    );
+
+    // Bulk-insert 51 fleet_member rows (direct SQL, no HTTP proof-of-ownership)
+    const memberPlaceholders = members
+      .map((_, i) => `($1, $${i + 2}, 'owner_wallet')`)
+      .join(", ");
+    await pool.query(
+      `INSERT INTO fleet_members (fleet_id, wallet_address, proof_method) VALUES ${memberPlaceholders}`,
+      [fleetId, ...members.map((m) => m.wallet)],
+    );
+  });
+
+  afterAll(async () => {
+    await pool.query(`DELETE FROM fleet_members WHERE fleet_id = $1`, [fleetId]);
+    await cleanupUsers([ownerWallet, ...members.map((m) => m.wallet)]);
+  });
+
+  it("body.agents contains exactly 50 entries even though 51 public members exist", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?fleet=${slug}`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect((body.agents as any[]).length).toBe(50);
+  });
+
+  it("fleet.agent_count equals 50 (reflects the capped agent list, not the full member count)", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?fleet=${slug}`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.fleet.agent_count).toBe(50);
+  });
+});
