@@ -243,27 +243,36 @@ export function registerCoherenceRoutes(app: Express) {
         : sql`u.wallet_address LIKE ${org + "%"}`;
 
       const FLEET_MAX_AGENTS = 50;
-      const result = await db.execute(sql`
-        SELECT
-          u.wallet_address,
-          u.agent_name,
-          COUNT(cc.id)::int AS total_anchors,
-          COUNT(cc.id) FILTER (WHERE cc.linked_proof_id IS NOT NULL)::int AS linked_count,
-          COUNT(cc.id) FILTER (WHERE cc.linked_proof_id IS NOT NULL AND wt.created_at >= cc.created_at AND wt.created_at <= cc.created_at + INTERVAL '1 hour')::int AS linked_within_1h,
-          COUNT(cc.id) FILTER (WHERE cc.linked_proof_id IS NULL AND cc.created_at > NOW() - INTERVAL '1 hour')::int AS pending_count,
-          COUNT(cc.id) FILTER (WHERE cc.linked_proof_id IS NULL AND cc.created_at <= NOW() - INTERVAL '1 hour')::int AS divergent_count,
-          COUNT(cc.id) FILTER (WHERE cc.divergent_at IS NOT NULL)::int AS flagged_divergent_count,
-          ROUND(AVG(cc.coherence_score) FILTER (WHERE cc.coherence_score IS NOT NULL))::int AS avg_score,
-          MAX(cc.created_at) AS last_anchor_at
-        FROM users u
-        LEFT JOIN coherence_checks cc ON cc.user_id = u.id
-        LEFT JOIN certifications wt ON wt.id = cc.linked_proof_id
-        WHERE ${agentFilter}
-          AND u.is_public_profile = true
-        GROUP BY u.wallet_address, u.agent_name
-        ORDER BY COUNT(cc.id) DESC, u.wallet_address ASC
-        LIMIT ${FLEET_MAX_AGENTS}
-      `);
+      const [countResult, result] = await Promise.all([
+        db.execute(sql`
+          SELECT COUNT(*)::int AS total_count
+          FROM users u
+          WHERE ${agentFilter}
+            AND u.is_public_profile = true
+        `),
+        db.execute(sql`
+          SELECT
+            u.wallet_address,
+            u.agent_name,
+            COUNT(cc.id)::int AS total_anchors,
+            COUNT(cc.id) FILTER (WHERE cc.linked_proof_id IS NOT NULL)::int AS linked_count,
+            COUNT(cc.id) FILTER (WHERE cc.linked_proof_id IS NOT NULL AND wt.created_at >= cc.created_at AND wt.created_at <= cc.created_at + INTERVAL '1 hour')::int AS linked_within_1h,
+            COUNT(cc.id) FILTER (WHERE cc.linked_proof_id IS NULL AND cc.created_at > NOW() - INTERVAL '1 hour')::int AS pending_count,
+            COUNT(cc.id) FILTER (WHERE cc.linked_proof_id IS NULL AND cc.created_at <= NOW() - INTERVAL '1 hour')::int AS divergent_count,
+            COUNT(cc.id) FILTER (WHERE cc.divergent_at IS NOT NULL)::int AS flagged_divergent_count,
+            ROUND(AVG(cc.coherence_score) FILTER (WHERE cc.coherence_score IS NOT NULL))::int AS avg_score,
+            MAX(cc.created_at) AS last_anchor_at
+          FROM users u
+          LEFT JOIN coherence_checks cc ON cc.user_id = u.id
+          LEFT JOIN certifications wt ON wt.id = cc.linked_proof_id
+          WHERE ${agentFilter}
+            AND u.is_public_profile = true
+          GROUP BY u.wallet_address, u.agent_name
+          ORDER BY COUNT(cc.id) DESC, u.wallet_address ASC
+          LIMIT ${FLEET_MAX_AGENTS}
+        `),
+      ]);
+      const totalMemberCount = Number((countResult.rows[0] as any)?.total_count ?? 0);
 
       const agents = (result.rows as any[]).map((r) => {
         const total = Number(r.total_anchors || 0);
@@ -316,6 +325,8 @@ export function registerCoherenceRoutes(app: Express) {
         fleet_name: registeredFleet?.name,
         fleet: {
           agent_count: agents.length,
+          total_member_count: totalMemberCount,
+          truncated: agents.length === FLEET_MAX_AGENTS && totalMemberCount > FLEET_MAX_AGENTS,
           total_anchors: fleetTotals.total,
           linked_count: fleetTotals.linked,
           linked_within_1h: fleetTotals.linked1h,

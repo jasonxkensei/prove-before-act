@@ -1255,6 +1255,20 @@ describe("GET /api/fleet/coherence?fleet=<slug> — LIMIT=50 cap hides members b
     const body = await res.json();
     expect(body.fleet.agent_count).toBe(50);
   });
+
+  it("fleet.truncated is true when 51 public members exist but only 50 are returned", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?fleet=${slug}`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.fleet.truncated).toBe(true);
+  });
+
+  it("fleet.total_member_count is 51 (the full count before the LIMIT)", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?fleet=${slug}`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.fleet.total_member_count).toBe(51);
+  });
 });
 
 // ── GET /api/fleet/coherence?org= — LIMIT=50 cap (Task #555) ─────────────────
@@ -1303,5 +1317,19 @@ describe("GET /api/fleet/coherence?org= — LIMIT=50 cap hides members beyond sl
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.fleet.agent_count).toBe(50);
+  });
+
+  it("fleet.truncated is true when 51 public users share the prefix but only 50 are returned", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?org=${orgPrefix}`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.fleet.truncated).toBe(true);
+  });
+
+  it("fleet.total_member_count is 51 (the full count before the LIMIT)", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?org=${orgPrefix}`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.fleet.total_member_count).toBe(51);
   });
 });
