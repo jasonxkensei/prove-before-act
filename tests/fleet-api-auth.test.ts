@@ -540,4 +540,17 @@ describe("Fleet mutation endpoints — unknown slug → 404 FLEET_NOT_FOUND", ()
     const body = await res.json();
     expect(body.error).toBe("FLEET_NOT_FOUND");
   });
+
+  it("DELETE /api/fleets/:slug/members/:wallet — non-existent slug → 404 FLEET_NOT_FOUND", async () => {
+    const res = await fetch(
+      `${BASE}/api/fleets/${missingSlug}/members/${encodeURIComponent(memberWallet)}`,
+      {
+        method: "DELETE",
+        headers: { Cookie: ownerCookie },
+      },
+    );
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.error).toBe("FLEET_NOT_FOUND");
+  });
 });
