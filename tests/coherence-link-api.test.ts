@@ -504,6 +504,72 @@ describe("GET /api/agents/:wallet/coherence — status, aggregate, rate denomina
   });
 });
 
+// ── GET /api/agents/:wallet/coherence — fresh anchor shows 'pending' ──────────
+//
+// Guards the first-branch of the CASE expression in server/routes/coherence.ts:
+//   WHEN cc.linked_proof_id IS NOT NULL THEN 'linked'
+//   WHEN cc.created_at > NOW() - INTERVAL '1 hour' THEN 'pending'
+//   ELSE 'divergent'
+//
+// A fresh unlinked anchor (< 1 minute old) must resolve to 'pending', not
+// 'divergent'. If the 1-hour window condition were accidentally inverted or
+// removed, this test catches it without relying on the 20-min fixture in the
+// status suite above.
+
+describe("GET /api/agents/:wallet/coherence — fresh unlinked anchor shows status='pending'", () => {
+  const runId = crypto.randomBytes(6).toString("hex");
+  const userId = `coh-fresh-${runId}`;
+  const wallet = `erd1cohfresh${runId}`;
+  const whyFreshId = crypto.randomUUID();
+
+  beforeAll(async () => {
+    await insertUser(userId, wallet, true);
+
+    // WHY cert created just now (< 1 minute ago), confirmed, no linked_proof_id.
+    const intentHash = crypto.randomBytes(32).toString("hex");
+    await pool.query(
+      `INSERT INTO certifications
+         (id, user_id, file_name, file_hash, blockchain_status, is_public, metadata, created_at)
+       VALUES ($1,$2,'coherence-check.json',$3,'confirmed',true,$4, NOW() - INTERVAL '30 seconds')`,
+      [
+        whyFreshId,
+        userId,
+        crypto.randomBytes(32).toString("hex"),
+        JSON.stringify({ type: "coherence_check", role: "WHY", intent: "fresh intent", decision: "fresh decision" }),
+      ],
+    );
+    // coherence_checks row — no linked_proof_id, created moments ago.
+    await pool.query(
+      `INSERT INTO coherence_checks (user_id, proof_id, intent_hash, created_at)
+       VALUES ($1,$2,$3, NOW() - INTERVAL '30 seconds')`,
+      [userId, whyFreshId, intentHash],
+    );
+  });
+
+  afterAll(async () => {
+    await cleanup([userId], [wallet]);
+  });
+
+  it("fresh unlinked anchor (< 1 min old) has status='pending', not 'divergent'", async () => {
+    const res = await fetch(`${BASE}/api/agents/${wallet}/coherence`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const row = body.checks.find((c: any) => c.why_proof_id === whyFreshId);
+    expect(row).toBeDefined();
+    expect(row.status).toBe("pending");
+  });
+
+  it("fresh unlinked anchor has linked_proof_id=null and coherence_score=null", async () => {
+    const res = await fetch(`${BASE}/api/agents/${wallet}/coherence`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const row = body.checks.find((c: any) => c.why_proof_id === whyFreshId);
+    expect(row).toBeDefined();
+    expect(row.linked_proof_id).toBeNull();
+    expect(row.coherence_score).toBeNull();
+  });
+});
+
 // ── GET /api/agents/:wallet/coherence — pagination limits ──────────────────────
 //
 // Guards the server-side caps in server/routes/coherence.ts lines 329–334:
