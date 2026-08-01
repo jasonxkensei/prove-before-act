@@ -314,7 +314,7 @@ export default function Landing() {
           </div>
 
           <h1 className="mb-3 text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-tight">
-            Prove Before Act —
+            Prove Before Act
             <br />
             <span className="text-primary">accountability for&nbsp;agents.</span>
           </h1>
