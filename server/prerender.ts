@@ -1231,6 +1231,174 @@ ${safeJsonLd({
   }
 }
 
+function renderCoherencePage(baseUrl: string): string {
+  return commonHead(
+    "Coherence Layer — Prove Before Act | xproof",
+    "Anchor your WHY before acting. check_coherence anchors intent on-chain before every AI decision. Link it to your WHAT proof after execution to produce an auditable coherence score.",
+    `${baseUrl}/coherence`,
+  ) + `
+<body>
+<main style="font-family:Inter,sans-serif;max-width:860px;margin:0 auto;padding:2rem 1.5rem;color:#111">
+<nav style="margin-bottom:2rem"><a href="${escapeHtml(baseUrl)}" style="color:#10b981;text-decoration:none;font-weight:600">← xproof</a></nav>
+
+<h1 style="font-size:2rem;font-weight:700;margin-bottom:.5rem">Coherence Layer — Prove Before Act</h1>
+<p style="color:#555;font-size:1.1rem;margin-bottom:2rem">Close the loop between intent and result. Anchor your <strong>WHY</strong> before acting, anchor your <strong>WHAT</strong> after, link the pair to produce a public, on-chain coherence score.</p>
+
+<h2>Full 4W loop</h2>
+<table style="width:100%;border-collapse:collapse;margin-bottom:1.5rem">
+<thead><tr style="background:#f3f4f6">
+  <th style="padding:.6rem 1rem;text-align:left;border:1px solid #e5e7eb">W</th>
+  <th style="padding:.6rem 1rem;text-align:left;border:1px solid #e5e7eb">Tool / endpoint</th>
+  <th style="padding:.6rem 1rem;text-align:left;border:1px solid #e5e7eb">When</th>
+  <th style="padding:.6rem 1rem;text-align:left;border:1px solid #e5e7eb">Role</th>
+</tr></thead>
+<tbody>
+  <tr><td style="padding:.5rem 1rem;border:1px solid #e5e7eb"><strong>WHO</strong></td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">MX-8004 / SIGIL NFT</td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">Registration</td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">Agent identity, on-chain</td></tr>
+  <tr><td style="padding:.5rem 1rem;border:1px solid #e5e7eb"><strong>WHY</strong></td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb"><code>check_coherence</code></td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">Before act</td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">Intent + context + decision hash</td></tr>
+  <tr><td style="padding:.5rem 1rem;border:1px solid #e5e7eb"><strong>WHAT</strong></td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb"><code>certify_file</code></td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">After act</td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">Result / output hash</td></tr>
+  <tr><td style="padding:.5rem 1rem;border:1px solid #e5e7eb"><strong>WHEN</strong></td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">MultiversX timestamp</td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">Automatic</td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">Immutable block timestamp</td></tr>
+</tbody>
+</table>
+
+<h2>check_coherence — Anchor your WHY before acting</h2>
+<p>MCP tool implementing Prove Before Act. Call BEFORE executing any significant action. Pass <code>intent</code>, <code>context</code>, and <code>decision</code>.</p>
+<pre style="background:#f9fafb;padding:1rem;border-radius:.5rem;overflow-x:auto;font-size:.85rem"><code>{ "name": "check_coherence", "arguments": { "intent": "...", "context": "...", "decision": "...", "who": "optional" } }</code></pre>
+<p><strong>Response:</strong> <code>proof_id</code>, <code>coherence_anchor</code> (SHA-256), <code>timestamp</code>, <code>verify_url</code>, <code>next_step.link_why_to_what</code>.<br>
+<strong>Cost:</strong> $0.01/anchor. First 10 free. Idempotent: identical payloads return the same <code>proof_id</code>.</p>
+
+<h2>POST /api/coherence/link — Close the loop</h2>
+<p>After executing and certifying your WHAT, link the two proofs. Auth: <code>Bearer pm_...</code></p>
+<pre style="background:#f9fafb;padding:1rem;border-radius:.5rem;overflow-x:auto;font-size:.85rem"><code>curl -X POST ${escapeHtml(baseUrl)}/api/coherence/link \\
+  -H "Authorization: Bearer pm_YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"why_proof_id": "&lt;UUID from check_coherence&gt;", "what_proof_id": "&lt;UUID from certify_file&gt;"}'</code></pre>
+<p><strong>Coherence score:</strong> 50 base + 15 if WHAT within 1 h + 20 if WHAT <code>metadata.why_proof_id</code> references WHY + 15 if WHAT on-chain confirmed.</p>
+<p><strong>Unlinked WHY anchor:</strong> <code>pending</code> for &lt;1 h, then <code>divergent</code> after 1 h; flagged as proposed <code>fault</code> violation after 2 h TTL.</p>
+
+<h2>require_coherence_anchor — Coherence Artisan policy gate</h2>
+<p>MCP tool for orchestrators. Before delegating a sub-action, verify a valid WHY anchor exists. <strong>Free — no credit consumed.</strong></p>
+<ul>
+  <li><code>allowed: true</code> → anchor valid; returns <code>anchor_id</code>, <code>expires_at</code>, <code>verify_url</code></li>
+  <li><code>allowed: false</code> → reason <code>NO_ANCHOR</code> or <code>ANCHOR_EXPIRED</code>; <code>required_action: "check_coherence"</code></li>
+</ul>
+
+<h2>Coherence history</h2>
+<pre style="background:#f9fafb;padding:1rem;border-radius:.5rem;overflow-x:auto;font-size:.85rem"><code>GET ${escapeHtml(baseUrl)}/api/agents/{wallet}/coherence?limit=50&amp;offset=0</code></pre>
+<p>Returns per-anchor status (<code>linked</code> | <code>pending</code> &lt;1 h | <code>divergent</code> ≥1 h) plus aggregate <code>coherence_rate</code> and <code>avg_coherence_score</code>. Public, no auth required.</p>
+
+<h2>Fleet coherence</h2>
+<p>Aggregate coherence across an entire fleet — the Coherence Artisan view.</p>
+<pre style="background:#f9fafb;padding:1rem;border-radius:.5rem;overflow-x:auto;font-size:.85rem"><code>GET ${escapeHtml(baseUrl)}/api/fleet/coherence?org=&lt;wallet_prefix&gt;
+GET ${escapeHtml(baseUrl)}/api/fleet/coherence?fleet=&lt;slug&gt;</code></pre>
+<p>Returns per-agent stats plus <code>fleet_score = round(0.7 × coherence_rate + 0.3 × avg_coherence_score)</code>. Interactive view: <a href="${escapeHtml(baseUrl)}/fleet" style="color:#10b981">${escapeHtml(baseUrl)}/fleet</a></p>
+
+<h2>Resources</h2>
+<ul>
+  <li><a href="${escapeHtml(baseUrl)}/agent-context" style="color:#10b981">Agent context page</a> — full API reference for AI agents</li>
+  <li><a href="${escapeHtml(baseUrl)}/llms.txt" style="color:#10b981">llms.txt</a> — machine-readable tool list</li>
+  <li><a href="${escapeHtml(baseUrl)}/.well-known/xproof.md" style="color:#10b981">xproof.md</a> — full specification</li>
+  <li><a href="${escapeHtml(baseUrl)}/fleet" style="color:#10b981">Fleet view</a> — interactive fleet coherence dashboard</li>
+</ul>
+</main>
+</body></html>`;
+}
+
+function renderFleetPage(baseUrl: string): string {
+  return commonHead(
+    "Fleet Coherence — Coherence Artisan View | xproof",
+    "Aggregate WHY→WHAT coherence across a fleet of AI agents. Enter an org wallet prefix or registered fleet slug to see per-agent coherence rates and the fleet-level score.",
+    `${baseUrl}/fleet`,
+  ) + `
+<body>
+<main style="font-family:Inter,sans-serif;max-width:860px;margin:0 auto;padding:2rem 1.5rem;color:#111">
+<nav style="margin-bottom:2rem">
+  <a href="${escapeHtml(baseUrl)}" style="color:#10b981;text-decoration:none;font-weight:600">← xproof</a>
+  &nbsp;·&nbsp;
+  <a href="${escapeHtml(baseUrl)}/coherence" style="color:#10b981;text-decoration:none">Coherence Layer</a>
+</nav>
+
+<h1 style="font-size:2rem;font-weight:700;margin-bottom:.5rem">Fleet Coherence — Coherence Artisan View</h1>
+<p style="color:#555;font-size:1.1rem;margin-bottom:2rem">When an organization runs a fleet of agents, who guarantees global alignment? The fleet coherence view aggregates WHY→WHAT coherence rates across all agents in your fleet and produces a single fleet-level score.</p>
+
+<h2>Two query modes</h2>
+<table style="width:100%;border-collapse:collapse;margin-bottom:1.5rem">
+<thead><tr style="background:#f3f4f6">
+  <th style="padding:.6rem 1rem;text-align:left;border:1px solid #e5e7eb">Mode</th>
+  <th style="padding:.6rem 1rem;text-align:left;border:1px solid #e5e7eb">Parameter</th>
+  <th style="padding:.6rem 1rem;text-align:left;border:1px solid #e5e7eb">Selects</th>
+</tr></thead>
+<tbody>
+  <tr><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">Wallet prefix</td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb"><code>?org=&lt;prefix&gt;</code></td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">Every public agent whose wallet address starts with the prefix (min 6 chars)</td></tr>
+  <tr><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">Registered fleet</td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb"><code>?fleet=&lt;slug&gt;</code></td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">The exact members added to a named fleet via <code>POST /api/fleets</code></td></tr>
+</tbody>
+</table>
+
+<p>Only agents with <code>is_public_profile = true</code> are included. Max 50 agents returned (capped). Private-profile agents are excluded from the public fleet view.</p>
+
+<h2>API — GET /api/fleet/coherence</h2>
+<pre style="background:#f9fafb;padding:1rem;border-radius:.5rem;overflow-x:auto;font-size:.85rem"><code># Org-prefix mode
+GET ${escapeHtml(baseUrl)}/api/fleet/coherence?org=erd1acme
+
+# Registered fleet mode
+GET ${escapeHtml(baseUrl)}/api/fleet/coherence?fleet=acme-agents</code></pre>
+
+<h3>Response shape</h3>
+<pre style="background:#f9fafb;padding:1rem;border-radius:.5rem;overflow-x:auto;font-size:.85rem"><code>{
+  "fleet_slug": "acme-agents",       // or "org_prefix" for prefix mode
+  "fleet": {
+    "agent_count": 12,
+    "coherence_rate": 84,            // % of mature WHY anchors linked within 1 h
+    "avg_coherence_score": 71,
+    "fleet_score": 80,               // round(0.7 × rate + 0.3 × avg_score)
+    "total_anchors": 347,
+    "linked_count": 291,
+    "divergent_count": 8,
+    "pending_count": 3,
+    "truncated": false,              // true when member count exceeds 50-agent cap
+    "total_member_count": 12
+  },
+  "agents": [
+    {
+      "wallet_address": "erd1...",
+      "agent_name": "acme-classifier",
+      "total_anchors": 42,
+      "linked_count": 38,
+      "coherence_rate": 90,
+      "avg_coherence_score": 78,
+      "divergent_count": 1,
+      "pending_count": 0,
+      "last_anchor_at": "2026-08-01T14:22:00Z"
+    }
+  ]
+}</code></pre>
+
+<h2>Fleet score formula</h2>
+<p><code>fleet_score = round(0.7 × coherence_rate + 0.3 × avg_coherence_score)</code></p>
+<p>Coherence rate (closing the loop at all) is weighted more than average score (how gracefully the loop was closed). A fleet with all agents reliably linking WHY→WHAT within 1 h earns full points on the dominant term.</p>
+
+<h2>Register a fleet</h2>
+<pre style="background:#f9fafb;padding:1rem;border-radius:.5rem;overflow-x:auto;font-size:.85rem"><code># Create a fleet (auth required)
+POST ${escapeHtml(baseUrl)}/api/fleets
+Authorization: Bearer pm_YOUR_API_KEY
+{ "name": "Acme Agents", "slug": "acme-agents" }
+
+# Add a member (ownership proof required)
+POST ${escapeHtml(baseUrl)}/api/fleets/acme-agents/members
+Authorization: Bearer pm_YOUR_API_KEY
+{ "wallet_address": "erd1...", "proof": { "type": "owner_wallet" } }</code></pre>
+
+<h2>Resources</h2>
+<ul>
+  <li><a href="${escapeHtml(baseUrl)}/coherence" style="color:#10b981">Coherence Layer docs</a> — check_coherence, require_coherence_anchor, link API</li>
+  <li><a href="${escapeHtml(baseUrl)}/agent-context" style="color:#10b981">Agent context page</a> — full API reference</li>
+  <li><a href="${escapeHtml(baseUrl)}/llms.txt" style="color:#10b981">llms.txt</a> — MCP tool list</li>
+  <li><a href="${escapeHtml(baseUrl)}/.well-known/xproof.md" style="color:#10b981">xproof.md</a> — full specification</li>
+</ul>
+<p style="margin-top:2rem;color:#888;font-size:.875rem">Interactive fleet dashboard: <a href="${escapeHtml(baseUrl)}/fleet" style="color:#10b981">${escapeHtml(baseUrl)}/fleet</a> — enter a wallet prefix or fleet slug to load live per-agent coherence data.</p>
+</main>
+</body></html>`;
+}
+
 export function prerenderMiddleware() {
   return async (req: Request, res: Response, next: NextFunction) => {
     const path = req.path;
@@ -1321,6 +1489,22 @@ export function prerenderMiddleware() {
           .set("Content-Type", "text/html")
           .set("Link", agentLinks)
           .send(await renderLeaderboardPage(baseUrl));
+      }
+
+      if (path === "/coherence") {
+        return res.status(200)
+          .set("Content-Type", "text/html")
+          .set("Cache-Control", "public, max-age=300")
+          .set("Link", agentLinks)
+          .send(renderCoherencePage(baseUrl));
+      }
+
+      if (path === "/fleet") {
+        return res.status(200)
+          .set("Content-Type", "text/html")
+          .set("Cache-Control", "public, max-age=300")
+          .set("Link", agentLinks)
+          .send(renderFleetPage(baseUrl));
       }
 
       const agentMatch = path.match(/^\/agent\/([^/]+)$/);
