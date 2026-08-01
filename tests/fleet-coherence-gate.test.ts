@@ -614,3 +614,98 @@ describe("GET /api/fleet/coherence?fleet=<slug> — registered-fleet member scop
     expect(body.fleet.agent_count).toBeGreaterThanOrEqual(3);
   });
 });
+
+// ── GET /api/fleet/coherence?fleet=<slug> — fresh anchor counted as 'pending' ──
+//
+// Guards the fleet-level FILTER clause in server/routes/coherence.ts:
+//   COUNT(cc.id) FILTER (WHERE cc.linked_proof_id IS NULL
+//                          AND cc.created_at > NOW() - INTERVAL '1 hour') AS pending_count
+//   COUNT(cc.id) FILTER (WHERE cc.linked_proof_id IS NULL
+//                          AND cc.created_at <= NOW() - INTERVAL '1 hour') AS divergent_count
+//
+// A fresh unlinked anchor (< 1 minute old, no linked_proof_id) must be
+// counted in pending_count, not in divergent_count.  If the FILTER condition
+// were accidentally inverted or dropped the fleet dashboard would show an
+// inflated divergent_count and a suppressed pending_count, silently lowering
+// coherence_rate for every fleet that has new members.
+
+describe("GET /api/fleet/coherence?fleet=<slug> — fresh unlinked anchor counted as pending, not divergent", () => {
+  const runId = crypto.randomBytes(4).toString("hex");
+  const fleetSlug = `fleet-fresh-${runId}`;
+  const fleetName = `Fresh Anchor Fleet ${runId}`;
+
+  const ownerId     = `ffresh-own-${runId}`;
+  const ownerWallet = `erd1ffreshown${runId}`;
+
+  const memberId     = `ffresh-mb-${runId}`;
+  const memberWallet = `erd1ffreshmb${runId}`;
+
+  const freshWhyId = crypto.randomUUID();
+  let fleetId: string;
+
+  beforeAll(async () => {
+    await insertUser(ownerId,  ownerWallet,  true);
+    await insertUser(memberId, memberWallet, true, "agent-fresh");
+
+    // Create the fleet and register the member.
+    const { rows } = await pool.query<{ id: string }>(
+      `INSERT INTO fleets (owner_user_id, name, slug) VALUES ($1, $2, $3) RETURNING id`,
+      [ownerId, fleetName, fleetSlug],
+    );
+    fleetId = rows[0].id;
+    await pool.query(
+      `INSERT INTO fleet_members (fleet_id, wallet_address, proof_method) VALUES ($1, $2, 'api_key')`,
+      [fleetId, memberWallet],
+    );
+
+    // WHY cert created 30 seconds ago — well within the 1-hour window.
+    // No linked_proof_id on the coherence_checks row.
+    const intentHash = crypto.randomBytes(32).toString("hex");
+    await pool.query(
+      `INSERT INTO certifications
+         (id, user_id, file_name, file_hash, blockchain_status, is_public, metadata, created_at)
+       VALUES ($1, $2, 'coherence-check.json', $3, 'confirmed', true, $4, NOW() - INTERVAL '30 seconds')`,
+      [
+        freshWhyId,
+        memberId,
+        crypto.randomBytes(32).toString("hex"),
+        JSON.stringify({ type: "coherence_check", role: "WHY", intent: "fresh fleet intent", decision: "fresh fleet decision" }),
+      ],
+    );
+    await pool.query(
+      `INSERT INTO coherence_checks (user_id, proof_id, intent_hash, created_at)
+       VALUES ($1, $2, $3, NOW() - INTERVAL '30 seconds')`,
+      [memberId, freshWhyId, intentHash],
+    );
+  });
+
+  afterAll(async () => {
+    await pool.query(`DELETE FROM fleets WHERE id = $1`, [fleetId]);
+    await cleanup([ownerId, memberId], [ownerWallet, memberWallet]);
+  });
+
+  it("fleet pending_count >= 1 for a fresh unlinked anchor (< 1 min old)", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?fleet=${fleetSlug}`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.fleet.pending_count).toBeGreaterThanOrEqual(1);
+  });
+
+  it("fresh unlinked anchor is NOT counted in fleet divergent_count", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?fleet=${fleetSlug}`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    // The only anchor seeded is fresh and unlinked — divergent_count must be 0.
+    expect(body.fleet.divergent_count).toBe(0);
+  });
+
+  it("member's per-agent row also shows pending_count=1 and divergent_count=0", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?fleet=${fleetSlug}`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const agent = body.agents.find((a: any) => a.wallet_address === memberWallet);
+    expect(agent).toBeDefined();
+    expect(agent.pending_count).toBe(1);
+    expect(agent.divergent_count).toBe(0);
+  });
+});
