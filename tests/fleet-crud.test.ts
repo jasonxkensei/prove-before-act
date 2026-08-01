@@ -1107,3 +1107,84 @@ describe("GET /api/fleet/coherence?fleet=<slug> — public response shape and fi
     expect(body.error).toBe("FLEET_NOT_FOUND");
   });
 });
+
+// ── GET /api/fleet/coherence?fleet=<slug> — private-profile member visibility ─
+//
+// Members whose user row has is_public_profile = false must NOT appear in the
+// public coherence response. This guards against accidental removal of the
+//   AND u.is_public_profile = true
+// filter in coherence.ts (line ~262).
+
+describe("GET /api/fleet/coherence?fleet=<slug> — private-profile members are hidden (Task #544)", () => {
+  const run = runHex();
+  const { walletAddress: ownerWallet } = makeEd25519TestWallet();
+  const ownerId = `fc-priv-owner-${run}`;
+  const slug    = `fleet-priv-vis-${run}`;
+
+  // One public-profile member, one private-profile member
+  const { walletAddress: publicWallet  } = makeEd25519TestWallet();
+  const { walletAddress: privateWallet } = makeEd25519TestWallet();
+  const publicMemberId  = `fc-priv-pub-${run}`;
+  const privateMemberId = `fc-priv-prv-${run}`;
+
+  let fleetId: string;
+  let ownerCookie: string;
+
+  beforeAll(async () => {
+    await insertUser(ownerId, ownerWallet);
+    ownerCookie = await createTestSession(ownerWallet);
+
+    const res = await fetch(`${BASE}/api/fleets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: ownerCookie },
+      body: JSON.stringify({ name: `Fleet Priv Vis ${run}`, slug }),
+    });
+    expect(res.status).toBe(201);
+    fleetId = (await res.json()).fleet.id;
+
+    // Insert one public-profile and one private-profile member user
+    await pool.query(
+      `INSERT INTO users (id, wallet_address, is_public_profile)
+       VALUES ($1, $2, true), ($3, $4, false)`,
+      [publicMemberId, publicWallet, privateMemberId, privateWallet],
+    );
+
+    // Add both as fleet members
+    await pool.query(
+      `INSERT INTO fleet_members (fleet_id, wallet_address, proof_method)
+       VALUES ($1, $2, 'signature'), ($1, $3, 'signature')`,
+      [fleetId, publicWallet, privateWallet],
+    );
+  });
+
+  afterAll(async () => {
+    await pool.query(`DELETE FROM fleet_members WHERE fleet_id = $1`, [fleetId]);
+    await cleanupUsers([ownerId, publicMemberId, privateMemberId]);
+  });
+
+  it("public-profile member appears in body.agents", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?fleet=${slug}`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const wallets = (body.agents as any[]).map((a: any) => a.wallet_address);
+    expect(wallets).toContain(publicWallet);
+  });
+
+  it("private-profile member's wallet is absent from body.agents", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?fleet=${slug}`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const wallets = (body.agents as any[]).map((a: any) => a.wallet_address);
+    expect(
+      wallets,
+      `private-profile wallet ${privateWallet} must not appear in the public coherence response`,
+    ).not.toContain(privateWallet);
+  });
+
+  it("fleet.agent_count equals 1 (only the public-profile member is counted)", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?fleet=${slug}`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.fleet.agent_count).toBe(1);
+  });
+});
