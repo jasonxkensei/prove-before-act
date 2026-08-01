@@ -2237,6 +2237,8 @@ Available tools (auth: Bearer pm_YOUR_API_KEY except where noted):
 - \\\`audit_agent_session\\\` — certify a full agent decision (WHY + WHAT dual-proof, blocks execution without proof_id)
 - \\\`check_attestations\\\` — check third-party trust attestations for an agent wallet
 - \\\`investigate_proof\\\` — full 4W audit trail reconstruction (x402 paid or API key)
+- \\\`check_coherence\\\` — anchor WHY intent before executing (Prove Before Act); \$${priceUsd}/anchor, first 10 free; idempotent on identical payloads
+- \\\`require_coherence_anchor\\\` — policy gate for orchestrators: verify a valid WHY anchor exists before delegating a sub-action; **free, no credit consumed**
 - \\\`submit_outcome\\\` — record the actual outcome against a confidence-anchored decision
 - \\\`get_calibration\\\` — query an agent's calibration quality (bias, gap, variance) — **no auth required**
 
@@ -2438,6 +2440,34 @@ Blocking workflow templates (agent CANNOT continue without proof_id):
 - Eliza OS:  /agent-tools/audit-guard-eliza.ts
 
 MCP tool: audit_agent_session (same params, enforces API key auth)
+
+## Coherence Layer — Prove Before Act
+
+The Coherence Layer closes the loop between intent and result. Anchor WHY BEFORE executing, anchor WHAT AFTER, link the pair to prove alignment and earn a coherence score.
+
+Full loop: check_coherence (WHY) → execute → certify_file with metadata.why_proof_id (WHAT) → POST /api/coherence/link
+
+check_coherence — MCP tool. Args: intent, context, decision (all required), who (optional). Returns proof_id (the WHY anchor) and coherence_anchor (SHA-256 of payload). Cost: \$${priceUsd}/anchor, first 10 free. Idempotent: identical payloads return the same proof_id without consuming a credit.
+
+require_coherence_anchor — MCP tool. Orchestrator policy gate. Pass intent_hash (from check_coherence response) or all three of intent+context+decision. Returns allowed: true/false + anchor_id + expires_at. Free, no credit consumed. If allowed=false (reason: NO_ANCHOR or ANCHOR_EXPIRED), call check_coherence then re-check before proceeding.
+
+POST /api/coherence/link — link WHY to WHAT.
+  Auth: Bearer pm_KEY. Body: {why_proof_id, what_proof_id}. Idempotent.
+  Coherence score: 50 base + 15 if WHAT within 1h of WHY + 20 if WHAT metadata.why_proof_id references WHY + 15 if WHAT on-chain confirmed.
+
+Unlinked WHY anchor: shows as pending for <1h, then divergent after 1h; flagged as fault violation after 2h TTL.
+
+Coherence history (public, paginated):
+  GET /api/agents/{wallet}/coherence?limit=50&offset=0
+  Returns: checks[], total, aggregate.coherence_rate, aggregate.avg_coherence_score
+  Per-check status: linked | pending (<1h unlinked) | divergent (≥1h unlinked)
+
+Fleet coherence (Coherence Artisan view):
+  GET /api/fleet/coherence?org=<wallet_prefix>   — all public agents sharing prefix
+  GET /api/fleet/coherence?fleet=<slug>          — named fleet members
+  fleet_score = round(0.7 × coherence_rate + 0.3 × avg_coherence_score)
+
+Full Coherence Layer documentation: https://xproof.app/coherence
 `;
     res.setHeader("Content-Type", "text/plain");
     res.send(content);
@@ -4764,6 +4794,73 @@ Before each piece of AI-generated content is published on Moltbook, xproof_agent
 
 ---
 
+## Coherence Layer — Prove Before Act (WHY before WHAT)
+
+The Coherence Layer closes the loop between intent and result. Before executing any significant action, anchor your **WHY** (intent, context, decision) on-chain with \`check_coherence\`. After executing, anchor the **WHAT** (output hash) with \`certify_file\`. Link the pair with \`POST /api/coherence/link\` to produce an auditable coherence score.
+
+### check_coherence — Anchor your WHY before acting
+
+MCP tool implementing the Prove Before Act pattern. Pass intent, context, and decision BEFORE executing.
+
+\`\`\`json
+{ "name": "check_coherence", "arguments": { "intent": "...", "context": "...", "decision": "...", "who": "optional" } }
+\`\`\`
+
+Response: \`proof_id\`, \`coherence_anchor\` (SHA-256 of payload), \`timestamp\`, \`verify_url\`, \`next_step.link_why_to_what\`.
+Cost: \$${priceUsd} per anchor. First 10 free. Idempotent: identical payloads return the same proof_id.
+
+### The full 4W Prove Before Act loop
+
+| W | Tool | When | Role |
+|---|------|------|------|
+| WHO | MX-8004 / SIGIL NFT | Registration | Agent identity, on-chain |
+| WHY | \`check_coherence\` | Before act | Intent + context + decision hash |
+| WHAT | \`certify_file\` | After act | Result / output hash |
+| WHEN | MultiversX timestamp | Automatic | Immutable block timestamp |
+
+### POST /api/coherence/link — Close the loop
+
+Auth: Bearer pm_... Both proofs must belong to your account. Idempotent (re-link same pair returns \`already_linked: true\`).
+
+\`\`\`bash
+curl -X POST ${baseUrl}/api/coherence/link \\
+  -H "Authorization: Bearer pm_YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"why_proof_id": "<UUID from check_coherence>", "what_proof_id": "<UUID from certify_file>"}'
+\`\`\`
+
+Coherence score: 50 base + 15 if WHAT within 1h of WHY + 20 if WHAT \`metadata.why_proof_id\` references WHY + 15 if WHAT on-chain confirmed.
+
+Unlinked WHY anchor: \`pending\` for <1h, then \`divergent\` after 1h; flagged as \`fault\` violation after 2h TTL — both lower public coherence rate.
+
+### require_coherence_anchor — Coherence Artisan policy gate
+
+MCP tool for orchestrators. Before delegating a sub-action, verify a valid WHY anchor exists. **Free — no credit consumed.**
+
+Pass \`intent_hash\` (from check_coherence response) or all three of \`intent\` + \`context\` + \`decision\`.
+- \`allowed: true\` → anchor valid; returns \`anchor_id\`, \`expires_at\`, \`verify_url\`
+- \`allowed: false\` → reason \`NO_ANCHOR\` or \`ANCHOR_EXPIRED\`; \`required_action: "check_coherence"\`
+
+Pattern: \`require_coherence_anchor\` → if \`allowed=false\`, call \`check_coherence\` → re-check → execute → \`certify_file\` → \`POST /api/coherence/link\`
+
+### Coherence history and fleet view
+
+\`\`\`bash
+# Per-agent history (public, paginated)
+GET ${baseUrl}/api/agents/{wallet}/coherence?limit=50&offset=0
+# → checks[], total, aggregate.coherence_rate, aggregate.avg_coherence_score
+# Per-check status: linked | pending (<1h unlinked) | divergent (≥1h unlinked)
+
+# Fleet coherence
+GET ${baseUrl}/api/fleet/coherence?org=<wallet_prefix>
+GET ${baseUrl}/api/fleet/coherence?fleet=<slug>
+# → per-agent stats + fleet_score = round(0.7 × coherence_rate + 0.3 × avg_coherence_score)
+\`\`\`
+
+Full documentation: ${baseUrl}/coherence
+
+---
+
 ## Resources
 
 - Human-readable page: ${baseUrl}/agent-context
@@ -4771,6 +4868,7 @@ Before each piece of AI-generated content is published on Moltbook, xproof_agent
 - API docs: ${baseUrl}/llms.txt
 - MCP endpoint: ${baseUrl}/mcp
 - Agent leaderboard: ${baseUrl}/leaderboard
+- Coherence Layer: ${baseUrl}/coherence
 - Moltbook live agent profile: ${baseUrl}/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9
 - Trust leaderboard API: GET ${baseUrl}/api/leaderboard
 - x402 Bazaar (Coinbase): https://api.cdp.coinbase.com/platform/v2/x402/discovery/mcp
