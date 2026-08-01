@@ -1426,6 +1426,28 @@ export function prerenderMiddleware() {
         .send(await renderAgentsPageZh(baseUrl));
     }
 
+    // /fleet is the fleet coherence docs page — the React SPA renders an empty
+    // state without ?org= or ?fleet= params (Grok renders JS and sees nothing).
+    // Always serve prerendered HTML to every visitor so crawlers see full content.
+    if (path === "/fleet") {
+      return res.status(200)
+        .set("Content-Type", "text/html; charset=utf-8")
+        .set("Cache-Control", "public, max-age=300")
+        .set("Link", agentLinksHeader)
+        .send(renderFleetPage(baseUrl));
+    }
+
+    // /coherence is the Coherence Layer docs page — always serve prerendered HTML
+    // for the same reason as /fleet (React SPA content is richer but crawlers
+    // benefit from the canonical static form).
+    if (path === "/coherence") {
+      return res.status(200)
+        .set("Content-Type", "text/html; charset=utf-8")
+        .set("Cache-Control", "public, max-age=300")
+        .set("Link", agentLinksHeader)
+        .send(renderCoherencePage(baseUrl));
+    }
+
     const userAgent = req.get("user-agent") || "";
     if (!isCrawler(userAgent, req)) {
       return next();
@@ -1489,22 +1511,6 @@ export function prerenderMiddleware() {
           .set("Content-Type", "text/html")
           .set("Link", agentLinks)
           .send(await renderLeaderboardPage(baseUrl));
-      }
-
-      if (path === "/coherence") {
-        return res.status(200)
-          .set("Content-Type", "text/html")
-          .set("Cache-Control", "public, max-age=300")
-          .set("Link", agentLinks)
-          .send(renderCoherencePage(baseUrl));
-      }
-
-      if (path === "/fleet") {
-        return res.status(200)
-          .set("Content-Type", "text/html")
-          .set("Cache-Control", "public, max-age=300")
-          .set("Link", agentLinks)
-          .send(renderFleetPage(baseUrl));
       }
 
       const agentMatch = path.match(/^\/agent\/([^/]+)$/);
