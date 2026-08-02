@@ -31,7 +31,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: npm-sdk
-        run: npm install
+        run: npm ci
 
       - name: Run linter (tsc)
         working-directory: npm-sdk
@@ -63,7 +63,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: npm-sdk
-        run: npm install
+        run: npm ci
 
       - name: Build
         working-directory: npm-sdk
