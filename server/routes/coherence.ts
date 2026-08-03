@@ -237,6 +237,23 @@ export function registerCoherenceRoutes(app: Express) {
         }
       }
 
+      // Test-only clock injection: _asOf pins the reference timestamp so
+      // integration tests can exercise the exact 1-hour boundary without
+      // wall-clock delays.  Rejected in production (NODE_ENV === "production").
+      // nowExpr is a factory so each sql`` fragment is a fresh object — Drizzle
+      // sql fragments are stateful and must not be reused across db.execute() calls.
+      let nowExpr: () => ReturnType<typeof sql>;
+      if (process.env.NODE_ENV !== "production" && typeof req.query._asOf === "string") {
+        const asOf = new Date(req.query._asOf as string);
+        if (isNaN(asOf.getTime())) {
+          return res.status(400).json({ error: "INVALID_PARAM", message: "_asOf must be a valid ISO timestamp" });
+        }
+        const asOfIso = asOf.toISOString();
+        nowExpr = () => sql`${asOfIso}::timestamptz`;
+      } else {
+        nowExpr = () => sql`NOW()`;
+      }
+
       // Same shape for both modes — only the agent-selection predicate differs.
       const agentFilter = registeredFleet
         ? sql`u.wallet_address IN (SELECT fm.wallet_address FROM fleet_members fm WHERE fm.fleet_id = ${registeredFleet.id})`
@@ -257,8 +274,8 @@ export function registerCoherenceRoutes(app: Express) {
             COUNT(cc.id)::int AS total_anchors,
             COUNT(cc.id) FILTER (WHERE cc.linked_proof_id IS NOT NULL)::int AS linked_count,
             COUNT(cc.id) FILTER (WHERE cc.linked_proof_id IS NOT NULL AND wt.created_at >= cc.created_at AND wt.created_at <= cc.created_at + INTERVAL '1 hour')::int AS linked_within_1h,
-            COUNT(cc.id) FILTER (WHERE cc.linked_proof_id IS NULL AND cc.created_at > NOW() - INTERVAL '1 hour')::int AS pending_count,
-            COUNT(cc.id) FILTER (WHERE cc.linked_proof_id IS NULL AND cc.created_at <= NOW() - INTERVAL '1 hour')::int AS divergent_count,
+            COUNT(cc.id) FILTER (WHERE cc.linked_proof_id IS NULL AND cc.created_at > ${nowExpr()} - INTERVAL '1 hour')::int AS pending_count,
+            COUNT(cc.id) FILTER (WHERE cc.linked_proof_id IS NULL AND cc.created_at <= ${nowExpr()} - INTERVAL '1 hour')::int AS divergent_count,
             COUNT(cc.id) FILTER (WHERE cc.divergent_at IS NOT NULL)::int AS flagged_divergent_count,
             ROUND(AVG(cc.coherence_score) FILTER (WHERE cc.coherence_score IS NOT NULL))::int AS avg_score,
             MAX(cc.created_at) AS last_anchor_at

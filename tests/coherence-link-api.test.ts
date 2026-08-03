@@ -1341,3 +1341,118 @@ describe("GET /api/agents/:wallet/coherence — per-item field shape (Task #542)
     expect(div.intent_hash).toBe(divCheckIntentHash);
   });
 });
+
+// ── GET /api/fleet/coherence — exact 1-hour boundary at the fleet aggregation layer ──
+//
+// The fleet SQL classifies each unlinked anchor as:
+//
+//   pending   = cc.created_at >  <asOf> - INTERVAL '1 hour'   (strict >)
+//   divergent = cc.created_at <= <asOf> - INTERVAL '1 hour'   (inclusive <=)
+//
+// At exactly one hour: created_at == asOf - 1h → satisfies <=  → divergent.
+//
+// This boundary was already verified at the per-wallet layer (describe block
+// at line ~592) via the _asOf parameter.  This suite exercises the same
+// condition at the fleet aggregation layer, where the counts come from a
+// cross-member SQL reduce (not a single-user query), and where the JS
+// fleetTotals reduce must correctly accumulate the SQL-computed buckets.
+//
+// The fleet endpoint now accepts _asOf (non-production only) so the test can
+// pin the reference clock and test the exact equality boundary without
+// wall-clock waits.
+
+describe("GET /api/fleet/coherence — anchor at exactly 1 hour classified correctly in fleet aggregate", () => {
+  const runId  = crypto.randomBytes(6).toString("hex");
+  // org prefix: 6-62 lowercase alphanumeric chars (server validation rule).
+  const org    = `erd1f${runId}`; // "erd1f" + 6 hex chars = 11 chars — satisfies ≥ 6
+  const userId = `fleetbnd-${runId}`;
+  // Wallet must start with the org prefix so the LIKE predicate matches it.
+  const wallet = `${org}m1`;
+  const whyId  = crypto.randomUUID();
+  let seedTime: Date; // absolute timestamp captured from the DB clock
+
+  beforeAll(async () => {
+    await insertUser(userId, wallet, /* isPublicProfile */ true);
+
+    // Capture the DB's current time as a fixed anchor.  All _asOf calculations
+    // are relative to this value so there is no wall-clock drift between the
+    // seed INSERT and the HTTP request.
+    const { rows } = await pool.query<{ now: Date }>(`SELECT NOW() AS now`);
+    seedTime = rows[0].now;
+
+    // Seed a WHY cert + coherence_checks row at exactly seedTime (age = 0 ms).
+    // The tests advance the reference clock via _asOf to simulate the passage
+    // of exactly 1 hour without waiting.
+    const intentHash = crypto.randomBytes(32).toString("hex");
+    await pool.query(
+      `INSERT INTO certifications
+         (id, user_id, file_name, file_hash, blockchain_status, is_public, metadata, created_at)
+       VALUES ($1,$2,'fleet-bnd.json',$3,'confirmed',true,$4,$5::timestamptz)`,
+      [
+        whyId, userId,
+        crypto.randomBytes(32).toString("hex"),
+        JSON.stringify({ type: "coherence_check", role: "WHY", intent: "fleet boundary", decision: "fleet decision" }),
+        seedTime.toISOString(),
+      ],
+    );
+    await pool.query(
+      `INSERT INTO coherence_checks (user_id, proof_id, intent_hash, created_at)
+       VALUES ($1,$2,$3,$4::timestamptz)`,
+      [userId, whyId, intentHash, seedTime.toISOString()],
+    );
+  });
+
+  afterAll(async () => {
+    await cleanup([userId], [wallet]);
+  });
+
+  // Helper: ISO string of seedTime + deltaMs.
+  function asOf(deltaMs: number): string {
+    return new Date(seedTime.getTime() + deltaMs).toISOString();
+  }
+
+  // Fleet URL with _asOf pinned at seedTime + 1 h.
+  function fleetUrl(deltaMs: number): string {
+    return `${BASE}/api/fleet/coherence?org=${encodeURIComponent(org)}&_asOf=${encodeURIComponent(asOf(deltaMs))}`;
+  }
+
+  it("endpoint returns 200 for a valid org prefix with one matching public member", async () => {
+    const res = await fetch(fleetUrl(60 * 60 * 1000));
+    expect(res.status).toBe(200);
+  });
+
+  it("fleet.pending_count is 0 at exactly _asOf = seedTime + 1h — anchor is NOT in the pending bucket", async () => {
+    // _asOf = seedTime + 1h  →  created_at > _asOf - 1h  →  seedTime > seedTime  →  FALSE → not pending.
+    // If the SQL condition were accidentally changed to strict < (instead of <=),
+    // the equality case would fall through to pending, and this assertion would fail.
+    const body = await fetch(fleetUrl(60 * 60 * 1000)).then(r => r.json());
+    expect(body.fleet.pending_count).toBe(0);
+  });
+
+  it("fleet.divergent_count is 1 at exactly _asOf = seedTime + 1h — anchor IS in the divergent bucket", async () => {
+    // _asOf = seedTime + 1h  →  created_at <= _asOf - 1h  →  seedTime <= seedTime  →  TRUE → divergent.
+    // Exact count (= 1) is safe because the fixture is a unique org-prefix with a
+    // single member; no other user's anchor can match the LIKE predicate.
+    const body = await fetch(fleetUrl(60 * 60 * 1000)).then(r => r.json());
+    expect(body.fleet.divergent_count).toBe(1);
+  });
+
+  it("fleet.coherence_rate is 0 at _asOf = seedTime + 1h — the mature anchor enters the denominator", async () => {
+    // fleetMature = total - pending = 1 - 0 = 1; linked_within_1h = 0.
+    // coherence_rate = round(0/1 * 100) = 0.
+    // null would mean the server mis-counted the anchor as pending and excluded
+    // it from the denominator, making fleetMature = 0.
+    const body = await fetch(fleetUrl(60 * 60 * 1000)).then(r => r.json());
+    expect(body.fleet.coherence_rate).toBe(0);
+  });
+
+  it("mutation-sensitivity: at _asOf = seedTime + 1h − 1s the anchor is still pending (not divergent)", async () => {
+    // _asOf = seedTime + 1h - 1s  →  created_at <= _asOf - 1h  →  seedTime <= seedTime - 1s  →  FALSE → pending.
+    // If the boundary condition were flipped to strict < instead of <=, the 1-second-
+    // before case would still be pending — this test guards the OTHER side of the
+    // boundary to confirm the < vs <= semantics are consistent with the per-wallet view.
+    const body = await fetch(fleetUrl(60 * 60 * 1000 - 1000)).then(r => r.json());
+    expect(body.fleet.pending_count).toBe(1);
+    expect(body.fleet.divergent_count).toBe(0);
+  });
+});
