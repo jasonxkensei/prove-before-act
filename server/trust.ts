@@ -577,11 +577,20 @@ async function computeAllLeaderboardEntries(): Promise<LeaderboardEntry[]> {
     GROUP BY u.id, u.wallet_address, u.agent_name, u.agent_category, u.agent_description, u.agent_website
     HAVING COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) > 0
     -- TRUST-H4: cap at 200 so the leaderboard job doesn't scale with total user count.
-    -- cert_total is a proxy for rank order — agents with more confirmed certs almost always
-    -- score higher, so the top-200 by cert count is a reliable approximation of the
-    -- top-200 by trust score.  runTrustRefreshCycle() (separate function) still processes
-    -- ALL users for the per-wallet score cache; only the public leaderboard is capped here.
-    ORDER BY cert_total DESC
+    -- We order by a lightweight score proxy rather than raw cert_total so that agents with
+    -- fewer but higher-quality certifications (rich metadata, audit trails) rank above agents
+    -- who have many low-value certs.  The proxy is:
+    --   cert_total * (1 + metadata_count + audit_count)
+    -- where metadata_count = certs carrying model_hash / strategy_hash / version_number, and
+    -- audit_count = certs carrying an agent_id audit reference.  Both are already computed in
+    -- the SELECT above and cost no additional joins.
+    -- Known trade-off: the attestation bonus (computed from on-chain attestations by external
+    -- wallets) is fetched after this query and cannot be folded in here without a subquery join
+    -- against a separate table.  An agent whose trust score is dominated purely by attestation
+    -- bonus and has zero metadata/audit certs could still be displaced by the cap.  This is
+    -- considered an acceptable approximation; re-evaluate if the live leaderboard shows obvious
+    -- gaps (e.g. a well-known high-attestation agent missing from the top 200).
+    ORDER BY cert_total * (1 + metadata_count + audit_count) DESC
     LIMIT 200
   `);
 
