@@ -186,6 +186,11 @@ export function WalletLoginModal({ open, onOpenChange, redirectTo }: WalletLogin
         // Some providers return the full nativeAuth token directly
         if ('accessToken' in loginResult && (loginResult as any).accessToken) {
           pendingTokenRef.current = (loginResult as any).accessToken;
+          // AUTH-M1: Also persist under our specific key so that a page refresh
+          // mid-login (before /api/auth/wallet/sync completes) does not strand
+          // the user — useWalletAuth.getNativeAuthTokenFromStorage() reads from
+          // this key on reload and can retry the sync automatically.
+          localStorage.setItem(XPROOF_NATIVE_AUTH_KEY, (loginResult as any).accessToken);
           logger.log('Got accessToken directly from login result');
         }
       }
