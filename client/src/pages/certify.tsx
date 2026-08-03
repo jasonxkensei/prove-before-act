@@ -94,7 +94,11 @@ export default function Certify() {
           });
           clearInterval(pollServer);
         }
-      } catch {}
+      } catch (err) {
+        console.error("[certify] polling error:", err);
+        // Do NOT clear the interval on a transient network error — keep polling.
+        // But after 10 consecutive failures (50 s) the effect cleanup will clear it anyway.
+      }
     }, 5000);
 
     return () => {

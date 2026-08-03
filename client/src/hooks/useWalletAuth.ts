@@ -60,7 +60,13 @@ export function useWalletAuth() {
   const { address: sdkAddress } = useGetAccount();
   const isLoggedInSdk = useGetIsLoggedIn();
   
-  const savedAddress = typeof window !== 'undefined' ? sessionStorage.getItem('walletAddress') : null;
+  // FE-H4: wallet-login-modal writes walletAddress to localStorage; this hook
+  // previously read only from sessionStorage, so the address was lost on page
+  // refresh (sessionStorage cleared). Check sessionStorage first (written on
+  // successful sync), then fall back to localStorage (written by modal).
+  const savedAddress = typeof window !== 'undefined'
+    ? (sessionStorage.getItem('walletAddress') || localStorage.getItem('walletAddress'))
+    : null;
   const address = sdkAddress || savedAddress || '';
   const isLoggedIn = isLoggedInSdk || !!savedAddress;
   

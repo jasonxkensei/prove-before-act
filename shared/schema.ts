@@ -70,7 +70,7 @@ export const certifications = pgTable("certifications", {
   fileSize: integer("file_size"),
   authorName: text("author_name"),
   authorSignature: text("author_signature"),
-  transactionHash: text("transaction_hash"),
+  transactionHash: text("transaction_hash").unique(), // PAY-C3: prevent same tx from certifying multiple files
   transactionUrl: text("transaction_url"),
   blockchainStatus: varchar("blockchain_status").default("pending"), // pending, confirmed, failed
   certificateUrl: text("certificate_url"),

@@ -94,8 +94,12 @@ function Router() {
           <Route path="/coherence" component={CoherencePage} />
           <Route path="/fleet" component={FleetPage} />
           <Route path="/fleets" component={FleetManagePage} />
-          <Route path="/stats" component={AdminDashboard} />
-          <Route path="/admin" component={AdminDashboard} />
+          <Route path="/stats">
+            <Redirect to="/" />
+          </Route>
+          <Route path="/admin">
+            <Redirect to="/" />
+          </Route>
           <Route>
             <Redirect to="/" />
           </Route>
