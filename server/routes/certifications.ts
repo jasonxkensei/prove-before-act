@@ -2,7 +2,7 @@ import { type Express } from "express";
 import crypto from "crypto";
 import { db } from "../db";
 import { logger } from "../logger";
-import { certifications, users, apiKeys } from "@shared/schema";
+import { certifications, users, apiKeys, sha256HexSchema } from "@shared/schema";
 import { eq, desc, sql, and, count, ne } from "drizzle-orm";
 import { z } from "zod";
 import { isWalletAuthenticated } from "../walletAuth";
@@ -45,7 +45,10 @@ export function registerCertificationsRoutes(app: Express) {
       // Validate request body
       const schema = z.object({
         fileName: z.string().min(1),
-        fileHash: z.string().min(1),
+        // AUTH-M1: enforce 64-char lowercase hex — rejects SQL fragments, blobs,
+        // and mixed-case duplicates (sha256HexSchema also lowercases the value so
+        // the DB uniqueness check is case-insensitive by construction).
+        fileHash: sha256HexSchema,
         fileType: z.string().optional(),
         fileSize: z.number().optional(),
         authorName: z.string().min(1),
@@ -55,7 +58,7 @@ export function registerCertificationsRoutes(app: Express) {
         // stored URL is always server-derived from the verified transactionHash
         // via getTxExplorerUrl(), so a caller cannot point the "View on
         // MultiversX explorer" link at an attacker-controlled phishing page
-        // while supplying a legitimate on-chain txHash.
+        // while supplying a legitimate on-chain txHash.  (AUTH-M2 handled here.)
       });
 
       const data = schema.parse(req.body);
@@ -449,7 +452,8 @@ export function registerCertificationsRoutes(app: Express) {
         // Validate certification data
         const schema = z.object({
           fileName: z.string().min(1),
-          fileHash: z.string().min(1),
+          // AUTH-M1: same hex constraint as the REST POST path above.
+          fileHash: sha256HexSchema,
           fileType: z.string().optional(),
           fileSize: z.number().optional(),
           authorName: z.string().min(1),
