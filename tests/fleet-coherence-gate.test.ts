@@ -709,3 +709,107 @@ describe("GET /api/fleet/coherence?fleet=<slug> — fresh unlinked anchor counte
     expect(agent.divergent_count).toBe(0);
   });
 });
+
+// ── GET /api/fleet/coherence?fleet=<slug> — coherence_rate is null when all anchors are pending ──
+//
+// The fleet coherence_rate denominator is:
+//   fleetMature = fleetTotals.total - fleetTotals.pending
+//
+// When every member has only fresh (pending) anchors, fleetMature = 0 and the
+// server must return coherence_rate: null, not 0.  The guard is:
+//   fleetRate = fleetMature > 0 ? Math.round(...) : null
+//
+// Returning 0 would be wrong — it implies "no anchors linked out of some mature
+// set", whereas null means "no data yet; the denominator is empty".  Fleet
+// dashboards should display "not enough data yet" rather than "0% coherence"
+// for a brand-new fleet whose members have all just started anchoring.
+//
+// This describe block is isolated from the existing fresh-anchor suite above
+// so it can assert the exact counts (=1) rather than >= 1.
+
+describe("GET /api/fleet/coherence?fleet=<slug> — coherence_rate is null when every member has only pending anchors", () => {
+  const runId = crypto.randomBytes(4).toString("hex");
+  const fleetSlug = `fleet-null-${runId}`;
+  const fleetName = `Null Rate Fleet ${runId}`;
+
+  const ownerId     = `fnull-own-${runId}`;
+  const ownerWallet = `erd1fnullow${runId}`;
+
+  const memberId     = `fnull-mb-${runId}`;
+  const memberWallet = `erd1fnullmb${runId}`;
+
+  const freshWhyId = crypto.randomUUID();
+  let fleetId: string;
+
+  beforeAll(async () => {
+    await insertUser(ownerId,  ownerWallet,  true);
+    await insertUser(memberId, memberWallet, true, "agent-null-rate");
+
+    // Create the registered fleet and enrol the single member.
+    const { rows } = await pool.query<{ id: string }>(
+      `INSERT INTO fleets (owner_user_id, name, slug) VALUES ($1, $2, $3) RETURNING id`,
+      [ownerId, fleetName, fleetSlug],
+    );
+    fleetId = rows[0].id;
+    await pool.query(
+      `INSERT INTO fleet_members (fleet_id, wallet_address, proof_method) VALUES ($1, $2, 'api_key')`,
+      [fleetId, memberWallet],
+    );
+
+    // One fresh WHY anchor created 10 seconds ago — well inside the 1-hour
+    // pending window, so pending_count = 1 and fleetMature = 0.
+    // No linked_proof_id on the coherence_checks row.
+    const intentHash = crypto.randomBytes(32).toString("hex");
+    await pool.query(
+      `INSERT INTO certifications
+         (id, user_id, file_name, file_hash, blockchain_status, is_public, metadata, created_at)
+       VALUES ($1, $2, 'null-rate-check.json', $3, 'confirmed', true, $4,
+               NOW() - INTERVAL '10 seconds')`,
+      [
+        freshWhyId, memberId,
+        crypto.randomBytes(32).toString("hex"),
+        JSON.stringify({ type: "coherence_check", role: "WHY", intent: "null rate intent", decision: "null rate decision" }),
+      ],
+    );
+    await pool.query(
+      `INSERT INTO coherence_checks (user_id, proof_id, intent_hash, created_at)
+       VALUES ($1, $2, $3, NOW() - INTERVAL '10 seconds')`,
+      [memberId, freshWhyId, intentHash],
+    );
+  });
+
+  afterAll(async () => {
+    await pool.query(`DELETE FROM fleets WHERE id = $1`, [fleetId]);
+    await cleanup([ownerId, memberId], [ownerWallet, memberWallet]);
+  });
+
+  it("returns 200 for a registered fleet with one public member", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?fleet=${fleetSlug}`);
+    expect(res.status).toBe(200);
+  });
+
+  it("fleet.total_anchors === 1 (the single fresh anchor is counted)", async () => {
+    const body = await fetch(`${BASE}/api/fleet/coherence?fleet=${fleetSlug}`).then(r => r.json());
+    expect(body.fleet.total_anchors).toBe(1);
+  });
+
+  it("fleet.pending_count === 1 (the fresh anchor is in the pending bucket)", async () => {
+    const body = await fetch(`${BASE}/api/fleet/coherence?fleet=${fleetSlug}`).then(r => r.json());
+    expect(body.fleet.pending_count).toBe(1);
+  });
+
+  it("fleet.coherence_rate === null (fleetMature = 0; must not be 0 or a positive number)", async () => {
+    // fleetMature = total - pending = 1 - 1 = 0.
+    // The guard: fleetRate = fleetMature > 0 ? Math.round(...) : null.
+    // If the guard is removed, code divides by zero or Math.round(0/0) = NaN,
+    // which JSON-serialises as null anyway — but the test pins the intent so
+    // any refactor that returns 0 (not null) is caught immediately.
+    const body = await fetch(`${BASE}/api/fleet/coherence?fleet=${fleetSlug}`).then(r => r.json());
+    expect(body.fleet.coherence_rate).toBeNull();
+  });
+
+  it("fleet.divergent_count === 0 (the pending anchor is not mis-classified as divergent)", async () => {
+    const body = await fetch(`${BASE}/api/fleet/coherence?fleet=${fleetSlug}`).then(r => r.json());
+    expect(body.fleet.divergent_count).toBe(0);
+  });
+});
