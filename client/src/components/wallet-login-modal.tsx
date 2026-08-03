@@ -92,6 +92,10 @@ export function WalletLoginModal({ open, onOpenChange, redirectTo }: WalletLogin
         // belt-and-suspenders removeItem as a fallback for any edge case where
         // this line was somehow skipped (e.g. an older tab still holding the key).
         localStorage.removeItem(XPROOF_NATIVE_AUTH_KEY);
+        // Belt-and-suspenders: also clear legacy key names written by older
+        // app versions so they don't linger in localStorage after a successful sync.
+        localStorage.removeItem('nativeAuthToken');
+        localStorage.removeItem('loginToken');
         pendingTokenRef.current = null;
 
         loginAction({ address: walletAddress, providerType: ProviderTypeEnum.extension });

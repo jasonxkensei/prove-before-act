@@ -120,6 +120,9 @@ export function useWalletAuth() {
             // Token only needed until sync succeeds — clear it now so it
             // doesn't sit in localStorage for the entire session duration.
             localStorage.removeItem('xproof_native_auth_token');
+            // Also clear legacy key names written by older app versions.
+            localStorage.removeItem('nativeAuthToken');
+            localStorage.removeItem('loginToken');
             return userData;
           }
 
