@@ -16,6 +16,7 @@ import {
   isAdminWallet, getApiKeyOwnerWallet, tryDisplaceAcpReservation,
   TRIAL_QUOTA, REGISTER_RATE_LIMIT_MAX, REGISTER_RATE_LIMIT_WINDOW_MS,
   buildX402Block, buildPrepaidCreditsBlock, buildTrialExhaustedMessage, buildPaymentRequiredMessage,
+  safeErrMsg,
 } from "./routes/helpers";
 import { pgCheckRateLimit } from "./pgRateLimit";
 import { buildCoherenceAnchor } from "./coherence-anchor";
@@ -565,7 +566,8 @@ export async function createMcpServer(ctx: McpContext) {
           }],
         };
       } catch (error: any) {
-        return { content: [{ type: "text" as const, text: JSON.stringify({ error: "CERTIFICATION_FAILED", message: error.message || "Failed to create certification" }) }], isError: true };
+        logger.error("certify_file MCP tool error", { error: String(error) });
+        return { content: [{ type: "text" as const, text: JSON.stringify({ error: "CERTIFICATION_FAILED", message: safeErrMsg(error) }) }], isError: true };
       }
     }
   );
@@ -848,7 +850,8 @@ export async function createMcpServer(ctx: McpContext) {
           }],
         };
       } catch (error: any) {
-        return { content: [{ type: "text" as const, text: JSON.stringify({ error: "CERTIFICATION_FAILED", message: error.message || "Failed to create confidence certification" }) }], isError: true };
+        logger.error("certify_with_confidence MCP tool error", { error: String(error) });
+        return { content: [{ type: "text" as const, text: JSON.stringify({ error: "CERTIFICATION_FAILED", message: safeErrMsg(error) }) }], isError: true };
       }
     }
   );
@@ -892,7 +895,8 @@ export async function createMcpServer(ctx: McpContext) {
           }],
         };
       } catch (error: any) {
-        return { content: [{ type: "text" as const, text: JSON.stringify({ error: "VERIFICATION_FAILED", message: error.message }) }], isError: true };
+        logger.error("verify_proof MCP tool error", { error: String(error) });
+        return { content: [{ type: "text" as const, text: JSON.stringify({ error: "VERIFICATION_FAILED", message: safeErrMsg(error) }) }], isError: true };
       }
     }
   );
@@ -958,7 +962,8 @@ export async function createMcpServer(ctx: McpContext) {
           }],
         };
       } catch (error: any) {
-        return { content: [{ type: "text" as const, text: JSON.stringify({ error: "RETRIEVAL_FAILED", message: error.message }) }], isError: true };
+        logger.error("get_proof MCP tool error", { error: String(error) });
+        return { content: [{ type: "text" as const, text: JSON.stringify({ error: "RETRIEVAL_FAILED", message: safeErrMsg(error) }) }], isError: true };
       }
     }
   );
@@ -1308,8 +1313,9 @@ export async function createMcpServer(ctx: McpContext) {
           }],
         };
       } catch (error: any) {
+        logger.error("audit_agent_session MCP tool error", { error: String(error) });
         return {
-          content: [{ type: "text" as const, text: JSON.stringify({ error: "AUDIT_CERTIFICATION_FAILED", message: error.message || "Failed to certify audit session" }) }],
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "AUDIT_CERTIFICATION_FAILED", message: safeErrMsg(error) }) }],
           isError: true,
         };
       }
@@ -1374,8 +1380,9 @@ export async function createMcpServer(ctx: McpContext) {
           }],
         };
       } catch (error: any) {
+        logger.error("check_attestations MCP tool error", { error: String(error) });
         return {
-          content: [{ type: "text" as const, text: JSON.stringify({ error: "CHECK_ATTESTATIONS_FAILED", message: error.message }) }],
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "CHECK_ATTESTATIONS_FAILED", message: safeErrMsg(error) }) }],
           isError: true,
         };
       }
@@ -1510,9 +1517,9 @@ export async function createMcpServer(ctx: McpContext) {
           }],
         };
       } catch (error: any) {
-        const message = error.error || error.message || "Failed to reconstruct audit trail";
+        logger.error("investigate_proof MCP tool error", { error: String(error) });
         return {
-          content: [{ type: "text" as const, text: JSON.stringify({ error: "INVESTIGATION_FAILED", message, incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` }) }],
+          content: [{ type: "text" as const, text: JSON.stringify({ error: "INVESTIGATION_FAILED", message: safeErrMsg(error), incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}` }) }],
           isError: true,
         };
       }
@@ -1614,7 +1621,7 @@ export async function createMcpServer(ctx: McpContext) {
         if (err?.code === "23505" || err?.message?.includes("unique")) {
           return { content: [{ type: "text" as const, text: JSON.stringify({ error: "OUTCOME_ALREADY_SUBMITTED", message: "An outcome has already been submitted for this proof." }) }], isError: true };
         }
-        logger.error("MCP submit_outcome failed", { error: err.message });
+        logger.error("MCP submit_outcome failed", { error: String(err) });
         return { content: [{ type: "text" as const, text: JSON.stringify({ error: "INTERNAL_ERROR", message: "Failed to submit outcome" }) }], isError: true };
       }
     }
@@ -1718,7 +1725,7 @@ export async function createMcpServer(ctx: McpContext) {
         }
         return { content: [{ type: "text" as const, text: JSON.stringify(body) }], ...(isErr ? { isError: true } : {}) };
       } catch (err: any) {
-        logger.error("MCP get_calibration failed", { error: err.message });
+        logger.error("MCP get_calibration failed", { error: String(err) });
         return { content: [{ type: "text" as const, text: JSON.stringify({ error: "INTERNAL_ERROR", message: "Failed to fetch calibration data" }) }], isError: true };
       }
     }
@@ -2000,7 +2007,7 @@ export async function createMcpServer(ctx: McpContext) {
         };
       } catch (err: any) {
         logger.error("check_coherence MCP tool error", { error: String(err) });
-        return mcpErr({ error: "INTERNAL_ERROR", message: String(err) });
+        return mcpErr({ error: "INTERNAL_ERROR", message: safeErrMsg(err) });
       }
     }
   );
@@ -2107,7 +2114,7 @@ export async function createMcpServer(ctx: McpContext) {
         };
       } catch (err: any) {
         logger.error("require_coherence_anchor MCP tool error", { error: String(err) });
-        return mcpErr({ error: "INTERNAL_ERROR", message: String(err) });
+        return mcpErr({ error: "INTERNAL_ERROR", message: safeErrMsg(err) });
       }
     }
   );
