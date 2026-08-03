@@ -967,6 +967,59 @@ export function registerAdminRoutes(app: Express) {
   });
 
   // ============================================
+  // Admin: Proposed Violations Review
+  // ============================================
+
+  // GET /api/admin/violations/proposed — list all violations awaiting admin review
+  app.get("/api/admin/violations/proposed", isWalletAuthenticated, requireAdmin, async (req: any, res) => {
+    try {
+      const result = await db.execute(sql`
+        SELECT id, wallet_address, proof_id, type, reason, detected_at, auto_confirmed, notes
+        FROM agent_violations
+        WHERE status = 'proposed'
+        ORDER BY detected_at ASC
+      `);
+      res.json({
+        violations: result.rows,
+        total: result.rows.length,
+      });
+    } catch (err: any) {
+      logger.withRequest(req).error("Proposed violations fetch error");
+      res.status(500).json({ error: safeErrMsg(err) });
+    }
+  });
+
+  // POST /api/admin/violations/bulk-reject — reject multiple proposed violations at once
+  app.post("/api/admin/violations/bulk-reject", isWalletAuthenticated, requireAdmin, async (req: any, res) => {
+    try {
+      const { ids, notes } = req.body || {};
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ error: "ids must be a non-empty array of violation IDs" });
+      }
+      // Validate all IDs are strings to avoid SQL injection
+      if (!ids.every((id: unknown) => typeof id === "string")) {
+        return res.status(400).json({ error: "All IDs must be strings" });
+      }
+      const adminNotes = typeof notes === "string" ? notes : null;
+      const result = await db.execute(sql`
+        UPDATE agent_violations
+        SET status = 'rejected', notes = ${adminNotes}
+        WHERE id = ANY(${ids}::varchar[])
+          AND status = 'proposed'
+        RETURNING id
+      `);
+      res.json({
+        success: true,
+        rejected: result.rows.length,
+        ids: result.rows.map((r: any) => r.id),
+      });
+    } catch (err: any) {
+      logger.withRequest(req).error("Bulk-reject violations error");
+      res.status(500).json({ error: safeErrMsg(err) });
+    }
+  });
+
+  // ============================================
   // ============================================
   // POST /api/admin/repair/void-false-why-violations
   // Scans all open "no WHY" breach violations, re-runs the heartbeat fallback

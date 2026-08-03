@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useWalletAuth } from "@/hooks/useWalletAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,7 +28,12 @@ import {
   ChevronRight,
   Gauge,
   Filter,
+  ShieldAlert,
+  ShieldCheck,
+  ShieldX,
+  Trash2,
 } from "lucide-react";
+import { apiRequest } from "@/lib/queryClient";
 import { Link } from "wouter";
 
 interface PublicStats {
@@ -171,6 +176,22 @@ interface AdminStats {
     by_source: { api: number; trial: number; user: number };
     daily: Array<{ date: string; count: number }>;
   };
+}
+
+interface ProposedViolation {
+  id: string;
+  wallet_address: string;
+  proof_id: string | null;
+  type: string;
+  reason: string | null;
+  detected_at: string;
+  auto_confirmed: boolean;
+  notes: string | null;
+}
+
+interface ProposedViolationsData {
+  violations: ProposedViolation[];
+  total: number;
 }
 
 function formatResetsIn(isoDate: string): string {
@@ -601,6 +622,228 @@ function OnboardingFunnelCard({ data }: { data: PublicStats["onboarding_funnel"]
   );
 }
 
+function ProposedViolationsCard({ data, isAdmin }: { data: ProposedViolationsData | undefined; isAdmin: boolean }) {
+  const queryClient = useQueryClient();
+  const [expanded, setExpanded] = useState(true);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [actionNotes, setActionNotes] = useState("");
+
+  const violations = data?.violations ?? [];
+
+  const confirmMutation = useMutation({
+    mutationFn: async ({ id, notes }: { id: string; notes?: string }) => {
+      return apiRequest("POST", `/api/admin/violations/${id}/confirm`, { notes: notes || null });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/violations/proposed"] });
+    },
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: async ({ id, notes }: { id: string; notes?: string }) => {
+      return apiRequest("POST", `/api/admin/violations/${id}/reject`, { notes: notes || null });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/violations/proposed"] });
+    },
+  });
+
+  const bulkRejectMutation = useMutation({
+    mutationFn: async ({ ids, notes }: { ids: string[]; notes?: string }) => {
+      return apiRequest("POST", "/api/admin/violations/bulk-reject", { ids, notes: notes || null });
+    },
+    onSuccess: () => {
+      setSelected(new Set());
+      setActionNotes("");
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/violations/proposed"] });
+    },
+  });
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selected.size === violations.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(violations.map((v) => v.id)));
+    }
+  };
+
+  const isBusy = confirmMutation.isPending || rejectMutation.isPending || bulkRejectMutation.isPending;
+
+  return (
+    <Card data-testid="card-proposed-violations">
+      <CardHeader
+        className="flex flex-row items-center justify-between gap-2 space-y-0 cursor-pointer select-none"
+        onClick={() => setExpanded((v) => !v)}
+        data-testid="button-toggle-proposed-violations"
+      >
+        <div className="flex items-center gap-2">
+          {expanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+          <CardTitle className="text-sm font-medium">Proposed Violations</CardTitle>
+          {violations.length > 0 ? (
+            <Badge variant="destructive" data-testid="badge-proposed-violations-count">
+              {violations.length} pending
+            </Badge>
+          ) : (
+            <Badge variant="secondary" data-testid="badge-proposed-violations-count">
+              0 pending
+            </Badge>
+          )}
+        </div>
+        <ShieldAlert className="h-4 w-4 text-muted-foreground" />
+      </CardHeader>
+
+      {expanded && (
+        <CardContent className="pt-0">
+          {!data && (
+            <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground" data-testid="proposed-violations-loading">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading proposed violations…
+            </div>
+          )}
+          {data && violations.length === 0 && (
+            <p className="py-4 text-sm text-muted-foreground" data-testid="proposed-violations-empty">
+              No proposed violations awaiting review — all caught up.
+            </p>
+          )}
+          {data && violations.length > 0 && (
+            <>
+              {/* Bulk action toolbar */}
+              {selected.size > 0 && (
+                <div className="flex flex-wrap items-center gap-2 mb-3 p-3 bg-muted/50 rounded-md" data-testid="bulk-action-toolbar">
+                  <span className="text-sm text-muted-foreground">{selected.size} selected</span>
+                  <input
+                    className="flex-1 min-w-[180px] text-sm border rounded px-2 py-1 bg-background"
+                    placeholder="Optional notes for bulk rejection…"
+                    value={actionNotes}
+                    onChange={(e) => setActionNotes(e.target.value)}
+                    data-testid="input-bulk-notes"
+                  />
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    disabled={isBusy}
+                    onClick={() => bulkRejectMutation.mutate({ ids: [...selected], notes: actionNotes })}
+                    data-testid="button-bulk-reject"
+                  >
+                    {bulkRejectMutation.isPending ? (
+                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                    ) : (
+                      <Trash2 className="h-3 w-3 mr-1" />
+                    )}
+                    Reject {selected.size}
+                  </Button>
+                </div>
+              )}
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm" data-testid="table-proposed-violations">
+                  <thead>
+                    <tr className="border-b text-left">
+                      <th className="pb-2 pr-2">
+                        <input
+                          type="checkbox"
+                          checked={selected.size === violations.length}
+                          onChange={toggleSelectAll}
+                          aria-label="Select all"
+                          data-testid="checkbox-select-all-violations"
+                        />
+                      </th>
+                      <th className="pb-2 pr-4 font-medium text-muted-foreground">Wallet</th>
+                      <th className="pb-2 pr-4 font-medium text-muted-foreground">Type</th>
+                      <th className="pb-2 pr-4 font-medium text-muted-foreground">Reason</th>
+                      <th className="pb-2 pr-4 font-medium text-muted-foreground">Detected</th>
+                      <th className="pb-2 font-medium text-muted-foreground text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {violations.map((v) => (
+                      <tr
+                        key={v.id}
+                        className="border-b last:border-0 align-top"
+                        data-testid={`row-violation-${v.id}`}
+                      >
+                        <td className="py-2 pr-2 align-middle">
+                          <input
+                            type="checkbox"
+                            checked={selected.has(v.id)}
+                            onChange={() => toggleSelect(v.id)}
+                            aria-label={`Select violation ${v.id}`}
+                          />
+                        </td>
+                        <td className="py-2 pr-4 font-mono text-xs max-w-[120px] truncate" title={v.wallet_address}>
+                          {v.wallet_address.slice(0, 8)}…{v.wallet_address.slice(-6)}
+                        </td>
+                        <td className="py-2 pr-4">
+                          <Badge
+                            variant={v.type === "fault" ? "destructive" : "secondary"}
+                            className="text-xs"
+                          >
+                            {v.type}
+                          </Badge>
+                        </td>
+                        <td className="py-2 pr-4 text-xs text-muted-foreground max-w-[280px]" title={v.reason ?? undefined}>
+                          {v.reason ?? "—"}
+                        </td>
+                        <td className="py-2 pr-4 text-xs text-muted-foreground whitespace-nowrap">
+                          {formatTimeAgo(v.detected_at)}
+                        </td>
+                        <td className="py-2 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={isBusy}
+                              onClick={() => confirmMutation.mutate({ id: v.id })}
+                              data-testid={`button-confirm-violation-${v.id}`}
+                              title="Confirm — apply trust penalty"
+                            >
+                              {confirmMutation.isPending ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <ShieldCheck className="h-3 w-3 text-destructive" />
+                              )}
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={isBusy}
+                              onClick={() => rejectMutation.mutate({ id: v.id })}
+                              data-testid={`button-reject-violation-${v.id}`}
+                              title="Reject — false positive, no penalty"
+                            >
+                              {rejectMutation.isPending ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <ShieldX className="h-3 w-3 text-muted-foreground" />
+                              )}
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="mt-3 text-xs text-muted-foreground">
+                Sorted oldest-first · confirm applies a trust penalty · reject marks as false positive · auto-refreshes every 30s
+              </p>
+            </>
+          )}
+        </CardContent>
+      )}
+    </Card>
+  );
+}
+
 function TrendIndicator({ current, previous }: { current: number; previous: number }) {
   if (previous === 0 && current === 0) {
     return <span className="text-xs text-muted-foreground flex items-center gap-1"><Minus className="h-3 w-3" /> No change</span>;
@@ -666,6 +909,15 @@ export default function AdminDashboard() {
     enabled: isAdmin,
   });
 
+  const { data: proposedViolations } = useQuery<ProposedViolationsData>({
+    queryKey: ["/api/admin/violations/proposed"],
+    refetchInterval: 30000,
+    retry: false,
+    enabled: isAdmin,
+  });
+
+  const pendingViolationCount = proposedViolations?.total ?? 0;
+
   if (statsLoading || healthLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center" data-testid="admin-loading">
@@ -693,6 +945,14 @@ export default function AdminDashboard() {
               <p className="text-sm text-muted-foreground">Real-time metrics for xproof.app</p>
             </div>
           </div>
+          {isAdmin && pendingViolationCount > 0 && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-destructive/10 border border-destructive/25 rounded-md" data-testid="alert-pending-violations">
+              <ShieldAlert className="h-4 w-4 text-destructive" />
+              <span className="text-sm font-medium text-destructive">
+                {pendingViolationCount} violation{pendingViolationCount !== 1 ? "s" : ""} need review
+              </span>
+            </div>
+          )}
         </div>
 
 
@@ -975,6 +1235,7 @@ export default function AdminDashboard() {
 
             {isAdmin && (
               <div className="mb-6 space-y-6">
+                <ProposedViolationsCard data={proposedViolations} isAdmin={isAdmin} />
                 <OnboardingFunnelCard data={stats.onboarding_funnel} />
                 <TrafficSourcesCard data={trafficSources} />
                 <UtmCampaignCard data={utmStats} />
