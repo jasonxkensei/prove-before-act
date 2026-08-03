@@ -543,5 +543,37 @@ describe(
 
       expect(res.body.success).toBe(true);
     });
+
+    // ── Logger silence contract (Task #560) ──────────────────────────────────
+    // The 409 ALREADY_LINKED path is expected, non-error behavior — a concurrent
+    // caller simply lost the atomic UPDATE race.  No logger.error or logger.warn
+    // must be emitted; either would trigger an ops alert for normal traffic.
+
+    it("logger.error is NOT called when the 409 path is taken (concurrent link cleanly rejected)", async () => {
+      // Default afterEach resets to linkedByWinner → 409 path.
+      await request
+        .post("/api/coherence/link")
+        .set("Content-Type", "application/json")
+        .set("Authorization", "Bearer pm_test_stub")
+        .send({ why_proof_id: FAKE_WHY_ID, what_proof_id: FAKE_WHAT_ID });
+
+      expect(
+        mockLoggerError.mock.calls.length,
+        "logger.error must NOT be called on the 409 ALREADY_LINKED path — this is expected concurrent behavior, not an error",
+      ).toBe(0);
+    });
+
+    it("logger.warn is NOT called when the 409 path is taken (409 is informational, not a warning)", async () => {
+      await request
+        .post("/api/coherence/link")
+        .set("Content-Type", "application/json")
+        .set("Authorization", "Bearer pm_test_stub")
+        .send({ why_proof_id: FAKE_WHY_ID, what_proof_id: FAKE_WHAT_ID });
+
+      expect(
+        mockLoggerWarn.mock.calls.length,
+        "logger.warn must NOT be called on the 409 ALREADY_LINKED path — a lost race is informational only",
+      ).toBe(0);
+    });
   },
 );
