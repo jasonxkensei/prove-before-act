@@ -278,8 +278,11 @@ export async function createMcpServer(ctx: McpContext) {
           }],
         };
       } catch (err) {
+        // Do NOT forward the raw error to the caller — it can contain DB constraint
+        // details (e.g. unique-key violation messages) that reveal schema information.
+        // The full error is captured in the server log above for internal diagnosis.
         logger.error("register_trial MCP tool error", { error: String(err) });
-        return { content: [{ type: "text" as const, text: JSON.stringify({ error: "REGISTRATION_ERROR", message: String(err) }) }], isError: true };
+        return { content: [{ type: "text" as const, text: JSON.stringify({ error: "REGISTRATION_ERROR", message: "Registration failed. Please retry or contact support if the problem persists." }) }], isError: true };
       }
     }
   );

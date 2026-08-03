@@ -509,3 +509,23 @@ export function buildTrialExhaustedMessage(baseUrl: string, quota: number): stri
 export function buildPaymentRequiredMessage(baseUrl: string): string {
   return `No prepaid credits. Continue via x402 — no account needed: POST ${baseUrl}/api/proof without Authorization header → receive HTTP 402 with USDC payment address + amount → pay on ${X402_NETWORK_NAME} → resend with X-PAYMENT header → certified. ${X402_PRICE}. Full guide: ${baseUrl}/llms.txt`;
 }
+
+/**
+ * Returns a client-safe error message for use in HTTP responses.
+ *
+ * In production, server errors (5xx) MUST NOT expose raw exception messages
+ * because they can contain DB schema details, file paths, or internal state.
+ * Client errors (4xx) are caller-induced and safe to relay verbatim.
+ * In development all messages are forwarded for easier debugging.
+ *
+ * Usage:
+ *   res.status(500).json({ error: safeErrMsg(err) });
+ *   res.status(500).json({ error: "SOME_CODE", message: safeErrMsg(err) });
+ */
+export function safeErrMsg(err: unknown, statusCode = 500): string {
+  const isProduction = process.env.NODE_ENV === "production";
+  if (statusCode < 500 || !isProduction) {
+    return String((err as any)?.message ?? err ?? "Unknown error");
+  }
+  return "Internal Server Error";
+}

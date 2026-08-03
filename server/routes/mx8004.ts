@@ -1,4 +1,5 @@
 import { type Express } from "express";
+import { safeErrMsg } from "./helpers";
 import { logger } from "../logger";
 import { isMX8004Configured, getReputationScore, getAgentDetails, getContractAddresses, getJobData, getValidationStatus, hasGivenFeedback, getAgentResponse, readFeedback, getAgentsExplorerUrl } from "../mx8004";
 
@@ -69,7 +70,7 @@ export function registerMx8004Routes(app: Express) {
         standard: "MX-8004",
       });
     } catch (err: any) {
-      return res.status(500).json({ error: "MX8004_QUERY_FAILED", message: err.message });
+      return res.status(500).json({ error: "MX8004_QUERY_FAILED", message: safeErrMsg(err) });
     }
   });
 
@@ -89,7 +90,7 @@ export function registerMx8004Routes(app: Express) {
         standard: "MX-8004",
       });
     } catch (err: any) {
-      return res.status(500).json({ error: "MX8004_QUERY_FAILED", message: err.message });
+      return res.status(500).json({ error: "MX8004_QUERY_FAILED", message: safeErrMsg(err) });
     }
   });
 
@@ -119,7 +120,7 @@ export function registerMx8004Routes(app: Express) {
         erc8004: true,
       });
     } catch (err: any) {
-      return res.status(500).json({ error: "MX8004_QUERY_FAILED", message: err.message });
+      return res.status(500).json({ error: "MX8004_QUERY_FAILED", message: safeErrMsg(err) });
     }
   });
 

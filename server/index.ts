@@ -35,8 +35,10 @@ const app = express();
 // Trust proxy for production (Replit uses reverse proxy)
 app.set('trust proxy', 1);
 
-// Custom CSP header to allow MultiversX SDK to work properly
-// The SDK uses some dynamic code that requires 'unsafe-eval'
+// ── Security headers ─────────────────────────────────────────────────────────
+// CSP: 'unsafe-eval' and 'unsafe-inline' are required by the MultiversX wallet
+// SDK which performs dynamic code evaluation; we cannot remove them without
+// breaking wallet connectivity. All other directives are as strict as possible.
 const CSP_HEADER = 
   "default-src 'self'; " +
   "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://fonts.googleapis.com; " +
@@ -48,7 +50,62 @@ const CSP_HEADER =
   "worker-src 'self' blob:;";
 
 app.use((req, res, next) => {
-  res.setHeader('Content-Security-Policy', CSP_HEADER);
+  const isProduction = process.env.NODE_ENV === "production";
+
+  // CSP
+  res.setHeader("Content-Security-Policy", CSP_HEADER);
+
+  // Prevent the app from being embedded in cross-origin iframes (clickjacking).
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+
+  // Stop browsers from MIME-sniffing responses away from the declared Content-Type.
+  res.setHeader("X-Content-Type-Options", "nosniff");
+
+  // Control how much referrer information is sent with requests.
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+
+  // Modern recommendation: disable the legacy XSS auditor — it can introduce
+  // new vulnerabilities. The CSP directive above provides the real protection.
+  res.setHeader("X-XSS-Protection", "0");
+
+  // Cross-Origin-Opener-Policy: allow-popups is required so the MultiversX
+  // wallet popup can post a message back to our window; "same-origin" would
+  // break wallet auth. Allow-popups still isolates the main page from openers.
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+
+  // HSTS: force HTTPS in production only (dev runs on plain HTTP).
+  if (isProduction) {
+    res.setHeader("Strict-Transport-Security", "max-age=63072000; includeSubDomains");
+  }
+
+  next();
+});
+
+// ── CORS ─────────────────────────────────────────────────────────────────────
+// /api/* and /mcp are consumed by external AI agents using API-key or x402 auth.
+// Allow any origin WITHOUT credentials so cross-origin agent requests work
+// while the SameSite cookie CSRF protection on session-based endpoints is not
+// weakened (browsers won't send session cookies on cross-origin requests unless
+// Access-Control-Allow-Credentials: true is also set — which we never set here).
+app.use("/api", (req: Request, res: Response, next: NextFunction) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Payment, X-Api-Key");
+  if (req.method === "OPTIONS") {
+    res.status(204).end();
+    return;
+  }
+  next();
+});
+
+app.use("/mcp", (req: Request, res: Response, next: NextFunction) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Payment");
+  if (req.method === "OPTIONS") {
+    res.status(204).end();
+    return;
+  }
   next();
 });
 
@@ -112,12 +169,21 @@ app.use((req, res, next) => {
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+    const isProduction = process.env.NODE_ENV === "production";
 
-    logger.error(`Error ${status}: ${message}`, { stack: err.stack });
+    // Always log the full error (including stack) server-side.
+    logger.error(`Error ${status}: ${err.message}`, { stack: err.stack });
 
     if (!res.headersSent) {
-      res.status(status).json({ message });
+      // Never expose raw internal error messages to clients for server errors in
+      // production — they can contain DB schema details, file paths, or stack traces.
+      // 4xx errors are caller-induced and safe to relay verbatim; 5xx errors are
+      // internal and get a generic message unless running in development.
+      const safeMessage =
+        status < 500 || !isProduction
+          ? err.message || "Internal Server Error"
+          : "Internal Server Error";
+      res.status(status).json({ message: safeMessage });
     }
   });
 

@@ -8,6 +8,7 @@ import { isWalletAuthenticated } from "../walletAuth";
 import { attestationIssuanceRateLimiter, publicSearchRateLimiter, publicPdfRateLimiter, publicReadRateLimiter } from "../reliability";
 import { computeTrustScoreByWallet, getCalibrationSummaryByWallet } from "../trust";
 import { isValidWebhookUrl, safeWebhookFetch } from "../webhook";
+import { safeErrMsg } from "./helpers";
 
 // Short-lived cache for the per-wallet public-profile visibility flag used by
 // the trust widget. Keyed by wallet address; TTL matches the widget
@@ -113,7 +114,7 @@ export function registerAttestationsRoutes(app: Express) {
         return res.status(400).json({ message: "Validation error", errors: err.errors });
       }
       logger.error("Failed to create attestation", { error: err.message });
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: safeErrMsg(err) });
     }
   });
 
@@ -133,7 +134,7 @@ export function registerAttestationsRoutes(app: Express) {
       `);
       res.json({ days, expiring: result.rows });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: safeErrMsg(err) });
     }
   });
 
@@ -182,7 +183,7 @@ export function registerAttestationsRoutes(app: Express) {
       `);
       res.json({ results: result.rows, limit, offset });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: safeErrMsg(err) });
     }
   });
 
@@ -213,7 +214,7 @@ export function registerAttestationsRoutes(app: Express) {
 
       res.json(row);
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: safeErrMsg(err) });
     }
   });
 
@@ -292,7 +293,7 @@ export function registerAttestationsRoutes(app: Express) {
       logger.info("Attestation revoked", { issuer: issuerWallet, attestationId: id });
       res.json({ success: true, id });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: safeErrMsg(err) });
     }
   });
 
@@ -309,7 +310,7 @@ export function registerAttestationsRoutes(app: Express) {
       `);
       res.json(result.rows);
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: safeErrMsg(err) });
     }
   });
 
@@ -363,7 +364,7 @@ export function registerAttestationsRoutes(app: Express) {
         attestations: issued.rows,
       });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: safeErrMsg(err) });
     }
   });
 
@@ -448,7 +449,7 @@ export function registerAttestationsRoutes(app: Express) {
       if (err.name === "ZodError") {
         return res.status(400).json({ message: "Validation error", errors: err.errors });
       }
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: safeErrMsg(err) });
     }
   });
 
@@ -480,7 +481,7 @@ export function registerAttestationsRoutes(app: Express) {
         snapshots: result.rows,
       });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: safeErrMsg(err) });
     }
   });
 
@@ -611,7 +612,7 @@ export function registerAttestationsRoutes(app: Express) {
       res.send(pdfBuf);
     } catch (err: any) {
       logger.error("PDF generation error", { error: err.message });
-      if (!res.headersSent) res.status(500).json({ error: err.message });
+      if (!res.headersSent) res.status(500).json({ error: safeErrMsg(err) });
     }
   });
 

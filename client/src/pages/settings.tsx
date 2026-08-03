@@ -207,7 +207,7 @@ export default function Settings() {
     handleSubmit: handleSubmitAttest,
     control: controlAttest,
     reset: resetAttest,
-    formState: { isSubmitting: isAttesting },
+    formState: { isSubmitting: isAttesting, errors: errorsAttest },
   } = useForm<AttestationForm>({
     defaultValues: {
       subjectWallet: "",
@@ -705,8 +705,16 @@ export default function Settings() {
                       id="subjectWallet"
                       data-testid="input-subject-wallet"
                       placeholder="erd1..."
-                      {...registerAttest("subjectWallet", { required: true })}
+                      {...registerAttest("subjectWallet", {
+                        required: "Wallet address is required",
+                        validate: (v) =>
+                          /^erd1[a-z0-9]{58}$/.test(v.trim()) ||
+                          "Must be a valid MultiversX wallet address (erd1… 62 chars)",
+                      })}
                     />
+                    {errorsAttest.subjectWallet && (
+                      <p className="text-xs text-destructive">{errorsAttest.subjectWallet.message}</p>
+                    )}
                   </div>
 
                   <div className="space-y-2">

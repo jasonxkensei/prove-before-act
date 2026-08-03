@@ -10,7 +10,7 @@ import { computeTrustScoreByWallet, runLeaderboardRefreshCycle, runTrustRefreshC
 import { getAlertConfig, getRateLimitAlertConfig } from "../alerts";
 import { getMetrics } from "../metrics";
 import { getTxQueueStats } from "../txQueue";
-import { requireAdmin, EXCLUDED_IP_HASHES, getClientIp } from "./helpers";
+import { requireAdmin, EXCLUDED_IP_HASHES, getClientIp, safeErrMsg } from "./helpers";
 import { reconstructAuditTrail } from "../audit-trail";
 import { publicStatsRateLimiter } from "../reliability";
 
@@ -664,7 +664,7 @@ export function registerAdminRoutes(app: Express) {
         recent_processing: recentProcessing,
       });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: safeErrMsg(err) });
     }
   });
 
@@ -695,7 +695,7 @@ export function registerAdminRoutes(app: Express) {
         total_keys: result.rows.reduce((s: number, r: any) => s + r.key_count, 0),
       });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: safeErrMsg(err) });
     }
   });
 
@@ -770,7 +770,7 @@ export function registerAdminRoutes(app: Express) {
         trust_score: updatedScore,
       });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: safeErrMsg(err) });
     }
   });
 
@@ -943,7 +943,7 @@ export function registerAdminRoutes(app: Express) {
       });
     } catch (err: any) {
       logger.error("Failed to fetch trial funnel", { component: "admin", error: err.message });
-      return res.status(500).json({ error: "INTERNAL_ERROR", message: err.message });
+      return res.status(500).json({ error: "INTERNAL_ERROR", message: safeErrMsg(err) });
     }
   });
 
@@ -962,7 +962,7 @@ export function registerAdminRoutes(app: Express) {
       await runTrustRefreshCycle();
       res.json({ success: true, message: "Trust and leaderboard refresh cycles completed" });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: safeErrMsg(err) });
     }
   });
 
@@ -1036,7 +1036,7 @@ export function registerAdminRoutes(app: Express) {
       });
     } catch (err: any) {
       logger.error("Admin WHY-violation repair error", { error: err.message });
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: safeErrMsg(err) });
     }
   });
 
@@ -1055,7 +1055,7 @@ export function registerAdminRoutes(app: Express) {
         deleted: deleted.map(u => ({ id: u.id, name: u.companyName })),
       });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: safeErrMsg(err) });
     }
   });
 
