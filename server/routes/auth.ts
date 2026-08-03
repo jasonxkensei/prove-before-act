@@ -90,7 +90,9 @@ export function registerAuthRoutes(app: Express) {
   // It accepted any wallet address without cryptographic proof of ownership,
   // allowing impersonation of any MultiversX wallet including admin wallets.
   // Use /api/auth/wallet/sync with a Native Auth token instead.
-  app.post("/api/auth/wallet/simple-sync", (req, res) => {
+  // AUTH-H1: Rate-limited even though disabled — prevents brute-force enumeration
+  // of the 410 response (timing side-channel) and future accidental re-enablement.
+  app.post("/api/auth/wallet/simple-sync", authRateLimiter, (req, res) => {
     res.status(410).json({
       message: "This endpoint has been disabled due to a security vulnerability. Use Native Auth with /api/auth/wallet/sync instead.",
       error: "ENDPOINT_DISABLED",
@@ -126,8 +128,47 @@ export function registerAuthRoutes(app: Express) {
   });
 
   // Logout endpoint
-  app.post("/api/auth/logout", async (req, res) => {
+  // AUTH-H2: Enforce request provenance to prevent CSRF logout attacks.
+  //
+  // Attack scenario: an attacker embeds a page that fires a credentialed POST
+  // to /api/auth/logout. If the session cookie is not SameSite=Strict this
+  // succeeds and logs the victim out silently.
+  //
+  // Defense: compare the Origin header (sent by every modern browser for
+  // cross-origin requests, and for same-origin fetch POSTs) against our list
+  // of trusted origins.  If Origin is absent we fall back to Referer.  If
+  // neither header is present the request is treated as same-origin (browsers
+  // always populate at least one of them for credentialed cross-site requests).
+  //
+  // A cross-site attacker cannot spoof Origin/Referer — they are browser-
+  // controlled headers.  Server-to-server calls (no headers) are allowed
+  // because they cannot carry a stolen session cookie via SameSite policy.
+  app.post("/api/auth/logout", async (req: any, res) => {
     try {
+      const { getAcceptedOrigins } = await import("../nativeAuth");
+      const allowedOrigins = getAcceptedOrigins();
+
+      const origin = (req.headers.origin as string | undefined) || "";
+      const referer = (req.headers.referer as string | undefined) || "";
+      const checkHeader = origin || referer;
+
+      if (checkHeader) {
+        const trusted = allowedOrigins.some(
+          (o) => checkHeader === o || checkHeader.startsWith(o + "/")
+        );
+        if (!trusted) {
+          logger.withRequest(req).warn("Logout blocked: untrusted origin", {
+            origin,
+            referer,
+          });
+          return res.status(403).json({ message: "Forbidden" });
+        }
+      }
+      // No active session → already logged out; return 200 so clients always
+      // land in a clean logged-out state without displaying an error.
+      if (!req.session?.walletAddress) {
+        return res.json({ message: "Already logged out" });
+      }
       await destroyWalletSession(req);
       res.json({ message: "Logged out successfully" });
     } catch (error: any) {

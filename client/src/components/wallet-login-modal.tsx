@@ -37,26 +37,19 @@ export function WalletLoginModal({ open, onOpenChange, redirectTo }: WalletLogin
   const isLoggedIn = useGetIsLoggedIn();
   const { address } = useGetAccount();
 
-  const getNativeAuthToken = (): string | null => {
-    // First check if we have a token from the login result (most reliable)
-    if (pendingTokenRef.current) return pendingTokenRef.current;
+  // AUTH-M1: Specific key for our Native Auth token — avoids picking up tokens
+  // from third-party libraries via broad regex scanning (token injection risk).
+  const XPROOF_NATIVE_AUTH_KEY = 'xproof_native_auth_token';
 
-    const keys = Object.keys(localStorage);
-    for (const key of keys) {
-      if (key.includes('nativeAuth') || key.includes('token') || key.includes('accessToken')) {
-        const value = localStorage.getItem(key);
-        if (value && value.length > 50) return value;
-      }
-    }
-    const direct = localStorage.getItem('nativeAuthToken') || localStorage.getItem('loginToken');
-    if (direct) return direct;
-    const sKeys = Object.keys(sessionStorage);
-    for (const key of sKeys) {
-      if (key.includes('nativeAuth') || key.includes('token') || key.includes('accessToken')) {
-        const value = sessionStorage.getItem(key);
-        if (value && value.length > 50) return value;
-      }
-    }
+  const getNativeAuthToken = (): string | null => {
+    // 1. In-memory token from current login flow (most reliable — no storage required)
+    if (pendingTokenRef.current) return pendingTokenRef.current;
+    // 2. Our own specific localStorage key written during a previous login
+    const ours = localStorage.getItem(XPROOF_NATIVE_AUTH_KEY);
+    if (ours && ours.length > 50) return ours;
+    // 3. Legacy key names written by older app versions
+    const legacy = localStorage.getItem('nativeAuthToken') || localStorage.getItem('loginToken');
+    if (legacy && legacy.length > 50) return legacy;
     return null;
   };
 
@@ -206,6 +199,9 @@ export function WalletLoginModal({ open, onOpenChange, redirectTo }: WalletLogin
             signature,
           });
           pendingTokenRef.current = finalToken;
+          // AUTH-M1: Persist under specific key so useWalletAuth can find it
+          // on subsequent page loads without a broad localStorage scan.
+          localStorage.setItem(XPROOF_NATIVE_AUTH_KEY, finalToken);
           logger.log('Composed nativeAuth token from address + init + signature');
         } catch (e) {
           logger.error('Failed to compose nativeAuth token', e);

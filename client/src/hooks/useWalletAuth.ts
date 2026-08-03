@@ -24,32 +24,25 @@ interface User {
   createdAt?: Date | null;
 }
 
+// AUTH-M1: Use specific, well-known storage keys instead of iterating all
+// localStorage keys with a broad regex. The old approach could pick up tokens
+// from third-party libraries (e.g. "token_tracking", "accessToken_analytics")
+// and send them as Bearer credentials to our backend — token confusion / injection.
+//
+// Key written by wallet-login-modal.tsx after a successful Native Auth login.
+const XPROOF_NATIVE_AUTH_KEY = 'xproof_native_auth_token';
+
 function getNativeAuthTokenFromStorage(): string | null {
-  const keys = Object.keys(localStorage);
-  for (const key of keys) {
-    if (key.includes('nativeAuth') || key.includes('token')) {
-      const value = localStorage.getItem(key);
-      if (value && value.length > 50) {
-        return value;
-      }
-    }
+  // 1. Our own specific key — written by wallet-login-modal.tsx on login
+  const ours = localStorage.getItem(XPROOF_NATIVE_AUTH_KEY);
+  if (ours && ours.length > 50) return ours;
+
+  // 2. Legacy key names written by older versions of this app
+  for (const key of ['nativeAuthToken', 'loginToken']) {
+    const val = localStorage.getItem(key);
+    if (val && val.length > 50) return val;
   }
-  const directToken = localStorage.getItem('nativeAuthToken');
-  if (directToken) return directToken;
-  
-  const loginToken = localStorage.getItem('loginToken');
-  if (loginToken) return loginToken;
-  
-  const sessionKeys = Object.keys(sessionStorage);
-  for (const key of sessionKeys) {
-    if (key.includes('nativeAuth') || key.includes('token')) {
-      const value = sessionStorage.getItem(key);
-      if (value && value.length > 50) {
-        return value;
-      }
-    }
-  }
-  
+
   return null;
 }
 
@@ -248,6 +241,7 @@ export function useWalletAuth() {
     onSuccess: () => {
       sessionStorage.removeItem('walletAddress');
       localStorage.removeItem('loginInfo');
+      localStorage.removeItem(XPROOF_NATIVE_AUTH_KEY);
       localStorage.removeItem('nativeAuthToken');
       localStorage.removeItem('loginToken');
       
