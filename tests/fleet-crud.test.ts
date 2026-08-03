@@ -1271,6 +1271,94 @@ describe("GET /api/fleet/coherence?fleet=<slug> — LIMIT=50 cap hides members b
   });
 });
 
+// ── GET /api/fleet/coherence?fleet=<slug> — exact cap boundary (Task #564) ────
+//
+// A fleet with exactly 50 public-profile members sits precisely at the LIMIT.
+// The truncated expression is:
+//   agents.length === FLEET_MAX_AGENTS && totalMemberCount > FLEET_MAX_AGENTS
+// When totalMemberCount === 50 the right side is false, so truncated must be
+// false even though agents.length === FLEET_MAX_AGENTS. A refactor that tests
+// only agents.length === FLEET_MAX_AGENTS (omitting the totalMemberCount guard)
+// would pass the 51-member test but break this boundary case.
+
+describe("GET /api/fleet/coherence?fleet=<slug> — exact cap boundary: 50 members returns truncated=false (Task #564)", () => {
+  const run = runHex();
+  const { walletAddress: ownerWallet } = makeEd25519TestWallet();
+  const ownerId = `fc-exact50-owner-${run}`;
+  const slug    = `fleet-exact50-${run}`;
+
+  // Exactly 50 members — all public-profile
+  const SEED_COUNT = 50;
+  const members = Array.from({ length: SEED_COUNT }, (_, i) => ({
+    id:     `fc-exact50-mem-${run}-${String(i).padStart(2, "0")}`,
+    wallet: makeEd25519TestWallet().walletAddress,
+  }));
+
+  let fleetId: string;
+  let ownerCookie: string;
+
+  beforeAll(async () => {
+    await insertUser(ownerId, ownerWallet);
+    ownerCookie = await createTestSession(ownerWallet);
+
+    const res = await fetch(`${BASE}/api/fleets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: ownerCookie },
+      body: JSON.stringify({ name: `Fleet Exact50 ${run}`, slug }),
+    });
+    expect(res.status).toBe(201);
+    fleetId = (await res.json()).fleet.id;
+
+    // Bulk-insert 50 public-profile user rows
+    const userPlaceholders = members
+      .map((_, i) => `($${i * 2 + 1}, $${i * 2 + 2}, true)`)
+      .join(", ");
+    const userParams = members.flatMap((m) => [m.id, m.wallet]);
+    await pool.query(
+      `INSERT INTO users (id, wallet_address, is_public_profile) VALUES ${userPlaceholders}`,
+      userParams,
+    );
+
+    // Bulk-insert 50 fleet_member rows
+    const memberPlaceholders = members
+      .map((_, i) => `($1, $${i + 2}, 'owner_wallet')`)
+      .join(", ");
+    await pool.query(
+      `INSERT INTO fleet_members (fleet_id, wallet_address, proof_method) VALUES ${memberPlaceholders}`,
+      [fleetId, ...members.map((m) => m.wallet)],
+    );
+  });
+
+  afterAll(async () => {
+    await pool.query(`DELETE FROM fleet_members WHERE fleet_id = $1`, [fleetId]);
+    await cleanupUsers([ownerWallet, ...members.map((m) => m.wallet)]);
+  });
+
+  it("body.agents contains exactly 50 entries (all members are returned)", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?fleet=${slug}`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect((body.agents as any[]).length).toBe(50);
+  });
+
+  it("fleet.truncated is false when total_member_count equals FLEET_MAX_AGENTS (50)", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?fleet=${slug}`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(
+      body.fleet.truncated,
+      "truncated must be false when member count equals the cap — not merely when agents.length < cap",
+    ).toBe(false);
+  });
+
+  it("fleet.total_member_count is 50", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?fleet=${slug}`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.fleet.total_member_count).toBe(50);
+  });
+});
+
 // ── GET /api/fleet/coherence?org= — LIMIT=50 cap (Task #555) ─────────────────
 // Seeds 51 public-profile users whose wallet addresses share a common prefix,
 // then confirms the org-prefix branch of the coherence handler also caps the
