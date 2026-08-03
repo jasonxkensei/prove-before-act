@@ -7,7 +7,7 @@ import { eq, desc, sql, and, count, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { paymentRateLimiter, publicSearchRateLimiter } from "../reliability";
 import { isX402Configured, verifyX402Payment, send402Response, build402Response } from "../x402";
-import { recordOnBlockchain, isMultiversXConfigured, computeOnchainPayloadBytes, MAX_ONCHAIN_PAYLOAD_BYTES } from "../blockchain";
+import { recordOnBlockchain, isMultiversXConfigured, computeOnchainPayloadBytes, MAX_ONCHAIN_PAYLOAD_BYTES, BlockchainValidationError } from "../blockchain";
 import { getCertificationPriceEgld, getCertificationPriceUsd } from "../pricing";
 import { auditLogSchema, AUDIT_LOG_JSON_SCHEMA, type AgentAuditLog, REVERSIBILITY_CLASSES, JURISDICTION_TYPES, validateTimestampOrdering, isStrictDatetime } from "../auditSchema";
 import { isMX8004Configured, recordCertificationAsJob } from "../mx8004";
@@ -1110,6 +1110,9 @@ export function registerProofWriteRoutes(app: Express) {
       }
 
       // Record on blockchain; refund credit and remove pending row if the write fails.
+      // PAYMENT-C4: Distinguish BlockchainValidationError (caller-induced, 400) from
+      // genuine network/RPC failures (transient, 502) so callers receive actionable
+      // feedback instead of a generic 502 that suggests the blockchain is down.
       let result: Awaited<ReturnType<typeof recordOnBlockchain>>;
       try {
         result = await recordOnBlockchain(fileHash, fileName);
@@ -1117,8 +1120,15 @@ export function registerProofWriteRoutes(app: Express) {
         await db.delete(certifications).where(eq(certifications.id, auditPending.id)).catch(() => {});
         if (trialInfo) await refundTrialCredit(trialInfo.userId).catch(() => {});
         else if (creditInfo) await refundCredit(creditInfo.userId).catch(() => {});
-        logger.withRequest(req).error("Blockchain write failed, pending row removed, credit refunded", { error: blockchainErr?.message, fileHash });
-        return res.status(502).json({ error: "BLOCKCHAIN_ERROR", message: "Blockchain write failed. Your credit has been refunded." });
+
+        if (blockchainErr instanceof BlockchainValidationError) {
+          // Payload rejected before any chain interaction — safe to tell the caller exactly why.
+          logger.withRequest(req).error("Audit log payload rejected by blockchain validator (no credit charged)", { error: blockchainErr.message, code: blockchainErr.code, fileHash });
+          return res.status(400).json({ error: blockchainErr.code, message: blockchainErr.message });
+        }
+
+        logger.withRequest(req).error("Blockchain write failed for audit log, pending row removed, credit refunded", { error: blockchainErr?.message, fileHash });
+        return res.status(502).json({ error: "BLOCKCHAIN_ERROR", message: "Blockchain write failed. Your credit has been refunded. This is a transient error — please retry.", retry: true });
       }
 
       // Update the pending row with confirmed blockchain data.

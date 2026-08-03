@@ -196,8 +196,11 @@ export function registerAcpRoutes(app: Express) {
       
       const chainId = process.env.MULTIVERSX_CHAIN_ID || "1"; // 1 = Mainnet
 
-      // Receiver wallet for certification fees
-      const xproofWallet = process.env.MULTIVERSX_RECEIVER_ADDRESS || process.env.XPROOF_WALLET_ADDRESS || process.env.MULTIVERSX_SENDER_ADDRESS;
+      // Receiver wallet for certification fees.
+      // PROOFMINT_WALLET_ADDRESS is the legacy env-var name from the ProofMint→xproof
+      // rebrand; include it in the fallback chain so existing deployments that set this
+      // variable continue to work without a manual migration.
+      const xproofWallet = process.env.MULTIVERSX_RECEIVER_ADDRESS || process.env.PROOFMINT_WALLET_ADDRESS || process.env.XPROOF_WALLET_ADDRESS || process.env.MULTIVERSX_SENDER_ADDRESS;
       if (!xproofWallet) {
         logger.withRequest(req).error("No receiver wallet configured");
         return res.status(500).json({
@@ -654,127 +657,172 @@ export function registerAcpRoutes(app: Express) {
       // Admin-exempt checkouts have expectedValue "0" — skip on-chain payment checks
       const isAdminExempt = checkout.expectedValue === "0";
 
+      // PAYMENT-C1 / PAYMENT-C2: Fail-closed chain for on-chain payment verification.
+      //
+      // Invariant: txVerified must only be set to true when EVERY check below passes.
+      // Any network error, HTTP failure, non-success tx status, or mismatched field
+      // MUST cause a 402 response — never a 200 or a silent pass-through.
+      //
+      // Edge cases covered (PAYMENT-C2):
+      //   - txResponse.status 404 → transaction not found → 402
+      //   - txResponse not OK (5xx/4xx) → RPC failure → 402 fail-closed
+      //   - txData.status null / undefined / "pending" / "invalid" / "failed" → 402
+      //   - Network exception / timeout → 402 (not 503, PAYMENT-C1)
+
       let txVerified = false;
-      let txStatus = "pending";
 
       try {
         const txResponse = await fetch(`${apiUrl}/transactions/${data.tx_hash}`, { signal: AbortSignal.timeout(10000) });
-        if (txResponse.ok) {
-          const txData = await txResponse.json();
-          txStatus = txData.status;
-          if (txData.status === "success") {
-            if (isAdminExempt) {
-              txVerified = true;
-            } else {
-              // Verify receiver matches what was quoted at checkout creation
-              const expectedReceiver = checkout.expectedReceiver;
-              if (expectedReceiver && txData.receiver !== expectedReceiver) {
-                logger.withRequest(req).warn("ACP confirm: tx receiver mismatch", {
-                  txHash: data.tx_hash,
-                  txReceiver: txData.receiver,
-                  expected: expectedReceiver,
-                });
-                return res.status(402).json({
-                  error: "PAYMENT_VERIFICATION_FAILED",
-                  message: "Transaction receiver does not match the xproof payment address quoted at checkout",
-                });
-              }
 
-              // Verify value (EGLD in atomic units) meets or exceeds the quoted price
-              const expectedValue = checkout.expectedValue;
-              if (expectedValue && expectedValue !== "0") {
-                const onChainValue = BigInt(txData.value || "0");
-                const requiredValue = BigInt(expectedValue);
-                if (onChainValue < requiredValue) {
-                  logger.withRequest(req).warn("ACP confirm: insufficient value", {
-                    txHash: data.tx_hash,
-                    onChainValue: onChainValue.toString(),
-                    required: requiredValue.toString(),
-                  });
-                  return res.status(402).json({
-                    error: "PAYMENT_VERIFICATION_FAILED",
-                    message: "Transaction value is less than the price quoted at checkout",
-                  });
-                }
-              }
+        // 404: transaction not found on-chain (not yet indexed, wrong hash, or never broadcast)
+        if (txResponse.status === 404) {
+          return res.status(402).json({
+            error: "PAYMENT_VERIFICATION_FAILED",
+            message: "Transaction not found on the MultiversX blockchain. Ensure the transaction was successfully broadcast before confirming.",
+          });
+        }
 
-              // Verify data field matches the canonical payload from checkout
-              const expectedData = checkout.expectedData;
-              if (expectedData && txData.data !== expectedData) {
-                logger.withRequest(req).warn("ACP confirm: tx data mismatch", {
-                  txHash: data.tx_hash,
-                  checkoutId: checkout.id,
-                });
-                return res.status(402).json({
-                  error: "PAYMENT_VERIFICATION_FAILED",
-                  message: "Transaction data field does not match the certify payload for this checkout",
-                });
-              }
+        // Any other non-OK HTTP status from the MultiversX API → fail closed.
+        if (!txResponse.ok) {
+          logger.withRequest(req).warn("ACP confirm: MultiversX API returned non-OK status", { txHash: data.tx_hash, httpStatus: txResponse.status });
+          return res.status(402).json({
+            error: "PAYMENT_VERIFICATION_FAILED",
+            message: `MultiversX API returned HTTP ${txResponse.status}. Cannot verify payment without on-chain data — fail closed. Retry when the network is available.`,
+            retry: true,
+          });
+        }
 
-              // Verify tx sender matches the expected payer wallet captured at checkout creation.
-              // This prevents a competing actor from using their own tx to confirm someone else's
-              // checkout (tx hijacking). If no expectedSender was stored, reject as fail-closed.
-              const checkoutMeta = checkout.metadata as Record<string, unknown> | null;
-              const expectedSender: string | undefined = checkoutMeta?.expectedSender as string | undefined;
-              if (!expectedSender) {
-                logger.withRequest(req).warn("ACP confirm: checkout has no expectedSender — created before sender binding was enforced; rejecting fail-closed", { checkoutId: checkout.id, txHash: data.tx_hash });
-                return res.status(402).json({
-                  error: "SENDER_BINDING_MISSING",
-                  message: "This checkout was created without a payer_wallet binding. Re-create the checkout providing payer_wallet to bind the expected payment sender.",
-                });
-              }
-              if (txData.sender !== expectedSender) {
-                logger.withRequest(req).warn("ACP confirm: tx sender mismatch", {
-                  txHash: data.tx_hash,
-                  checkoutId: checkout.id,
-                  txSender: txData.sender,
-                  expectedSender,
-                });
-                return res.status(402).json({
-                  error: "PAYMENT_VERIFICATION_FAILED",
-                  message: `Transaction sender (${txData.sender}) does not match the expected payer wallet (${expectedSender}) that was provided when the checkout was created.`,
-                });
-              }
+        const txData = await txResponse.json();
 
-              txVerified = true;
+        // PAYMENT-C2: Explicit rejection for any non-"success" status value.
+        // Covers: null, undefined, "pending", "invalid", "failed", and any future unknown status.
+        // This guard runs BEFORE any field-level checks so mismatched fields are never
+        // evaluated against a transaction that hasn't been finalized on-chain.
+        if (!txData.status || txData.status !== "success") {
+          const statusLabel: string = typeof txData.status === "string" ? txData.status : "unknown";
+          return res.status(402).json({
+            error: "PAYMENT_VERIFICATION_FAILED",
+            message: `Transaction status is "${statusLabel}", not "success". Retry once the transaction is confirmed on-chain.`,
+            tx_status: statusLabel,
+          });
+        }
 
-              // Reject if we cannot verify the checkout predates the transaction (fail-closed).
-              // This prevents an attacker from observing a victim's payment, creating a new
-              // checkout for the same file_hash/filename, and confirming with the victim's tx.
-              if (!txData.timestamp) {
-                logger.withRequest(req).warn("ACP confirm: transaction timestamp unavailable — cannot verify checkout/tx ordering", { txHash: data.tx_hash });
-                return res.status(402).json({
-                  error: "TX_TIMESTAMP_UNAVAILABLE",
-                  message: "Transaction timestamp could not be verified. Payment cannot be attributed without proof that the checkout predates the transaction.",
-                });
-              }
-              const txTime = new Date(txData.timestamp * 1000);
-              if (checkout.createdAt && checkout.createdAt > txTime) {
-                logger.withRequest(req).warn("ACP confirm: checkout postdates transaction", {
-                  txHash: data.tx_hash,
-                  checkoutCreatedAt: checkout.createdAt,
-                  txTime,
-                });
-                return res.status(402).json({
-                  error: "CHECKOUT_POSTDATES_TRANSACTION",
-                  message: "This checkout was created after the transaction was submitted. Payment cannot be attributed to a checkout that did not exist when the payment was made.",
-                });
-              }
+        // At this point txData.status === "success" — proceed with field-level verification.
+        if (isAdminExempt) {
+          txVerified = true;
+        } else {
+          // Verify receiver matches what was quoted at checkout creation
+          const expectedReceiver = checkout.expectedReceiver;
+          if (expectedReceiver && txData.receiver !== expectedReceiver) {
+            logger.withRequest(req).warn("ACP confirm: tx receiver mismatch", {
+              txHash: data.tx_hash,
+              txReceiver: txData.receiver,
+              expected: expectedReceiver,
+            });
+            return res.status(402).json({
+              error: "PAYMENT_VERIFICATION_FAILED",
+              message: "Transaction receiver does not match the xproof payment address quoted at checkout",
+            });
+          }
+
+          // Verify value (EGLD in atomic units) meets or exceeds the quoted price
+          const expectedValue = checkout.expectedValue;
+          if (expectedValue && expectedValue !== "0") {
+            const onChainValue = BigInt(txData.value || "0");
+            const requiredValue = BigInt(expectedValue);
+            if (onChainValue < requiredValue) {
+              logger.withRequest(req).warn("ACP confirm: insufficient value", {
+                txHash: data.tx_hash,
+                onChainValue: onChainValue.toString(),
+                required: requiredValue.toString(),
+              });
+              return res.status(402).json({
+                error: "PAYMENT_VERIFICATION_FAILED",
+                message: "Transaction value is less than the price quoted at checkout",
+              });
             }
           }
+
+          // Verify data field matches the canonical payload from checkout
+          const expectedData = checkout.expectedData;
+          if (expectedData && txData.data !== expectedData) {
+            logger.withRequest(req).warn("ACP confirm: tx data mismatch", {
+              txHash: data.tx_hash,
+              checkoutId: checkout.id,
+            });
+            return res.status(402).json({
+              error: "PAYMENT_VERIFICATION_FAILED",
+              message: "Transaction data field does not match the certify payload for this checkout",
+            });
+          }
+
+          // Verify tx sender matches the expected payer wallet captured at checkout creation.
+          // This prevents a competing actor from using their own tx to confirm someone else's
+          // checkout (tx hijacking). If no expectedSender was stored, reject as fail-closed.
+          const checkoutMeta = checkout.metadata as Record<string, unknown> | null;
+          const expectedSender: string | undefined = checkoutMeta?.expectedSender as string | undefined;
+          if (!expectedSender) {
+            logger.withRequest(req).warn("ACP confirm: checkout has no expectedSender — created before sender binding was enforced; rejecting fail-closed", { checkoutId: checkout.id, txHash: data.tx_hash });
+            return res.status(402).json({
+              error: "SENDER_BINDING_MISSING",
+              message: "This checkout was created without a payer_wallet binding. Re-create the checkout providing payer_wallet to bind the expected payment sender.",
+            });
+          }
+          if (txData.sender !== expectedSender) {
+            logger.withRequest(req).warn("ACP confirm: tx sender mismatch", {
+              txHash: data.tx_hash,
+              checkoutId: checkout.id,
+              txSender: txData.sender,
+              expectedSender,
+            });
+            return res.status(402).json({
+              error: "PAYMENT_VERIFICATION_FAILED",
+              message: `Transaction sender (${txData.sender}) does not match the expected payer wallet (${expectedSender}) that was provided when the checkout was created.`,
+            });
+          }
+
+          // Reject if we cannot verify the checkout predates the transaction (fail-closed).
+          // This prevents an attacker from observing a victim's payment, creating a new
+          // checkout for the same file_hash/filename, and confirming with the victim's tx.
+          if (!txData.timestamp) {
+            logger.withRequest(req).warn("ACP confirm: transaction timestamp unavailable — cannot verify checkout/tx ordering", { txHash: data.tx_hash });
+            return res.status(402).json({
+              error: "TX_TIMESTAMP_UNAVAILABLE",
+              message: "Transaction timestamp could not be verified. Payment cannot be attributed without proof that the checkout predates the transaction.",
+            });
+          }
+          const txTime = new Date(txData.timestamp * 1000);
+          if (checkout.createdAt && checkout.createdAt > txTime) {
+            logger.withRequest(req).warn("ACP confirm: checkout postdates transaction", {
+              txHash: data.tx_hash,
+              checkoutCreatedAt: checkout.createdAt,
+              txTime,
+            });
+            return res.status(402).json({
+              error: "CHECKOUT_POSTDATES_TRANSACTION",
+              message: "This checkout was created after the transaction was submitted. Payment cannot be attributed to a checkout that did not exist when the payment was made.",
+            });
+          }
+
+          txVerified = true;
         }
       } catch (err) {
-        logger.withRequest(req).error("Could not verify ACP transaction", { txHash: data.tx_hash });
-        return res.status(503).json({
-          error: "VERIFICATION_UNAVAILABLE",
-          message: "Could not verify transaction on MultiversX at this time. Please retry.",
+        // PAYMENT-C1: Network error / timeout / JSON parse failure — fail closed.
+        // Return 402 (payment not verified) rather than 503 so callers treat this as
+        // "payment unconfirmed" and do not assume success.
+        logger.withRequest(req).error("ACP confirm: RPC call failed — fail closed", { txHash: data.tx_hash, error: (err as any)?.message });
+        return res.status(402).json({
+          error: "PAYMENT_VERIFICATION_FAILED",
+          message: "Could not reach the MultiversX network to verify payment. Certification not issued — retry once the network is available.",
+          retry: true,
         });
       }
 
+      // Final guard: txVerified can only be true if every check above passed explicitly.
       if (!txVerified) {
         return res.status(402).json({
           error: "PAYMENT_VERIFICATION_FAILED",
-          message: `Transaction not yet confirmed on-chain (status: ${txStatus}). Retry once the transaction is successful.`,
+          message: "Payment could not be verified. Retry once the transaction is confirmed on-chain.",
         });
       }
 

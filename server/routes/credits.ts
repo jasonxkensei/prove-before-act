@@ -3,8 +3,8 @@ import crypto from "crypto";
 import { recoverMessageAddress } from "viem";
 import { db } from "../db";
 import { logger } from "../logger";
-import { apiKeys, creditPurchases, creditPurchaseIntents } from "@shared/schema";
-import { eq, and, gt } from "drizzle-orm";
+import { apiKeys, creditPurchases, creditPurchaseIntents, users } from "@shared/schema";
+import { eq, and, gt, sql } from "drizzle-orm";
 import { CREDIT_PACKAGES, getPackage, getEffectivePackages, getEffectivePackage, verifyUsdcOnBase } from "../credits";
 import { getTotalCertificationCount } from "../pricing";
 import { addCredits, getUserCreditBalance } from "./helpers";
@@ -274,19 +274,50 @@ export function registerCreditsRoutes(app: Express) {
         });
       }
 
-      // Record purchase and add credits, then consume the intent to prevent reuse
-      await db.insert(creditPurchases).values({
-        userId: apiKey.userId,
-        packageId: pkg.id,
-        txHash,
-        creditsAdded: pkg.certs,
-        priceUsdc: effectivePriceUsdc,
-        network: "eip155:8453",
-      });
-      await addCredits(apiKey.userId, pkg.certs);
-      await db.delete(creditPurchaseIntents).where(eq(creditPurchaseIntents.intentToken, intentToken));
-
-      const newBalance = await getUserCreditBalance(apiKey.userId);
+      // PAYMENT-C5: Record purchase, add credits, and consume intent atomically inside a
+      // single DB transaction. Before this fix the three writes ran sequentially with no
+      // surrounding transaction, so a crash between INSERT and addCredits could leave the
+      // purchase recorded but credits never added (user charged, no credits), and a crash
+      // between addCredits and DELETE could allow the same intent to be reused.
+      //
+      // PAYMENT-C3: The DB-level UNIQUE constraint on creditPurchases.txHash is the
+      // authoritative race guard — two concurrent confirm calls both passing the
+      // pre-check above will race to INSERT; the loser gets a 23505 and we return 409.
+      // This is handled by catching the error from the transaction below.
+      let newBalance: number;
+      try {
+        await db.transaction(async (tx) => {
+          // INSERT first — if txHash is already used the unique constraint throws 23505
+          // here (inside the transaction) so the subsequent addCredits and DELETE are
+          // never executed, keeping the balance correct.
+          await tx.insert(creditPurchases).values({
+            userId: apiKey.userId,
+            packageId: pkg.id,
+            txHash,
+            creditsAdded: pkg.certs,
+            priceUsdc: effectivePriceUsdc,
+            network: "eip155:8453",
+          });
+          // Atomically add credits in the same transaction — no partial state possible.
+          await tx.update(users)
+            .set({ creditBalance: sql`credit_balance + ${pkg.certs}` })
+            .where(eq(users.id, apiKey.userId!));
+          // Consume the intent so it cannot be reused.
+          await tx.delete(creditPurchaseIntents)
+            .where(eq(creditPurchaseIntents.intentToken, intentToken));
+        });
+        newBalance = await getUserCreditBalance(apiKey.userId);
+      } catch (txErr: any) {
+        // Unique constraint violation: another request already claimed this tx hash
+        // (race condition between the pre-check above and this INSERT).
+        const isUniqueViolation =
+          txErr?.code === "23505" ||
+          (typeof txErr?.message === "string" && txErr.message.includes("unique constraint"));
+        if (isUniqueViolation) {
+          return res.status(409).json({ error: "TX_ALREADY_USED", message: "This transaction has already been used to credit an account" });
+        }
+        throw txErr; // Re-throw: caught by the outer handler → 500
+      }
       logger.withRequest(req).info("Credits added", { userId: apiKey.userId, package: pkg.id, credits: pkg.certs, txHash });
 
       return res.json({
