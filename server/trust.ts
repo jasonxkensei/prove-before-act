@@ -576,6 +576,13 @@ async function computeAllLeaderboardEntries(): Promise<LeaderboardEntry[]> {
       AND u.wallet_address NOT LIKE 'erd1trial%'
     GROUP BY u.id, u.wallet_address, u.agent_name, u.agent_category, u.agent_description, u.agent_website
     HAVING COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) > 0
+    -- TRUST-H4: cap at 200 so the leaderboard job doesn't scale with total user count.
+    -- cert_total is a proxy for rank order — agents with more confirmed certs almost always
+    -- score higher, so the top-200 by cert count is a reliable approximation of the
+    -- top-200 by trust score.  runTrustRefreshCycle() (separate function) still processes
+    -- ALL users for the per-wallet score cache; only the public leaderboard is capped here.
+    ORDER BY cert_total DESC
+    LIMIT 200
   `);
 
   const allRows = rows.rows as any[];
