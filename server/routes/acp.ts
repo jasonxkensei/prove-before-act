@@ -611,13 +611,25 @@ export function registerAcpRoutes(app: Express) {
         });
       }
 
-      // Check if already confirmed
+      // Idempotency: if this checkout was already confirmed, return 200 with the existing
+      // certification data rather than 409. This lets agents safely retry a confirm call
+      // after a network timeout without needing to distinguish "already done" from "error".
       if (checkout.status === "confirmed") {
-        return res.status(409).json({
-          error: "ALREADY_CONFIRMED",
-          message: "This checkout has already been confirmed",
+        const chainIdIdem = process.env.MULTIVERSX_CHAIN_ID || "1";
+        const explorerUrlIdem = chainIdIdem === "1"
+          ? "https://explorer.multiversx.com"
+          : "https://devnet-explorer.multiversx.com";
+        logger.withRequest(req).info("ACP confirm: idempotent re-submit for already-confirmed checkout", { checkoutId: checkout.id, certificationId: checkout.certificationId });
+        return res.status(200).json({
+          status: "confirmed",
+          checkout_id: checkout.id,
+          tx_hash: checkout.txHash || data.tx_hash,
           certification_id: checkout.certificationId,
-        });
+          certificate_url: checkout.certificationId ? `/api/certificates/${checkout.certificationId}.pdf` : undefined,
+          proof_url: checkout.certificationId ? `/proof/${checkout.certificationId}` : undefined,
+          blockchain_explorer_url: checkout.txHash ? `${explorerUrlIdem}/transactions/${checkout.txHash}` : undefined,
+          message: "Certification already confirmed (idempotent re-submit)",
+        } as ACPConfirmResponse);
       }
 
       // Reject confirmation if the reservation was displaced by a paid path
@@ -689,6 +701,8 @@ export function registerAcpRoutes(app: Express) {
             error: "PAYMENT_VERIFICATION_FAILED",
             message: `MultiversX API returned HTTP ${txResponse.status}. Cannot verify payment without on-chain data — fail closed. Retry when the network is available.`,
             retry: true,
+            retry_after_seconds: 15,
+            max_retries: 5,
           });
         }
 
@@ -815,6 +829,8 @@ export function registerAcpRoutes(app: Express) {
           error: "PAYMENT_VERIFICATION_FAILED",
           message: "Could not reach the MultiversX network to verify payment. Certification not issued — retry once the network is available.",
           retry: true,
+          retry_after_seconds: 15,
+          max_retries: 5,
         });
       }
 
@@ -914,11 +930,19 @@ export function registerAcpRoutes(app: Express) {
           });
         }
         if (txResult.kind === "already_confirmed") {
-          return res.status(409).json({
-            error: "ALREADY_CONFIRMED",
-            message: "This checkout has already been confirmed",
+          // Idempotency: concurrent re-submit raced and confirmed inside the transaction;
+          // return 200 so the caller treats this as a successful (already-done) confirmation.
+          logger.withRequest(req).info("ACP confirm: idempotent re-submit detected inside transaction", { checkoutId: checkout.id, certificationId: txResult.certificationId });
+          return res.status(200).json({
+            status: "confirmed",
+            checkout_id: checkout.id,
+            tx_hash: data.tx_hash,
             certification_id: txResult.certificationId,
-          });
+            certificate_url: txResult.certificationId ? `/api/certificates/${txResult.certificationId}.pdf` : undefined,
+            proof_url: txResult.certificationId ? `/proof/${txResult.certificationId}` : undefined,
+            blockchain_explorer_url: `${explorerUrl}/transactions/${data.tx_hash}`,
+            message: "Certification already confirmed (idempotent re-submit)",
+          } as ACPConfirmResponse);
         }
         if (txResult.kind === "missing_checkout") {
           logger.withRequest(req).error("ACP confirm: checkout disappeared mid-transaction", { checkoutId: checkout.id });
@@ -1181,6 +1205,18 @@ export function registerAcpRoutes(app: Express) {
               message: { type: "string" },
             },
           },
+          PaymentVerificationError: {
+            type: "object",
+            description: "Returned (HTTP 402) when the payment cannot be verified. If retry is true, the network was unreachable and the caller should retry after retry_after_seconds, up to max_retries times.",
+            properties: {
+              error: { type: "string", example: "PAYMENT_VERIFICATION_FAILED" },
+              message: { type: "string" },
+              retry: { type: "boolean", description: "true when the failure is transient (network unreachable) and the same request may succeed later. false (or absent) when the payment was verified and rejected for a permanent reason." },
+              retry_after_seconds: { type: "integer", example: 15, description: "Minimum seconds to wait before the next retry attempt. Present when retry is true." },
+              max_retries: { type: "integer", example: 5, description: "Maximum number of consecutive retries before treating the failure as permanent. Present when retry is true." },
+              tx_status: { type: "string", description: "The on-chain transaction status when it was found but not 'success' (e.g. 'pending', 'failed')." },
+            },
+          },
           Error: {
             type: "object",
             properties: {
@@ -1238,19 +1274,23 @@ export function registerAcpRoutes(app: Express) {
         "/api/acp/confirm": {
           post: {
             summary: "Confirm transaction",
-            description: "After signing and broadcasting transaction, confirm to receive certification ID and URLs.",
+            description: "After signing and broadcasting transaction, confirm to receive certification ID and URLs. This endpoint is idempotent: if the checkout is already confirmed, re-submitting returns 200 with the existing certification data (safe to retry after a network timeout).",
             requestBody: {
               required: true,
               content: { "application/json": { schema: { $ref: "#/components/schemas/ConfirmRequest" } } },
             },
             responses: {
               "200": {
-                description: "Certification confirmed",
+                description: "Certification confirmed (or idempotent re-submit of an already-confirmed checkout)",
                 content: { "application/json": { schema: { $ref: "#/components/schemas/ConfirmResponse" } } },
+              },
+              "402": {
+                description: "Payment could not be verified. If retry=true the network was unreachable — wait retry_after_seconds and retry up to max_retries times. If retry is absent or false, the payment was rejected for a permanent reason (wrong receiver, insufficient value, etc.) and a new checkout is required.",
+                content: { "application/json": { schema: { $ref: "#/components/schemas/PaymentVerificationError" } } },
               },
               "401": { description: "API key required" },
               "404": { description: "Checkout not found" },
-              "410": { description: "Checkout expired" },
+              "410": { description: "Checkout expired or displaced" },
             },
           },
         },
