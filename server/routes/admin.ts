@@ -7,7 +7,7 @@ import { certifications, users, apiKeys, visits, txQueue as txQueueTable, agentV
 import { eq, desc, sql, and, gte, gt, count, ne } from "drizzle-orm";
 import { isWalletAuthenticated } from "../walletAuth";
 import { computeTrustScoreByWallet, runLeaderboardRefreshCycle, runTrustRefreshCycle } from "../trust";
-import { getAlertConfig, getRateLimitAlertConfig } from "../alerts";
+import { getAlertConfig, getRateLimitAlertConfig, getViolationQueueAlertConfig } from "../alerts";
 import { getMetrics } from "../metrics";
 import { getTxQueueStats } from "../txQueue";
 import { requireAdmin, EXCLUDED_IP_HASHES, getClientIp, safeErrMsg } from "./helpers";
@@ -835,6 +835,11 @@ export function registerAdminRoutes(app: Express) {
       logger.error("Failed to fetch rate-limit stats", { component: "admin", error: err.message });
       return res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to fetch rate-limit stats" });
     }
+  });
+
+  // GET /api/admin/violation-queue/alert-config
+  app.get("/api/admin/violation-queue/alert-config", isWalletAuthenticated, requireAdmin, (req: any, res) => {
+    res.json(getViolationQueueAlertConfig());
   });
 
   // ============================================
