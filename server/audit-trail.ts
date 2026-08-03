@@ -4,7 +4,19 @@ import { eq, and, inArray, sql } from "drizzle-orm";
 import { computeTrustScoreByWallet, type TrustScore } from "./trust";
 import { logger } from "./logger";
 
-export const VIOLATION_GAP_THRESHOLD_MS = 30 * 60 * 1000;
+// TRUST-H1: Increased from 30 minutes to 4 hours.
+//
+// At 30 min, any actor could call investigate_proof on an agent's WHY cert that had
+// no visible WHAT yet (agent mid-process, search index lag, timing) and have a
+// "proposed" violation auto-confirmed after the threshold — permanently damaging the
+// agent's trust score with no admin review.
+//
+// The threshold now governs when a "proposed" violation is CREATED (not when it is
+// confirmed). The violation stays "proposed" indefinitely until an admin explicitly
+// confirms it. Only chronologically irrefutable anomalies (WHAT timestamped before
+// WHY on-chain) are allowed to auto-confirm because they are mathematically verifiable
+// and cannot be explained by timing or index lag.
+export const VIOLATION_GAP_THRESHOLD_MS = 4 * 60 * 60 * 1000; // 4 hours
 
 const MX_API_URL = process.env.MULTIVERSX_API_URL || "https://api.multiversx.com";
 
@@ -477,18 +489,30 @@ export async function detectAndRecordViolations(
     });
   }
 
-  // WHY exists but WHAT is missing: always record as proposed immediately (public transparency);
-  // auto-confirm once the 30-min irrefutable window has passed
+  // WHY exists but WHAT is missing: record as "proposed" once the gap exceeds the threshold.
+  //
+  // TRUST-H1: Do NOT auto-confirm this case. "WHY without WHAT > threshold" is NOT an
+  // irrefutable violation — the WHAT may not yet be discoverable due to timing gaps,
+  // index lag, or search-window limitations in reconstructAuditTrail. An adversary could
+  // call investigate_proof on an agent's recent WHY and auto-confirm a spurious violation
+  // without any admin review, permanently destroying the agent's trust score.
+  //
+  // Irrefutable auto-confirm is reserved solely for the case above
+  // (intent_preceded_execution === false) where on-chain timestamps cryptographically
+  // prove WHAT was submitted before WHY — a fact that cannot be explained by timing lag.
   if (verification.why_certified && !verification.what_certified) {
     const whyEntry = timeline.find((t: any) => t.role === "WHY");
     if (whyEntry) {
       const gapMs = Date.now() - new Date(whyEntry.certified_at).getTime();
-      const autoConfirm = gapMs > VIOLATION_GAP_THRESHOLD_MS;
-      anomalies.push({
-        type: "fault",
-        reason: `WHY certified but no matching WHAT found after ${Math.round(VIOLATION_GAP_THRESHOLD_MS / 60000)} minutes`,
-        autoConfirm,
-      });
+      // Only create a proposed violation once enough time has elapsed to be sure this
+      // isn't a transient gap. The violation stays "proposed" until an admin confirms it.
+      if (gapMs > VIOLATION_GAP_THRESHOLD_MS) {
+        anomalies.push({
+          type: "fault",
+          reason: `WHY certified but no matching WHAT found after ${Math.round(VIOLATION_GAP_THRESHOLD_MS / (60000 * 60))} hours`,
+          autoConfirm: false, // TRUST-H1: admin review required — never auto-confirm
+        });
+      }
     }
   }
 

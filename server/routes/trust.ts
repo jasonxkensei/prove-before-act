@@ -230,7 +230,7 @@ export function registerTrustRoutes(app: Express) {
   });
 
   // GET /api/agents/:wallet/incident-report?proof_id=<uuid> — reconstruct 4W audit trail for a contested action
-  app.get("/api/agents/:wallet/incident-report", publicReadRateLimiter, async (req, res) => {
+  app.get("/api/agents/:wallet/incident-report", publicReadRateLimiter, async (req: any, res) => {
     try {
       const { wallet } = req.params;
       const proofId = req.query.proof_id as string;
@@ -239,9 +239,22 @@ export function registerTrustRoutes(app: Express) {
         return res.status(400).json({ error: "proof_id query parameter is required" });
       }
 
-      // Public, unauthenticated read path: must NOT trigger governance writes.
-      // reconstructAuditTrail defaults to recordViolations=false; we omit the flag explicitly here.
-      const result = await reconstructAuditTrail(wallet, proofId);
+      // TRUST-M: Governance writes (violation detection) are only permitted for the wallet
+      // owner or a platform admin — matching the same authorization gate used by the MCP
+      // investigate_proof tool. Anonymous / public callers get a read-only audit trail so
+      // they cannot mutate agent_violations by repeatedly calling this endpoint at zero cost.
+      //
+      // Session presence (req.session.walletAddress) is the auth signal here because this is
+      // a REST GET endpoint and wallet-session cookies are how the web UI identifies users.
+      // API-key callers should use the MCP investigate_proof tool which carries explicit
+      // Authorization headers and applies the same governance gate.
+      const sessionWallet: string | undefined = req.session?.walletAddress;
+      const recordViolations =
+        typeof sessionWallet === "string" &&
+        sessionWallet.length > 0 &&
+        (isAdminWallet(sessionWallet) || sessionWallet.toLowerCase() === wallet.toLowerCase());
+
+      const result = await reconstructAuditTrail(wallet, proofId, { recordViolations });
       res.json(result);
     } catch (err: any) {
       if (err.status && err.error) {

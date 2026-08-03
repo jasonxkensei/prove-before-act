@@ -28,7 +28,10 @@ const PARTNER_AGENT_ID_REGEX = /^[A-Za-z0-9._:\-]{5,128}$/;
 const PAYMENT_INTENT_REGEX = /^[A-Za-z0-9_\-]{5,128}$/;
 
 export function registerProofReadRoutes(app: Express) {
-  app.get("/api/proof/check", async (req, res) => {
+  // Rate-limiter is required: this endpoint is unauthenticated and its response reveals
+  // whether a given hash has been certified. Without a limiter, an attacker can enumerate
+  // hashes to map certified content or perform timing-based oracle attacks at no cost.
+  app.get("/api/proof/check", publicReadRateLimiter, async (req, res) => {
     try {
       const hash = req.query.hash as string;
       if (!hash || !/^[a-f0-9]{64}$/i.test(hash)) {
@@ -63,10 +66,19 @@ export function registerProofReadRoutes(app: Express) {
     }
   });
 
-  app.get("/api/proof/:id", async (req, res) => {
+  // Rate-limiter + UUID validation: this endpoint fetches a full certification row including
+  // metadata. Without a rate limiter an attacker can enumerate UUIDs; without UUID validation
+  // a malformed id can trigger unexpected DB behaviour (e.g. type-cast errors).
+  app.get("/api/proof/:id", publicReadRateLimiter, async (req, res) => {
     try {
       const { id } = req.params;
-      
+
+      // Reject non-UUID inputs immediately before touching the database.
+      const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!id || !UUID_REGEX.test(id)) {
+        return res.status(400).json({ error: "Invalid proof id — expected UUID format" });
+      }
+
       const [certification] = await db
         .select()
         .from(certifications)
