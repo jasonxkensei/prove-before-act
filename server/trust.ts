@@ -364,8 +364,13 @@ async function computeTransparencyCounts(userId: string): Promise<{ metadataCoun
   try {
     const [result] = await db
       .select({
-        metadataCount: sql<number>`COUNT(*) FILTER (WHERE blockchain_status = 'confirmed' AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding') AND metadata IS NOT NULL AND (metadata->>'model_hash' IS NOT NULL OR metadata->>'strategy_hash' IS NOT NULL OR metadata->>'version_number' IS NOT NULL))`,
-        auditCount: sql<number>`COUNT(*) FILTER (WHERE blockchain_status = 'confirmed' AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding') AND metadata IS NOT NULL AND metadata->>'agent_id' IS NOT NULL)`,
+        // TRUST-C2: require minimum field lengths to prevent trivial token injection
+        // (e.g. {"model_hash":"x"}) from earning transparency-tier bonus points.
+        // model_hash / strategy_hash must be ≥ 16 chars (shortest sensible hash fragment).
+        // version_number must be ≥ 3 chars (e.g. "1.0").
+        // agent_id must be ≥ 8 chars to be a meaningful reference.
+        metadataCount: sql<number>`COUNT(*) FILTER (WHERE blockchain_status = 'confirmed' AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding') AND metadata IS NOT NULL AND (length(metadata->>'model_hash') >= 16 OR length(metadata->>'strategy_hash') >= 16 OR length(metadata->>'version_number') >= 3))`,
+        auditCount: sql<number>`COUNT(*) FILTER (WHERE blockchain_status = 'confirmed' AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding') AND metadata IS NOT NULL AND length(metadata->>'agent_id') >= 8)`,
       })
       .from(certifications)
       .where(eq(certifications.userId, userId));
@@ -568,8 +573,9 @@ async function computeAllLeaderboardEntries(): Promise<LeaderboardEntry[]> {
       COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding') AND c.created_at >= ${cutoff30d}) AS cert_last_30d,
       MIN(c.created_at) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) AS first_cert_at,
       MAX(c.created_at) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) AS last_cert_at,
-      COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding') AND c.metadata IS NOT NULL AND (c.metadata->>'model_hash' IS NOT NULL OR c.metadata->>'strategy_hash' IS NOT NULL OR c.metadata->>'version_number' IS NOT NULL)) AS metadata_count,
-      COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding') AND c.metadata IS NOT NULL AND c.metadata->>'agent_id' IS NOT NULL) AS audit_count
+      -- TRUST-C2: require minimum field lengths (mirrors computeTransparencyCounts fix).
+      COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding') AND c.metadata IS NOT NULL AND (length(c.metadata->>'model_hash') >= 16 OR length(c.metadata->>'strategy_hash') >= 16 OR length(c.metadata->>'version_number') >= 3)) AS metadata_count,
+      COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding') AND c.metadata IS NOT NULL AND length(c.metadata->>'agent_id') >= 8) AS audit_count
     FROM users u
     LEFT JOIN certifications c ON c.user_id = u.id
     WHERE u.is_public_profile = true
