@@ -117,6 +117,9 @@ export function useWalletAuth() {
           if (syncResponse.ok) {
             logger.log('Backend session created via native auth');
             const userData = await syncResponse.json();
+            // Token only needed until sync succeeds — clear it now so it
+            // doesn't sit in localStorage for the entire session duration.
+            localStorage.removeItem('xproof_native_auth_token');
             return userData;
           }
 

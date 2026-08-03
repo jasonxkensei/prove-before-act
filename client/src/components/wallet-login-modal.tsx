@@ -85,6 +85,13 @@ export function WalletLoginModal({ open, onOpenChange, redirectTo }: WalletLogin
         logger.log('Backend sync successful');
 
         localStorage.setItem('walletAddress', walletAddress);
+        // Session cookie is now the durable credential — the native auth token
+        // only needs to survive until sync succeeds. Clearing it now narrows
+        // its localStorage exposure window without affecting any functionality.
+        // Logout cleanup (wallet-login-modal.tsx handleLogout) keeps the
+        // belt-and-suspenders removeItem as a fallback for any edge case where
+        // this line was somehow skipped (e.g. an older tab still holding the key).
+        localStorage.removeItem(XPROOF_NATIVE_AUTH_KEY);
         pendingTokenRef.current = null;
 
         loginAction({ address: walletAddress, providerType: ProviderTypeEnum.extension });
