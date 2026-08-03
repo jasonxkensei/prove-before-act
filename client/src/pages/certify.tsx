@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { useWalletAuth } from "@/hooks/useWalletAuth";
 import { useToast } from "@/hooks/use-toast";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -117,32 +117,11 @@ export default function Certify() {
     }
   }, [user]);
 
-  const certifyMutation = useMutation({
-    mutationFn: async (data: CertificationData) => {
-      const response = await apiRequest("POST", "/api/certifications", data);
-      return response.json();
-    },
-    onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/certifications"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      setCertificationResult({
-        ...data,
-        txHash: data.transactionHash,
-        explorerUrl: data.transactionUrl,
-      });
-      toast({
-        title: "Success!",
-        description: "Your file has been certified on the blockchain",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Certification failed",
-        description: error.message || "An error occurred during certification",
-        variant: "destructive",
-      });
-    },
-  });
+  // FE-DEAD: certifyMutation was defined here but never called — handleSubmit
+  // manages the full flow (wallet tx signing → API POST → state update) and
+  // cannot be replaced by a simple mutation because it needs the signed txHash
+  // from sendCertificationTransaction before the POST body is known.
+  // Removed to eliminate dead code and the confusing duplicate success/error logic.
 
   const handleFileSelect = async (selectedFile: File) => {
     setFile(selectedFile);

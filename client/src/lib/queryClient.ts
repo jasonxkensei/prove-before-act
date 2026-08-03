@@ -47,8 +47,13 @@ export const queryClient = new QueryClient({
       queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: false,
       refetchOnWindowFocus: false,
-      staleTime: Infinity,
-      retry: false,
+      // FE-M4: Infinity caused transient fetch errors to become permanent for the
+      // entire session (no re-fetch, no retry). 30 s gives fresh data on re-focus
+      // while avoiding hammering the server on every render.
+      staleTime: 30 * 1000,
+      // 1 retry lets the client recover from a single transient 5xx or network
+      // blip without looping. Auth queries override this via their own queryFn.
+      retry: 1,
     },
     mutations: {
       retry: false,
