@@ -472,6 +472,142 @@ describe(
   },
 );
 
+// ── Suite: 23505 absorbed + re-select itself throws ───────────────────────────
+// The narrowed catch absorbs a 23505 unique_violation.  The subsequent re-select
+// at line 123 is NOT inside that inner catch — it executes unconditionally after
+// the catch exits.  If the re-select itself throws (e.g. a connection drop), the
+// exception must reach the outer catch (lines 183-185) which logs and returns
+// HTTP 500 { error: "INTERNAL_ERROR" }.  Without this test, a regression that
+// wraps the re-select in a bare `catch {}` would silently swallow the exception.
+
+// SELECT sequence: 4th call (re-select) rejects with a connection_failure.
+const SELECT_SEQUENCE_23505_RESELECT_THROWS = [
+  [fakeWhyCert],  // 0 — WHY cert
+  [fakeWhatCert], // 1 — WHAT cert
+  [],             // 2 — coherenceChecks: no row → triggers INSERT
+  // index 3 — re-select rejects (simulated below via mockImplementation)
+];
+
+// Connection failure thrown by the re-select after 23505 is absorbed.
+const RESELECT_CONN_FAILURE_ERR = Object.assign(
+  new Error("connection to server lost during re-select"),
+  { code: "08006" },
+);
+
+function configure23505ReselectThrowsMocks() {
+  let callIndex = 0;
+  mockSelect.mockImplementation(() => {
+    const idx = callIndex++;
+    const builder: any = {
+      from: vi.fn().mockReturnThis(),
+      where: vi.fn().mockImplementation(() => {
+        if (idx < SELECT_SEQUENCE_23505_RESELECT_THROWS.length) {
+          return Promise.resolve(SELECT_SEQUENCE_23505_RESELECT_THROWS[idx]);
+        }
+        // idx === 3: the re-select after 23505 is absorbed — simulate a connection drop.
+        return Promise.reject(RESELECT_CONN_FAILURE_ERR);
+      }),
+    };
+    return builder;
+  });
+
+  // INSERT throws 23505 — concurrent winner already inserted the row.
+  mockInsert.mockReturnValue({
+    values: vi.fn().mockReturnValue({
+      onConflictDoNothing: vi.fn().mockReturnValue({
+        returning: vi.fn().mockRejectedValue(UNIQUE_VIOLATION_ERR),
+      }),
+    }),
+  });
+}
+
+describe(
+  "POST /api/coherence/link — 23505 absorbed but re-select throws → 500 INTERNAL_ERROR",
+  () => {
+    let request: ReturnType<typeof supertest>;
+
+    beforeAll(async () => {
+      configure23505ReselectThrowsMocks();
+
+      const express = (await import("express")).default;
+      const app = express();
+      app.use(express.json());
+
+      const { registerCoherenceRoutes } = await import(
+        "../server/routes/coherence"
+      );
+      registerCoherenceRoutes(app);
+
+      request = supertest(app);
+    });
+
+    afterEach(() => {
+      mockLoggerError.mockClear();
+      mockLoggerInfo.mockClear();
+      mockLoggerWarn.mockClear();
+      configure23505ReselectThrowsMocks();
+    });
+
+    it("responds HTTP 500 when the re-select after an absorbed 23505 throws", async () => {
+      const res = await request
+        .post("/api/coherence/link")
+        .set("Content-Type", "application/json")
+        .set("Authorization", `Bearer pm_test_stub`)
+        .send({ why_proof_id: FAKE_WHY_ID, what_proof_id: FAKE_WHAT_ID });
+
+      expect(
+        res.status,
+        "a re-select that throws after an absorbed 23505 must produce HTTP 500",
+      ).toBe(500);
+    });
+
+    it("body.error is 'INTERNAL_ERROR' — the exception reaches the outer catch", async () => {
+      // If the re-select were wrapped in a bare catch that swallowed it,
+      // checkRow would stay null and the route would return DB_ERROR instead.
+      const res = await request
+        .post("/api/coherence/link")
+        .set("Content-Type", "application/json")
+        .set("Authorization", `Bearer pm_test_stub`)
+        .send({ why_proof_id: FAKE_WHY_ID, what_proof_id: FAKE_WHAT_ID });
+
+      expect(res.body.error).toBe("INTERNAL_ERROR");
+      expect(res.body.error).not.toBe("DB_ERROR");
+    });
+
+    it("logger.error is called — outer catch logs before returning the 500", async () => {
+      await request
+        .post("/api/coherence/link")
+        .set("Content-Type", "application/json")
+        .set("Authorization", `Bearer pm_test_stub`)
+        .send({ why_proof_id: FAKE_WHY_ID, what_proof_id: FAKE_WHAT_ID });
+
+      expect(
+        mockLoggerError.mock.calls.length,
+        "outer catch must call logger.error before returning INTERNAL_ERROR",
+      ).toBeGreaterThan(0);
+    });
+
+    it("logger.error carries the re-select error message so ops can distinguish it from an INSERT failure", async () => {
+      await request
+        .post("/api/coherence/link")
+        .set("Content-Type", "application/json")
+        .set("Authorization", `Bearer pm_test_stub`)
+        .send({ why_proof_id: FAKE_WHY_ID, what_proof_id: FAKE_WHAT_ID });
+
+      const callsWithReselectMsg = mockLoggerError.mock.calls.filter(
+        ([, meta]: [string, Record<string, unknown>]) =>
+          typeof meta?.error === "string" &&
+          meta.error.includes("re-select"),
+      );
+      // The outer catch logs `err?.message` — the error message contains "re-select".
+      expect(
+        callsWithReselectMsg.length,
+        "logger.error must record the re-select error message so the failure is traceable",
+      ).toBeGreaterThan(0);
+    });
+  },
+);
+
 // ── Suite: 23505 concurrent-race path ─────────────────────────────────────────
 // When a concurrent request wins the INSERT race, the loser receives a 23505
 // unique_violation.  The narrowed catch must silently absorb this error, then
