@@ -2,6 +2,7 @@ import { type Express } from "express";
 import { safeErrMsg } from "./helpers";
 import { logger } from "../logger";
 import { isMX8004Configured, getReputationScore, getAgentDetails, getContractAddresses, getJobData, getValidationStatus, hasGivenFeedback, getAgentResponse, readFeedback, getAgentsExplorerUrl } from "../mx8004";
+import { publicReadRateLimiter } from "../reliability";
 
 export function registerMx8004Routes(app: Express) {
   app.get("/api/mx8004/status", (req, res) => {
@@ -54,7 +55,7 @@ export function registerMx8004Routes(app: Express) {
     });
   });
 
-  app.get("/api/mx8004/job/:jobId", async (req, res) => {
+  app.get("/api/mx8004/job/:jobId", publicReadRateLimiter, async (req, res) => {
     if (!isMX8004Configured()) {
       return res.status(503).json({ error: "MX8004_NOT_CONFIGURED", message: "MX-8004 integration is not active" });
     }
@@ -74,7 +75,7 @@ export function registerMx8004Routes(app: Express) {
     }
   });
 
-  app.get("/api/mx8004/validation/:requestHash", async (req, res) => {
+  app.get("/api/mx8004/validation/:requestHash", publicReadRateLimiter, async (req, res) => {
     if (!isMX8004Configured()) {
       return res.status(503).json({ error: "MX8004_NOT_CONFIGURED", message: "MX-8004 integration is not active" });
     }
@@ -94,7 +95,7 @@ export function registerMx8004Routes(app: Express) {
     }
   });
 
-  app.get("/api/mx8004/feedback/:agentNonce/:clientAddress/:index", async (req, res) => {
+  app.get("/api/mx8004/feedback/:agentNonce/:clientAddress/:index", publicReadRateLimiter, async (req, res) => {
     if (!isMX8004Configured()) {
       return res.status(503).json({ error: "MX8004_NOT_CONFIGURED", message: "MX-8004 integration is not active" });
     }
@@ -124,7 +125,7 @@ export function registerMx8004Routes(app: Express) {
     }
   });
 
-  app.get("/api/agent/:nonce/reputation", async (req, res) => {
+  app.get("/api/agent/:nonce/reputation", publicReadRateLimiter, async (req, res) => {
     try {
       const nonce = parseInt(req.params.nonce);
       if (isNaN(nonce) || nonce < 1) {
