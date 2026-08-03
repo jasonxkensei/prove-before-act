@@ -21,6 +21,12 @@ export function getSession() {
       httpOnly: true,
       secure: isProduction,
       sameSite: "strict",
+      // AUTH-M05: bound session lifetime so abandoned sessions expire on the
+      // server side even if the browser never sends a logout request.
+      // 24 h matches the nativeAuth token expiry; rolling: true means active
+      // users get a sliding window without being forced to re-authenticate.
+      maxAge: 24 * 60 * 60 * 1000,
     },
+    rolling: true,
   });
 }

@@ -128,33 +128,39 @@ export async function createMcpServer(ctx: McpContext) {
           return { content: [{ type: "text" as const, text: JSON.stringify({ error: "DUPLICATE_AGENT_NAME", message: `An agent named "${name}" already exists. Try a unique name (e.g. "${suggested}").` }) }], isError: true };
         }
 
-        // Create trial user + API key — identical flow to REST endpoint
+        // Create trial user + API key — identical flow to REST endpoint.
+        // AUTH-M04: wrap both inserts in a transaction so a failure on the
+        // apiKeys insert cannot leave an orphaned user with no credentials.
         const trialWallet = `erd1trial${crypto.randomBytes(24).toString("hex")}`;
         const registrationIpHash = crypto.createHash("sha256").update(clientIp).digest("hex");
-
-        const [trialUser] = await db.insert(users).values({
-          walletAddress: trialWallet,
-          subscriptionTier: "free",
-          subscriptionStatus: "active",
-          isTrial: true,
-          trialQuota: TRIAL_QUOTA,
-          trialUsed: 0,
-          agentName: name,
-          companyName: name,
-          isPublicProfile: false,
-          registrationIpHash,
-        }).returning();
 
         const rawKey = `pm_${crypto.randomBytes(32).toString("hex")}`;
         const keyHash = crypto.createHash("sha256").update(rawKey).digest("hex");
         const keyPrefix = rawKey.slice(0, 10);
 
-        await db.insert(apiKeys).values({
-          keyHash,
-          keyPrefix,
-          userId: trialUser.id,
-          name: `Trial: ${name}`,
-          isActive: true,
+        const [trialUser] = await db.transaction(async (tx) => {
+          const [newUser] = await tx.insert(users).values({
+            walletAddress: trialWallet,
+            subscriptionTier: "free",
+            subscriptionStatus: "active",
+            isTrial: true,
+            trialQuota: TRIAL_QUOTA,
+            trialUsed: 0,
+            agentName: name,
+            companyName: name,
+            isPublicProfile: false,
+            registrationIpHash,
+          }).returning();
+
+          await tx.insert(apiKeys).values({
+            keyHash,
+            keyPrefix,
+            userId: newUser.id,
+            name: `Trial: ${name}`,
+            isActive: true,
+          });
+
+          return [newUser];
         });
 
         logger.info("Agent trial registered via MCP register_trial", {
@@ -1355,14 +1361,39 @@ export async function createMcpServer(ctx: McpContext) {
           ORDER BY a.created_at DESC
         `);
         const attestations = (result as any).rows ?? [];
-        const counted = Math.min(3, attestations.length);
+
+        // TRUST-M04: compute the real issuer-weighted trust bonus instead of
+        // always using 50/attestation. Actual value depends on the issuer's
+        // confirmed cert count (10 pts for <3 certs, 25 for ≥3, 40 for ≥10,
+        // 50 for ≥30) — mirroring the formula in server/trust.ts.
+        let trust_bonus = 0;
+        const topAttestations = attestations.slice(0, 3);
+        if (topAttestations.length > 0) {
+          const issuerWallets = [...new Set(topAttestations.map((a: any) => a.issuer_wallet as string))];
+          const issuerCertResult = await db.execute(sql`
+            SELECT u.wallet_address, COUNT(c.id)::int AS cert_count
+            FROM users u
+            LEFT JOIN certifications c
+              ON c.user_id = u.id AND c.blockchain_status = 'confirmed'
+            WHERE u.wallet_address = ANY(${issuerWallets})
+            GROUP BY u.wallet_address
+          `);
+          const issuerCertMap = new Map(
+            ((issuerCertResult as any).rows ?? []).map((r: any) => [r.wallet_address as string, Number(r.cert_count)])
+          );
+          for (const a of topAttestations) {
+            const n = Number(issuerCertMap.get(a.issuer_wallet as string) ?? 0);
+            trust_bonus += n >= 30 ? 50 : n >= 10 ? 40 : n >= 3 ? 25 : 10;
+          }
+        }
+
         return {
           content: [{
             type: "text" as const,
             text: JSON.stringify({
               wallet: params.wallet,
               attestation_count: attestations.length,
-              trust_bonus: counted * 50,
+              trust_bonus,
               attestations: attestations.map((a: any) => ({
                 id: a.id,
                 domain: a.domain,
@@ -2136,7 +2167,7 @@ export async function authenticateApiKey(authHeader: string | undefined): Promis
   }
 
   db.update(apiKeys)
-    .set({ lastUsedAt: new Date(), requestCount: (apiKey.requestCount || 0) + 1 })
+    .set({ lastUsedAt: new Date(), requestCount: sql`request_count + 1` })
     .where(eq(apiKeys.id, apiKey.id))
     .execute()
     .catch((err) => logger.error("Failed to update API key stats", { error: err.message }));

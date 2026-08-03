@@ -8,3 +8,4 @@
 - [npm overrides require clean reinstall](npm-overrides-cascade.md) — `overrides` changes can silently leave stale nested versions unless node_modules + lockfile are deleted before reinstall
 - [@noble/ed25519 v3 breaking change](noble-ed25519-v3-breaking.md) — v3 freezes `etc`, breaking old `ed.etc.sha512Sync = ...` monkeypatches; use `signAsync`/`verifyAsync` instead
 - [npm lockfile Replit registry proxy](npm-lockfile-replit-registry.md) — always regenerate package-lock.json with `--registry https://registry.npmjs.org`; Replit proxy URLs break CI
+- [xproof security audit fixes Aug 2026](xproof-security-audit-aug2026.md) — comprehensive map of 71 audit findings vs fixed/confirmed status

@@ -177,7 +177,15 @@ export async function deliverWebhook(
 
     const payloadStr = JSON.stringify(payload);
     const timestamp = Math.floor(Date.now() / 1000).toString();
-    const webhookSecret = signingSecret || process.env.SESSION_SECRET || "xproof-webhook-secret";
+    // AUTH-M01: use a dedicated signing secret so a SESSION_SECRET compromise
+    // does not also compromise webhook signatures. Falls back to SESSION_SECRET
+    // for backward-compatible deployments that have not yet set the new variable.
+    // The hardcoded "xproof-webhook-secret" fallback has been removed.
+    const webhookSecret = signingSecret || process.env.WEBHOOK_SIGNING_SECRET || process.env.SESSION_SECRET;
+    if (!webhookSecret) {
+      logger.error("Webhook signing secret not configured — skipping webhook delivery", { certificationId });
+      return false;
+    }
     const signature = signPayload(timestamp + "." + payloadStr, webhookSecret);
 
     await db

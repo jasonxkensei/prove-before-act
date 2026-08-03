@@ -6,6 +6,7 @@ import { eq, desc, sql, and, gte, count } from "drizzle-orm";
 import { z } from "zod";
 import { isWalletAuthenticated } from "../walletAuth";
 import { attestationIssuanceRateLimiter, publicSearchRateLimiter, publicPdfRateLimiter, publicReadRateLimiter } from "../reliability";
+import { pgCheckRateLimitBatch } from "../pgRateLimit";
 import { computeTrustScoreByWallet, getCalibrationSummaryByWallet } from "../trust";
 import { isValidWebhookUrl, safeWebhookFetch } from "../webhook";
 import { safeErrMsg } from "./helpers";
@@ -369,7 +370,12 @@ export function registerAttestationsRoutes(app: Express) {
   });
 
   // POST /api/attestations/batch — batch issue up to 20 attestations at once
-  app.post("/api/attestations/batch", isWalletAuthenticated, attestationIssuanceRateLimiter, async (req: any, res) => {
+  // TRUST-M05: do NOT apply attestationIssuanceRateLimiter (request-level
+  // middleware) here. That middleware counts 1 per HTTP request regardless of
+  // batch size, allowing 20 batches × 20 items = 400 attestations/hour instead
+  // of the intended 20/hour. We call pgCheckRateLimitBatch after parsing so the
+  // counter is incremented by items.length atomically.
+  app.post("/api/attestations/batch", isWalletAuthenticated, async (req: any, res) => {
     try {
       const issuerWallet = req.walletAddress;
       const itemSchema = z.object({
@@ -386,6 +392,15 @@ export function registerAttestationsRoutes(app: Express) {
       });
 
       const { attestations: items } = batchSchema.parse(req.body);
+
+      // Item-weighted rate limit: each attestation in the batch consumes one slot.
+      const rl = await pgCheckRateLimitBatch("attest", issuerWallet, 20, 60 * 60 * 1000, items.length);
+      if (!rl.allowed) {
+        return res.status(429).json({
+          error: "TOO_MANY_REQUESTS",
+          message: "Attestation rate limit exceeded: max 20 per hour per issuer",
+        });
+      }
 
       const issuerCertCheck = await db.execute(sql`
         SELECT COUNT(*) AS cnt

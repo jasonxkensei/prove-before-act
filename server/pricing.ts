@@ -71,7 +71,10 @@ export async function getEgldUsdPrice(): Promise<number> {
       logger.info("Using cached EGLD price as fallback", { component: "pricing" });
       return cachedPrice.egldUsd;
     }
-    return 30;
+    // PAY-M01: no cached price and live fetch failed — throw so callers surface
+    // a proper error to the user rather than silently pricing at a hardcoded
+    // $30/EGLD that bears no relation to the live exchange rate.
+    throw new Error("EGLD/USD price unavailable: CoinGecko unreachable and no cached price");
   }
 }
 

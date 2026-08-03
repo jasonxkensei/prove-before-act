@@ -135,6 +135,51 @@ export async function pgCheckRateLimit(
   }
 }
 
+// ── pgCheckRateLimitBatch ──────────────────────────────────────────────────
+// TRUST-M05: item-weighted rate limit check. Increments the counter by
+// `itemCount` atomically so that a batch of N items consumes N slots from the
+// per-window budget rather than just 1 (the request-level default).
+export async function pgCheckRateLimitBatch(
+  namespace: string,
+  key: string,
+  limit: number,
+  windowMs: number,
+  itemCount: number,
+): Promise<{ allowed: boolean; remaining: number; resetAt: number }> {
+  if (itemCount <= 0) {
+    const resetAt = Math.floor(Date.now() / windowMs) * windowMs + windowMs;
+    return { allowed: true, remaining: limit, resetAt };
+  }
+  try {
+    const now = Date.now();
+    const windowStart = Math.floor(now / windowMs) * windowMs;
+    const resetAt = new Date(windowStart + windowMs);
+    const bucket = `${namespace}:${key}:${windowStart}`;
+
+    const result = await pool.query<{ count: number; reset_at: Date }>(
+      `INSERT INTO rate_limit_counters (bucket, count, reset_at)
+       VALUES ($1, $3, $2)
+       ON CONFLICT (bucket) DO UPDATE
+         SET count = rate_limit_counters.count + $3
+       RETURNING count, reset_at`,
+      [bucket, resetAt, itemCount],
+    );
+    const count = Number(result.rows[0].count);
+    return {
+      allowed: count <= limit,
+      remaining: Math.max(0, limit - count),
+      resetAt: result.rows[0].reset_at.getTime(),
+    };
+  } catch (err) {
+    logRateLimitFailOpen("check", "pgCheckRateLimitBatch: DB error, failing open", {
+      namespace,
+      error: err,
+    });
+    const resetAt = Math.floor(Date.now() / windowMs) * windowMs + windowMs;
+    return { allowed: true, remaining: limit, resetAt };
+  }
+}
+
 // ── getRateLimitStats ──────────────────────────────────────────────────────
 // Returns the top `topN` active buckets per namespace, sorted by count DESC.
 // Keys are truncated to the first 12 chars to avoid exposing raw IPs/UUIDs.

@@ -432,7 +432,14 @@ export default function Certify() {
                   </p>
                 </div>
               )}
-              {certificationResult.explorerUrl && (
+              {certificationResult.explorerUrl && (() => {
+                // FE-H05: validate explorerUrl before using in href to prevent
+                // XSS via javascript: URIs or attacker-controlled redirect URLs.
+                const safeExplorerUrl =
+                  /^https:\/\/explorer\.multiversx\.com\//.test(certificationResult.explorerUrl)
+                    ? certificationResult.explorerUrl
+                    : null;
+                return safeExplorerUrl ? (
                 <div>
                   <Button
                     variant="outline"
@@ -441,7 +448,7 @@ export default function Certify() {
                     data-testid="link-explorer"
                   >
                     <a
-                      href={certificationResult.explorerUrl}
+                      href={safeExplorerUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
@@ -450,7 +457,8 @@ export default function Certify() {
                     </a>
                   </Button>
                 </div>
-              )}
+                ) : null;
+              })()}
             </CardContent>
           </Card>
 

@@ -39,7 +39,9 @@ export function registerAuthRoutes(app: Express) {
       const decoded = await verifyNativeAuthToken(token);
       const walletAddress = decoded.address;
 
-      if (!walletAddress || !walletAddress.startsWith("erd1")) {
+      // AUTH-L04: validate full bech32 MultiversX format (erd1 + 58 lowercase alnum chars).
+      // Prefix-only check accepted "erd1" (5 chars) or "erd1" + 999 arbitrary chars.
+      if (!walletAddress || !/^erd1[a-z0-9]{58}$/.test(walletAddress)) {
         return res.status(400).json({ message: "Invalid MultiversX wallet address in token" });
       }
 

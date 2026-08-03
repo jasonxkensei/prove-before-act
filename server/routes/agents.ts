@@ -433,30 +433,37 @@ export function registerAgentsRoutes(app: Express) {
       // Generate a per-account webhook secret derived from the key — stable and unique
       const webhookSecretSeed = crypto.randomBytes(16).toString("hex");
 
-      const [trialUser] = await db.insert(users).values({
-        walletAddress: trialWallet,
-        subscriptionTier: "free",
-        subscriptionStatus: "active",
-        isTrial: true,
-        trialQuota: TRIAL_QUOTA,
-        trialUsed: 0,
-        agentName: data.agent_name,
-        companyName: data.agent_name,
-        isPublicProfile: false,
-        registrationIpHash,
-        ...(data.webhook_url ? { webhookUrl: data.webhook_url, webhookSecret: webhookSecretSeed } : {}),
-      }).returning();
-
+      // AUTH-M04: wrap user + API-key creation in a single transaction so a
+      // partial failure (user inserted, key insert throws) cannot leave an
+      // orphaned user row with no usable credentials.
       const rawKey = `pm_${crypto.randomBytes(32).toString("hex")}`;
       const keyHash = crypto.createHash("sha256").update(rawKey).digest("hex");
       const keyPrefix = rawKey.slice(0, 10);
 
-      await db.insert(apiKeys).values({
-        keyHash,
-        keyPrefix,
-        userId: trialUser.id,
-        name: `Trial: ${data.agent_name}`,
-        isActive: true,
+      const [trialUser] = await db.transaction(async (tx) => {
+        const [newUser] = await tx.insert(users).values({
+          walletAddress: trialWallet,
+          subscriptionTier: "free",
+          subscriptionStatus: "active",
+          isTrial: true,
+          trialQuota: TRIAL_QUOTA,
+          trialUsed: 0,
+          agentName: data.agent_name,
+          companyName: data.agent_name,
+          isPublicProfile: false,
+          registrationIpHash,
+          ...(data.webhook_url ? { webhookUrl: data.webhook_url, webhookSecret: webhookSecretSeed } : {}),
+        }).returning();
+
+        await tx.insert(apiKeys).values({
+          keyHash,
+          keyPrefix,
+          userId: newUser.id,
+          name: `Trial: ${data.agent_name}`,
+          isActive: true,
+        });
+
+        return [newUser];
       });
 
       logger.withRequest(req).info("Agent trial registered", {

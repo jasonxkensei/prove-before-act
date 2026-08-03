@@ -3,31 +3,17 @@ import { getCertificationPriceEgld, getPricingInfo } from "../pricing";
 
 export function registerPricingRoutes(app: Express) {
   // Get pricing information (public endpoint)
+  // AUTH-M06: the ?wallet= admin price-oracle has been removed. Checking admin
+  // status against an unauthenticated query parameter allows any caller to
+  // enumerate admin wallets (admin returns price_usd:0, non-admin returns the
+  // real price) and exposes the receiver address to unauthenticated parties.
+  // Admin price exemptions must go through the authenticated session, not a
+  // public endpoint.
   app.get("/api/pricing", async (req, res) => {
     try {
-      const wallet = (req.query.wallet as string || "").trim().toLowerCase();
-      const ADMIN_WALLETS = (process.env.ADMIN_WALLETS || "").split(",").map(w => w.trim().toLowerCase()).filter(Boolean);
-      const isAdmin = wallet && ADMIN_WALLETS.includes(wallet);
       const receiverAddress = process.env.MULTIVERSX_RECEIVER_ADDRESS || process.env.XPROOF_WALLET_ADDRESS || process.env.MULTIVERSX_SENDER_ADDRESS || "";
 
       const pricing = await getPricingInfo();
-
-      if (isAdmin) {
-        return res.json({
-          protocol: "xproof",
-          version: "1.0",
-          ...pricing,
-          price_usd: 0,
-          price_egld: "0",
-          egld_usd_rate: 0,
-          receiver_address: receiverAddress,
-          payment_methods: [
-            { method: "EGLD", description: "Pay in EGLD at current exchange rate on MultiversX" },
-            { method: "USDC", description: "Pay in USDC on Base via x402 protocol" },
-          ],
-        });
-      }
-
       const { priceUsd, priceEgld, egldUsdRate } = await getCertificationPriceEgld();
 
       res.json({

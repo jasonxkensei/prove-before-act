@@ -201,8 +201,9 @@ export async function validateApiKey(req: express.Request, res: express.Response
 }
 
 export function isAdminWallet(walletAddress: string): boolean {
-  const adminWallets = (process.env.ADMIN_WALLETS || "").split(",").map(w => w.trim()).filter(Boolean);
-  return adminWallets.includes(walletAddress);
+  // AUTH-H04: normalise both sides to lowercase for consistent comparison.
+  const adminWallets = (process.env.ADMIN_WALLETS || "").split(",").map(w => w.trim().toLowerCase()).filter(Boolean);
+  return adminWallets.includes(walletAddress.toLowerCase());
 }
 
 export async function getApiKeyOwnerWallet(apiKeyRecord: any): Promise<string | null> {
@@ -300,12 +301,14 @@ export const REGISTER_RATE_LIMIT_MAX = 10;
 export const REGISTER_RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000;
 
 export function requireAdmin(req: any, res: express.Response, next: express.NextFunction) {
-  const adminWallets = (process.env.ADMIN_WALLETS || "").split(",").map(w => w.trim()).filter(Boolean);
+  // AUTH-H04: normalise to lowercase so ADMIN_WALLETS="ERD1..." and a session
+  // wallet stored as "erd1..." always compare equal.
+  const adminWallets = (process.env.ADMIN_WALLETS || "").split(",").map(w => w.trim().toLowerCase()).filter(Boolean);
   // Fail closed: if no admin wallet list is configured, deny all access.
   if (adminWallets.length === 0) {
     return res.status(403).json({ error: "Forbidden: admin access required" });
   }
-  const userWallet = req.session?.walletAddress;
+  const userWallet = (req.session?.walletAddress as string | undefined)?.toLowerCase();
   if (!userWallet || !adminWallets.includes(userWallet)) {
     return res.status(403).json({ error: "Forbidden: admin access required" });
   }
