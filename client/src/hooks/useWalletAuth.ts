@@ -7,6 +7,7 @@ import { useGetAccount } from '@multiversx/sdk-dapp/out/react/account/useGetAcco
 import { useGetIsLoggedIn } from '@multiversx/sdk-dapp/out/react/account/useGetIsLoggedIn';
 import { getAccountProvider } from '@multiversx/sdk-dapp/out/providers/helpers/accountProvider';
 import { logoutAction } from '@multiversx/sdk-dapp/out/store/actions/sharedActions/sharedActions';
+import { handleLogout, XPROOF_NATIVE_AUTH_TOKEN_KEY } from '@/lib/auth-storage';
 
 interface User {
   id: number;
@@ -30,11 +31,11 @@ interface User {
 // and send them as Bearer credentials to our backend — token confusion / injection.
 //
 // Key written by wallet-login-modal.tsx after a successful Native Auth login.
-const XPROOF_NATIVE_AUTH_KEY = 'xproof_native_auth_token';
+// XPROOF_NATIVE_AUTH_TOKEN_KEY and handleLogout are imported from auth-storage.
 
 function getNativeAuthTokenFromStorage(): string | null {
   // 1. Our own specific key — written by wallet-login-modal.tsx on login
-  const ours = localStorage.getItem(XPROOF_NATIVE_AUTH_KEY);
+  const ours = localStorage.getItem(XPROOF_NATIVE_AUTH_TOKEN_KEY);
   if (ours && ours.length > 50) return ours;
 
   // 2. Legacy key names written by older versions of this app
@@ -253,9 +254,8 @@ export function useWalletAuth() {
     onSuccess: () => {
       sessionStorage.removeItem('walletAddress');
       localStorage.removeItem('loginInfo');
-      localStorage.removeItem(XPROOF_NATIVE_AUTH_KEY);
-      localStorage.removeItem('nativeAuthToken');
-      localStorage.removeItem('loginToken');
+      // Remove all three auth token key variants via the shared helper.
+      handleLogout();
       
       const keysToRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {

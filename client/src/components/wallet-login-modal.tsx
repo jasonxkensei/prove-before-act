@@ -18,6 +18,10 @@ import { Shield, Wallet, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { queryClient } from "@/lib/queryClient";
+import { XPROOF_NATIVE_AUTH_TOKEN_KEY, handleLogout } from "@/lib/auth-storage";
+
+// Re-export so callers that import from this module keep working.
+export { XPROOF_NATIVE_AUTH_TOKEN_KEY, handleLogout };
 
 interface WalletLoginModalProps {
   open: boolean;
@@ -39,7 +43,7 @@ export function WalletLoginModal({ open, onOpenChange, redirectTo }: WalletLogin
 
   // AUTH-M1: Specific key for our Native Auth token — avoids picking up tokens
   // from third-party libraries via broad regex scanning (token injection risk).
-  const XPROOF_NATIVE_AUTH_KEY = 'xproof_native_auth_token';
+  const XPROOF_NATIVE_AUTH_KEY = XPROOF_NATIVE_AUTH_TOKEN_KEY;
 
   const getNativeAuthToken = (): string | null => {
     // 1. In-memory token from current login flow (most reliable — no storage required)
