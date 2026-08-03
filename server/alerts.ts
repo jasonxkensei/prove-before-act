@@ -225,3 +225,100 @@ export function getRateLimitAlertConfig(): {
     lastAlertAt: rlLastAlertSentAt > 0 ? new Date(rlLastAlertSentAt).toISOString() : null,
   };
 }
+
+// ============================================================
+// Violation review queue alerting
+// ============================================================
+// Fires when the number of "proposed" violations that have been sitting
+// unreviewed for longer than VIOLATION_QUEUE_STALE_HOURS exceeds
+// VIOLATION_QUEUE_THRESHOLD.  The check is cheap (one COUNT query) and is
+// intended to be called once per daily-maintenance cycle.
+
+interface ViolationQueueAlertPayload {
+  alert: "violation_queue_backlog";
+  severity: "warning" | "critical";
+  timestamp: string;
+  stale_hours: number;
+  proposed_count: number;
+  threshold: number;
+  review_url: string;
+}
+
+const violationQueueAlertConfig = {
+  // How many stale proposed violations trigger an alert.
+  threshold: parseInt(process.env.VIOLATION_QUEUE_THRESHOLD || "10", 10),
+  // A violation is "stale" if it has been proposed for longer than this many hours.
+  staleHours: parseInt(process.env.VIOLATION_QUEUE_STALE_HOURS || "24", 10),
+  // Minimum gap between successive alerts (avoids daily-maintenance spam).
+  cooldownHours: parseInt(process.env.VIOLATION_QUEUE_COOLDOWN_HOURS || "24", 10),
+  // Reuse the TX alert webhook by default; operators can override independently.
+  webhookUrl: process.env.VIOLATION_QUEUE_ALERT_WEBHOOK_URL || process.env.TX_ALERT_WEBHOOK_URL || null,
+};
+
+let violationQueueLastAlertSentAt: number = 0;
+
+export async function checkAndAlertViolationQueue(baseUrl: string): Promise<void> {
+  if (!violationQueueAlertConfig.webhookUrl) return;
+
+  const now = Date.now();
+  if (now - violationQueueLastAlertSentAt < violationQueueAlertConfig.cooldownHours * 60 * 60 * 1000) return;
+
+  try {
+    const cutoff = new Date(now - violationQueueAlertConfig.staleHours * 60 * 60 * 1000);
+    const result = await db.execute(
+      sql`SELECT COUNT(*)::int AS cnt
+          FROM agent_violations
+          WHERE status = 'proposed'
+            AND detected_at < ${cutoff}`,
+    );
+    const staleCount = Number((result.rows[0] as any)?.cnt ?? 0);
+
+    if (staleCount < violationQueueAlertConfig.threshold) return;
+
+    const severity: "warning" | "critical" =
+      staleCount >= violationQueueAlertConfig.threshold * 3 ? "critical" : "warning";
+
+    const payload: ViolationQueueAlertPayload = {
+      alert: "violation_queue_backlog",
+      severity,
+      timestamp: new Date().toISOString(),
+      stale_hours: violationQueueAlertConfig.staleHours,
+      proposed_count: staleCount,
+      threshold: violationQueueAlertConfig.threshold,
+      review_url: `${baseUrl}/admin`,
+    };
+
+    await sendAlertWebhook(
+      violationQueueAlertConfig.webhookUrl,
+      "violation_queue_backlog",
+      payload,
+    );
+    violationQueueLastAlertSentAt = now;
+    logger.warn("Violation queue backlog alert sent", {
+      component: "alerts",
+      severity,
+      staleCount,
+      staleHours: violationQueueAlertConfig.staleHours,
+      threshold: violationQueueAlertConfig.threshold,
+    });
+  } catch (err: any) {
+    logger.error("Failed to check/send violation queue alert", {
+      component: "alerts",
+      error: err.message,
+    });
+  }
+}
+
+export function getViolationQueueAlertConfig(): {
+  threshold: number; staleHours: number; cooldownHours: number; configured: boolean; lastAlertAt: string | null;
+} {
+  return {
+    threshold: violationQueueAlertConfig.threshold,
+    staleHours: violationQueueAlertConfig.staleHours,
+    cooldownHours: violationQueueAlertConfig.cooldownHours,
+    configured: !!violationQueueAlertConfig.webhookUrl,
+    lastAlertAt: violationQueueLastAlertSentAt > 0
+      ? new Date(violationQueueLastAlertSentAt).toISOString()
+      : null,
+  };
+}

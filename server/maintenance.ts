@@ -7,6 +7,7 @@ import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { computeTrustScore } from "./trust";
 import { purgeExpiredRateLimitRows } from "./pgRateLimit";
+import { checkAndAlertViolationQueue } from "./alerts";
 import { logger } from "./logger";
 
 export async function runDailyMaintenance() {
@@ -86,6 +87,17 @@ export async function runDailyMaintenance() {
         error: purgeErr?.message ?? String(purgeErr),
       });
     }
+
+    // Alert if the proposed-violation review queue has grown beyond the
+    // configured threshold without admin attention.  checkAndAlertViolationQueue
+    // is a no-op when VIOLATION_QUEUE_ALERT_WEBHOOK_URL is not set.
+    const baseUrl = process.env.APP_BASE_URL || "https://xproof.app";
+    await checkAndAlertViolationQueue(baseUrl).catch((err: any) => {
+      logger.debug("Violation queue alert check skipped", {
+        component: "maintenance",
+        error: err?.message ?? String(err),
+      });
+    });
 
     if (snapshots > 0 || expiring.rows.length > 0 || purgedRateLimitRows > 0) {
       logger.info("Daily maintenance complete", {
