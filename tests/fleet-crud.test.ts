@@ -1333,3 +1333,69 @@ describe("GET /api/fleet/coherence?org= — LIMIT=50 cap hides members beyond sl
     expect(body.fleet.total_member_count).toBe(51);
   });
 });
+
+// ── GET /api/fleet/coherence?org= — private-profile exclusion (Task #563) ─────
+//
+// The org-prefix SQL contains `AND u.is_public_profile = true` in both the
+// COUNT(*) sub-query and the per-agent SELECT.  A refactor that removes this
+// predicate would silently expose private account data to unauthenticated callers.
+//
+// This describe block seeds two users with the same wallet prefix:
+//   - public  (is_public_profile = true)  → must appear in body.agents
+//   - private (is_public_profile = false) → must NEVER appear
+//
+// The request is unauthenticated to confirm no session privilege is required
+// for this information to leak.
+
+describe("GET /api/fleet/coherence?org= — private-profile users are excluded even when the prefix matches", () => {
+  const run = runHex();
+  // Prefix must be 6-62 lowercase alphanumeric chars.
+  const orgPrefix = `erd1priv${run}`;
+
+  const publicId     = `orgpriv-pub-${run}`;
+  const publicWallet = `${orgPrefix}pub`;
+
+  const privateId     = `orgpriv-prv-${run}`;
+  const privateWallet = `${orgPrefix}prv`;
+
+  beforeAll(async () => {
+    await pool.query(
+      `INSERT INTO users (id, wallet_address, is_public_profile) VALUES ($1, $2, true), ($3, $4, false)`,
+      [publicId, publicWallet, privateId, privateWallet],
+    );
+  });
+
+  afterAll(async () => {
+    await cleanupUsers([publicWallet, privateWallet]);
+  });
+
+  it("returns 200 for an org prefix with one public and one private user", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?org=${orgPrefix}`);
+    expect(res.status).toBe(200);
+  });
+
+  it("body.agents contains only the public user — private user is absent", async () => {
+    const res  = await fetch(`${BASE}/api/fleet/coherence?org=${orgPrefix}`);
+    const body = await res.json();
+    const wallets: string[] = (body.agents as any[]).map((a: any) => a.wallet_address);
+    expect(wallets).toContain(publicWallet);
+    expect(wallets).not.toContain(privateWallet);
+  });
+
+  it("fleet.agent_count === 1 (private user does not inflate the count)", async () => {
+    const res  = await fetch(`${BASE}/api/fleet/coherence?org=${orgPrefix}`);
+    const body = await res.json();
+    // Exact count is safe: the unique orgPrefix guarantees no other user matches.
+    expect(body.fleet.agent_count).toBe(1);
+  });
+
+  it("fleet.total_member_count === 1 (COUNT sub-query also filters private profiles)", async () => {
+    // total_member_count comes from a separate COUNT(*) query that also has
+    // AND u.is_public_profile = true.  If only the per-agent SELECT were fixed
+    // but the COUNT query were not, agent_count and total_member_count would
+    // disagree — this test catches that split-fix scenario.
+    const res  = await fetch(`${BASE}/api/fleet/coherence?org=${orgPrefix}`);
+    const body = await res.json();
+    expect(body.fleet.total_member_count).toBe(1);
+  });
+});
