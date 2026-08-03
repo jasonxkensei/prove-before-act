@@ -813,3 +813,77 @@ describe("GET /api/fleet/coherence?fleet=<slug> — coherence_rate is null when 
     expect(body.fleet.divergent_count).toBe(0);
   });
 });
+
+// ── GET /api/fleet/coherence?org=<prefix> — fresh anchor counted as 'pending' ──
+//
+// Guards the same FILTER clause exercised by the org-prefix path.  The only
+// difference from the fleet-slug path is the agent-selection predicate:
+//   fleet-slug:  u.wallet_address IN (SELECT fm.wallet_address FROM fleet_members …)
+//   org-prefix:  u.wallet_address LIKE '<prefix>%'
+//
+// A regression that only broke the LIKE predicate would pass the fleet-slug
+// test but silently miscount pending vs divergent for every unregistered org.
+
+describe("GET /api/fleet/coherence?org=<prefix> — fresh unlinked anchor counted as pending, not divergent", () => {
+  const runId = crypto.randomBytes(4).toString("hex");
+  // Prefix must be ≥ 6 lowercase alphanumeric chars and unique to this run.
+  const prefix = `erd1pfx${runId}`;
+
+  const agentId     = `pfx-ag-${runId}`;
+  const agentWallet = `${prefix}agent`;
+
+  const freshWhyId = crypto.randomUUID();
+
+  beforeAll(async () => {
+    await insertUser(agentId, agentWallet, true, "agent-pfx-fresh");
+
+    // WHY cert created 30 seconds ago — well within the 1-hour pending window.
+    // No linked_proof_id on the coherence_checks row.
+    const intentHash = crypto.randomBytes(32).toString("hex");
+    await pool.query(
+      `INSERT INTO certifications
+         (id, user_id, file_name, file_hash, blockchain_status, is_public, metadata, created_at)
+       VALUES ($1, $2, 'coherence-check.json', $3, $4, true, $5, NOW() - INTERVAL '30 seconds')`,
+      [
+        freshWhyId,
+        agentId,
+        crypto.randomBytes(32).toString("hex"),
+        "confirmed",
+        JSON.stringify({ type: "coherence_check", role: "WHY", intent: "fresh org intent", decision: "fresh org decision" }),
+      ],
+    );
+    await pool.query(
+      `INSERT INTO coherence_checks (user_id, proof_id, intent_hash, created_at)
+       VALUES ($1, $2, $3, NOW() - INTERVAL '30 seconds')`,
+      [agentId, freshWhyId, intentHash],
+    );
+  });
+
+  afterAll(async () => {
+    await cleanup([agentId], [agentWallet]);
+  });
+
+  it("fleet pending_count >= 1 for a fresh unlinked anchor via org-prefix mode", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?org=${prefix}`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.fleet.pending_count).toBeGreaterThanOrEqual(1);
+  });
+
+  it("fresh unlinked anchor is NOT counted in fleet divergent_count in org-prefix mode", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?org=${prefix}`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.fleet.divergent_count).toBe(0);
+  });
+
+  it("agent's per-row pending_count=1 and divergent_count=0 in org-prefix mode", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?org=${prefix}`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const agent = body.agents.find((a: any) => a.wallet_address === agentWallet);
+    expect(agent).toBeDefined();
+    expect(agent.pending_count).toBe(1);
+    expect(agent.divergent_count).toBe(0);
+  });
+});
