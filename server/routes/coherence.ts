@@ -162,6 +162,7 @@ export function registerCoherenceRoutes(app: Express) {
         return res.status(409).json({
           error: "ALREADY_LINKED",
           message: `This WHY anchor is already linked to proof ${current?.linkedProofId}`,
+          coherence_check: current ? serializeCheck(current) : null,
         });
       }
 

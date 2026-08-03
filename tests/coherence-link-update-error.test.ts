@@ -471,6 +471,51 @@ describe(
       expect(mockUpdate).toHaveBeenCalledTimes(1);
     });
 
+    it("body.coherence_check is present in the 409 response so callers don't need a second round-trip", async () => {
+      // The 409 now embeds the full link state so callers can read the winner's
+      // proof ID from a single response rather than issuing GET /api/agents/:wallet/coherence.
+      const res = await request
+        .post("/api/coherence/link")
+        .set("Content-Type", "application/json")
+        .set("Authorization", "Bearer pm_test_stub")
+        .send({ why_proof_id: FAKE_WHY_ID, what_proof_id: FAKE_WHAT_ID });
+
+      expect(res.status).toBe(409);
+      expect(
+        res.body.coherence_check,
+        "409 ALREADY_LINKED must include coherence_check in the response body",
+      ).toBeDefined();
+      expect(res.body.coherence_check).not.toBeNull();
+    });
+
+    it("body.coherence_check.linked_proof_id equals the winning proof ID", async () => {
+      // Callers can read coherence_check.linked_proof_id to discover which proof
+      // won the race without a follow-up GET request.
+      const res = await request
+        .post("/api/coherence/link")
+        .set("Content-Type", "application/json")
+        .set("Authorization", "Bearer pm_test_stub")
+        .send({ why_proof_id: FAKE_WHY_ID, what_proof_id: FAKE_WHAT_ID });
+
+      expect(res.status).toBe(409);
+      expect(
+        res.body.coherence_check?.linked_proof_id,
+        "coherence_check.linked_proof_id must equal the winner's proof ID",
+      ).toBe(FAKE_WINNER_PROOF_ID);
+    });
+
+    it("body.coherence_check.why_proof_id matches the requested why_proof_id", async () => {
+      // Sanity: the embedded check row is for the correct WHY anchor.
+      const res = await request
+        .post("/api/coherence/link")
+        .set("Content-Type", "application/json")
+        .set("Authorization", "Bearer pm_test_stub")
+        .send({ why_proof_id: FAKE_WHY_ID, what_proof_id: FAKE_WHAT_ID });
+
+      expect(res.status).toBe(409);
+      expect(res.body.coherence_check?.why_proof_id).toBe(FAKE_WHY_ID);
+    });
+
     // ── 200 path: same pair re-submitted (idempotent re-link) ────────────────
 
     it("responds HTTP 200 with already_linked: true when re-select finds the same what_proof_id", async () => {
