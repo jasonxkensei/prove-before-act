@@ -431,6 +431,10 @@ export async function createMcpServer(ctx: McpContext) {
         // Attribution: always use the verified API key owner (never a shared system account).
         // auth.userId is guaranteed non-null here because we checked it above.
         const certUserId = auth.userId;
+        // Resolve the owner's wallet address once so the milestone trust_profile URL
+        // points to the calling agent's real profile page, not the authorName display string
+        // (which may be "AI Agent" or a tool-supplied label, not a wallet address).
+        const certOwnerWallet = await getApiKeyOwnerWallet({ userId: certUserId }) || "";
 
         // Insert a pending reservation row BEFORE the blockchain write.
         // The DB unique constraint on fileHash prevents concurrent MCP requests from
@@ -528,7 +532,7 @@ export async function createMcpServer(ctx: McpContext) {
                 first_proof: true,
                 milestone: {
                   message: "This is your first on-chain proof. Your agent now has a verifiable track record on MultiversX.",
-                  trust_profile: `${baseUrl}/agent/${certification.authorName || ""}`,
+                  trust_profile: `${baseUrl}/agent/${certOwnerWallet || certification.authorName || ""}`,
                   next_steps: {
                     view_proof: `${baseUrl}/proof/${certification.id}`,
                     certify_more: "Call certify_file again with a different file_hash",
@@ -716,6 +720,8 @@ export async function createMcpServer(ctx: McpContext) {
 
         // Attribution: always use the verified API key owner (never a shared system account)
         const cwcCertUserId = auth.userId;
+        // Resolve wallet for correct trust_profile URL in milestone response.
+        const cwcOwnerWallet = await getApiKeyOwnerWallet({ userId: cwcCertUserId }) || "";
 
         const metadata: Record<string, unknown> = {
           confidence_level,
@@ -808,7 +814,7 @@ export async function createMcpServer(ctx: McpContext) {
                 first_proof: true,
                 milestone: {
                   message: "This is your first on-chain proof. Your agent now has a verifiable track record on MultiversX.",
-                  trust_profile: `${baseUrl}/agent/${certification.authorName || ""}`,
+                  trust_profile: `${baseUrl}/agent/${cwcOwnerWallet || certification.authorName || ""}`,
                   next_steps: {
                     view_proof: `${baseUrl}/proof/${certification.id}`,
                     certify_more: "Call certify_with_confidence or certify_file for subsequent decisions",
