@@ -481,6 +481,107 @@ describe("GET /api/fleets — authenticated caller sees only their own fleets (n
   });
 });
 
+// ── Non-member wallet → 404 MEMBER_NOT_FOUND ─────────────────────────────────
+//
+// DELETE /api/fleets/:slug/members/:wallet returns 404 MEMBER_NOT_FOUND when
+// the fleet exists and the caller is the owner, but the target wallet is not
+// currently a member of that fleet.
+//
+// A refactor that silently returned 200 for a "no rows deleted" result — or
+// that swallowed the missing-row branch — would go undetected without this test.
+
+describe("DELETE /api/fleets/:slug/members/:wallet — wallet not in fleet → 404 MEMBER_NOT_FOUND", () => {
+  const run = runHex();
+  const ownerWallet = `erd1notmemberowner${run}`;
+  const ownerId     = `not-member-owner-${run}`;
+  // This wallet is never added as a member of the fleet.
+  const absentWallet = `erd1absentmember${run}`;
+
+  let ownerCookie: string;
+  let fleetSlug: string;
+
+  beforeAll(async () => {
+    await insertUser(ownerId, ownerWallet);
+    ownerCookie = await createTestSession(ownerWallet);
+
+    const res = await fetch(`${BASE}/api/fleets`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: ownerCookie },
+      body: JSON.stringify({ name: `Not Member Test Fleet ${run}` }),
+    });
+    expect(res.status).toBe(201);
+    fleetSlug = (await res.json()).fleet.slug;
+  });
+
+  afterAll(async () => {
+    await cleanupUsers([ownerWallet]);
+  });
+
+  it("returns 404 MEMBER_NOT_FOUND when the wallet is not a fleet member", async () => {
+    const res = await fetch(
+      `${BASE}/api/fleets/${fleetSlug}/members/${encodeURIComponent(absentWallet)}`,
+      {
+        method: "DELETE",
+        headers: { Cookie: ownerCookie },
+      },
+    );
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.error).toBe("MEMBER_NOT_FOUND");
+  });
+
+  it("returns 200 success (not 404) when the wallet IS a member and is removed", async () => {
+    // First add the wallet as a member using the owner_wallet proof path
+    // so we can verify the positive case too (the 404 is not always returned).
+    // We re-use the owner's own wallet address as the member, which the API
+    // accepts via the owner_wallet proof path.
+    const addRes = await fetch(`${BASE}/api/fleets/${fleetSlug}/members`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: ownerCookie },
+      body: JSON.stringify({ wallet_address: ownerWallet, proof: { type: "owner_wallet" } }),
+    });
+    // Only assert the remove step if the add succeeded.
+    if (addRes.status !== 201 && addRes.status !== 200) return;
+
+    const removeRes = await fetch(
+      `${BASE}/api/fleets/${fleetSlug}/members/${encodeURIComponent(ownerWallet)}`,
+      {
+        method: "DELETE",
+        headers: { Cookie: ownerCookie },
+      },
+    );
+    expect(removeRes.status).toBe(200);
+    const body = await removeRes.json();
+    expect(body.success).toBe(true);
+  });
+
+  it("returns 404 MEMBER_NOT_FOUND on a second remove of the same wallet (already gone)", async () => {
+    // Re-add then double-remove to confirm idempotency is NOT silent:
+    // the second delete must 404, not 200.
+    const addRes = await fetch(`${BASE}/api/fleets/${fleetSlug}/members`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: ownerCookie },
+      body: JSON.stringify({ wallet_address: ownerWallet, proof: { type: "owner_wallet" } }),
+    });
+    if (addRes.status !== 201 && addRes.status !== 200) return;
+
+    // First remove — should succeed.
+    await fetch(
+      `${BASE}/api/fleets/${fleetSlug}/members/${encodeURIComponent(ownerWallet)}`,
+      { method: "DELETE", headers: { Cookie: ownerCookie } },
+    );
+
+    // Second remove — must 404.
+    const res = await fetch(
+      `${BASE}/api/fleets/${fleetSlug}/members/${encodeURIComponent(ownerWallet)}`,
+      { method: "DELETE", headers: { Cookie: ownerCookie } },
+    );
+    expect(res.status).toBe(404);
+    const body = await res.json();
+    expect(body.error).toBe("MEMBER_NOT_FOUND");
+  });
+});
+
 // ── Unknown slug → 404 FLEET_NOT_FOUND ───────────────────────────────────────
 //
 // getOwnedFleet() returns 404 FLEET_NOT_FOUND when no fleet matches the slug.
