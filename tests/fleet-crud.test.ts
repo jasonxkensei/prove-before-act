@@ -1269,6 +1269,22 @@ describe("GET /api/fleet/coherence?fleet=<slug> — LIMIT=50 cap hides members b
     const body = await res.json();
     expect(body.fleet.total_member_count).toBe(51);
   });
+
+  it("fleet.score_basis.sampled_agents is 50 and score_basis.total_agents is 51 when truncated", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?fleet=${slug}`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.fleet.score_basis).toBeDefined();
+    expect(body.fleet.score_basis.sampled_agents).toBe(50);
+    expect(body.fleet.score_basis.total_agents).toBe(51);
+  });
+
+  it("fleet.score_formula notes sampling when truncated=true", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?fleet=${slug}`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.fleet.score_formula).toMatch(/sampled/);
+  });
 });
 
 // ── GET /api/fleet/coherence?fleet=<slug> — exact cap boundary (Task #564) ────
@@ -1419,6 +1435,22 @@ describe("GET /api/fleet/coherence?org= — LIMIT=50 cap hides members beyond sl
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.fleet.total_member_count).toBe(51);
+  });
+
+  it("fleet.score_basis.sampled_agents is 50 and score_basis.total_agents is 51 when truncated (org-prefix mode)", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?org=${orgPrefix}`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.fleet.score_basis).toBeDefined();
+    expect(body.fleet.score_basis.sampled_agents).toBe(50);
+    expect(body.fleet.score_basis.total_agents).toBe(51);
+  });
+
+  it("fleet.score_formula notes sampling when truncated=true (org-prefix mode)", async () => {
+    const res = await fetch(`${BASE}/api/fleet/coherence?org=${orgPrefix}`);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.fleet.score_formula).toMatch(/sampled/);
   });
 });
 

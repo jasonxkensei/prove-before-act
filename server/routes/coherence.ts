@@ -337,6 +337,7 @@ export function registerCoherenceRoutes(app: Express) {
       if (fleetRate !== null && fleetAvgScore !== null) fleetScore = Math.round(0.7 * fleetRate + 0.3 * fleetAvgScore);
       else if (fleetRate !== null) fleetScore = fleetRate;
 
+      const truncated = agents.length === FLEET_MAX_AGENTS && totalMemberCount > FLEET_MAX_AGENTS;
       return res.json({
         org_prefix: registeredFleet ? undefined : org,
         fleet_slug: registeredFleet?.slug,
@@ -344,7 +345,7 @@ export function registerCoherenceRoutes(app: Express) {
         fleet: {
           agent_count: agents.length,
           total_member_count: totalMemberCount,
-          truncated: agents.length === FLEET_MAX_AGENTS && totalMemberCount > FLEET_MAX_AGENTS,
+          truncated,
           total_anchors: fleetTotals.total,
           linked_count: fleetTotals.linked,
           linked_within_1h: fleetTotals.linked1h,
@@ -354,7 +355,10 @@ export function registerCoherenceRoutes(app: Express) {
           coherence_rate: fleetRate,
           avg_coherence_score: fleetAvgScore,
           fleet_score: fleetScore,
-          score_formula: "fleet_score = round(0.7 × coherence_rate + 0.3 × avg_coherence_score)",
+          score_basis: { sampled_agents: agents.length, total_agents: totalMemberCount },
+          score_formula: truncated
+            ? "fleet_score = round(0.7 × coherence_rate + 0.3 × avg_coherence_score) — based on sampled agents only"
+            : "fleet_score = round(0.7 × coherence_rate + 0.3 × avg_coherence_score)",
         },
         agents,
         note: agents.length === 0
