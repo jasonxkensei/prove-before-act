@@ -480,12 +480,17 @@ export async function detectAndRecordViolations(
 ): Promise<number> {
   const anomalies: { type: "fault" | "breach"; reason: string; autoConfirm: boolean }[] = [];
 
-  // Irrefutable: WHAT timestamp precedes WHY on-chain → auto-confirm fault
+  // WHAT timestamp precedes WHY on-chain — cryptographically irrefutable, but
+  // TRUST-C01 (audit #5): autoConfirm must be false for ALL anomaly types.
+  // Even when blockchain timestamps prove execution preceded intent, the violation
+  // requires human review before being permanently applied to the trust score —
+  // an adversary calling investigate_proof on a competitor's proof must not be
+  // able to auto-confirm a score-destroying violation without admin oversight.
   if (verification.intent_preceded_execution === false) {
     anomalies.push({
       type: "fault",
       reason: "WHAT was certified before WHY — execution preceded intent declaration",
-      autoConfirm: true,
+      autoConfirm: false, // TRUST-C01: admin review required before confirming
     });
   }
 
