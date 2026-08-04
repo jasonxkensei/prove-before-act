@@ -16,7 +16,7 @@ import {
   Settings,
 } from "lucide-react";
 
-const BASE = "https://xproof.app";
+const BASE = "https://provebeforeact.com";
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -170,7 +170,7 @@ contract ViolationWatcher {
         bytes32 proofId,
         IXProofViolations.ViolationType violationType
     ) external {
-        require(msg.sender == xproofContract, "Not xProof");
+        require(msg.sender == xproofContract, "Not Prove Before Act");
         require(agentWallet == watchedAgent, "Not watched agent");
 
         lastViolationTime = block.timestamp;
@@ -243,7 +243,7 @@ export default function DocsBaseViolationsPage() {
           </h1>
           <p className="text-lg text-muted-foreground max-w-3xl">
             When a violation moves from <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">proposed</code> to{" "}
-            <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">confirmed</code>, xProof emits an immutable event on Base.
+            <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">confirmed</code>, Prove Before Act emits an immutable event on Base.
             Any protocol can read it. No API dependency. No trust required.
           </p>
         </div>
@@ -288,7 +288,7 @@ export default function DocsBaseViolationsPage() {
                 <div className="rounded-md bg-muted/50 p-4 text-sm">
                   <p className="font-mono text-xs">
                     <span className="text-muted-foreground">Flow:</span>{" "}
-                    Violation detected → confirmed in xProof DB → <code>XProofViolations.emitViolation()</code> on Base →{" "}
+                    Violation detected → confirmed in Prove Before Act DB → <code>XProofViolations.emitViolation()</code> on Base →{" "}
                     <code>ViolationConfirmed</code> event → Operator's <code>ViolationWatcher.onViolation()</code> fires
                   </p>
                 </div>
@@ -304,7 +304,7 @@ export default function DocsBaseViolationsPage() {
               </h2>
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  The <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">ViolationConfirmed</code> event is emitted by the xProof Base contract
+                  The <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">ViolationConfirmed</code> event is emitted by the Prove Before Act Base contract
                   every time a violation is confirmed. Both <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">agentWallet</code> and{" "}
                   <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">proofId</code> are indexed for efficient filtering.
                 </p>
@@ -357,7 +357,7 @@ enum ViolationType {
                 Emitter Contract — <code className="text-sm font-mono">XProofViolations.sol</code>
               </h2>
               <p className="text-sm text-muted-foreground mb-4">
-                Deployed by xProof on Base. Only the authorized xProof backend wallet can call <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">emitViolation()</code>.
+                Deployed by Prove Before Act on Base. Only the authorized Prove Before Act backend wallet can call <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">emitViolation()</code>.
                 Operators don't deploy this — they read its events.
               </p>
               <div className="relative group/code">
@@ -440,7 +440,7 @@ enum ViolationType {
                       <tr className="border-b">
                         <td className="py-2 pr-4">_xproofContract</td>
                         <td className="py-2 pr-4 text-muted-foreground">address</td>
-                        <td className="py-2 font-sans text-muted-foreground">xProof violations contract on Base</td>
+                        <td className="py-2 font-sans text-muted-foreground">Prove Before Act violations contract on Base</td>
                       </tr>
                       <tr className="border-b">
                         <td className="py-2 pr-4">_watchedAgent</td>
@@ -490,7 +490,7 @@ forge create --rpc-url https://mainnet.base.org \\
                 Query Violation Events
               </h2>
               <p className="text-sm text-muted-foreground mb-4">
-                Any protocol can query Base for confirmed violations without touching the xProof API. 
+                Any protocol can query Base for confirmed violations without touching the Prove Before Act API. 
                 Filter by agent wallet or proof ID using the indexed event parameters.
               </p>
               <div className="relative group/code">
@@ -527,12 +527,12 @@ for (const event of events) {
             <CardContent className="p-6">
               <h2 className="text-xl font-semibold mb-3">Composability</h2>
               <p className="text-sm text-muted-foreground mb-3">
-                xProof emits the signal. The operator's contract decides what to do with it.
+                Prove Before Act emits the signal. The operator's contract decides what to do with it.
               </p>
               <p className="text-sm text-muted-foreground">
                 The violation event is public, immutable, and indexable. Any protocol building on top can query Base
-                for confirmed violations without touching the xProof API. This is not infrastructure xProof has to build.
-                This is infrastructure operators build on top of xProof because the standard is open and the events are public.
+                for confirmed violations without touching the Prove Before Act API. This is not infrastructure Prove Before Act has to build.
+                This is infrastructure operators build on top of Prove Before Act because the standard is open and the events are public.
               </p>
               <div className="flex flex-wrap gap-2 mt-4">
                 {["Open standard", "Base Mainnet", "No API dependency", "Composable", "Immutable events"].map((label) => (
@@ -551,7 +551,7 @@ for (const event of events) {
               <div className="space-y-3 text-sm">
                 <div className="flex items-center gap-3">
                   <Badge variant="default" className="text-xs">Live</Badge>
-                  <span className="text-muted-foreground">Violation detection and confirmation in xProof DB</span>
+                  <span className="text-muted-foreground">Violation detection and confirmation in Prove Before Act DB</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <Badge variant="default" className="text-xs">Live</Badge>
@@ -589,7 +589,7 @@ for (const event of events) {
           <p>
             Source: <a href="https://github.com" className="text-primary hover:underline">contracts/ViolationWatcher.sol</a> ·{" "}
             <a href="/docs" className="text-primary hover:underline">API Reference</a> ·{" "}
-            <a href="/" className="text-primary hover:underline">xproof.app</a>
+            <a href="/" className="text-primary hover:underline">provebeforeact.com</a>
           </p>
         </div>
       </footer>

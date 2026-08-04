@@ -13,7 +13,7 @@ jobs:
       - name: Build
         run: npm run build && zip -r build.zip dist/
 
-      - name: Certify with xProof
+      - name: Certify with Prove Before Act
         id: certify
         uses: jasonxkensei/xProof-Action@v1
         with:

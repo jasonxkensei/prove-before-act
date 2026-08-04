@@ -1,6 +1,6 @@
-# LangChain + xProof Examples
+# LangChain + Prove Before Act Examples
 
-Two standalone scripts show different xProof integration points for
+Two standalone scripts show different Prove Before Act integration points for
 LangChain agents.  Choose the one that matches your use case.
 
 | Script | Integration | Best for |
@@ -13,7 +13,7 @@ LangChain agents.  Choose the one that matches your use case.
 Run these commands from the `python-sdk/` directory:
 
 ```bash
-pip install -e .              # install the xproof package in editable mode
+pip install -e .              # install the Prove Before Act package in editable mode
 ```
 
 Or, to pin to the example's locked dependencies (run from this directory):
@@ -37,13 +37,13 @@ python main.py
 
 The script will:
 
-1. Register a trial xProof agent.
+1. Register a trial Prove Before Act agent.
 2. Simulate two LangChain LLM calls with the handler attached.
 3. Flush the batch — both calls are certified on-chain in one round trip.
 4. Verify each proof by ID and print the result.
 
 Each proof is anchored on MultiversX and verifiable at
-`https://xproof.app/verify/<proofId>`.
+`https://provebeforeact.com/verify/<proofId>`.
 
 ---
 

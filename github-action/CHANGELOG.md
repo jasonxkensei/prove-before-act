@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the xProof Certify GitHub Action are documented here.
+All notable changes to the Prove Before Act Certify GitHub Action are documented here.
 
 ## [1.1.0] - 2026-07-08
 
@@ -19,8 +19,8 @@ All notable changes to the xProof Certify GitHub Action are documented here.
 
 ### Changed
 - Top-of-README messaging reworded to be more factual and less alarmist.
-- Documented the relationship between this Action (API-key based, for CI) and xProof's x402/no-API-key flow (SDK-based, for autonomous agents).
+- Documented the relationship between this Action (API-key based, for CI) and Prove Before Act's x402/no-API-key flow (SDK-based, for autonomous agents).
 
 ## [1.0.0] - 2026-02-12
 
-- Initial release: certify one or more files by SHA-256 hash via the xProof API, with proof/badge/attestation outputs and GitHub Step Summary support.
+- Initial release: certify one or more files by SHA-256 hash via the Prove Before Act API, with proof/badge/attestation outputs and GitHub Step Summary support.

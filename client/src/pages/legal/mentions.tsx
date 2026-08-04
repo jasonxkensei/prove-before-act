@@ -8,7 +8,7 @@ export default function MentionsLegales() {
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between">
           <a href="/" className="flex items-center gap-2" data-testid="link-logo-home">
-            <img src="/xproof-logo.png" alt="xproof" className="h-8 w-auto" />
+            <img src="/xproof-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
           </a>
           <Link href="/">
             <Button variant="ghost" size="sm" data-testid="button-back-home">
@@ -26,11 +26,11 @@ export default function MentionsLegales() {
           <section>
             <h2 className="text-xl font-semibold mb-4">Service operator</h2>
             <p className="text-muted-foreground leading-relaxed">
-              The xproof service is currently operated by a sole proprietor based in France, 
+              The Prove Before Act service is currently operated by a sole proprietor based in France, 
               pending the establishment of a dedicated legal entity.
             </p>
             <ul className="mt-4 space-y-2 text-muted-foreground">
-              <li><strong className="text-foreground">Service name:</strong> xproof</li>
+              <li><strong className="text-foreground">Service name:</strong> Prove Before Act</li>
               <li><strong className="text-foreground">Country:</strong> France</li>
               <li><strong className="text-foreground">Contact:</strong> <span className="italic">[Email coming soon]</span></li>
             </ul>
@@ -51,7 +51,7 @@ export default function MentionsLegales() {
           <section>
             <h2 className="text-xl font-semibold mb-4">Blockchain infrastructure</h2>
             <p className="text-muted-foreground leading-relaxed">
-              xproof uses the MultiversX blockchain for recording proof of existence.
+              Prove Before Act uses the MultiversX blockchain for recording proof of existence.
               Transactions are public and verifiable on the MultiversX explorer.
             </p>
             <ul className="mt-4 space-y-2 text-muted-foreground">
@@ -63,8 +63,8 @@ export default function MentionsLegales() {
           <section>
             <h2 className="text-xl font-semibold mb-4">Intellectual property</h2>
             <p className="text-muted-foreground leading-relaxed">
-              All content on xproof (text, graphics, logos, icons, images, 
-              software) is the exclusive property of xproof or its partners and is protected 
+              All content on Prove Before Act (text, graphics, logos, icons, images, 
+              software) is the exclusive property of Prove Before Act or its partners and is protected 
               by applicable intellectual property laws.
             </p>
             <p className="text-muted-foreground leading-relaxed mt-4">
@@ -77,7 +77,7 @@ export default function MentionsLegales() {
           <section>
             <h2 className="text-xl font-semibold mb-4">Limitation of liability</h2>
             <p className="text-muted-foreground leading-relaxed">
-              xproof shall not be held liable for any direct or indirect damages resulting 
+              Prove Before Act shall not be held liable for any direct or indirect damages resulting 
               from the use of the service, including but not limited to data loss or service 
               interruption.
             </p>

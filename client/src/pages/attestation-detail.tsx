@@ -82,7 +82,7 @@ export default function AttestationDetailPage() {
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between">
           <Link href="/" data-testid="link-logo-home" className="flex items-center gap-2">
-            <img src="/xproof-logo.png" alt="xproof" className="h-8 w-auto" />
+            <img src="/xproof-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
           </Link>
           <Button asChild variant="ghost" size="sm" data-testid="button-back-leaderboard">
             <Link href="/leaderboard">
@@ -270,7 +270,7 @@ export default function AttestationDetailPage() {
                   +50 trust score contribution
                 </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  This active attestation contributes +50 points to the agent's xproof trust score (max +150 from 3 attestations).
+                  This active attestation contributes +50 points to the agent's Prove Before Act trust score (max +150 from 3 attestations).
                 </p>
               </div>
             )}

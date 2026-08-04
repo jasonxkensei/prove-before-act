@@ -107,11 +107,11 @@ export async function generateCertificatePDF(options: CertificateOptions): Promi
         size: 'A4', 
         margin: 0,
         info: {
-          Title: `xproof Certificate - ${certification.fileName}`,
-          Author: 'xproof',
+          Title: `Prove Before Act Certificate - ${certification.fileName}`,
+          Author: 'Prove Before Act',
           Subject: 'Blockchain Proof of Ownership Certificate',
           Keywords: 'blockchain, certificate, proof, ownership, multiversx',
-          Creator: 'xproof Certification Platform'
+          Creator: 'Prove Before Act Certification Platform'
         }
       });
       
@@ -264,7 +264,7 @@ export async function generateCertificatePDF(options: CertificateOptions): Promi
       infoY += 32;
 
       // PUBLIC PROOF LINK
-      const proofUrl = `https://xproof.app/proof/${certification.id}`;
+      const proofUrl = `https://provebeforeact.com/proof/${certification.id}`;
       doc.fontSize(9).font('Helvetica-Bold').fillColor(COLORS.textLight);
       doc.text('PUBLIC PROOF', labelX, infoY);
       doc.fontSize(9).font('Helvetica').fillColor(COLORS.primary);
@@ -345,7 +345,7 @@ export async function generateCertificatePDF(options: CertificateOptions): Promi
                margin, footerY + 12, { width: contentWidth, align: 'center' });
       
       doc.fontSize(7).fillColor(COLORS.textMuted);
-      doc.text('xproof © ' + new Date().getFullYear() + ' — Blockchain Certification Platform — xproof.app',
+      doc.text('Prove Before Act © ' + new Date().getFullYear() + ' — Blockchain Certification Platform — provebeforeact.com',
                margin, footerY + 30, { width: contentWidth, align: 'center' });
 
       if (subscriptionTier === 'free') {

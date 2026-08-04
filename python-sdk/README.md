@@ -1,6 +1,6 @@
-# xproof
+# Prove Before Act
 
-[![Python SDK CI](https://github.com/jasonxkensei/xproof/actions/workflows/python-sdk.yml/badge.svg?branch=main)](https://github.com/jasonxkensei/xproof/actions/workflows/python-sdk.yml) [![PyPI version](https://img.shields.io/pypi/v/xproof)](https://pypi.org/project/xproof/) [![Python versions](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-blue)](https://pypi.org/project/xproof/)
+[![Python SDK CI](https://github.com/jasonxkensei/xProof/actions/workflows/python-sdk.yml/badge.svg?branch=main)](https://github.com/jasonxkensei/xProof/actions/workflows/python-sdk.yml) [![PyPI version](https://img.shields.io/pypi/v/Prove Before Act)](https://pypi.org/project/xproof/) [![Python versions](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-blue)](https://pypi.org/project/xproof/)
 
 On-chain decision provenance for autonomous agents. **WHY before acting. WHAT after.** Timestamps written by the chain, not your agent.
 
@@ -15,7 +15,7 @@ pip install xproof
 ### Step 1 — Register (no wallet, no payment)
 
 ```bash
-curl -X POST https://xproof.app/api/agent/register \
+curl -X POST https://provebeforeact.com/api/agent/register \
   -H "Content-Type: application/json" \
   -d '{"agent_name": "my-agent"}'
 ```
@@ -29,7 +29,7 @@ curl -X POST https://xproof.app/api/agent/register \
 Hash your reasoning and certify it *before* your agent executes.
 
 ```bash
-curl -X POST https://xproof.app/api/proof \
+curl -X POST https://provebeforeact.com/api/proof \
   -H "Authorization: Bearer pm_..." \
   -H "Content-Type: application/json" \
   -d '{
@@ -49,7 +49,7 @@ curl -X POST https://xproof.app/api/proof \
 Hash your output and link it to the WHY proof.
 
 ```bash
-curl -X POST https://xproof.app/api/proof \
+curl -X POST https://provebeforeact.com/api/proof \
   -H "Authorization: Bearer pm_..." \
   -H "Content-Type: application/json" \
   -d '{
@@ -337,7 +337,7 @@ if tb is not None:
 
 ## Governance & Policy Enforcement
 
-xProof detects automatically when an agent acted with insufficient confidence on an irreversible action — and writes the evidence on-chain before you ever open an incident report.
+Prove Before Act detects automatically when an agent acted with insufficient confidence on an irreversible action — and writes the evidence on-chain before you ever open an incident report.
 
 ### Mark decisions as reversible, costly, or irreversible
 
@@ -675,7 +675,7 @@ violations without grepping free-form text.
 import json, logging, urllib.request
 from xproof import XProofClient
 
-logger = logging.getLogger("xproof.compliance")
+logger = logging.getLogger("Prove Before Act.compliance")
 logging.basicConfig(level=logging.INFO)
 
 client = XProofClient(api_key="pm_...")
@@ -813,12 +813,12 @@ print(pricing.price_usd)  # e.g. 0.01
 
 ## API Reference
 
-### `XProofClient(api_key=None, base_url="https://xproof.app", timeout=30)`
+### `XProofClient(api_key=None, base_url="https://provebeforeact.com", timeout=30)`
 
 | Parameter  | Type  | Default                |
 |------------|-------|------------------------|
 | `api_key`  | `str` | `None`                 |
-| `base_url` | `str` | `"https://xproof.app"` |
+| `base_url` | `str` | `"https://provebeforeact.com"` |
 | `timeout`  | `int` | `30` (seconds)         |
 
 ### Methods
@@ -870,7 +870,7 @@ make install-hooks
 ```
 
 After that, every `git commit` will run `make typecheck`, which checks the
-entire `xproof/` package with mypy. If mypy reports any errors the commit is
+entire `Prove Before Act/` package with mypy. If mypy reports any errors the commit is
 blocked until they are fixed.
 
 To run the hooks manually against all files without committing (from the repo root):
@@ -897,8 +897,8 @@ code --install-extension charliermarsh.ruff
 
 ## Links
 
-- [xproof.app](https://xproof.app) — dashboard & docs
-- [npm SDK](https://www.npmjs.com/package/@xproof/xproof) — `npm install @xproof/xproof`
+- [provebeforeact.com](https://provebeforeact.com) — dashboard & docs
+- [npm SDK](https://www.npmjs.com/package/@prove-before-act/sdk) — `npm install @prove-before-act/sdk`
 - [Examples](https://github.com/jasonxkensei/xproof-examples) — LangChain, CrewAI, AutoGen, LlamaIndex
 
 ## License

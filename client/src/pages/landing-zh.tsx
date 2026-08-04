@@ -85,7 +85,7 @@ export default function LandingZh() {
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between">
           <a href="/zh" className="flex items-center gap-2" data-testid="link-logo-home-zh">
-            <img src="/xproof-logo.png" alt="xproof" className="h-8 w-auto" />
+            <img src="/xproof-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
           </a>
           <nav className="hidden md:flex items-center gap-6">
             <a href="#how-it-works" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
@@ -146,7 +146,7 @@ export default function LandingZh() {
           </h1>
 
           <p className="mx-auto mb-5 max-w-2xl text-lg md:text-xl text-muted-foreground leading-relaxed">
-            监管检查时，您能提供AI决策的完整证明吗？xproof 为每次智能体操作生成<strong className="text-foreground">不可篡改的合规存证</strong>——
+            监管检查时，您能提供AI决策的完整证明吗？Prove Before Act 为每次智能体操作生成<strong className="text-foreground">不可篡改的合规存证</strong>——
             决策前锚定推理依据，执行后锚定实际结果，构建完整的<strong className="text-foreground">风控留痕与审计追溯链</strong>。
           </p>
 
@@ -201,7 +201,7 @@ export default function LandingZh() {
               <p className="text-xs text-muted-foreground leading-relaxed">
                 《生成式人工智能服务管理暂行办法》《数据安全法》明确要求AI系统保留可审查的决策记录。
                 一旦发生争议或监管检查，<strong className="text-foreground">无法举证等同于违规</strong>。
-                xproof 为每次AI决策生成链上不可篡改的证明，每次 $0.01，审计时随时可查。
+                Prove Before Act 为每次AI决策生成链上不可篡改的证明，每次 $0.01，审计时随时可查。
               </p>
             </div>
             <Badge variant="outline" className="text-xs border-amber-500/30 text-amber-600 dark:text-amber-400 whitespace-nowrap shrink-0">
@@ -224,7 +224,7 @@ export default function LandingZh() {
                 { id: "AP2", label: "授权管理", desc: "是否获得授权？" },
                 { id: "MCP", label: "通信协议", desc: "请求了什么？" },
                 { id: "x402", label: "支付结算", desc: "支付了什么？" },
-                { id: "xProof", label: "可验证意图", desc: "为何执行此操作？", highlight: true },
+                { id: "Prove Before Act", label: "可验证意图", desc: "为何执行此操作？", highlight: true },
               ].map((pillar, i) => (
                 <div key={pillar.id} className="flex items-center flex-1 min-w-0">
                   {i > 0 && (
@@ -256,7 +256,7 @@ export default function LandingZh() {
                 { id: "AP2", label: "授权管理", desc: "是否获得授权？" },
                 { id: "MCP", label: "通信协议", desc: "请求了什么？" },
                 { id: "x402", label: "支付结算", desc: "支付了什么？" },
-                { id: "xProof", label: "可验证意图", desc: "为何执行此操作？", highlight: true },
+                { id: "Prove Before Act", label: "可验证意图", desc: "为何执行此操作？", highlight: true },
               ].map((pillar) => (
                 <div
                   key={pillar.id}
@@ -277,7 +277,7 @@ export default function LandingZh() {
               ))}
             </div>
             <p className="mt-8 text-center text-sm text-muted-foreground">
-              xproof 是智能体经济的可信层。{" "}
+              Prove Before Act 是智能体经济的可信层。{" "}
               <span className="text-foreground font-medium">每一次智能体操作，均可链上存证。</span>
             </p>
           </div>
@@ -455,7 +455,7 @@ export default function LandingZh() {
                 </ul>
               </div>
               <div className="rounded-md border border-primary/20 bg-primary/5 p-4">
-                <p className="text-sm font-semibold text-primary mb-2">xproof 合规风控</p>
+                <p className="text-sm font-semibold text-primary mb-2">Prove Before Act 合规风控</p>
                 <ul className="space-y-1.5 text-xs text-muted-foreground">
                   <li className="flex items-start gap-1.5"><span className="text-primary mt-0.5 shrink-0">✓</span>每日1000次决策全量存证：<strong className="text-foreground">$10/天</strong></li>
                   <li className="flex items-start gap-1.5"><span className="text-primary mt-0.5 shrink-0">✓</span>监管检查：随时出具链上证明</li>
@@ -567,7 +567,7 @@ GET /api/agents/{wallet}/incident-report
                 <div className="pl-4">metadata=&#123;<span className="text-[#a5d6ff]">"role"</span>: <span className="text-[#a5d6ff]">"WHAT"</span>, <span className="text-[#a5d6ff]">"why_proof_id"</span>: why_proof[<span className="text-[#a5d6ff]">"proof_id"</span>]&#125;</div>
                 <div>)</div>
                 <div className="mt-3 text-[#3fb950]"># 审计轨迹已建立 — WHY在WHAT之前锚定，链上可验证</div>
-                <div className="text-[#3fb950]"># 事件报告: xproof.app/incident/&#123;wallet&#125;/&#123;why_proof_id&#125;</div>
+                <div className="text-[#3fb950]"># 事件报告: provebeforeact.com/incident/&#123;wallet&#125;/&#123;why_proof_id&#125;</div>
               </div>
             </div>
           </div>
@@ -792,12 +792,12 @@ print(proof["verify_url"])  # 链上可验证`}
             <Accordion type="single" collapsible className="space-y-2">
               {[
                 {
-                  q: "xproof如何帮助智能体集群运营商满足合规要求？",
-                  a: "xproof为每次智能体操作生成不可篡改的链上存证，包含操作主体（WHO）、操作时间（WHEN）、决策依据（WHY，执行前锚定）和实际结果（WHAT，执行后锚定）。这四个维度构成完整的审计轨迹，可直接响应《生成式人工智能服务管理暂行办法》等监管要求，为审计员和监管机构提供可独立验证的操作记录。",
+                  q: "Prove Before Act如何帮助智能体集群运营商满足合规要求？",
+                  a: "Prove Before Act为每次智能体操作生成不可篡改的链上存证，包含操作主体（WHO）、操作时间（WHEN）、决策依据（WHY，执行前锚定）和实际结果（WHAT，执行后锚定）。这四个维度构成完整的审计轨迹，可直接响应《生成式人工智能服务管理暂行办法》等监管要求，为审计员和监管机构提供可独立验证的操作记录。",
                 },
                 {
                   q: "批量认证适合高频操作的集群吗？",
-                  a: "是的。xproof的批量API支持单次请求提交最多100个哈希值，每次存证固定收费$0.01，无任何批量溢价。对于每秒产生大量操作的集群，您可以在本地缓冲操作记录，定期批量提交，实现高效可扩展的审计基础设施。",
+                  a: "是的。Prove Before Act的批量API支持单次请求提交最多100个哈希值，每次存证固定收费$0.01，无任何批量溢价。对于每秒产生大量操作的集群，您可以在本地缓冲操作记录，定期批量提交，实现高效可扩展的审计基础设施。",
                 },
                 {
                   q: "x402协议如何工作？智能体无需账号也能存证吗？",
@@ -813,7 +813,7 @@ print(proof["verify_url"])  # 链上可验证`}
                 },
                 {
                   q: "如何查看具体操作的完整审计报告？",
-                  a: "每个存证都有一个对应的事件报告页面，位于 xproof.app/incident/{钱包地址}/{proof_id}。报告包含：自然语言摘要、4W验证状态、WHY→WHAT时序证明（含时间差）、完整操作时间线，以及供其他智能体程序化调用的JSON端点。",
+                  a: "每个存证都有一个对应的事件报告页面，位于 provebeforeact.com/incident/{钱包地址}/{proof_id}。报告包含：自然语言摘要、4W验证状态、WHY→WHAT时序证明（含时间差）、完整操作时间线，以及供其他智能体程序化调用的JSON端点。",
                 },
               ].map((item, i) => (
                 <AccordionItem key={i} value={`item-${i}`} className="border rounded-md px-4">
@@ -864,7 +864,7 @@ print(proof["verify_url"])  # 链上可验证`}
         <div className="container">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <img src="/xproof-logo.png" alt="xproof" className="h-6 w-auto" />
+              <img src="/xproof-logo.png" alt="Prove Before Act" className="h-6 w-auto" />
               <span className="text-xs text-muted-foreground">智能体经济的可信证明层</span>
             </div>
             <nav className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground justify-center">
@@ -875,7 +875,7 @@ print(proof["verify_url"])  # 链上可验证`}
               <a href="/" className="hover:text-foreground transition-colors border border-border/50 rounded px-2 py-0.5 font-mono">EN</a>
             </nav>
             <p className="text-xs text-muted-foreground">
-              © {new Date().getFullYear()} xproof · 基于 MultiversX 区块链
+              © {new Date().getFullYear()} Prove Before Act · 基于 MultiversX 区块链
             </p>
           </div>
         </div>

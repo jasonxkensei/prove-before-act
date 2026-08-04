@@ -671,7 +671,7 @@ export function registerTrustRoutes(app: Express) {
       const baseUrl = `https://${req.get("host")}`;
       const badgeUrl = `${baseUrl}/badge/trust/${wallet}.svg`;
       const linkUrl = `${baseUrl}/agent/${wallet}`;
-      const markdown = `[![xproof Trust](${badgeUrl})](${linkUrl})`;
+      const markdown = `[![Prove Before Act Trust](${badgeUrl})](${linkUrl})`;
       res.setHeader("Cache-Control", "private, no-store");
       res.json({ markdown, badgeUrl, linkUrl });
     } catch (error) {

@@ -1,8 +1,8 @@
-# xproof System Architecture
+# Prove Before Act System Architecture
 
 ## High-Level Overview
 
-xproof is a blockchain certification service that anchors SHA-256 file hashes on the MultiversX blockchain. Users upload files in the browser, which are hashed client-side using the Web Crypto API. The hash is then recorded as an immutable on-chain transaction, producing a verifiable proof of existence. Files never leave the user's browser.
+Prove Before Act is a blockchain certification service that anchors SHA-256 file hashes on the MultiversX blockchain. Users upload files in the browser, which are hashed client-side using the Web Crypto API. The hash is then recorded as an immutable on-chain transaction, producing a verifiable proof of existence. Files never leave the user's browser.
 
 ### System Data Flow
 
@@ -348,7 +348,7 @@ Certification records have a `blockchain_status` field with three possible value
 
 ### MultiversX Native Auth
 
-xproof uses MultiversX Native Auth, a cryptographic authentication mechanism where users prove wallet ownership by signing a challenge message.
+Prove Before Act uses MultiversX Native Auth, a cryptographic authentication mechanism where users prove wallet ownership by signing a challenge message.
 
 ```
 Client                              Server                         MultiversX API
@@ -408,7 +408,7 @@ The ACP enables AI agents to programmatically purchase certifications using API 
 
 ### Discovery
 
-AI agents discover xproof capabilities through multiple standard endpoints:
+AI agents discover Prove Before Act capabilities through multiple standard endpoints:
 
 | Endpoint | Purpose |
 |----------|---------|

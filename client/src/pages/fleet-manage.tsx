@@ -570,7 +570,7 @@ export default function FleetManagePage() {
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
 
   useEffect(() => {
-    document.title = "My Fleets | xproof";
+    document.title = "My Fleets | Prove Before Act";
   }, []);
 
   const { data, isLoading } = useQuery<{ fleets: Fleet[] }>({
@@ -611,7 +611,7 @@ export default function FleetManagePage() {
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between gap-4">
           <Link href="/" data-testid="link-logo-home" className="flex items-center gap-2">
-            <img src="/xproof-logo.png" alt="xproof" className="h-8 w-auto" />
+            <img src="/xproof-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
           </Link>
           <nav className="flex items-center gap-3">
             <Button asChild variant="ghost" size="sm">

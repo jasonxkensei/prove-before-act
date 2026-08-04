@@ -43,7 +43,7 @@ export async function POST(req: Request) {
       id: latestProof.proofId,
       hash: latestProof.fileHash,
       tx: latestProof.transactionHash,
-      verify: `https://xproof.app/verify/${latestProof.proofId}`,
+      verify: `https://provebeforeact.com/verify/${latestProof.proofId}`,
     },
   });
 }

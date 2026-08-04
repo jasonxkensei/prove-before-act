@@ -11,10 +11,10 @@ function buildAcceptedOrigins(): string[] {
   const origins = new Set<string>();
 
   // Always include production domains
-  origins.add('https://xproof.app');
-  origins.add('https://www.xproof.app');
+  origins.add('https://provebeforeact.com');
+  origins.add('https://www.provebeforeact.com');
 
-  // REPLIT_DOMAINS / REPL_DOMAINS — may be comma-separated (e.g. "xproof.app,www.xproof.app")
+  // REPLIT_DOMAINS / REPL_DOMAINS — may be comma-separated (e.g. "provebeforeact.com,www.provebeforeact.com")
   for (const envVar of ['REPLIT_DOMAINS', 'REPL_DOMAINS']) {
     const val = process.env[envVar] || '';
     for (const domain of val.split(',')) {
@@ -40,7 +40,7 @@ function buildAcceptedOrigins(): string[] {
 
   // Development localhost fallback — only when no Replit-specific domain is found
   if (origins.size === 2) {
-    // Only xproof.app domains were added — must be local dev
+    // Only provebeforeact.com domains were added — must be local dev
     origins.add('http://localhost:5000');
     origins.add('http://localhost:3000');
   }

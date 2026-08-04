@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to `@xproof/xproof` will be documented here.
+All notable changes to `@prove-before-act/sdk` will be documented here.
 
 ## [0.1.11] — 2026-07-30
 
@@ -11,21 +11,21 @@ All notable changes to `@xproof/xproof` will be documented here.
 
 ### Changed
 
-- **User-Agent** header updated to `xproof-js/0.1.11`.
+- **User-Agent** header updated to `Prove Before Act-js/0.1.11`.
 
 ## [0.1.10] — 2026-06-19
 
 ### Changed
 
 - **Flat pricing** — Version bump to surface corrected pricing on npm. Single rate of **$0.01 per proof**, no tiers, no volume discounts, no promo. Prepaid packs: 100 proofs/$1, 1,000/$10, 10,000/$100 USDC. Use `client.getPricing()` to retrieve the live rate at runtime.
-- **User-Agent** header updated to `xproof-js/0.1.10`.
+- **User-Agent** header updated to `Prove Before Act-js/0.1.10`.
 
 ### How to upgrade
 
 No breaking changes.
 
 ```bash
-npm install @xproof/xproof@0.1.10
+npm install @prove-before-act/sdk@0.1.10
 ```
 
 ---
@@ -35,14 +35,14 @@ npm install @xproof/xproof@0.1.10
 ### Changed
 
 - **Flat pricing** — Single rate of **$0.01 per proof**, no tiers, no promo. Prepaid packs: 100/$1, 1,000/$10, 10,000/$100 USDC. The SDK reads pricing dynamically via `client.getPricing()` — no code change required.
-- **User-Agent** header updated to `xproof-js/0.1.9`.
+- **User-Agent** header updated to `Prove Before Act-js/0.1.9`.
 
 ### How to upgrade
 
 No breaking changes.
 
 ```bash
-npm install @xproof/xproof@0.1.9
+npm install @prove-before-act/sdk@0.1.9
 ```
 
 ---
@@ -71,14 +71,14 @@ npm install @xproof/xproof@0.1.9
 ### Changed
 
 - `ConfidenceOptions` extended with optional `timing?: TimingBreakdown`
-- `User-Agent` header updated to `xproof-js/0.1.8`
+- `User-Agent` header updated to `Prove Before Act-js/0.1.8`
 
 ### How to upgrade
 
 No breaking changes. All new fields are optional.
 
 ```bash
-npm install @xproof/xproof@0.1.8
+npm install @prove-before-act/sdk@0.1.8
 ```
 
 ---

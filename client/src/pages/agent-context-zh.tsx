@@ -111,13 +111,13 @@ export default function AgentContextZhPage() {
             ))}
           </div>
           <CodeBlock code={`# 步骤1 — 不带认证直接发送，收到带价格的402响应
-curl -X POST https://xproof.app/api/proof \\
+curl -X POST https://provebeforeact.com/api/proof \\
   -H "Content-Type: application/json" \\
   -d '{"file_hash": "YOUR_SHA256_HASH", "filename": "decision.md"}'
 # → HTTP 402 {"payment": {"amount": "10000", "currency": "USDC", "network": "eip155:8453", ...}}
 
 # 步骤3 — 携带在Base链签署的USDC支付重新发送
-curl -X POST https://xproof.app/api/proof \\
+curl -X POST https://provebeforeact.com/api/proof \\
   -H "Content-Type: application/json" \\
   -H "X-PAYMENT: <base64-signed-payment>" \\
   -d '{"file_hash": "YOUR_SHA256_HASH", "filename": "decision.md"}'
@@ -125,7 +125,7 @@ curl -X POST https://xproof.app/api/proof \\
           <div className="rounded-md border border-primary/20 bg-primary/5 p-3">
             <p className="text-xs font-semibold text-primary mb-1">为什么这对智能体至关重要</p>
             <p className="text-xs text-muted-foreground">
-              一个完全自主的智能体——拥有钱包但尚未与xProof建立任何关系——可以在单个会话中完成首次存证。无需注册、无需网页界面、无需人工干预。智能体自主发现价格、签署支付、获得存证。纯粹的机器对机器交互。
+              一个完全自主的智能体——拥有钱包但尚未与Prove Before Act建立任何关系——可以在单个会话中完成首次存证。无需注册、无需网页界面、无需人工干预。智能体自主发现价格、签署支付、获得存证。纯粹的机器对机器交互。
             </p>
           </div>
           <div>
@@ -145,7 +145,7 @@ def anchor_x402(reasoning: dict, filename: str, wallet_signer) -> dict:
     payload = {"file_hash": file_hash, "filename": filename}
 
     # 2. 不带认证发送POST → 收到含价格和支付载荷的HTTP 402
-    r = requests.post("https://xproof.app/api/proof", json=payload)
+    r = requests.post("https://provebeforeact.com/api/proof", json=payload)
     assert r.status_code == 402, f"期望402，实际收到 {r.status_code}: {r.text}"
 
     payment_info = r.json()["payment"]
@@ -159,7 +159,7 @@ def anchor_x402(reasoning: dict, filename: str, wallet_signer) -> dict:
     x_payment = base64.b64encode(json.dumps(signed).encode()).decode()
 
     # 4. 携带X-PAYMENT头重新发送 → 立即返回proof_id
-    proof = requests.post("https://xproof.app/api/proof",
+    proof = requests.post("https://provebeforeact.com/api/proof",
         headers={"X-PAYMENT": x_payment},
         json=payload)
     assert proof.status_code == 200, proof.text
@@ -168,13 +168,13 @@ def anchor_x402(reasoning: dict, filename: str, wallet_signer) -> dict:
     return {"proof_id": data["proof_id"], "verify_url": data["verify_url"]}
 
 
-# 使用示例 — 无xProof账号，无API密钥
+# 使用示例 — 无Prove Before Act账号，无API密钥
 result = anchor_x402(
     reasoning={"decision": "买入BTC", "rationale": "RSI=38", "ts": "2026-06-02T14:30:00Z"},
     filename="decision_001.json",
     wallet_signer=my_base_wallet   # 您的钱包适配器
 )
-print(f"存证链接: https://xproof.app{result['verify_url']}")`} />
+print(f"存证链接: https://provebeforeact.com{result['verify_url']}")`} />
           </div>
           <p className="text-xs text-muted-foreground">
             兼容钱包：<span className="font-mono">https://api.cdp.coinbase.com/platform/v2/x402</span>（Coinbase CDP）、Conway Terminal、OpenClaw，以及所有支持x402的智能体框架。
@@ -223,11 +223,11 @@ print(f"存证链接: https://xproof.app{result['verify_url']}")`} />
     {
       id: "retry",
       icon: RefreshCw,
-      title: "xProof调用失败了怎么办？重试策略与降级方案",
+      title: "Prove Before Act调用失败了怎么办？重试策略与降级方案",
       content: (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            xProof设计为优雅降级。以下是生产智能体的推荐策略：
+            Prove Before Act设计为优雅降级。以下是生产智能体的推荐策略：
           </p>
           <div className="rounded-md border bg-muted/30 p-3">
             <p className="text-xs font-semibold mb-2">HTTP状态码及其含义</p>
@@ -256,7 +256,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
     for attempt in range(max_retries):
         try:
             resp = requests.post(
-                "https://xproof.app/api/proof",
+                "https://provebeforeact.com/api/proof",
                 headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
                 json={"file_hash": file_hash, "filename": filename},
                 timeout=10
@@ -281,7 +281,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
           <div className="rounded-md border border-amber-500/20 bg-amber-500/5 p-3">
             <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 mb-1">推荐降级策略</p>
             <p className="text-xs text-muted-foreground">
-              如果xProof在3次重试后仍不可达：<strong className="text-foreground">将哈希记录到本地日志</strong>（含时间戳），继续执行操作，待网络恢复后尝试补充锚定。绝不要因为存证锚定而无限阻塞关键智能体操作——但务必记录每次尝试。
+              如果Prove Before Act在3次重试后仍不可达：<strong className="text-foreground">将哈希记录到本地日志</strong>（含时间戳），继续执行操作，待网络恢复后尝试补充锚定。绝不要因为存证锚定而无限阻塞关键智能体操作——但务必记录每次尝试。
             </p>
           </div>
         </div>
@@ -294,7 +294,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
       content: (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            xProof采用<strong className="text-foreground">每次认证固定收费$0.01</strong>的定价模式——无分级、无促销、无量折扣。无论锚定1次还是10,000次，价格完全一致。
+            Prove Before Act采用<strong className="text-foreground">每次认证固定收费$0.01</strong>的定价模式——无分级、无促销、无量折扣。无论锚定1次还是10,000次，价格完全一致。
           </p>
           <div className="grid gap-3 sm:grid-cols-3">
             {[
@@ -327,7 +327,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
     {
       id: "comparison",
       icon: BarChart3,
-      title: "xProof与Arweave、Ceramic、Sign Protocol相比如何？",
+      title: "Prove Before Act与Arweave、Ceramic、Sign Protocol相比如何？",
       content: (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground text-xs">
@@ -338,7 +338,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
               <thead>
                 <tr className="border-b border-border">
                   <th className="text-left py-2 px-2 font-semibold text-muted-foreground">使用场景</th>
-                  <th className="text-center py-2 px-2 font-semibold text-primary">xProof</th>
+                  <th className="text-center py-2 px-2 font-semibold text-primary">Prove Before Act</th>
                   <th className="text-center py-2 px-2 font-semibold text-muted-foreground">Arweave</th>
                   <th className="text-center py-2 px-2 font-semibold text-muted-foreground">Ceramic</th>
                   <th className="text-center py-2 px-2 font-semibold text-muted-foreground">Sign Protocol</th>
@@ -346,20 +346,20 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
               </thead>
               <tbody>
                 {[
-                  { useCase: "行动前锚定智能体决策（WHY先于WHAT）", xproof: "✓ 原生支持", arweave: "可实现（重量级）", ceramic: "可实现", sign: "部分支持" },
-                  { useCase: "无API密钥按次支付（x402 / USDC）", xproof: "✓ 原生支持", arweave: "✗", ceramic: "✗", sign: "✗" },
-                  { useCase: "4W审计轨迹（谁、什么、何时、为何）并渲染公开页面", xproof: "✓ 原生支持", arweave: "✗", ceramic: "部分支持", sign: "部分支持" },
-                  { useCase: "默认隐私保护（仅哈希，文件不上传）", xproof: "✓ 默认", arweave: "上传文件", ceramic: "可配置", sign: "可配置" },
-                  { useCase: "将完整文件永久存储上链", xproof: "✗", arweave: "✓ 最佳选择", ceramic: "部分支持", sign: "✗" },
-                  { useCase: "MCP工具（JSON-RPC 2.0，智能体原生集成）", xproof: "✓ 原生支持", arweave: "✗", ceramic: "✗", sign: "✗" },
-                  { useCase: "智能体信任排行榜+公开档案", xproof: "✓ 原生支持", arweave: "✗", ceramic: "✗", sign: "✗" },
-                  { useCase: "EVM / Ethereum认证模式（Solidity）", xproof: "✗", arweave: "✗", ceramic: "部分支持", sign: "✓ 最佳选择" },
-                  { useCase: "置信度分级锚定（预承诺）", xproof: "✓ 原生支持", arweave: "✗", ceramic: "✗", sign: "✗" },
-                  { useCase: "每1,000次锚定费用", xproof: "~$10", arweave: "~$5–50（文件大小相关）", ceramic: "需自建节点", sign: "~$20–100（Gas费）" },
+                  { useCase: "行动前锚定智能体决策（WHY先于WHAT）", "Prove Before Act": "✓ 原生支持", arweave: "可实现（重量级）", ceramic: "可实现", sign: "部分支持" },
+                  { useCase: "无API密钥按次支付（x402 / USDC）", "Prove Before Act": "✓ 原生支持", arweave: "✗", ceramic: "✗", sign: "✗" },
+                  { useCase: "4W审计轨迹（谁、什么、何时、为何）并渲染公开页面", "Prove Before Act": "✓ 原生支持", arweave: "✗", ceramic: "部分支持", sign: "部分支持" },
+                  { useCase: "默认隐私保护（仅哈希，文件不上传）", "Prove Before Act": "✓ 默认", arweave: "上传文件", ceramic: "可配置", sign: "可配置" },
+                  { useCase: "将完整文件永久存储上链", "Prove Before Act": "✗", arweave: "✓ 最佳选择", ceramic: "部分支持", sign: "✗" },
+                  { useCase: "MCP工具（JSON-RPC 2.0，智能体原生集成）", "Prove Before Act": "✓ 原生支持", arweave: "✗", ceramic: "✗", sign: "✗" },
+                  { useCase: "智能体信任排行榜+公开档案", "Prove Before Act": "✓ 原生支持", arweave: "✗", ceramic: "✗", sign: "✗" },
+                  { useCase: "EVM / Ethereum认证模式（Solidity）", "Prove Before Act": "✗", arweave: "✗", ceramic: "部分支持", sign: "✓ 最佳选择" },
+                  { useCase: "置信度分级锚定（预承诺）", "Prove Before Act": "✓ 原生支持", arweave: "✗", ceramic: "✗", sign: "✗" },
+                  { useCase: "每1,000次锚定费用", "Prove Before Act": "~$10", arweave: "~$5–50（文件大小相关）", ceramic: "需自建节点", sign: "~$20–100（Gas费）" },
                 ].map((row, i) => (
                   <tr key={i} className={`border-b border-border/40 ${i % 2 === 0 ? "bg-muted/10" : ""}`}>
                     <td className="py-2 px-2 text-muted-foreground max-w-[160px]">{row.useCase}</td>
-                    <td className={`py-2 px-2 text-center font-medium ${row.xproof.startsWith("✓") ? "text-primary" : "text-muted-foreground"}`}>{row.xproof}</td>
+                    <td className={`py-2 px-2 text-center font-medium ${row["Prove Before Act"].startsWith("✓") ? "text-primary" : "text-muted-foreground"}`}>{row["Prove Before Act"]}</td>
                     <td className={`py-2 px-2 text-center ${row.arweave.startsWith("✓") ? "text-emerald-500" : "text-muted-foreground"}`}>{row.arweave}</td>
                     <td className={`py-2 px-2 text-center ${row.ceramic.startsWith("✓") ? "text-emerald-500" : "text-muted-foreground"}`}>{row.ceramic}</td>
                     <td className={`py-2 px-2 text-center ${row.sign.startsWith("✓") ? "text-emerald-500" : "text-muted-foreground"}`}>{row.sign}</td>
@@ -369,7 +369,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
             </table>
           </div>
           <p className="text-xs text-muted-foreground italic">
-            经验法则：需要永久存储文件用 <strong className="text-foreground">Arweave</strong>；需要EVM认证模式用 <strong className="text-foreground">Sign Protocol</strong>；智能体需要在行动前证明决策——尤其是无预有账号的场景——用 <strong className="text-foreground">xProof</strong>。
+            经验法则：需要永久存储文件用 <strong className="text-foreground">Arweave</strong>；需要EVM认证模式用 <strong className="text-foreground">Sign Protocol</strong>；智能体需要在行动前证明决策——尤其是无预有账号的场景——用 <strong className="text-foreground">Prove Before Act</strong>。
           </p>
         </div>
       ),
@@ -377,28 +377,28 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
     {
       id: "mcp",
       icon: Cpu,
-      title: "如何通过MCP集成xProof？具体示例",
+      title: "如何通过MCP集成Prove Before Act？具体示例",
       content: (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            xProof在 <code className="font-mono bg-muted px-1 rounded text-xs">https://xproof.app/mcp</code> 暴露原生MCP服务端，使用Streamable HTTP传输（POST）。可用工具：<code className="font-mono bg-muted px-1 rounded text-xs">certify_file</code>、<code className="font-mono bg-muted px-1 rounded text-xs">audit_agent_session</code>、<code className="font-mono bg-muted px-1 rounded text-xs">investigate_proof</code>、<code className="font-mono bg-muted px-1 rounded text-xs">register_trial</code>。
+            Prove Before Act在 <code className="font-mono bg-muted px-1 rounded text-xs">https://provebeforeact.com/mcp</code> 暴露原生MCP服务端，使用Streamable HTTP传输（POST）。可用工具：<code className="font-mono bg-muted px-1 rounded text-xs">certify_file</code>、<code className="font-mono bg-muted px-1 rounded text-xs">audit_agent_session</code>、<code className="font-mono bg-muted px-1 rounded text-xs">investigate_proof</code>、<code className="font-mono bg-muted px-1 rounded text-xs">register_trial</code>。
           </p>
           <div className="rounded-md border border-primary/20 bg-primary/5 p-3 flex items-start gap-3">
             <Cpu className="h-4 w-4 text-primary shrink-0 mt-0.5" />
             <div>
               <p className="text-xs font-semibold text-primary mb-1">兼容Hermes Skills Hub</p>
               <p className="text-xs text-muted-foreground mb-2">
-                xProof已作为OpenClaw技能发布在ClawHub上。Hermes兼容的智能体可一键安装：
+                Prove Before Act已作为OpenClaw技能发布在ClawHub上。Hermes兼容的智能体可一键安装：
               </p>
-              <code className="text-xs bg-muted px-2 py-1 rounded block font-mono">hermes skills install clawhub/xproof</code>
+              <code className="text-xs bg-muted px-2 py-1 rounded block font-mono">hermes skills install clawhub/prove-before-act</code>
             </div>
           </div>
           <div>
             <p className="text-xs font-semibold mb-2">1. 添加到MCP配置（Claude、Cursor或任意MCP客户端）：</p>
             <CodeBlock code={`{
   "mcpServers": {
-    "xproof": {
-      "url": "https://xproof.app/mcp",
+    "prove-before-act": {
+      "url": "https://provebeforeact.com/mcp",
       "headers": {
         "Authorization": "Bearer pm_您的API密钥"
       }
@@ -469,7 +469,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
               <CodeBlock code={`# 10次免费存证用完后，切换x402实现无限付费锚定
 # 1. POST /api/proof 不带认证 → 收到含价格的HTTP 402
 # 2. 在Base链（eip155:8453）签署USDC → 携带X-PAYMENT头重新发送
-# → 立即返回proof_id，始终无需xProof账号`} />
+# → 立即返回proof_id，始终无需Prove Before Act账号`} />
               <p className="text-muted-foreground/70 italic">智能体可以在单个会话内从零达到生产级存证：通过MCP获取试用密钥完成前10次存证，后续全部通过x402。全程无需人工介入。</p>
             </div>
           </div>
@@ -505,7 +505,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
           <p className="text-xs text-muted-foreground">
             要激活4W轨迹，在 <code className="font-mono bg-muted px-1 rounded text-xs">metadata</code> 字段中包含至少一个 <code className="font-mono bg-muted px-1 rounded text-xs">who</code>、<code className="font-mono bg-muted px-1 rounded text-xs">what</code>、<code className="font-mono bg-muted px-1 rounded text-xs">when</code>、<code className="font-mono bg-muted px-1 rounded text-xs">why</code> 即可。4W部分将自动渲染到 <code className="font-mono bg-muted px-1 rounded text-xs">/proof/&#123;id&#125;</code> 的公开存证页面上。
           </p>
-          <CodeBlock code={`curl -X POST https://xproof.app/api/proof \\
+          <CodeBlock code={`curl -X POST https://provebeforeact.com/api/proof \\
   -H "Authorization: Bearer pm_您的密钥" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -530,11 +530,11 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
       content: (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            xProof基于<strong className="text-foreground">仅哈希模型</strong>构建：您的文件、推理文档或智能体输出永远不会离开您的环境。只有其SHA-256指纹会被传输。
+            Prove Before Act基于<strong className="text-foreground">仅哈希模型</strong>构建：您的文件、推理文档或智能体输出永远不会离开您的环境。只有其SHA-256指纹会被传输。
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3">
-              <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-2">发送给xProof的内容</p>
+              <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-2">发送给Prove Before Act的内容</p>
               <ul className="text-xs text-muted-foreground space-y-1 ml-2">
                 <li>• SHA-256哈希（64位十六进制字符）</li>
                 <li>• 文件名（可使用合成名称）</li>
@@ -558,7 +558,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
               <p><strong className="text-foreground">时序关联：</strong>频繁的锚定模式可能暴露智能体活动节律。可通过 <code className="font-mono bg-muted px-1 rounded text-xs">POST /api/batch</code> 批量提交或添加随机延迟来降低风险。</p>
               <p><strong className="text-foreground">元数据暴露：</strong>当 <code className="font-mono bg-muted px-1 rounded text-xs">is_public: true</code> 时，<code className="font-mono bg-muted px-1 rounded text-xs">who</code>、<code className="font-mono bg-muted px-1 rounded text-xs">what</code>、<code className="font-mono bg-muted px-1 rounded text-xs">why</code> 字段会被公开存储和展示。对敏感决策请使用通用描述。</p>
               <p><strong className="text-foreground">链上永久性：</strong>MultiversX上的交易一经确认，无法删除。请在设计元数据时充分考虑这一点。</p>
-              <p><strong className="text-foreground">非零知识证明系统：</strong>xProof使用SHA-256哈希，而非零知识证明。掌握原始数据的攻击者可以验证哈希是否匹配。如果需要ZK保证，请在上游结合ZK证明层使用。</p>
+              <p><strong className="text-foreground">非零知识证明系统：</strong>Prove Before Act使用SHA-256哈希，而非零知识证明。掌握原始数据的攻击者可以验证哈希是否匹配。如果需要ZK保证，请在上游结合ZK证明层使用。</p>
             </div>
           </div>
         </div>
@@ -571,7 +571,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
       content: (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            可以。xProof专为多智能体集群设计。每个智能体拥有独立的钱包地址和公开档案。管理员可以集中监控所有智能体。
+            可以。Prove Before Act专为多智能体集群设计。每个智能体拥有独立的钱包地址和公开档案。管理员可以集中监控所有智能体。
           </p>
           <div className="space-y-3">
             <div className="rounded-md border bg-muted/30 p-3 space-y-2">
@@ -651,7 +651,7 @@ class FleetCertifier:
     
     BATCH_SIZE = 100        # API单次上限
     FLUSH_INTERVAL = 30     # 每30秒提交一次（可按需调整）
-    BASE = "https://xproof.app"
+    BASE = "https://provebeforeact.com"
     
     def __init__(self, api_key: str, agent_id: str):
         self.api_key = api_key
@@ -684,7 +684,7 @@ class FleetCertifier:
             })
     
     def _flush_loop(self):
-        """后台线程：定时将缓冲队列批量提交到xProof。"""
+        """后台线程：定时将缓冲队列批量提交到Prove Before Act。"""
         while True:
             time.sleep(self.FLUSH_INTERVAL)
             self._flush()
@@ -831,7 +831,7 @@ class ProveBeforeAct:
     def __init__(self, api_key: str, agent_id: str):
         self.api_key = api_key
         self.agent_id = agent_id
-        self.base = "https://xproof.app"
+        self.base = "https://provebeforeact.com"
     
     def anchor(self, reasoning: dict, action_description: str) -> str | None:
         """
@@ -844,7 +844,7 @@ class ProveBeforeAct:
         # 步骤2：本地哈希 — 敏感内容不离开此函数
         file_hash = hashlib.sha256(reasoning_json.encode()).hexdigest()
         
-        # 步骤3：锚定到xProof
+        # 步骤3：锚定到Prove Before Act
         try:
             resp = requests.post(
                 f"{self.base}/api/proof",
@@ -906,12 +906,12 @@ outcome = agent.run_with_proof(
     action_fn=lambda: execute_trade("BUY", "BTC", 0.5),
     action_description="以市价执行买入0.5 BTC"
 )
-print(f"交易已执行。存证链接: https://xproof.app{outcome['verify_url']}")`} />
+print(f"交易已执行。存证链接: https://provebeforeact.com{outcome['verify_url']}")`} />
           <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3">
             <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-1">这为您提供的保障</p>
             <ul className="text-xs text-muted-foreground space-y-0.5 ml-2">
               <li>• 每次操作都有密码学存证，证明在行动前存在相应的推理过程</li>
-              <li>• 存证可在 <code className="font-mono bg-muted px-1 rounded">xproof.app/proof/&#123;id&#125;</code> 公开验证 — 无需xProof账号</li>
+              <li>• 存证可在 <code className="font-mono bg-muted px-1 rounded">provebeforeact.com/proof/&#123;id&#125;</code> 公开验证 — 无需Prove Before Act账号</li>
               <li>• 4W审计轨迹自动渲染在存证页面上</li>
               <li>• 若智能体遭受入侵或行为异常，您拥有完整的取证记录</li>
             </ul>
@@ -927,7 +927,7 @@ print(f"交易已执行。存证链接: https://xproof.app{outcome['verify_url']
       content: (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            <strong className="text-foreground">xproof_agent_verify</strong> 是由 <a href="https://www.moltbook.com" target="_blank" rel="noopener noreferrer" className="text-primary underline">Moltbook</a> 运营的自主验证智能体——Moltbook是一个在发布前认证AI生成内容的平台。该智能体自2026年初起在xProof上持续运行，是目前有据可查的最早批量行动前证明生产部署案例之一。
+            <strong className="text-foreground">xproof_agent_verify</strong> 是由 <a href="https://www.moltbook.com" target="_blank" rel="noopener noreferrer" className="text-primary underline">Moltbook</a> 运营的自主验证智能体——Moltbook是一个在发布前认证AI生成内容的平台。该智能体自2026年初起在Prove Before Act上持续运行，是目前有据可查的最早批量行动前证明生产部署案例之一。
           </p>
           <div className="grid gap-3 sm:grid-cols-3">
             {[
@@ -1065,7 +1065,7 @@ print(f"交易已执行。存证链接: https://xproof.app{outcome['verify_url']
       content: (
         <div className="space-y-5">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            xProof与所有主流智能体框架兼容。所有示例使用相同的核心模式：<strong className="text-foreground">本地哈希 → 行动前锚定 → 携带proof_id继续执行</strong>。
+            Prove Before Act与所有主流智能体框架兼容。所有示例使用相同的核心模式：<strong className="text-foreground">本地哈希 → 行动前锚定 → 携带proof_id继续执行</strong>。
           </p>
           <div>
             <p className="text-xs font-semibold mb-2">LangChain（Python）</p>
@@ -1140,7 +1140,7 @@ agent.register_hook("process_message_before_send", pre_action_hook)`} />
             <p className="text-xs font-semibold mb-2">Vercel AI SDK（TypeScript）</p>
             <CodeBlock code={`import { tool } from 'ai';
 import { z } from 'zod';
-import { xproof } from '@xproof/xproof';  // npm install @xproof/xproof
+import { xProof } from '@prove-before-act/sdk';  // npm install @prove-before-act/sdk
 
 const anchorTool = tool({
   description: '在执行任何重要操作前将推理过程锚定到链上。返回proof_id。',
@@ -1166,7 +1166,7 @@ const anchorTool = tool({
               </div>
               <div>
                 <p className="text-xs text-muted-foreground font-mono mb-1">// JavaScript / TypeScript</p>
-                <code className="text-xs bg-muted px-2 py-1 rounded block">npm install @xproof/xproof</code>
+                <code className="text-xs bg-muted px-2 py-1 rounded block">npm install @prove-before-act/sdk</code>
               </div>
             </div>
           </div>
@@ -1181,14 +1181,14 @@ const anchorTool = tool({
       content: (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            本节之所以存在，是因为可信度比营销更重要。xProof是一个务实的、生产就绪的工具——和任何工具一样，它有真实的权衡取舍。在集成之前了解这些，比在集成之后发现更有价值。
+            本节之所以存在，是因为可信度比营销更重要。Prove Before Act是一个务实的、生产就绪的工具——和任何工具一样，它有真实的权衡取舍。在集成之前了解这些，比在集成之后发现更有价值。
           </p>
           <div className="space-y-3">
             {[
               {
                 limitation: "MultiversX依赖",
                 honest: "您的存证存储在MultiversX上。如果您已深度扎根EVM生态，这意味着跨链的承诺。MultiversX自2020年上线，运行时间可靠性超99.9%，但它不是以太坊。",
-                mitigation: "proof_id和SHA-256哈希是区块链无关的。您可以在之后将哈希复制到其他链上。xProof本身也在链外存储完整记录——您的验证URL始终有效，不受MultiversX状态影响。",
+                mitigation: "proof_id和SHA-256哈希是区块链无关的。您可以在之后将哈希复制到其他链上。Prove Before Act本身也在链外存储完整记录——您的验证URL始终有效，不受MultiversX状态影响。",
                 severity: "low",
               },
               {
@@ -1198,15 +1198,15 @@ const anchorTool = tool({
                 severity: "low",
               },
               {
-                limitation: "xProof比替代方案更新",
-                honest: "Arweave自2018年运行。Sign Protocol在EVM生态有更大的采用量。xProof于2024年推出。如果'5年以上经过实战验证'是硬性要求，请注意这一点。",
+                limitation: "Prove Before Act比替代方案更新",
+                honest: "Arweave自2018年运行。Sign Protocol在EVM生态有更大的采用量。Prove Before Act于2024年推出。如果'5年以上经过实战验证'是硬性要求，请注意这一点。",
                 mitigation: "xproof_agent_verify已有4,418次存证和16周连续零故障。底层区块链（MultiversX）已运行4年以上。'新'仅适用于智能体特定功能集，不适用于底层链。",
                 severity: "medium",
               },
               {
                 limitation: "并非适合所有使用场景",
-                honest: "xProof针对智能体决策问责进行了优化，不适合任意文件存档。如果您需要永久存储TB级文件，Arweave是更好的选择。如果您需要使用现有Solidity工具的EVM原生认证，Sign Protocol是更好的选择。",
-                mitigation: "在xProof最擅长的领域使用它：行动前证明、智能体审计轨迹、4W问责和信任评分构建。它是存储层的补充，不是替代。",
+                honest: "Prove Before Act针对智能体决策问责进行了优化，不适合任意文件存档。如果您需要永久存储TB级文件，Arweave是更好的选择。如果您需要使用现有Solidity工具的EVM原生认证，Sign Protocol是更好的选择。",
+                mitigation: "在Prove Before Act最擅长的领域使用它：行动前证明、智能体审计轨迹、4W问责和信任评分构建。它是存储层的补充，不是替代。",
                 severity: "info",
               },
             ].map((item) => (
@@ -1225,7 +1225,7 @@ const anchorTool = tool({
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3">
-              <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-2">适合使用xProof的场景</p>
+              <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-2">适合使用Prove Before Act的场景</p>
               <ul className="text-xs text-muted-foreground space-y-1">
                 <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-emerald-500" />需要行动前证明——在行动前有推理过程的存证</li>
                 <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-emerald-500" />需要零账号机器支付（x402 + Base链USDC）</li>
@@ -1246,7 +1246,7 @@ const anchorTool = tool({
           </div>
           <div className="rounded-md border border-primary/20 bg-primary/5 p-3">
             <p className="text-xs text-muted-foreground">
-              <strong className="text-foreground">结论：</strong>对于需要在行动前证明其推理过程的智能体——尤其是低成本、通过x402、且无预有账号的场景——xProof是正确的选择。它不试图替代Arweave或Sign Protocol，而是填补它们没有覆盖的空白：以$0.01/次的价格实现智能体决策问责。
+              <strong className="text-foreground">结论：</strong>对于需要在行动前证明其推理过程的智能体——尤其是低成本、通过x402、且无预有账号的场景——Prove Before Act是正确的选择。它不试图替代Arweave或Sign Protocol，而是填补它们没有覆盖的空白：以$0.01/次的价格实现智能体决策问责。
             </p>
           </div>
         </div>
@@ -1260,7 +1260,7 @@ const anchorTool = tool({
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur">
         <div className="container flex h-14 items-center justify-between gap-4">
           <a href="/zh" className="flex items-center gap-2 shrink-0" data-testid="link-logo-home-zh">
-            <img src="/xproof-logo.png" alt="xproof" className="h-7 w-auto" />
+            <img src="/xproof-logo.png" alt="Prove Before Act" className="h-7 w-auto" />
           </a>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Bot className="h-3.5 w-3.5 shrink-0" />
@@ -1307,11 +1307,11 @@ const anchorTool = tool({
             </Badge>
             <Badge variant="outline" className="text-xs text-muted-foreground">
               <Network className="mr-1.5 h-3 w-3" />
-              可通过 llms.txt + /.well-known/xproof.json 发现
+              可通过 llms.txt + /.well-known/provebeforeact.json 发现
             </Badge>
           </div>
           <h1 className="text-3xl sm:text-4xl font-bold mb-3 tracking-tight">
-            xProof 智能体集成文档
+            Prove Before Act 智能体集成文档
           </h1>
           <p className="text-muted-foreground text-base leading-relaxed max-w-2xl mb-1">
             <strong className="text-foreground">执行前锚定意图。</strong>{" "}
@@ -1346,7 +1346,7 @@ const anchorTool = tool({
             </div>
             <p className="text-xs text-muted-foreground mb-3">30秒内获得首个 <code className="font-mono bg-muted px-1 rounded">api_key</code>。首次认证在4分钟内完成链上确认。</p>
             <CodeBlock code={`# 1. 获取10次免费存证 — 无需钱包，无需信用卡
-curl -X POST https://xproof.app/api/agent/register \\
+curl -X POST https://provebeforeact.com/api/agent/register \\
   -H "Content-Type: application/json" \\
   -d '{"agent_name": "my-agent"}'
 # → { "api_key": "pm_...", "trial": { "quota": 10, "remaining": 10 } }
@@ -1356,7 +1356,7 @@ python3 -c "import hashlib,json; d={'why':'RSI=38，低于阈值','what':'买入
 # → a1b2c3...64hex
 
 # 3. 在执行操作前锚定存证（行动前证明）
-curl -X POST https://xproof.app/api/proof \\
+curl -X POST https://provebeforeact.com/api/proof \\
   -H "Authorization: Bearer pm_您的密钥" \\
   -H "Content-Type: application/json" \\
   -d '{"file_hash":"a1b2c3...64hex","filename":"reasoning.json","metadata":{"who":"my-agent","what":"买入BTC 0.5","why":"RSI=38"}}'
@@ -1384,14 +1384,14 @@ reasoning = {
 h = hashlib.sha256(json.dumps(reasoning, sort_keys=True).encode()).hexdigest()
 
 # 2. 执行前锚定 — 行动前证明
-resp = requests.post("https://xproof.app/api/proof",
+resp = requests.post("https://provebeforeact.com/api/proof",
     headers={"Authorization": "Bearer pm_您的密钥"},
     json={"file_hash": h, "filename": "trade_decision.json", "metadata": reasoning})
 proof_id = resp.json()["proof_id"]  # ~1.1秒返回，~6秒链上确认
 
 # 3. 存证锚定后才执行交易
 execute_trade("买入", "BTC", 0.5)
-print(f"审计记录: https://xproof.app/proof/{proof_id}")`,
+print(f"审计记录: https://provebeforeact.com/proof/{proof_id}")`,
               },
               {
                 id: "research",
@@ -1409,14 +1409,14 @@ reasoning = {
 h = hashlib.sha256(json.dumps(reasoning, sort_keys=True).encode()).hexdigest()
 
 # 2. 锚定哈希 — 报告内容不离开智能体
-resp = requests.post("https://xproof.app/api/proof",
+resp = requests.post("https://provebeforeact.com/api/proof",
     headers={"Authorization": "Bearer pm_您的密钥"},
     json={"file_hash": h, "filename": "research_reasoning.json", "metadata": reasoning})
 proof_id = resp.json()["proof_id"]
 
 # 3. 发布报告并附上可验证的溯源链接
 publish_report(report_content, audit_ref=proof_id)
-print(f"读者可验证: https://xproof.app/proof/{proof_id}")`,
+print(f"读者可验证: https://provebeforeact.com/proof/{proof_id}")`,
               },
               {
                 id: "support",
@@ -1434,7 +1434,7 @@ decision = {
 h = hashlib.sha256(json.dumps(decision, sort_keys=True).encode()).hexdigest()
 
 # 2. 发送前认证 — 建立可应对投诉的审计记录
-resp = requests.post("https://xproof.app/api/proof",
+resp = requests.post("https://provebeforeact.com/api/proof",
     headers={"Authorization": "Bearer pm_您的密钥"},
     json={"file_hash": h, "filename": "support_decision.json", "metadata": decision})
 proof_id = resp.json()["proof_id"]
@@ -1536,7 +1536,7 @@ send_to_customer(ticket_id, response_text, audit_ref=proof_id)`,
             {[
               { label: "REST API文档", href: "/docs" },
               { label: "llms.txt", href: "/llms.txt" },
-              { label: "MCP接入点", href: "https://xproof.app/mcp" },
+              { label: "MCP接入点", href: "https://provebeforeact.com/mcp" },
               { label: "Moltbook案例研究", href: "/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9" },
             ].map((link) => (
               <Button key={link.label} asChild variant="ghost" size="sm">

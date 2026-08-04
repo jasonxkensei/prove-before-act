@@ -1,6 +1,6 @@
 # Environment Variables Reference
 
-This document describes every environment variable used by xproof.
+This document describes every environment variable used by Prove Before Act.
 
 ## Database
 

@@ -1,4 +1,4 @@
-# Trading Agent + xProof: Confidence-Level Anchoring
+# Trading Agent + Prove Before Act: Confidence-Level Anchoring
 
 Anchor trading decisions at different confidence thresholds to create a forensic trail that proves real-time reasoning — not post-hoc reconstruction.
 
@@ -16,7 +16,7 @@ All three proofs share the same `decision_id`, forming a verifiable chain on the
 
 ## Why this matters
 
-Without confidence anchoring, an agent could claim it "predicted" a move after the fact. With xProof:
+Without confidence anchoring, an agent could claim it "predicted" a move after the fact. With Prove Before Act:
 
 - Each reasoning step is anchored **before** the next step happens
 - Timestamps are blockchain-verified, not self-reported
@@ -78,7 +78,7 @@ print(trail["is_finalized"])    # True
 ### TypeScript (npm SDK)
 
 ```typescript
-import { XProofClient } from "@xproof/xproof";
+import { XProofClient } from "@prove-before-act/sdk";
 
 const client = new XProofClient({ apiKey: "pm_..." });
 
@@ -108,7 +108,7 @@ console.log(trail.isFinalized); // true
 
 ## Links
 
-- [xproof.app](https://xproof.app)
-- Docs (LLM-readable): [xproof.app/llms.txt](https://xproof.app/llms.txt)
-- [PyPI: xproof](https://pypi.org/project/xproof)
-- [npm: @xproof/xproof](https://www.npmjs.com/package/@xproof/xproof)
+- [provebeforeact.com](https://provebeforeact.com)
+- Docs (LLM-readable): [provebeforeact.com/llms.txt](https://provebeforeact.com/llms.txt)
+- [PyPI: Prove Before Act](https://pypi.org/project/xproof)
+- [npm: @prove-before-act/sdk](https://www.npmjs.com/package/@prove-before-act/sdk)

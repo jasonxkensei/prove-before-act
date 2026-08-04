@@ -11,7 +11,7 @@
       }
     },
     "xproof": {
-      "url": "https://xproof.app/mcp",
+      "url": "https://provebeforeact.com/mcp",
       "headers": {
         "Authorization": "Bearer pm_YOUR_XPROOF_API_KEY"
       }

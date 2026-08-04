@@ -3,18 +3,18 @@ generated = []
 
 [[outputs]]
 id = "R6NawBePX8WEQ-20A29PB"
-uri = "file://xproof-v140-clawhub-upload.zip"
+uri = "file://Prove Before Act-v140-clawhub-upload.zip"
 type = "unspecified"
-title = "xProof v1.4.0 — fichiers propres pour drag-drop Clawhub"
+title = "Prove Before Act v1.4.0 — fichiers propres pour drag-drop Clawhub"
 
 [[outputs]]
 id = "mUo_jH9jFr_TnVZ9hZu9a"
-uri = "file://xproof-v150-clawhub-upload.zip"
+uri = "file://Prove Before Act-v150-clawhub-upload.zip"
 type = "unspecified"
-title = "xProof v1.5.0 — doc complète + Section 0 Free Trial (drag-drop Clawhub)"
+title = "Prove Before Act v1.5.0 — doc complète + Section 0 Free Trial (drag-drop Clawhub)"
 
 [[outputs]]
 id = "dPrHaErY0Nc_SZXRoFYVe"
-uri = "file://xproof-skill-v4.zip"
+uri = "file://Prove Before Act-skill-v4.zip"
 type = "unspecified"
-title = "xproof-skill-v4.zip — 12 fichiers (sans LICENSE)"
+title = "Prove Before Act-skill-v4.zip — 12 fichiers (sans LICENSE)"

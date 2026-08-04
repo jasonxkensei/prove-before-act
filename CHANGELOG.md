@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to xproof will be documented in this file.
+All notable changes to Prove Before Act will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
@@ -14,7 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Dynamic trust badge: `GET /badge/trust/:wallet.svg` (shields.io style) + `GET /badge/trust/:wallet/markdown`.
 - Agent public profile management: `PATCH /api/user/agent-profile` (name, category, description, website, opt-in toggle).
 - Leaderboard link added to site header and footer.
-- Leaderboard documented in `/.well-known/xproof.md`, `/llms.txt`, `/llms-full.txt`, `/learn/proof-of-existence.md`.
+- Leaderboard documented in `/.well-known/provebeforeact.md`, `/llms.txt`, `/llms-full.txt`, `/learn/proof-of-existence.md`.
 - Live use case: **xproof_agent_verify** beta review on Moltbook — proof `f8c3b35d-6ee1-4f76-a92b-1532a008df7b`.
 
 ## [1.0.0] - 2026-02-08
@@ -30,7 +30,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Agent Commerce Protocol (ACP) for programmatic AI agent access.
 - API key management (`pm_` prefixed bearer tokens).
 - AI agent discovery endpoints:
-  - `/.well-known/xproof.md` (specification)
+  - `/.well-known/provebeforeact.md` (specification)
   - `/.well-known/ai-plugin.json` (OpenAI plugin manifest)
   - `/.well-known/mcp.json` (Model Context Protocol manifest)
   - `/.well-known/agent.json` (Agent Protocol manifest)
@@ -40,7 +40,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Genesis certification proof (`/genesis.proof.json`).
 - SEO optimization with `robots.txt` and `sitemap.xml`.
 - Dark mode support.
-- Rebranding from "ProofMint" to "xproof".
+- Rebranding from "ProofMint" to "Prove Before Act".
 
 ### Security
 - Updated `qs` to 6.14.1 (all dependency tree instances via npm overrides).

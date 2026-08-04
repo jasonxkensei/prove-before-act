@@ -53,7 +53,7 @@ export default function CoherencePage() {
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between">
           <a href="/" className="flex items-center gap-2">
-            <img src="/xproof-logo.png" alt="xproof" className="h-8 w-auto" />
+            <img src="/xproof-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
           </a>
           <nav className="hidden md:flex items-center gap-6">
             <a href="/" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
@@ -88,7 +88,7 @@ export default function CoherencePage() {
             <div className="mb-5 flex justify-center">
               <Badge variant="outline" className="text-xs px-3 py-1 gap-1.5">
                 <Play className="h-3 w-3 text-primary" />
-                Coherence Layer · xProof v2
+                Coherence Layer · Prove Before Act v2
               </Badge>
             </div>
 
@@ -106,7 +106,7 @@ export default function CoherencePage() {
             </p>
 
             <p className="mx-auto mb-10 max-w-xl text-base text-muted-foreground">
-              The Coherence Layer is xProof's natural evolution — from "prove what happened" to
+              The Coherence Layer is Prove Before Act's natural evolution — from "prove what happened" to
               "maintain alignment between intent, decision, and result."
             </p>
 
@@ -337,7 +337,7 @@ export default function CoherencePage() {
                   code={`import hashlib, json, requests
 
 API_KEY = "pm_YOUR_KEY"
-BASE = "https://xproof.app"
+BASE = "https://provebeforeact.com"
 
 def prove_before_act(intent: str, context: str, decision: str, agent_id: str):
     """
@@ -397,8 +397,8 @@ what_resp = requests.post(f"{BASE}/api/proof",
         }
     }, timeout=10).json()
 
-print(f"WHY: https://xproof.app/proof/{why_id}")
-print(f"WHAT: https://xproof.app/proof/{what_resp['proof_id']}")`}
+print(f"WHY: https://provebeforeact.com/proof/{why_id}")
+print(f"WHAT: https://provebeforeact.com/proof/{what_resp['proof_id']}")`}
                 />
               </div>
             </div>
@@ -435,7 +435,7 @@ print(f"WHAT: https://xproof.app/proof/{what_resp['proof_id']}")`}
                   {
                     w: "WHAT",
                     question: "What did it produce?",
-                    answer: "certify_file / xProof — output hash anchored AFTER execution",
+                    answer: "certify_file / Prove Before Act — output hash anchored AFTER execution",
                     role: "Proof of existence",
                     highlight: false,
                   },
@@ -474,7 +474,7 @@ print(f"WHAT: https://xproof.app/proof/{what_resp['proof_id']}")`}
                     The Coherence Layer fills the WHY gap
                   </p>
                   <p className="text-sm text-muted-foreground leading-relaxed">
-                    xProof already answered WHAT and WHEN. MX-8004 answers WHO. The Coherence Layer —
+                    Prove Before Act already answered WHAT and WHEN. MX-8004 answers WHO. The Coherence Layer —
                     anchored via <code className="font-mono text-xs bg-muted px-1 rounded">check_coherence</code> —
                     closes the loop by answering WHY. All four W's are now on-chain, independently verifiable,
                     and reconstructible by any auditor.
@@ -536,7 +536,7 @@ print(f"WHAT: https://xproof.app/proof/{what_resp['proof_id']}")`}
                   <strong className="text-foreground not-italic">worthy of trust.</strong>"
                 </p>
                 <cite className="mt-2 block text-xs text-muted-foreground/60">
-                  — xProof Coherence Layer Manifesto
+                  — Prove Before Act Coherence Layer Manifesto
                 </cite>
               </blockquote>
             </div>
@@ -578,7 +578,7 @@ print(f"WHAT: https://xproof.app/proof/{what_resp['proof_id']}")`}
                   </p>
                   <CodeBlock
                     lang="bash"
-                    code={`curl "https://xproof.app/api/fleet/coherence?org=erd1acme"`}
+                    code={`curl "https://provebeforeact.com/api/fleet/coherence?org=erd1acme"`}
                   />
                   <div className="mt-auto pt-4">
                     <Button asChild size="sm">
@@ -662,8 +662,8 @@ print(f"WHAT: https://xproof.app/proof/{what_resp['proof_id']}")`}
               </div>
               <p className="mt-5 text-xs text-muted-foreground">
                 Or explore the full spec at{" "}
-                <a href="/.well-known/xproof.md" className="text-primary hover:underline font-mono">
-                  /.well-known/xproof.md
+                <a href="/.well-known/provebeforeact.md" className="text-primary hover:underline font-mono">
+                  /.well-known/provebeforeact.md
                 </a>
               </p>
             </div>

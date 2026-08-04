@@ -68,13 +68,13 @@ function commonHead(title: string, description: string, canonicalUrl: string, og
 <meta property="og:title" content="${escapeHtml(title)}">
 <meta property="og:description" content="${escapeHtml(description)}">
 <meta property="og:url" content="${escapeHtml(canonicalUrl)}">
-<meta property="og:site_name" content="xproof">
-<meta property="og:image" content="https://xproof.app/og-image.jpg">
+<meta property="og:site_name" content="Prove Before Act">
+<meta property="og:image" content="https://provebeforeact.com/og-image.jpg">
 
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${escapeHtml(title)}">
 <meta name="twitter:description" content="${escapeHtml(description)}">
-<meta name="twitter:image" content="https://xproof.app/og-image.jpg">
+<meta name="twitter:image" content="https://provebeforeact.com/og-image.jpg">
 
 <link rel="icon" href="/favicon-new.png" type="image/png">
 <link rel="icon" href="/favicon.ico" sizes="32x32">
@@ -83,13 +83,13 @@ function commonHead(title: string, description: string, canonicalUrl: string, og
 <meta name="theme-color" content="#10b981">
 
 <meta name="keywords" content="blockchain certification, proof of existence, MultiversX, AI agent, x402, MCP, proof of authorship, timestamp proof, SHA-256, agent commerce">
-<meta name="author" content="xproof">
+<meta name="author" content="Prove Before Act">
 
 <link rel="ai-plugin" href="/.well-known/ai-plugin.json">
 <link rel="openapi" href="/api/acp/openapi.json" type="application/json">
 <meta name="ai:service" content="proof-of-existence">
 <meta name="ai:api" content="/api/acp/products">
-<meta name="ai:spec" content="/.well-known/xproof.md">
+<meta name="ai:spec" content="/.well-known/provebeforeact.md">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -134,14 +134,14 @@ function safeJsonLd(
 
 async function renderHomePage(baseUrl: string): Promise<string> {
   const priceUsd = await getCertificationPriceUsd();
-  const title = "xproof — The on-chain notary for AI agents";
+  const title = "Prove Before Act — The on-chain notary for AI agents";
   const description = `The on-chain notary for AI agents. Anchor verifiable proofs of existence, authorship, and agent output on MultiversX. API-first, x402-compatible, $${priceUsd.toFixed(2)} per proof.`;
 
   return `${commonHead(title, description, baseUrl)}
 <body>
 <header>
   <nav>
-    <a href="${baseUrl}"><strong>xproof</strong></a> |
+    <a href="${baseUrl}"><strong>Prove Before Act</strong></a> |
     <a href="${baseUrl}/agents">For AI Agents</a> |
     <a href="${baseUrl}/certify">Certify</a> |
     <a href="${baseUrl}/docs">API Docs</a>
@@ -158,7 +158,7 @@ async function renderHomePage(baseUrl: string): Promise<string> {
 
   <section>
     <h2>How it works - 3 simple steps</h2>
-    <p>No technical knowledge required. If you can send an email, you can use xproof.</p>
+    <p>No technical knowledge required. If you can send an email, you can use Prove Before Act.</p>
     <ol>
       <li>
         <h3>Upload your file</h3>
@@ -206,7 +206,7 @@ async function renderHomePage(baseUrl: string): Promise<string> {
 </main>
 
 <footer>
-  <p>&copy; ${new Date().getFullYear()} xproof. All rights reserved.</p>
+  <p>&copy; ${new Date().getFullYear()} Prove Before Act. All rights reserved.</p>
   <p>Powered by <a href="https://multiversx.com">MultiversX</a></p>
   <nav>
     <a href="${baseUrl}/agents">For AI Agents</a> |
@@ -220,13 +220,13 @@ async function renderHomePage(baseUrl: string): Promise<string> {
 ${safeJsonLd({
   "@context": "https://schema.org",
   "@type": "Organization",
-  "name": "xproof",
-  "url": "https://xproof.app",
-  "logo": "https://xproof.app/icon-512.png",
+  "name": "Prove Before Act",
+  "url": "https://provebeforeact.com",
+  "logo": "https://provebeforeact.com/icon-512.png",
   "description": description,
   "sameAs": [
     "https://github.com/jasonxkensei/xProof",
-    "https://clawhub.ai/jasonxkensei/xproof"
+    "https://clawhub.ai/jasonxkensei/prove-before-act"
   ],
   "foundingDate": "2025",
   "knowsAbout": ["blockchain certification", "proof of existence", "AI agent trust", "MultiversX", "x402 protocol"]
@@ -237,8 +237,8 @@ ${safeJsonLd({
 ${safeJsonLd({
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
-  "name": "xproof",
-  "url": "https://xproof.app",
+  "name": "Prove Before Act",
+  "url": "https://provebeforeact.com",
   "applicationCategory": "DeveloperApplication",
   "operatingSystem": "Web",
   "description": "Proof and accountability layer for AI agents. Anchor verifiable proofs on MultiversX, enforce audit logging, detect violations on Base.",
@@ -261,11 +261,11 @@ ${safeJsonLd({
     "Public verification page for each proof",
     "Trust scoring and agent leaderboard"
   ],
-  "screenshot": "https://xproof.app/icon-512.png",
+  "screenshot": "https://provebeforeact.com/icon-512.png",
   "author": {
     "@type": "Organization",
-    "name": "xproof",
-    "url": "https://xproof.app"
+    "name": "Prove Before Act",
+    "url": "https://provebeforeact.com"
   }
 }, null, 2)}
 </script>
@@ -277,18 +277,18 @@ ${safeJsonLd({
   "mainEntity": [
     {
       "@type": "Question",
-      "name": "What is xproof?",
+      "name": "What is Prove Before Act?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "xproof is a proof and accountability layer for AI agents. It anchors verifiable proofs of existence, authorship, and timestamp on the MultiversX blockchain. Users and agents submit a SHA-256 hash of their file or decision, which is permanently recorded on-chain as tamper-proof evidence."
+        "text": "Prove Before Act is a proof and accountability layer for AI agents. It anchors verifiable proofs of existence, authorship, and timestamp on the MultiversX blockchain. Users and agents submit a SHA-256 hash of their file or decision, which is permanently recorded on-chain as tamper-proof evidence."
       }
     },
     {
       "@type": "Question",
-      "name": "Is my file uploaded to xproof servers?",
+      "name": "Is my file uploaded to Prove Before Act servers?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "No, never. Your file stays on your device. Only its fingerprint (a unique 64-character SHA-256 hash) is computed locally in your browser and recorded on the blockchain. xproof never sees, stores, or transmits your actual file."
+        "text": "No, never. Your file stays on your device. Only its fingerprint (a unique 64-character SHA-256 hash) is computed locally in your browser and recorded on the blockchain. Prove Before Act never sees, stores, or transmits your actual file."
       }
     },
     {
@@ -301,15 +301,15 @@ ${safeJsonLd({
     },
     {
       "@type": "Question",
-      "name": "What blockchain does xproof use?",
+      "name": "What blockchain does Prove Before Act use?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "xproof anchors proofs on the MultiversX blockchain, a high-performance, eco-friendly European blockchain. Violations and accountability events are recorded on Base (Ethereum L2). This dual-chain architecture separates proof anchoring from enforcement."
+        "text": "Prove Before Act anchors proofs on the MultiversX blockchain, a high-performance, eco-friendly European blockchain. Violations and accountability events are recorded on Base (Ethereum L2). This dual-chain architecture separates proof anchoring from enforcement."
       }
     },
     {
       "@type": "Question",
-      "name": "How do AI agents integrate with xproof?",
+      "name": "How do AI agents integrate with Prove Before Act?",
       "acceptedAnswer": {
         "@type": "Answer",
         "text": "AI agents can integrate via REST API with an API key, Model Context Protocol (MCP) for autonomous decision anchoring, or x402 HTTP-native payments for zero-setup proof creation. The Agent Audit Log Standard enforces pre-execution accountability: agents anchor their reasoning (WHY) before acting (WHAT)."
@@ -328,12 +328,12 @@ ${safeJsonLd({
       "name": "What is the 4W framework?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "The 4W framework (WHO/WHAT/WHEN/WHY) is xproof's Agent Proof Standard for accountability. WHO identifies the agent, WHAT records the action, WHEN timestamps it on-chain, and WHY anchors the reasoning before execution. This creates a complete, verifiable audit trail for autonomous agent decisions."
+        "text": "The 4W framework (WHO/WHAT/WHEN/WHY) is Prove Before Act's Agent Proof Standard for accountability. WHO identifies the agent, WHAT records the action, WHEN timestamps it on-chain, and WHY anchors the reasoning before execution. This creates a complete, verifiable audit trail for autonomous agent decisions."
       }
     },
     {
       "@type": "Question",
-      "name": "What is x402 and how does it work with xproof?",
+      "name": "What is x402 and how does it work with Prove Before Act?",
       "acceptedAnswer": {
         "@type": "Answer",
         "text": "x402 is an HTTP-native payment protocol that uses standard HTTP 402 responses. Agents can pay for and anchor proofs in a single HTTP round-trip using USDC on Base, without needing an account or API key. This enables fully autonomous agent-to-service commerce."
@@ -347,14 +347,14 @@ ${safeJsonLd({
 }
 
 function renderCertifyPage(baseUrl: string): string {
-  const title = "Certify a File - xproof";
+  const title = "Certify a File - Prove Before Act";
   const description = "Certify your digital files on the MultiversX blockchain. Upload any document, image, or code file to create an immutable proof of ownership with SHA-256 hashing.";
 
   return `${commonHead(title, description, `${baseUrl}/certify`)}
 <body>
 <header>
   <nav>
-    <a href="${baseUrl}"><strong>xproof</strong></a>
+    <a href="${baseUrl}"><strong>Prove Before Act</strong></a>
   </nav>
 </header>
 
@@ -377,14 +377,14 @@ function renderCertifyPage(baseUrl: string): string {
 </main>
 
 <footer>
-  <p>&copy; ${new Date().getFullYear()} xproof. Powered by <a href="https://multiversx.com">MultiversX</a></p>
+  <p>&copy; ${new Date().getFullYear()} Prove Before Act. Powered by <a href="https://multiversx.com">MultiversX</a></p>
 </footer>
 </body>
 </html>`;
 }
 
 function renderProofPage(baseUrl: string, cert: any): string {
-  const title = `${cert.fileName} - Blockchain Proof | xproof`;
+  const title = `${cert.fileName} - Blockchain Proof | Prove Before Act`;
   const description = `Blockchain proof for ${cert.fileName}. SHA-256: ${cert.fileHash.substring(0, 16)}... Certified on ${cert.createdAt ? new Date(cert.createdAt).toISOString().split('T')[0] : 'MultiversX blockchain'}. Status: ${cert.blockchainStatus || 'confirmed'}.`;
   const proofUrl = `${baseUrl}/proof/${cert.id}`;
   const certDate = cert.createdAt ? new Date(cert.createdAt).toLocaleString("en-US") : "Unknown";
@@ -393,7 +393,7 @@ function renderProofPage(baseUrl: string, cert: any): string {
 <body>
 <header>
   <nav>
-    <a href="${baseUrl}"><strong>xproof</strong></a>
+    <a href="${baseUrl}"><strong>Prove Before Act</strong></a>
   </nav>
 </header>
 
@@ -427,11 +427,11 @@ function renderProofPage(baseUrl: string, cert: any): string {
     </dl>
   </section>` : ""}
 
-  <p><a href="${baseUrl}">Certify your files on xproof</a></p>
+  <p><a href="${baseUrl}">Certify your files on Prove Before Act</a></p>
 </main>
 
 <footer>
-  <p>&copy; ${new Date().getFullYear()} xproof. Powered by <a href="https://multiversx.com">MultiversX</a></p>
+  <p>&copy; ${new Date().getFullYear()} Prove Before Act. Powered by <a href="https://multiversx.com">MultiversX</a></p>
 </footer>
 
 <script type="application/ld+json">
@@ -445,8 +445,8 @@ ${safeJsonLd({
   "url": proofUrl,
   "publisher": {
     "@type": "Organization",
-    "name": "xproof",
-    "url": "https://xproof.app"
+    "name": "Prove Before Act",
+    "url": "https://provebeforeact.com"
   }
 }, null, 2)}
 </script>
@@ -455,14 +455,14 @@ ${safeJsonLd({
 }
 
 function renderProofNotFound(baseUrl: string): string {
-  const title = "Proof Not Found - xproof";
+  const title = "Proof Not Found - Prove Before Act";
   const description = "The certification proof you are looking for does not exist or is not public.";
 
   return `${commonHead(title, description, baseUrl)}
 <body>
 <header>
   <nav>
-    <a href="${baseUrl}"><strong>xproof</strong></a>
+    <a href="${baseUrl}"><strong>Prove Before Act</strong></a>
   </nav>
 </header>
 
@@ -473,7 +473,7 @@ function renderProofNotFound(baseUrl: string): string {
 </main>
 
 <footer>
-  <p>&copy; ${new Date().getFullYear()} xproof. Powered by <a href="https://multiversx.com">MultiversX</a></p>
+  <p>&copy; ${new Date().getFullYear()} Prove Before Act. Powered by <a href="https://multiversx.com">MultiversX</a></p>
 </footer>
 </body>
 </html>`;
@@ -481,22 +481,22 @@ function renderProofNotFound(baseUrl: string): string {
 
 async function renderAgentsPage(baseUrl: string): Promise<string> {
   const priceUsd = await getCertificationPriceUsd();
-  const title = "MCP + xProof — Prove Before Act for AI Agents";
-  const description = `xproof works everywhere agents work. MCP, x402, ACP, REST. Prove Before Act: anchor reasoning before execution, $${priceUsd.toFixed(2)} per proof, no account needed via x402.`;
+  const title = "MCP + Prove Before Act — Prove Before Act for AI Agents";
+  const description = `Prove Before Act works everywhere agents work. MCP, x402, ACP, REST. Prove Before Act: anchor reasoning before execution, $${priceUsd.toFixed(2)} per proof, no account needed via x402.`;
 
   return `${commonHead(title, description, `${baseUrl}/agents`)}
 <body>
 <header>
   <nav>
-    <a href="${baseUrl}"><strong>xproof</strong></a> |
+    <a href="${baseUrl}"><strong>Prove Before Act</strong></a> |
     <a href="${baseUrl}/agent-context">Agent Context</a> |
     <a href="${baseUrl}/leaderboard">Leaderboard</a>
   </nav>
 </header>
 
 <main>
-  <h1>xproof for AI Agents — Prove Before Act</h1>
-  <p><strong>xproof is the accountability layer for autonomous agents.</strong> Instead of being a black box, your agent becomes transparent, auditable, and verifiable. Anchor your reasoning (WHY) on-chain <em>before</em> executing — then anchor the actual result (WHAT) after. Full 4W audit trail on MultiversX. $${priceUsd.toFixed(2)}/proof. No API key needed via x402.</p>
+  <h1>Prove Before Act for AI Agents — Prove Before Act</h1>
+  <p><strong>Prove Before Act is the accountability layer for autonomous agents.</strong> Instead of being a black box, your agent becomes transparent, auditable, and verifiable. Anchor your reasoning (WHY) on-chain <em>before</em> executing — then anchor the actual result (WHAT) after. Full 4W audit trail on MultiversX. $${priceUsd.toFixed(2)}/proof. No API key needed via x402.</p>
   <p><a href="${baseUrl}/agents/zh">中文版 →</a></p>
 
   <section>
@@ -507,18 +507,18 @@ async function renderAgentsPage(baseUrl: string): Promise<string> {
       <li><strong>Via REST</strong>: <code>POST ${baseUrl}/api/agent/register</code> → <code>{"agent_name":"my-agent"}</code></li>
     </ul>
     <p>2. Add to Claude / Cursor / Codex / OpenClaw:</p>
-    <pre><code>{ "mcpServers": { "xproof": { "url": "${baseUrl}/mcp", "headers": { "Authorization": "Bearer pm_YOUR_KEY" } } } }</code></pre>
+    <pre><code>{ "mcpServers": { "prove-before-act": { "url": "${baseUrl}/mcp", "headers": { "Authorization": "Bearer pm_YOUR_KEY" } } } }</code></pre>
     <p>3. Call <code>audit_agent_session</code> before any action — get a <code>proof_id</code> — execute only after.</p>
     <p><em>Note: always include <code>Accept: application/json, text/event-stream</code> in raw HTTP calls.</em></p>
   </section>
 
   <section>
-    <h2>Why MCP + xProof?</h2>
+    <h2>Why MCP + Prove Before Act?</h2>
     <ul>
       <li><strong>Native tool integration</strong> — Claude, Cursor, Codex, OpenClaw call <code>certify_file</code> or <code>audit_agent_session</code> directly, no custom code needed</li>
       <li><strong>Prove Before Act enforced by the protocol</strong> — <code>audit_agent_session</code> blocks execution until a proof_id is returned</li>
       <li><strong>x402 compatible</strong> — autonomous agents pay $${priceUsd.toFixed(2)}/proof via USDC on Base, no API key, no account, no human in the loop</li>
-      <li><strong>Immutable on-chain trail</strong> — SHA-256 hash anchored on MultiversX, verifiable without xproof</li>
+      <li><strong>Immutable on-chain trail</strong> — SHA-256 hash anchored on MultiversX, verifiable without Prove Before Act</li>
       <li><strong>Free trial</strong> — 10 free proofs, no wallet: call MCP tool <code>register_trial</code> (no auth needed) or <code>POST ${baseUrl}/api/agent/register</code> via REST</li>
     </ul>
   </section>
@@ -608,7 +608,7 @@ resp = requests.post("${baseUrl}/api/batch",
     <h3>SDKs &amp; frameworks</h3>
     <ul>
       <li>Python: <code>pip install xproof</code> — LangChain, CrewAI, AutoGen, LlamaIndex, OpenAI Agents SDK</li>
-      <li>JavaScript: <code>npm install @xproof/xproof</code> — Vercel AI, LangChain JS</li>
+      <li>JavaScript: <code>npm install @prove-before-act/sdk</code> — Vercel AI, LangChain JS</li>
     </ul>
   </section>
 
@@ -616,7 +616,7 @@ resp = requests.post("${baseUrl}/api/batch",
     <h2>Guarantees &amp; links</h2>
     <ul>
       <li>Privacy-first — only SHA-256 hash on-chain, raw content stays local</li>
-      <li>Immutable — anchored on MultiversX, verifiable without xproof</li>
+      <li>Immutable — anchored on MultiversX, verifiable without Prove Before Act</li>
       <li>$${priceUsd.toFixed(2)} flat per proof, no tiers</li>
     </ul>
     <p>
@@ -630,7 +630,7 @@ resp = requests.post("${baseUrl}/api/batch",
 </main>
 
 <footer>
-  <p>&copy; ${new Date().getFullYear()} xproof. Built on <a href="https://multiversx.com">MultiversX</a> | <a href="${baseUrl}/agent-context">Full agent guide</a> | <a href="${baseUrl}/leaderboard">Agent leaderboard</a></p>
+  <p>&copy; ${new Date().getFullYear()} Prove Before Act. Built on <a href="https://multiversx.com">MultiversX</a> | <a href="${baseUrl}/agent-context">Full agent guide</a> | <a href="${baseUrl}/leaderboard">Agent leaderboard</a></p>
 </footer>
 </body>
 </html>`;
@@ -638,14 +638,14 @@ resp = requests.post("${baseUrl}/api/batch",
 
 async function renderAgentsPageZh(baseUrl: string): Promise<string> {
   const priceUsd = await getCertificationPriceUsd();
-  const title = "MCP + xProof — AI 智能体的链上存证与合规审计";
-  const description = `xproof 支持所有主流智能体协议：MCP、x402、ACP、REST。执行前锚定推理（WHY），执行后锚定实际结果（WHAT）。每次存证 $${priceUsd.toFixed(2)}，通过 x402 无需账户即可使用。`;
+  const title = "MCP + Prove Before Act — AI 智能体的链上存证与合规审计";
+  const description = `Prove Before Act 支持所有主流智能体协议：MCP、x402、ACP、REST。执行前锚定推理（WHY），执行后锚定实际结果（WHAT）。每次存证 $${priceUsd.toFixed(2)}，通过 x402 无需账户即可使用。`;
 
   return `${commonHead(title, description, `${baseUrl}/agents/zh`)}
 <body>
 <header>
   <nav>
-    <a href="${baseUrl}"><strong>xproof</strong></a> |
+    <a href="${baseUrl}"><strong>Prove Before Act</strong></a> |
     <a href="${baseUrl}/agent-context/zh">智能体接入指南</a> |
     <a href="${baseUrl}/leaderboard">信任排行榜</a> |
     <a href="${baseUrl}/agents">English</a>
@@ -653,8 +653,8 @@ async function renderAgentsPageZh(baseUrl: string): Promise<string> {
 </header>
 
 <main>
-  <h1>xproof：AI 智能体的链上存证层 — Prove Before Act（先证明，后行动）</h1>
-  <p><strong>xproof 是自主智能体的问责基础设施。</strong>让你的智能体不再是黑箱，而是透明、可审计、可验证的系统。在执行前锚定推理过程（WHY），执行后锚定实际结果（WHAT）。完整的 4W（Who/What/When/Why）审计留痕，基于 MultiversX 区块链。每次存证 $${priceUsd.toFixed(2)}，通过 x402 无需 API key 即可使用。</p>
+  <h1>Prove Before Act：AI 智能体的链上存证层 — Prove Before Act（先证明，后行动）</h1>
+  <p><strong>Prove Before Act 是自主智能体的问责基础设施。</strong>让你的智能体不再是黑箱，而是透明、可审计、可验证的系统。在执行前锚定推理过程（WHY），执行后锚定实际结果（WHAT）。完整的 4W（Who/What/When/Why）审计留痕，基于 MultiversX 区块链。每次存证 $${priceUsd.toFixed(2)}，通过 x402 无需 API key 即可使用。</p>
   <p>适用于合规存证（如《生成式人工智能服务管理暂行办法》）、风控留痕、以及多智能体舰队的审计追溯需求。</p>
 
   <section>
@@ -665,18 +665,18 @@ async function renderAgentsPageZh(baseUrl: string): Promise<string> {
       <li><strong>通过 REST</strong>：<code>POST ${baseUrl}/api/agent/register</code> → <code>{"agent_name":"my-agent"}</code></li>
     </ul>
     <p>2. 添加到 Claude / Cursor / Codex / OpenClaw：</p>
-    <pre><code>{ "mcpServers": { "xproof": { "url": "${baseUrl}/mcp", "headers": { "Authorization": "Bearer pm_YOUR_KEY" } } } }</code></pre>
+    <pre><code>{ "mcpServers": { "prove-before-act": { "url": "${baseUrl}/mcp", "headers": { "Authorization": "Bearer pm_YOUR_KEY" } } } }</code></pre>
     <p>3. 在每次行动前调用 <code>audit_agent_session</code> — 获得 <code>proof_id</code> 后才执行行动。</p>
     <p><em>注意：原始 HTTP 调用必须包含 <code>Accept: application/json, text/event-stream</code>，否则服务器会返回 "Not Acceptable"。</em></p>
   </section>
 
   <section>
-    <h2>为什么选择 MCP + xProof？</h2>
+    <h2>为什么选择 MCP + Prove Before Act？</h2>
     <ul>
       <li><strong>原生工具集成</strong> — Claude、Cursor、Codex、OpenClaw 可直接调用 <code>certify_file</code> 或 <code>audit_agent_session</code>，无需额外开发</li>
       <li><strong>协议层强制 Prove Before Act</strong> — <code>audit_agent_session</code> 会阻塞执行，直到返回 proof_id</li>
       <li><strong>兼容 x402</strong> — 自主智能体通过 Base 链上的 USDC 支付每次 $${priceUsd.toFixed(2)}，无需 API key、无需账户、无需人工介入</li>
-      <li><strong>不可篡改的链上留痕</strong> — SHA-256 哈希锚定在 MultiversX 上，无需依赖 xproof 即可独立验证</li>
+      <li><strong>不可篡改的链上留痕</strong> — SHA-256 哈希锚定在 MultiversX 上，无需依赖 Prove Before Act 即可独立验证</li>
       <li><strong>免费试用</strong> — 10 次免费存证，无需钱包：直接调用 MCP 工具 <code>register_trial</code>（无需认证）或通过 REST <code>POST ${baseUrl}/api/agent/register</code></li>
     </ul>
   </section>
@@ -766,7 +766,7 @@ resp = requests.post("${baseUrl}/api/batch",
     <h3>SDK 与框架</h3>
     <ul>
       <li>Python：<code>pip install xproof</code> — 支持 LangChain、CrewAI、AutoGen、LlamaIndex、OpenAI Agents SDK</li>
-      <li>JavaScript：<code>npm install @xproof/xproof</code> — 支持 Vercel AI、LangChain JS</li>
+      <li>JavaScript：<code>npm install @prove-before-act/sdk</code> — 支持 Vercel AI、LangChain JS</li>
     </ul>
   </section>
 
@@ -774,7 +774,7 @@ resp = requests.post("${baseUrl}/api/batch",
     <h2>保证与相关链接</h2>
     <ul>
       <li>隐私优先 — 仅将 SHA-256 哈希上链，原始内容始终保留在本地</li>
-      <li>不可篡改 — 锚定在 MultiversX 上，无需 xproof 即可独立验证</li>
+      <li>不可篡改 — 锚定在 MultiversX 上，无需 Prove Before Act 即可独立验证</li>
       <li>固定价格 — 每次存证 $${priceUsd.toFixed(2)}，无分级收费</li>
     </ul>
     <p>
@@ -788,7 +788,7 @@ resp = requests.post("${baseUrl}/api/batch",
 </main>
 
 <footer>
-  <p>&copy; ${new Date().getFullYear()} xproof. Built on <a href="https://multiversx.com">MultiversX</a> | <a href="${baseUrl}/agent-context/zh">智能体接入指南</a> | <a href="${baseUrl}/leaderboard">信任排行榜</a></p>
+  <p>&copy; ${new Date().getFullYear()} Prove Before Act. Built on <a href="https://multiversx.com">MultiversX</a> | <a href="${baseUrl}/agent-context/zh">智能体接入指南</a> | <a href="${baseUrl}/leaderboard">信任排行榜</a></p>
 </footer>
 </body>
 </html>`;
@@ -796,14 +796,14 @@ resp = requests.post("${baseUrl}/api/batch",
 
 async function renderAgentContextPage(baseUrl: string): Promise<string> {
   const priceUsd = await getCertificationPriceUsd();
-  const title = "xProof Agent Context — On-chain accountability layer for autonomous agents";
-  const description = "xProof anchors your agent's intent before execution on MultiversX. Prove Before Act: no API key needed via x402, 4W audit trail, MCP native. Free trial: 10 proofs, no wallet.";
+  const title = "Prove Before Act Agent Context — On-chain accountability layer for autonomous agents";
+  const description = "Prove Before Act anchors your agent's intent before execution on MultiversX. Prove Before Act: no API key needed via x402, 4W audit trail, MCP native. Free trial: 10 proofs, no wallet.";
 
   return `${commonHead(title, description, `${baseUrl}/agent-context`)}
 <body>
-<header><nav><a href="${baseUrl}"><strong>xproof</strong></a> | <a href="${baseUrl}/agent-context.md">Machine-readable (.md)</a></nav></header>
+<header><nav><a href="${baseUrl}"><strong>Prove Before Act</strong></a> | <a href="${baseUrl}/agent-context.md">Machine-readable (.md)</a></nav></header>
 <main>
-  <h1>xProof Agent Context</h1>
+  <h1>Prove Before Act Agent Context</h1>
   <p><strong>Anchor intent before execution.</strong> Hash locally → certify on MultiversX → proceed with <code>proof_id</code>. Production-proven: 4,418 proofs, 16-week streak, 100% on-chain. <a href="${baseUrl}/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9">Moltbook case study</a>.</p>
   <p>No API key needed. Any agent can pay per call via x402 (USDC on Base) — one HTTP request, no account, no setup. Discoverable via <a href="${baseUrl}/llms.txt">llms.txt</a> and <a href="${baseUrl}/.well-known/xproof.json">/.well-known/xproof.json</a>.</p>
 
@@ -973,18 +973,18 @@ Resend + X-PAYMENT: &lt;base64-signed-payment&gt; → 200 {"proof_id": "..."}</c
   </section>
 
   <section id="4w-split">
-    <h2>4W Responsibility Split: MX-8004 vs xProof</h2>
+    <h2>4W Responsibility Split: MX-8004 vs Prove Before Act</h2>
     <p>The 4W audit trail is delivered by two complementary systems. Understanding the split is important when building agents that need forensically complete provenance:</p>
     <table>
       <thead><tr><th></th><th>Question</th><th>Provided by</th></tr></thead>
       <tbody>
         <tr><td><strong>WHO</strong></td><td>Which agent or actor made this decision?</td><td><strong>MX-8004</strong> — MultiversX on-chain identity registry; anchors the agent's verified wallet address, DID, and reputation</td></tr>
-        <tr><td><strong>WHAT</strong></td><td>What output or action was certified?</td><td><strong>xProof</strong> — SHA-256 hash of the output, anchored on MultiversX mainnet</td></tr>
-        <tr><td><strong>WHEN</strong></td><td>Immutable timestamp?</td><td><strong>xProof</strong> — MultiversX block finality (~6 s); not a self-reported clock</td></tr>
-        <tr><td><strong>WHY</strong></td><td>What reasoning led to the decision?</td><td><strong>xProof</strong> — <code>action_description</code>, <code>risk_level</code>, and <code>context</code> fields from <code>/api/audit</code></td></tr>
+        <tr><td><strong>WHAT</strong></td><td>What output or action was certified?</td><td><strong>Prove Before Act</strong> — SHA-256 hash of the output, anchored on MultiversX mainnet</td></tr>
+        <tr><td><strong>WHEN</strong></td><td>Immutable timestamp?</td><td><strong>Prove Before Act</strong> — MultiversX block finality (~6 s); not a self-reported clock</td></tr>
+        <tr><td><strong>WHY</strong></td><td>What reasoning led to the decision?</td><td><strong>Prove Before Act</strong> — <code>action_description</code>, <code>risk_level</code>, and <code>context</code> fields from <code>/api/audit</code></td></tr>
       </tbody>
     </table>
-    <p>xProof owns <strong>WHAT / WHEN / WHY</strong> and the causal link that proves reasoning preceded the action. MX-8004 owns <strong>WHO</strong>. Together they form a forensically complete 4W trail.</p>
+    <p>Prove Before Act owns <strong>WHAT / WHEN / WHY</strong> and the causal link that proves reasoning preceded the action. MX-8004 owns <strong>WHO</strong>. Together they form a forensically complete 4W trail.</p>
   </section>
 
   <section id="coherence-layer">
@@ -1103,8 +1103,8 @@ Content-Type: application/json
     <h2>MCP endpoint</h2>
     <p>POST ${baseUrl}/mcp — JSON-RPC 2.0, Streamable HTTP transport.</p>
     <p>Tools: certify_file, audit_agent_session, verify_proof, investigate_proof, register_trial (no auth).</p>
-    <p>Add to Claude/Cursor: {"mcpServers": {"xproof": {"url": "${baseUrl}/mcp", "headers": {"Authorization": "Bearer pm_YOUR_KEY"}}}}</p>
-    <p><strong>Hermes Skills Hub compatible:</strong> xProof is published as an OpenClaw skill on ClawHub. Hermes-compatible agents can install it in one command: <code>hermes skills install clawhub/xproof</code></p>
+    <p>Add to Claude/Cursor: {"mcpServers": {"prove-before-act": {"url": "${baseUrl}/mcp", "headers": {"Authorization": "Bearer pm_YOUR_KEY"}}}}</p>
+    <p><strong>Hermes Skills Hub compatible:</strong> Prove Before Act is published as an OpenClaw skill on ClawHub. Hermes-compatible agents can install it in one command: <code>hermes skills install clawhub/prove-before-act</code></p>
   </section>
 
   <section>
@@ -1126,7 +1126,7 @@ Content-Type: application/json
   <section>
     <h2>Get your API key — 3 ways</h2>
     <p><strong>1. No-account trial (fastest):</strong> POST /api/agent/register → instant pm_ key → 10 free proofs.</p>
-    <p><strong>2. MultiversX wallet (operator flow, most common):</strong> Connect your xPortal wallet on xproof.app/settings → create a pm_ API key → share it with your agent. Your wallet identity is anchored on-chain; the key is scoped, revocable, and tied to your MultiversX address.</p>
+    <p><strong>2. MultiversX wallet (operator flow, most common):</strong> Connect your xPortal wallet on provebeforeact.com/settings → create a pm_ API key → share it with your agent. Your wallet identity is anchored on-chain; the key is scoped, revocable, and tied to your MultiversX address.</p>
     <p><strong>3. MultiversX wallet (autonomous agent flow, advanced):</strong> An agent with its own MultiversX wallet can sign a Native Auth token programmatically using @multiversx/sdk-core, POST it to /api/auth/wallet/sync, then create a pm_ key via /api/keys — no human operator required. Only relevant for agents that hold their own on-chain identity.</p>
     <p><strong>4. x402 (no account, no key):</strong> Any agent with a USDC wallet on Base (eip155:8453) can anchor proofs with no setup — send USDC, get proof.</p>
   </section>
@@ -1155,7 +1155,7 @@ Content-Type: application/json
     </ul>
   </section>
 </main>
-<footer><p>&copy; ${new Date().getFullYear()} xproof. Built on <a href="https://multiversx.com">MultiversX</a></p></footer>
+<footer><p>&copy; ${new Date().getFullYear()} Prove Before Act. Built on <a href="https://multiversx.com">MultiversX</a></p></footer>
 </body></html>`;
 }
 
@@ -1168,20 +1168,20 @@ async function renderLeaderboardPage(baseUrl: string): Promise<string> {
     topAgentNames = result.entries.filter((e) => e.agentName).map((e) => e.agentName as string).slice(0, 5);
   } catch {}
 
-  const title = `Agent Trust Leaderboard — ${agentCount} verified AI agents | xproof`;
+  const title = `Agent Trust Leaderboard — ${agentCount} verified AI agents | Prove Before Act`;
   const topList = topAgentNames.length > 0 ? ` Top agents: ${topAgentNames.join(", ")}.` : "";
   const description = `Public trust registry for AI agents on MultiversX. ${agentCount} agents ranked by on-chain certification history, streaks, and domain attestations.${topList}`;
 
   return `${commonHead(title, description, `${baseUrl}/leaderboard`)}
 <body>
-<header><nav><a href="${baseUrl}"><strong>xproof</strong></a></nav></header>
+<header><nav><a href="${baseUrl}"><strong>Prove Before Act</strong></a></nav></header>
 <main>
   <h1>Agent Trust Leaderboard</h1>
   <p>${agentCount} AI agents ranked by on-chain certification history. Trust scores computed from confirmed certifications, activity streaks, seniority, and domain attestations.</p>
   <p>Trust levels: Newcomer (0-99), Active (100-299), Trusted (300-699), Verified (700+)</p>
   <p><a href="${baseUrl}/settings">Add my agent to the leaderboard</a></p>
 </main>
-<footer><p>&copy; ${new Date().getFullYear()} xproof. Powered by <a href="https://multiversx.com">MultiversX</a></p></footer>
+<footer><p>&copy; ${new Date().getFullYear()} Prove Before Act. Powered by <a href="https://multiversx.com">MultiversX</a></p></footer>
 </body></html>`;
 }
 
@@ -1195,12 +1195,12 @@ async function renderAgentProfilePage(baseUrl: string, walletAddress: string): P
 
     const name = user.agentName || `Agent ${walletAddress.slice(0, 8)}...${walletAddress.slice(-6)}`;
     const cat = user.agentCategory ? ` (${user.agentCategory})` : "";
-    const title = `${name} — ${trust.level} (${trust.score} pts)${cat} | xproof`;
+    const title = `${name} — ${trust.level} (${trust.score} pts)${cat} | Prove Before Act`;
     const desc = user.agentDescription || `${name} is a ${trust.level}-level AI agent with ${trust.certTotal} on-chain certifications and a ${trust.streakWeeks}-week activity streak on MultiversX.`;
 
     return `${commonHead(title, desc, `${baseUrl}/agent/${walletAddress}`, "profile")}
 <body>
-<header><nav><a href="${baseUrl}"><strong>xproof</strong></a></nav></header>
+<header><nav><a href="${baseUrl}"><strong>Prove Before Act</strong></a></nav></header>
 <main>
   <h1>${escapeHtml(name)}</h1>
   <p>Trust level: ${trust.level} (${trust.score} pts)</p>
@@ -1213,7 +1213,7 @@ async function renderAgentProfilePage(baseUrl: string, walletAddress: string): P
   </dl>
   <p><a href="${baseUrl}/leaderboard">View full leaderboard</a></p>
 </main>
-<footer><p>&copy; ${new Date().getFullYear()} xproof. Powered by <a href="https://multiversx.com">MultiversX</a></p></footer>
+<footer><p>&copy; ${new Date().getFullYear()} Prove Before Act. Powered by <a href="https://multiversx.com">MultiversX</a></p></footer>
 
 <script type="application/ld+json">
 ${safeJsonLd({
@@ -1233,13 +1233,13 @@ ${safeJsonLd({
 
 function renderCoherencePage(baseUrl: string): string {
   return commonHead(
-    "Coherence Layer — Prove Before Act | xproof",
+    "Coherence Layer — Prove Before Act | Prove Before Act",
     "Anchor your WHY before acting. check_coherence anchors intent on-chain before every AI decision. Link it to your WHAT proof after execution to produce an auditable coherence score.",
     `${baseUrl}/coherence`,
   ) + `
 <body>
 <main style="font-family:Inter,sans-serif;max-width:860px;margin:0 auto;padding:2rem 1.5rem;color:#111">
-<nav style="margin-bottom:2rem"><a href="${escapeHtml(baseUrl)}" style="color:#10b981;text-decoration:none;font-weight:600">← xproof</a></nav>
+<nav style="margin-bottom:2rem"><a href="${escapeHtml(baseUrl)}" style="color:#10b981;text-decoration:none;font-weight:600">← Prove Before Act</a></nav>
 
 <h1 style="font-size:2rem;font-weight:700;margin-bottom:.5rem">Coherence Layer — Prove Before Act</h1>
 <p style="color:#555;font-size:1.1rem;margin-bottom:2rem">Close the loop between intent and result. Anchor your <strong>WHY</strong> before acting, anchor your <strong>WHAT</strong> after, link the pair to produce a public, on-chain coherence score.</p>
@@ -1305,14 +1305,14 @@ GET ${escapeHtml(baseUrl)}/api/fleet/coherence?fleet=&lt;slug&gt;</code></pre>
 
 function renderFleetPage(baseUrl: string): string {
   return commonHead(
-    "Fleet Coherence — Coherence Artisan View | xproof",
+    "Fleet Coherence — Coherence Artisan View | Prove Before Act",
     "Aggregate WHY→WHAT coherence across a fleet of AI agents. Enter an org wallet prefix or registered fleet slug to see per-agent coherence rates and the fleet-level score.",
     `${baseUrl}/fleet`,
   ) + `
 <body>
 <main style="font-family:Inter,sans-serif;max-width:860px;margin:0 auto;padding:2rem 1.5rem;color:#111">
 <nav style="margin-bottom:2rem">
-  <a href="${escapeHtml(baseUrl)}" style="color:#10b981;text-decoration:none;font-weight:600">← xproof</a>
+  <a href="${escapeHtml(baseUrl)}" style="color:#10b981;text-decoration:none;font-weight:600">← Prove Before Act</a>
   &nbsp;·&nbsp;
   <a href="${escapeHtml(baseUrl)}/coherence" style="color:#10b981;text-decoration:none">Coherence Layer</a>
 </nav>

@@ -1,4 +1,4 @@
-# LangChain + xProof
+# LangChain + Prove Before Act
 
 Certify every LLM call in your LangChain application with a tamper-proof blockchain record.
 
@@ -22,7 +22,7 @@ pip install xproof langchain-core
 from xproof import XProofClient
 from xproof.integrations.langchain import XProofCallbackHandler
 
-client = XProofClient(api_key="pm_...")   # get key at xproof.app
+client = XProofClient(api_key="pm_...")   # get key at provebeforeact.com
 handler = XProofCallbackHandler(client=client, agent_name="my-agent")
 
 # Attach to any LangChain chain or LLM
@@ -51,11 +51,11 @@ No API key required for the demo — it registers a free trial account automatic
 Every certification is publicly verifiable:
 
 ```
-https://xproof.app/verify/<proof_id>
+https://provebeforeact.com/verify/<proof_id>
 ```
 
 ## Links
 
-- [xproof.app](https://xproof.app)
-- Docs (LLM-readable): [xproof.app/llms.txt](https://xproof.app/llms.txt)
-- [PyPI: xproof](https://pypi.org/project/xproof)
+- [provebeforeact.com](https://provebeforeact.com)
+- Docs (LLM-readable): [provebeforeact.com/llms.txt](https://provebeforeact.com/llms.txt)
+- [PyPI: Prove Before Act](https://pypi.org/project/xproof)

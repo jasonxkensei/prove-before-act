@@ -1,12 +1,12 @@
-# xProof API Reference
+# Prove Before Act API Reference
 
-Base URL: `https://xproof.app`
+Base URL: `https://provebeforeact.com`
 
 ## Authentication
 
 API key via Authorization header: `Authorization: Bearer pm_xxx`
 
-Get your key at https://xproof.app (connect wallet > API Keys section).
+Get your key at https://provebeforeact.com (connect wallet > API Keys section).
 
 Alternative: x402 payment protocol (no API key needed). Send request without auth, receive 402 with payment requirements, sign USDC payment on Base, resend with `X-PAYMENT` header.
 
@@ -30,7 +30,7 @@ Certify a single file.
 ```json
 {
   "proof_id": "uuid",
-  "verify_url": "https://xproof.app/proof/uuid",
+  "verify_url": "https://provebeforeact.com/proof/uuid",
   "blockchain": {
     "transaction_hash": "hex...",
     "explorer_url": "https://explorer.multiversx.com/transactions/hex..."

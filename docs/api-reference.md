@@ -1,14 +1,14 @@
-# xproof API Reference
+# Prove Before Act API Reference
 
 ## Base URL
 
-All API endpoints are served from the application root. In production, this is the deployed domain (e.g., `https://xproof.replit.app`). In development, the default is `http://localhost:5000`.
+All API endpoints are served from the application root. In production, this is the deployed domain (e.g., `https://provebeforeact.com`). In development, the default is `http://localhost:5000`.
 
 ---
 
 ## Authentication
 
-xproof uses two authentication mechanisms depending on the context.
+Prove Before Act uses two authentication mechanisms depending on the context.
 
 ### Wallet Authentication (Native Auth)
 
@@ -115,7 +115,7 @@ If `walletAddress` is provided, it must match the address in the Native Auth tok
 **curl example:**
 
 ```bash
-curl -X POST https://xproof.example.com/api/auth/wallet/sync \
+curl -X POST https://provebeforeact.com/api/auth/wallet/sync \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer <native_auth_token>" \
   -d '{"walletAddress": "erd1..."}'
@@ -266,7 +266,7 @@ Create a new file certification record.
 **curl example:**
 
 ```bash
-curl -X POST https://xproof.example.com/api/certifications \
+curl -X POST https://provebeforeact.com/api/certifications \
   -H "Content-Type: application/json" \
   -H "Cookie: connect.sid=<session_cookie>" \
   -d '{
@@ -392,7 +392,7 @@ Get public proof data for a certification. This endpoint is unauthenticated and 
 **curl example:**
 
 ```bash
-curl https://xproof.example.com/api/proof/550e8400-e29b-41d4-a716-446655440000
+curl https://provebeforeact.com/api/proof/550e8400-e29b-41d4-a716-446655440000
 ```
 
 ---
@@ -582,7 +582,7 @@ Start an ACP checkout session. Creates a payment request with a 30-minute expiry
 **curl example:**
 
 ```bash
-curl -X POST https://xproof.example.com/api/acp/checkout \
+curl -X POST https://provebeforeact.com/api/acp/checkout \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer pm_a1b2c3d4e5f6..." \
   -d '{
@@ -625,7 +625,7 @@ Confirm an ACP checkout by providing the EGLD payment transaction hash. The serv
     "file_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "file_name": "report.pdf",
     "transaction_hash": "on-chain-tx-hash",
-    "proof_url": "https://xproof.example.com/proof/uuid"
+    "proof_url": "https://provebeforeact.com/proof/uuid"
   }
 }
 ```
@@ -642,7 +642,7 @@ Confirm an ACP checkout by providing the EGLD payment transaction hash. The serv
 **curl example:**
 
 ```bash
-curl -X POST https://xproof.example.com/api/acp/confirm \
+curl -X POST https://provebeforeact.com/api/acp/confirm \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer pm_a1b2c3d4e5f6..." \
   -d '{
@@ -703,7 +703,7 @@ Health check endpoint for monitoring.
 ```json
 {
   "status": "ok",
-  "service": "xproof",
+  "service": "Prove Before Act",
   "timestamp": "2026-02-01T12:00:00.000Z"
 }
 ```
@@ -790,7 +790,7 @@ Dynamic shields.io-style SVG badge showing the agent's trust level and score. Su
 
 **Auth:** None
 
-**Response:** SVG image (e.g., `xproof | Active (157)`)
+**Response:** SVG image (e.g., `Prove Before Act | Active (157)`)
 
 ---
 
@@ -834,8 +834,8 @@ These endpoints serve machine-readable metadata for AI agent discovery. All are 
 
 | Endpoint | Content-Type | Description |
 |----------|-------------|-------------|
-| `/.well-known/xproof.md` | text/markdown | Full xproof specification document |
-| `/.well-known/proofmint.md` | redirect | Redirects to xproof.md (backward compatibility) |
+| `/.well-known/provebeforeact.md` | text/markdown | Full Prove Before Act specification document |
+| `/.well-known/proofmint.md` | redirect | Redirects to provebeforeact.md (backward compatibility) |
 | `/.well-known/ai-plugin.json` | application/json | OpenAI ChatGPT Plugin manifest |
 | `/.well-known/mcp.json` | application/json | Model Context Protocol manifest |
 | `/.well-known/agent.json` | application/json | Agent Protocol manifest |

@@ -190,10 +190,10 @@ async function executeTask(
 
       const crypto = await import("crypto");
       const requestHash = crypto.createHash("sha256").update(proof).digest("hex");
-      const requestUri = `https://xproof.app/proof/${certificationId}.json`;
-      const responseUri = `https://xproof.app/proof/${certificationId}`;
+      const requestUri = `https://provebeforeact.com/proof/${certificationId}.json`;
+      const responseUri = `https://provebeforeact.com/proof/${certificationId}`;
       const responseHash = crypto.createHash("sha256").update(`verified:${fileHash}`).digest("hex");
-      const certUrl = `https://xproof.app/api/certificates/${certificationId}.pdf`;
+      const certUrl = `https://provebeforeact.com/api/certificates/${certificationId}.pdf`;
 
       if (startStep > 0) {
         logger.info("Resuming job", { component: "tx-queue", jobId, startStep, stepName: VALIDATION_STEPS[startStep] });
@@ -220,7 +220,7 @@ async function executeTask(
       }
 
       if (startStep <= 3) {
-        const txHash = await validationResponse(requestHash, 100, responseUri, responseHash, "xproof-certification");
+        const txHash = await validationResponse(requestHash, 100, responseUri, responseHash, "Prove Before Act-certification");
         logger.info("Step completed", { component: "tx-queue", step: "4/5", action: "validation_response", txHash });
         await updatePayload(taskId, { currentStep: 4 });
       }

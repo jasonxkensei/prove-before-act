@@ -1,4 +1,4 @@
-# xProof + Fetch.ai uAgents
+# Prove Before Act + Fetch.ai uAgents
 
 Anchor every uAgent decision on **MultiversX mainnet** before the action that follows it. Each certification records the 4W audit trail: **Who** acted, **What** was produced, **When** it happened, and **Why**.
 
@@ -6,7 +6,7 @@ Anchor every uAgent decision on **MultiversX mainnet** before the action that fo
 
 uAgents operate autonomously — they send messages, execute trades, and trigger smart contracts without a human in the loop. When a dispute or audit occurs, self-reported logs are not independent evidence.
 
-xProof anchors the **WHY** (trigger + reasoning) on-chain *before* the action, and the **WHAT** (output) *after*. Both proofs share a `decision_id`, creating a verifiable confidence trail no one can retroactively alter.
+Prove Before Act anchors the **WHY** (trigger + reasoning) on-chain *before* the action, and the **WHAT** (output) *after*. Both proofs share a `decision_id`, creating a verifiable confidence trail no one can retroactively alter.
 
 ## Quickstart
 
@@ -21,7 +21,7 @@ from xproof.integrations.fetchai import XProofuAgentMiddleware, xproof_handler, 
 agent = Agent(name="research-agent", seed="your-seed-phrase")
 
 # Create middleware once
-xp = wrap_agent(agent, api_key="pm_...")  # get key at xproof.app
+xp = wrap_agent(agent, api_key="pm_...")  # get key at provebeforeact.com
 
 # Wrap any message handler — zero changes to your logic
 @agent.on_message(model=ResearchQuery)
@@ -81,7 +81,7 @@ what = xp.certify_outgoing(
 python main.py
 ```
 
-No API key needed — the demo uses mocked responses. To certify on-chain for real, replace `XProofClient.register()` with `XProofClient(api_key="pm_...")` obtained from [xproof.app/llms.txt](https://xproof.app/llms.txt).
+No API key needed — the demo uses mocked responses. To certify on-chain for real, replace `XProofClient.register()` with `XProofClient(api_key="pm_...")` obtained from [provebeforeact.com/llms.txt](https://provebeforeact.com/llms.txt).
 
 ## 4W metadata recorded per proof
 
@@ -95,5 +95,5 @@ No API key needed — the demo uses mocked responses. To certify on-chain for re
 ## Links
 
 - SDK: `pip install xproof`
-- Docs (LLM-readable): [xproof.app/llms.txt](https://xproof.app/llms.txt)
-- GitHub: [github.com/jasonxkensei/xproof](https://github.com/jasonxkensei/xproof)
+- Docs (LLM-readable): [provebeforeact.com/llms.txt](https://provebeforeact.com/llms.txt)
+- GitHub: [github.com/jasonxkensei/xProof](https://github.com/jasonxkensei/xProof)

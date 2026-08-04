@@ -1,13 +1,13 @@
 ---
-name: xproof
-description: Certify any agent output on the MultiversX blockchain for proof-of-existence and accountability. Use when the agent produces a report, analysis, research finding, or any output that needs to be independently verifiable. Creates an immutable, timestamped record using the xProof 4W framework (Who, What, When, Why). Requires only curl and sha256sum.
+name: Prove Before Act
+description: Certify any agent output on the MultiversX blockchain for proof-of-existence and accountability. Use when the agent produces a report, analysis, research finding, or any output that needs to be independently verifiable. Creates an immutable, timestamped record using the Prove Before Act 4W framework (Who, What, When, Why). Requires only curl and sha256sum.
 ---
 
-# xProof — Prove Your Work On-Chain
+# Prove Before Act — Prove Your Work On-Chain
 
 ## Overview
 
-This skill certifies agent outputs on the [MultiversX](https://multiversx.com) blockchain using [xProof](https://xproof.app). Every certification creates an immutable, publicly verifiable proof-of-existence — anchored on-chain, not stored by xProof.
+This skill certifies agent outputs on the [MultiversX](https://multiversx.com) blockchain using [Prove Before Act](https://provebeforeact.com). Every certification creates an immutable, publicly verifiable proof-of-existence — anchored on-chain, not stored by Prove Before Act.
 
 Use this skill whenever the agent produces an output that matters: a research report, a data analysis, a recommendation, a decision. The blockchain proof means anyone can verify *what* was produced, *when* it was produced, and *who* produced it — without trusting the agent.
 
@@ -22,17 +22,17 @@ Use this skill whenever the agent produces an output that matters: a research re
 ## How It Works
 
 1. Hash the output content with SHA-256 (the content never leaves the agent)
-2. Submit the hash to the xProof API with 4W metadata
-3. xProof anchors the hash on MultiversX mainnet
+2. Submit the hash to the Prove Before Act API with 4W metadata
+3. Prove Before Act anchors the hash on MultiversX mainnet
 4. A permanent `proof_id` and `transaction_hash` are returned
-5. Anyone can verify the proof independently at `https://xproof.app/proof/<proof_id>`
+5. Anyone can verify the proof independently at `https://provebeforeact.com/proof/<proof_id>`
 
 ## Setup
 
 Get a free API key (10 certifications included):
 
 ```bash
-curl -s -X POST https://xproof.app/api/agent/register \
+curl -s -X POST https://provebeforeact.com/api/agent/register \
   -H "Content-Type: application/json" \
   -d '{"agent_name": "my-deerflow-agent"}' | jq .
 ```
@@ -53,7 +53,7 @@ CONTENT="Q3 revenue analysis: $4.2M, up 15% YoY"
 HASH=$(echo -n "$CONTENT" | sha256sum | cut -d' ' -f1)
 
 # 2. Certify on-chain
-curl -s -X POST https://xproof.app/api/proof \
+curl -s -X POST https://provebeforeact.com/api/proof \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $XPROOF_API_KEY" \
   -d "{
@@ -76,7 +76,7 @@ Response:
   "id": "proof-abc123",
   "fileHash": "a1b2c3...",
   "transactionHash": "0xdeadbeef...",
-  "verifyUrl": "https://xproof.app/proof/proof-abc123",
+  "verifyUrl": "https://provebeforeact.com/proof/proof-abc123",
   "explorerUrl": "https://explorer.multiversx.com/transactions/0xdeadbeef..."
 }
 ```
@@ -113,7 +113,7 @@ handler = XProofCallbackHandler(api_key="pm_...")
 Certify up to 50 outputs in a single API call:
 
 ```bash
-curl -s -X POST https://xproof.app/api/batch \
+curl -s -X POST https://provebeforeact.com/api/batch \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $XPROOF_API_KEY" \
   -d '{
@@ -129,10 +129,10 @@ curl -s -X POST https://xproof.app/api/batch \
 Anyone can verify a proof — no API key needed:
 
 ```bash
-curl -s https://xproof.app/api/proof/<proof_id> | jq .
+curl -s https://provebeforeact.com/api/proof/<proof_id> | jq .
 ```
 
-Or visit: `https://xproof.app/proof/<proof_id>`
+Or visit: `https://provebeforeact.com/proof/<proof_id>`
 
 ## The 4W Framework
 
@@ -152,9 +152,9 @@ Every certification answers four questions:
 
 ## Links
 
-- [xProof website](https://xproof.app)
-- [API documentation](https://xproof.app/docs)
-- [MCP endpoint](https://xproof.app/mcp)
+- [Prove Before Act website](https://provebeforeact.com)
+- [API documentation](https://provebeforeact.com/docs)
+- [MCP endpoint](https://provebeforeact.com/mcp)
 - [Python SDK on PyPI](https://pypi.org/project/xproof/)
-- [npm SDK](https://www.npmjs.com/package/@xproof/xproof)
-- [GitHub](https://github.com/jasonxkensei/xproof)
+- [npm SDK](https://www.npmjs.com/package/@prove-before-act/sdk)
+- [GitHub](https://github.com/jasonxkensei/xProof)

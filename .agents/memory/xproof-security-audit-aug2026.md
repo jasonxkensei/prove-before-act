@@ -1,5 +1,5 @@
 ---
-name: xproof security audit Aug 2026
+name: Prove Before Act security audit Aug 2026
 description: 71-finding audit (rounds 1-3) + 52-finding audit (round 4) — fixed/confirmed status for all findings
 ---
 

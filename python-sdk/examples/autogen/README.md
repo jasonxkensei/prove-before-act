@@ -1,4 +1,4 @@
-# AutoGen + xProof Integration
+# AutoGen + Prove Before Act Integration
 
 Certify every message exchanged between AutoGen agents on-chain with 4W metadata.
 
@@ -11,7 +11,7 @@ pip install xproof[autogen]
 
 ## Quick Start
 
-Register xProof hooks on any `ConversableAgent`. Every sent and received message is automatically certified on MultiversX.
+Register Prove Before Act hooks on any `ConversableAgent`. Every sent and received message is automatically certified on MultiversX.
 
 ```python
 from autogen import ConversableAgent
@@ -51,7 +51,7 @@ hooks.flush()  # send all buffered certifications at once
 
 ## ConversableAgent Subclass
 
-For tighter integration, use `XProofConversableAgent` which extends AutoGen's `ConversableAgent` with xProof hooks built in:
+For tighter integration, use `XProofConversableAgent` which extends AutoGen's `ConversableAgent` with Prove Before Act hooks built in:
 
 ```python
 from xproof.integrations.autogen import XProofConversableAgent

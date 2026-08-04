@@ -1,29 +1,29 @@
-# xProof PR Descriptions — Ready to Paste
+# Prove Before Act PR Descriptions — Ready to Paste
 
 ## PR 1 — bytedance/deer-flow
 
-**Title:** `feat: add xProof blockchain certification skill`
+**Title:** `feat: add Prove Before Act blockchain certification skill`
 
 **Body:**
 
 ---
 
-### Add xProof blockchain certification skill
+### Add Prove Before Act blockchain certification skill
 
 Adds `xproof_certify` as a native DeerFlow skill that certifies agent outputs on the [MultiversX](https://multiversx.com) blockchain — creating immutable, publicly verifiable proofs of work.
 
 #### What it does
 
 1. Agent invokes `xproof_certify` with its output content
-2. The skill hashes the content (SHA-256), attaches 4W metadata (Who, What, When, Why), and submits to the xProof API
-3. xProof anchors the hash on MultiversX mainnet and returns a `proof_id` and `transaction_hash`
+2. The skill hashes the content (SHA-256), attaches 4W metadata (Who, What, When, Why), and submits to the Prove Before Act API
+3. Prove Before Act anchors the hash on MultiversX mainnet and returns a `proof_id` and `transaction_hash`
 4. The proof can be independently verified at any time — no trust in the agent required
 
 #### Why this matters for DeerFlow
 
 DeerFlow agents produce research, analysis, and recommendations that downstream systems rely on. Without a tamper-proof record, there is no way to verify *what* an agent produced, *when* it produced it, or *who* was responsible.
 
-xProof's 4W framework solves this:
+Prove Before Act's 4W framework solves this:
 
 | Field | Meaning |
 |-------|---------|
@@ -50,7 +50,7 @@ xProof's 4W framework solves this:
 
 #### Links
 
-- [xProof](https://xproof.app) · [API docs](https://xproof.app/docs) · [Python SDK](https://pypi.org/project/xproof/) · [GitHub](https://github.com/jasonxkensei/xproof) · [MCP endpoint](https://xproof.app/mcp)
+- [Prove Before Act](https://provebeforeact.com) · [API docs](https://provebeforeact.com/docs) · [Python SDK](https://pypi.org/project/xproof/) · [GitHub](https://github.com/jasonxkensei/xProof) · [MCP endpoint](https://provebeforeact.com/mcp)
 
 ---
 
@@ -58,15 +58,15 @@ xProof's 4W framework solves this:
 
 ## PR 2 — openai/openai-agents-python
 
-**Title:** `feat: add xProof blockchain certification hooks`
+**Title:** `feat: add Prove Before Act blockchain certification hooks`
 
 **Body:**
 
 ---
 
-### Add xProof on-chain certification for OpenAI Agents SDK
+### Add Prove Before Act on-chain certification for OpenAI Agents SDK
 
-Adds two integration classes that automatically certify agent and tool outputs on the [MultiversX](https://multiversx.com) blockchain using the xProof 4W framework (Who, What, When, Why).
+Adds two integration classes that automatically certify agent and tool outputs on the [MultiversX](https://multiversx.com) blockchain using the Prove Before Act 4W framework (Who, What, When, Why).
 
 #### Components
 
@@ -83,7 +83,7 @@ Adds two integration classes that automatically certify agent and tool outputs o
 
 #### Why this matters
 
-AI agents that make decisions and take actions need accountability. xProof provides a tamper-proof audit trail: each certification anchors a SHA-256 hash on MultiversX with structured 4W metadata.
+AI agents that make decisions and take actions need accountability. Prove Before Act provides a tamper-proof audit trail: each certification anchors a SHA-256 hash on MultiversX with structured 4W metadata.
 
 | Field | On-chain |
 |-------|----------|
@@ -115,7 +115,7 @@ result = await Runner.run(agent, input="Analyze Q3 metrics", hooks=hooks)
 
 #### Links
 
-- [xProof](https://xproof.app) · [API docs](https://xproof.app/docs) · [Python SDK](https://pypi.org/project/xproof/) · [GitHub](https://github.com/jasonxkensei/xproof) · [MCP endpoint](https://xproof.app/mcp)
+- [Prove Before Act](https://provebeforeact.com) · [API docs](https://provebeforeact.com/docs) · [Python SDK](https://pypi.org/project/xproof/) · [GitHub](https://github.com/jasonxkensei/xProof) · [MCP endpoint](https://provebeforeact.com/mcp)
 
 ---
 
@@ -123,15 +123,15 @@ result = await Runner.run(agent, input="Analyze Q3 metrics", hooks=hooks)
 
 ## PR 3 — microsoft/autogen
 
-**Title:** `feat: add xProof blockchain certification hooks for AutoGen agents`
+**Title:** `feat: add Prove Before Act blockchain certification hooks for AutoGen agents`
 
 **Body:**
 
 ---
 
-### Add xProof on-chain certification for AutoGen agents
+### Add Prove Before Act on-chain certification for AutoGen agents
 
-Adds message-level certification hooks that automatically anchor every message exchanged between AutoGen agents on the [MultiversX](https://multiversx.com) blockchain using the xProof 4W framework (Who, What, When, Why).
+Adds message-level certification hooks that automatically anchor every message exchanged between AutoGen agents on the [MultiversX](https://multiversx.com) blockchain using the Prove Before Act 4W framework (Who, What, When, Why).
 
 #### Components
 
@@ -142,14 +142,14 @@ Adds message-level certification hooks that automatically anchor every message e
 - Supports batch mode for multi-agent conversations
 
 **`XProofConversableAgent`** — subclass of `ConversableAgent`
-- Pre-wired with xProof hooks for tighter integration
+- Pre-wired with Prove Before Act hooks for tighter integration
 - Same behavior as `register_xproof_hooks` but with a single class
 
 #### Why this matters
 
 AutoGen enables multi-agent conversations where agents negotiate, delegate, and produce outputs. But without a tamper-proof record, there is no way to audit *what was said*, *by whom*, and *when*.
 
-xProof makes every message in a conversation independently verifiable:
+Prove Before Act makes every message in a conversation independently verifiable:
 
 | Field | On-chain |
 |-------|----------|
@@ -186,7 +186,7 @@ user_proxy.initiate_chat(assistant, message="Summarize the Q3 earnings report.")
 
 #### Links
 
-- [xProof](https://xproof.app) · [API docs](https://xproof.app/docs) · [Python SDK](https://pypi.org/project/xproof/) · [GitHub](https://github.com/jasonxkensei/xproof) · [MCP endpoint](https://xproof.app/mcp)
+- [Prove Before Act](https://provebeforeact.com) · [API docs](https://provebeforeact.com/docs) · [Python SDK](https://pypi.org/project/xproof/) · [GitHub](https://github.com/jasonxkensei/xProof) · [MCP endpoint](https://provebeforeact.com/mcp)
 
 ---
 
@@ -194,15 +194,15 @@ user_proxy.initiate_chat(assistant, message="Summarize the Q3 earnings report.")
 
 ## PR 4 — run-llama/llama_index
 
-**Title:** `feat: add xProof blockchain certification callback handler`
+**Title:** `feat: add Prove Before Act blockchain certification callback handler`
 
 **Body:**
 
 ---
 
-### Add xProof on-chain certification for LlamaIndex
+### Add Prove Before Act on-chain certification for LlamaIndex
 
-Adds a callback handler that automatically certifies every LLM call, query completion, and tool invocation from a LlamaIndex pipeline on the [MultiversX](https://multiversx.com) blockchain using the xProof 4W framework (Who, What, When, Why).
+Adds a callback handler that automatically certifies every LLM call, query completion, and tool invocation from a LlamaIndex pipeline on the [MultiversX](https://multiversx.com) blockchain using the Prove Before Act 4W framework (Who, What, When, Why).
 
 #### Component
 
@@ -216,7 +216,7 @@ Adds a callback handler that automatically certifies every LLM call, query compl
 
 LlamaIndex pipelines retrieve documents, call LLMs, and invoke tools to produce answers. Without a tamper-proof record, there is no way to verify *which* LLM was called, *what* it returned, or *when* it happened.
 
-xProof makes every step in the pipeline independently verifiable:
+Prove Before Act makes every step in the pipeline independently verifiable:
 
 | Field | On-chain |
 |-------|----------|
@@ -260,6 +260,6 @@ response = query_engine.query("What is AI?")
 
 #### Links
 
-- [xProof](https://xproof.app) · [API docs](https://xproof.app/docs) · [Python SDK](https://pypi.org/project/xproof/) · [GitHub](https://github.com/jasonxkensei/xproof) · [MCP endpoint](https://xproof.app/mcp)
+- [Prove Before Act](https://provebeforeact.com) · [API docs](https://provebeforeact.com/docs) · [Python SDK](https://pypi.org/project/xproof/) · [GitHub](https://github.com/jasonxkensei/xProof) · [MCP endpoint](https://provebeforeact.com/mcp)
 
 ---

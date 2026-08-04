@@ -91,7 +91,7 @@ export default function AgentContextPage() {
     {
       id: "production",
       icon: Cog,
-      title: "How to run xProof in production? Batch, monitoring, and policies.",
+      title: "How to run Prove Before Act in production? Batch, monitoring, and policies.",
       badge: "Production ready",
       content: (
         <div className="space-y-4">
@@ -116,7 +116,7 @@ actions = [
 
 # One call — up to 100 items
 resp = requests.post(
-    "https://xproof.app/api/batch",
+    "https://provebeforeact.com/api/batch",
     headers={"Authorization": f"Bearer {api_key}"},
     json={"certifications": actions},
     timeout=30
@@ -138,7 +138,7 @@ def daily_proof_count(api_key: str) -> int:
     """Count proofs anchored today."""
     today = datetime.date.today().isoformat()
     resp = requests.get(
-        "https://xproof.app/api/certifications",
+        "https://provebeforeact.com/api/certifications",
         headers={"Authorization": f"Bearer {api_key}"},
         params={"limit": 1},
     )
@@ -146,7 +146,7 @@ def daily_proof_count(api_key: str) -> int:
 
 count = daily_proof_count(api_key)
 if count < EXPECTED_DAILY_MIN:
-    alert(f"xProof volume anomaly: {count} proofs today (expected ≥{EXPECTED_DAILY_MIN})")`} />
+    alert(f"Prove Before Act volume anomaly: {count} proofs today (expected ≥{EXPECTED_DAILY_MIN})")`} />
           </div>
 
           {/* No proof = no action */}
@@ -213,13 +213,13 @@ if count < EXPECTED_DAILY_MIN:
             ))}
           </div>
           <CodeBlock lang="bash" code={`# Step 1 — send without auth, receive 402 with price
-curl -X POST https://xproof.app/api/proof \\
+curl -X POST https://provebeforeact.com/api/proof \\
   -H "Content-Type: application/json" \\
   -d '{"file_hash": "YOUR_SHA256_HASH", "filename": "decision.md"}'
 # → HTTP 402 {"payment": {"amount": "10000", "currency": "USDC", "network": "eip155:8453", ...}}
 
 # Step 3 — resend with signed USDC payment on Base
-curl -X POST https://xproof.app/api/proof \\
+curl -X POST https://provebeforeact.com/api/proof \\
   -H "Content-Type: application/json" \\
   -H "X-PAYMENT: <base64-signed-payment>" \\
   -d '{"file_hash": "YOUR_SHA256_HASH", "filename": "decision.md"}'
@@ -227,7 +227,7 @@ curl -X POST https://xproof.app/api/proof \\
           <div className="rounded-md border border-primary/20 bg-primary/5 p-3">
             <p className="text-xs font-semibold text-primary mb-1">Why this matters for agents</p>
             <p className="text-xs text-muted-foreground">
-              A fully autonomous agent — with a wallet but no pre-established relationship with xProof — can anchor its first proof in a single session. No registration, no web UI, no human in the loop. The agent discovers the price, signs the payment, and gets the proof. Pure machine-to-machine.
+              A fully autonomous agent — with a wallet but no pre-established relationship with Prove Before Act — can anchor its first proof in a single session. No registration, no web UI, no human in the loop. The agent discovers the price, signs the payment, and gets the proof. Pure machine-to-machine.
             </p>
           </div>
           <div>
@@ -247,7 +247,7 @@ def anchor_x402(reasoning: dict, filename: str, wallet_signer) -> dict:
     payload = {"file_hash": file_hash, "filename": filename}
 
     # 2. POST without auth → get HTTP 402 with price + payment payload
-    r = requests.post("https://xproof.app/api/proof", json=payload)
+    r = requests.post("https://provebeforeact.com/api/proof", json=payload)
     assert r.status_code == 402, f"Expected 402, got {r.status_code}: {r.text}"
 
     payment_info = r.json()["payment"]
@@ -261,7 +261,7 @@ def anchor_x402(reasoning: dict, filename: str, wallet_signer) -> dict:
     x_payment = base64.b64encode(json.dumps(signed).encode()).decode()
 
     # 4. Resend with X-PAYMENT header → get proof_id immediately
-    proof = requests.post("https://xproof.app/api/proof",
+    proof = requests.post("https://provebeforeact.com/api/proof",
         headers={"X-PAYMENT": x_payment},
         json=payload)
     assert proof.status_code == 200, proof.text
@@ -270,13 +270,13 @@ def anchor_x402(reasoning: dict, filename: str, wallet_signer) -> dict:
     return {"proof_id": data["proof_id"], "verify_url": data["verify_url"]}
 
 
-# Usage — no xProof account, no API key
+# Usage — no Prove Before Act account, no API key
 result = anchor_x402(
     reasoning={"decision": "BUY BTC", "rationale": "RSI=38", "ts": "2026-06-02T14:30:00Z"},
     filename="decision_001.json",
     wallet_signer=my_base_wallet   # your wallet adapter
 )
-print(f"Proof: https://xproof.app{result['verify_url']}")`} />
+print(f"Proof: https://provebeforeact.com{result['verify_url']}")`} />
           </div>
           <p className="text-xs text-muted-foreground">
             Compatible facilitators: <span className="font-mono">https://api.cdp.coinbase.com/platform/v2/x402</span> (Coinbase CDP), Conway Terminal, OpenClaw, any x402-enabled agent framework.
@@ -325,11 +325,11 @@ print(f"Proof: https://xproof.app{result['verify_url']}")`} />
     {
       id: "retry",
       icon: RefreshCw,
-      title: "What to do if the xProof call fails? Retry policy & fallback.",
+      title: "What to do if the Prove Before Act call fails? Retry policy & fallback.",
       content: (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            xProof is designed to fail gracefully. Here is the recommended policy for production agents:
+            Prove Before Act is designed to fail gracefully. Here is the recommended policy for production agents:
           </p>
           <div className="space-y-3">
             <div className="rounded-md border bg-muted/30 p-3">
@@ -360,7 +360,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
     for attempt in range(max_retries):
         try:
             resp = requests.post(
-                "https://xproof.app/api/proof",
+                "https://provebeforeact.com/api/proof",
                 headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
                 json={"file_hash": file_hash, "filename": filename},
                 timeout=10
@@ -385,7 +385,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
           <div className="rounded-md border border-amber-500/20 bg-amber-500/5 p-3">
             <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 mb-1">Recommended fallback policy</p>
             <p className="text-xs text-muted-foreground">
-              If xProof is unreachable after 3 retries: <strong className="text-foreground">log the hash locally</strong> with a timestamp, proceed with the action, and attempt to anchor retroactively when connectivity restores. Never block a critical agent action indefinitely on proof anchoring — but always log the attempt.
+              If Prove Before Act is unreachable after 3 retries: <strong className="text-foreground">log the hash locally</strong> with a timestamp, proceed with the action, and attempt to anchor retroactively when connectivity restores. Never block a critical agent action indefinitely on proof anchoring — but always log the attempt.
             </p>
           </div>
         </div>
@@ -398,7 +398,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
       content: (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            xProof uses a flat rate of <strong className="text-foreground">$0.01 per certification</strong> — no tiers, no promo, no volume discounts. The same price whether you anchor 1 or 10,000 proofs.
+            Prove Before Act uses a flat rate of <strong className="text-foreground">$0.01 per certification</strong> — no tiers, no promo, no volume discounts. The same price whether you anchor 1 or 10,000 proofs.
           </p>
           <div className="grid gap-3 sm:grid-cols-3">
             {[
@@ -431,7 +431,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
     {
       id: "comparison",
       icon: BarChart3,
-      title: "How does xProof compare to Arweave, Ceramic, Sign Protocol?",
+      title: "How does Prove Before Act compare to Arweave, Ceramic, Sign Protocol?",
       content: (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground text-xs">
@@ -442,7 +442,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
               <thead>
                 <tr className="border-b border-border">
                   <th className="text-left py-2 px-2 font-semibold text-muted-foreground">Use case</th>
-                  <th className="text-center py-2 px-2 font-semibold text-primary">xProof</th>
+                  <th className="text-center py-2 px-2 font-semibold text-primary">Prove Before Act</th>
                   <th className="text-center py-2 px-2 font-semibold text-muted-foreground">Arweave</th>
                   <th className="text-center py-2 px-2 font-semibold text-muted-foreground">Ceramic</th>
                   <th className="text-center py-2 px-2 font-semibold text-muted-foreground">Sign Protocol</th>
@@ -452,70 +452,70 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
                 {[
                   {
                     useCase: "Anchor agent decision before execution (WHY before WHAT)",
-                    xproof: "✓ Native",
+                    "Prove Before Act": "✓ Native",
                     arweave: "Possible (heavy)",
                     ceramic: "Possible",
                     sign: "Partial",
                   },
                   {
                     useCase: "Pay per proof with no API key (x402 / USDC)",
-                    xproof: "✓ Native",
+                    "Prove Before Act": "✓ Native",
                     arweave: "✗",
                     ceramic: "✗",
                     sign: "✗",
                   },
                   {
                     useCase: "4W audit trail (Who, What, When, Why) rendered on public page",
-                    xproof: "✓ Native",
+                    "Prove Before Act": "✓ Native",
                     arweave: "✗",
                     ceramic: "Partial",
                     sign: "Partial",
                   },
                   {
                     useCase: "Privacy by default (hash only, file never uploaded)",
-                    xproof: "✓ Default",
+                    "Prove Before Act": "✓ Default",
                     arweave: "Uploads file",
                     ceramic: "Configurable",
                     sign: "Configurable",
                   },
                   {
                     useCase: "Store full file permanently on-chain",
-                    xproof: "✗",
+                    "Prove Before Act": "✗",
                     arweave: "✓ Best tool",
                     ceramic: "Partial",
                     sign: "✗",
                   },
                   {
                     useCase: "MCP tool (JSON-RPC 2.0, agent-native integration)",
-                    xproof: "✓ Native",
+                    "Prove Before Act": "✓ Native",
                     arweave: "✗",
                     ceramic: "✗",
                     sign: "✗",
                   },
                   {
                     useCase: "Agent trust leaderboard + public profile",
-                    xproof: "✓ Native",
+                    "Prove Before Act": "✓ Native",
                     arweave: "✗",
                     ceramic: "✗",
                     sign: "✗",
                   },
                   {
                     useCase: "EVM / Ethereum attestation schemas",
-                    xproof: "✗",
+                    "Prove Before Act": "✗",
                     arweave: "✗",
                     ceramic: "Partial",
                     sign: "✓ Best tool",
                   },
                   {
                     useCase: "Confidence-level staged anchoring (pre-commitment)",
-                    xproof: "✓ Native",
+                    "Prove Before Act": "✓ Native",
                     arweave: "✗",
                     ceramic: "✗",
                     sign: "✗",
                   },
                   {
                     useCase: "Cost per 1,000 anchors",
-                    xproof: "~$50",
+                    "Prove Before Act": "~$50",
                     arweave: "~$5–50 (file size dep.)",
                     ceramic: "Node required †",
                     sign: "~$20–100 (gas)",
@@ -523,7 +523,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
                 ].map((row, i) => (
                   <tr key={i} className={`border-b border-border/40 ${i % 2 === 0 ? "bg-muted/10" : ""}`}>
                     <td className="py-2 px-2 text-muted-foreground max-w-[160px]">{row.useCase}</td>
-                    <td className={`py-2 px-2 text-center font-medium ${row.xproof.startsWith("✓") ? "text-primary" : "text-muted-foreground"}`}>{row.xproof}</td>
+                    <td className={`py-2 px-2 text-center font-medium ${row["Prove Before Act"].startsWith("✓") ? "text-primary" : "text-muted-foreground"}`}>{row["Prove Before Act"]}</td>
                     <td className={`py-2 px-2 text-center ${row.arweave.startsWith("✓") ? "text-emerald-500" : "text-muted-foreground"}`}>{row.arweave}</td>
                     <td className={`py-2 px-2 text-center ${row.ceramic.startsWith("✓") ? "text-emerald-500" : "text-muted-foreground"}`}>{row.ceramic}</td>
                     <td className={`py-2 px-2 text-center ${row.sign.startsWith("✓") ? "text-emerald-500" : "text-muted-foreground"}`}>{row.sign}</td>
@@ -533,7 +533,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
             </table>
           </div>
           <p className="text-xs text-muted-foreground italic">
-            Rule of thumb: use <strong className="text-foreground">Arweave</strong> to store files forever. Use <strong className="text-foreground">Sign Protocol</strong> for EVM attestation schemas. Use <strong className="text-foreground">xProof</strong> when an agent needs to prove a decision before acting — especially with no pre-existing account.
+            Rule of thumb: use <strong className="text-foreground">Arweave</strong> to store files forever. Use <strong className="text-foreground">Sign Protocol</strong> for EVM attestation schemas. Use <strong className="text-foreground">Prove Before Act</strong> when an agent needs to prove a decision before acting — especially with no pre-existing account.
           </p>
           <p className="text-xs text-muted-foreground/60">
             † Ceramic Network mainnet was deprecated in 2024. Current usage requires a self-hosted node or a third-party provider. "Free" understates the operational cost.
@@ -544,28 +544,28 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
     {
       id: "mcp",
       icon: Cpu,
-      title: "How to integrate xProof via MCP? Concrete examples.",
+      title: "How to integrate Prove Before Act via MCP? Concrete examples.",
       content: (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            xProof exposes a native MCP server at <code className="font-mono bg-muted px-1 rounded text-xs">https://xproof.app/mcp</code>. Use Streamable HTTP transport (POST). Tools available: <code className="font-mono bg-muted px-1 rounded text-xs">certify_file</code>, <code className="font-mono bg-muted px-1 rounded text-xs">audit_agent_session</code>, <code className="font-mono bg-muted px-1 rounded text-xs">investigate_proof</code>, <code className="font-mono bg-muted px-1 rounded text-xs">register_trial</code>.
+            Prove Before Act exposes a native MCP server at <code className="font-mono bg-muted px-1 rounded text-xs">https://provebeforeact.com/mcp</code>. Use Streamable HTTP transport (POST). Tools available: <code className="font-mono bg-muted px-1 rounded text-xs">certify_file</code>, <code className="font-mono bg-muted px-1 rounded text-xs">audit_agent_session</code>, <code className="font-mono bg-muted px-1 rounded text-xs">investigate_proof</code>, <code className="font-mono bg-muted px-1 rounded text-xs">register_trial</code>.
           </p>
           <div className="rounded-md border border-primary/20 bg-primary/5 p-3 flex items-start gap-3">
             <Cpu className="h-4 w-4 text-primary shrink-0 mt-0.5" />
             <div>
               <p className="text-xs font-semibold text-primary mb-1">Hermes Skills Hub compatible</p>
               <p className="text-xs text-muted-foreground mb-2">
-                xProof is published as an OpenClaw skill on ClawHub. Hermes-compatible agents can install it in one command:
+                Prove Before Act is published as an OpenClaw skill on ClawHub. Hermes-compatible agents can install it in one command:
               </p>
-              <code className="text-xs bg-muted px-2 py-1 rounded block font-mono">hermes skills install clawhub/xproof</code>
+              <code className="text-xs bg-muted px-2 py-1 rounded block font-mono">hermes skills install clawhub/prove-before-act</code>
             </div>
           </div>
           <div>
             <p className="text-xs font-semibold mb-2">1. Add to your MCP config (Claude, Cursor, any MCP client):</p>
             <CodeBlock lang="json" code={`{
   "mcpServers": {
-    "xproof": {
-      "url": "https://xproof.app/mcp",
+    "prove-before-act": {
+      "url": "https://provebeforeact.com/mcp",
       "headers": {
         "Authorization": "Bearer pm_YOUR_API_KEY"
       }
@@ -636,7 +636,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
               <CodeBlock lang="bash" code={`# After 10 free proofs, switch to x402 for unlimited paid anchoring
 # 1. POST /api/proof without auth → get HTTP 402 with price
 # 2. Sign USDC on Base (eip155:8453) → resend with X-PAYMENT header
-# → proof_id returned immediately, no xProof account ever needed`} />
+# → proof_id returned immediately, no Prove Before Act account ever needed`} />
               <p className="text-muted-foreground/70 italic">An agent can go from zero to production-grade proof anchoring in a single session: trial key via MCP for the first 10 proofs, then x402 for all subsequent proofs. No human ever touches the account.</p>
             </div>
           </div>
@@ -669,7 +669,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
           <p className="text-xs text-muted-foreground">
             To activate the 4W trail, include at least one of <code className="font-mono bg-muted px-1 rounded text-xs">who</code>, <code className="font-mono bg-muted px-1 rounded text-xs">what</code>, <code className="font-mono bg-muted px-1 rounded text-xs">when</code>, <code className="font-mono bg-muted px-1 rounded text-xs">why</code> in the <code className="font-mono bg-muted px-1 rounded text-xs">metadata</code> field. The 4W section is then automatically rendered on the public proof page at <code className="font-mono bg-muted px-1 rounded text-xs">/proof/&#123;id&#125;</code>.
           </p>
-          <CodeBlock lang="bash" code={`curl -X POST https://xproof.app/api/proof \\
+          <CodeBlock lang="bash" code={`curl -X POST https://provebeforeact.com/api/proof \\
   -H "Authorization: Bearer pm_YOUR_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -694,11 +694,11 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
       content: (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            xProof is built on a <strong className="text-foreground">hash-only model</strong>: your file, reasoning document, or agent output never leaves your environment. Only its SHA-256 fingerprint is transmitted.
+            Prove Before Act is built on a <strong className="text-foreground">hash-only model</strong>: your file, reasoning document, or agent output never leaves your environment. Only its SHA-256 fingerprint is transmitted.
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3">
-              <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-2">What is sent to xProof</p>
+              <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-2">What is sent to Prove Before Act</p>
               <ul className="text-xs text-muted-foreground space-y-1 ml-2">
                 <li>• SHA-256 hash (64 hex characters)</li>
                 <li>• Filename (can be synthetic)</li>
@@ -722,7 +722,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
               <p><strong className="text-foreground">Timing correlation:</strong> Frequent anchor patterns can reveal agent activity rhythm. Mitigate by batching with <code className="font-mono bg-muted px-1 rounded text-xs">POST /api/batch</code> or adding jitter.</p>
               <p><strong className="text-foreground">Metadata exposure:</strong> The <code className="font-mono bg-muted px-1 rounded text-xs">who</code>, <code className="font-mono bg-muted px-1 rounded text-xs">what</code>, <code className="font-mono bg-muted px-1 rounded text-xs">why</code> fields are stored and rendered publicly if <code className="font-mono bg-muted px-1 rounded text-xs">is_public: true</code>. Use generic descriptions for sensitive decisions.</p>
               <p><strong className="text-foreground">On-chain permanence:</strong> Once a transaction is confirmed on MultiversX, it cannot be deleted. Design your metadata accordingly.</p>
-              <p><strong className="text-foreground">Not a ZK system:</strong> xProof uses SHA-256 hashing, not zero-knowledge proofs. A determined adversary with access to the original data can verify the hash matches. If ZK is required, combine with a ZK proving layer upstream.</p>
+              <p><strong className="text-foreground">Not a ZK system:</strong> Prove Before Act uses SHA-256 hashing, not zero-knowledge proofs. A determined adversary with access to the original data can verify the hash matches. If ZK is required, combine with a ZK proving layer upstream.</p>
             </div>
           </div>
         </div>
@@ -735,7 +735,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
       content: (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Yes. xProof is designed for multi-agent fleets. Each agent gets its own wallet address and public profile. A supervisor can monitor all agents centrally.
+            Yes. Prove Before Act is designed for multi-agent fleets. Each agent gets its own wallet address and public profile. A supervisor can monitor all agents centrally.
           </p>
           <div className="space-y-3">
             <div className="rounded-md border bg-muted/30 p-3 space-y-2">
@@ -794,7 +794,7 @@ class ProveBeforeAct:
     def __init__(self, api_key: str, agent_id: str):
         self.api_key = api_key
         self.agent_id = agent_id
-        self.base = "https://xproof.app"
+        self.base = "https://provebeforeact.com"
     
     def anchor(self, reasoning: dict, action_description: str) -> str | None:
         """
@@ -807,7 +807,7 @@ class ProveBeforeAct:
         # Step 2: Hash locally — nothing sensitive leaves this function
         file_hash = hashlib.sha256(reasoning_json.encode()).hexdigest()
         
-        # Step 3: Anchor to xProof
+        # Step 3: Anchor to Prove Before Act
         try:
             resp = requests.post(
                 f"{self.base}/api/proof",
@@ -870,12 +870,12 @@ outcome = agent.run_with_proof(
     action_fn=lambda: execute_trade("BUY", "BTC", 0.5),
     action_description="Execute BUY 0.5 BTC at market price"
 )
-print(f"Trade executed. Proof: https://xproof.app{outcome['verify_url']}")`} />
+print(f"Trade executed. Proof: https://provebeforeact.com{outcome['verify_url']}")`} />
           <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3">
             <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-1">What this gives you</p>
             <ul className="text-xs text-muted-foreground space-y-0.5 ml-2">
               <li>• Every action has a cryptographic proof of the reasoning that preceded it</li>
-              <li>• The proof is publicly verifiable at <code className="font-mono bg-muted px-1 rounded">xproof.app/proof/&#123;id&#125;</code> — no xProof account needed to verify</li>
+              <li>• The proof is publicly verifiable at <code className="font-mono bg-muted px-1 rounded">provebeforeact.com/proof/&#123;id&#125;</code> — no Prove Before Act account needed to verify</li>
               <li>• 4W audit trail is automatically rendered on the proof page</li>
               <li>• If the agent is compromised or behaves unexpectedly, you have a full forensic record</li>
             </ul>
@@ -892,7 +892,7 @@ print(f"Trade executed. Proof: https://xproof.app{outcome['verify_url']}")`} />
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground leading-relaxed">
             The <strong className="text-foreground">Coherence Layer</strong> closes the 4W loop.
-            xProof already answers WHAT (certify_file) and WHEN (block timestamp). MX-8004 answers WHO.{" "}
+            Prove Before Act already answers WHAT (certify_file) and WHEN (block timestamp). MX-8004 answers WHO.{" "}
             <code className="font-mono text-xs bg-muted px-1 rounded">check_coherence</code> answers WHY —
             anchoring your agent's intent, context, and decision on-chain <em>before</em> acting.
           </p>
@@ -925,7 +925,7 @@ print(f"Trade executed. Proof: https://xproof.app{outcome['verify_url']}")`} />
           <CodeBlock lang="python" code={`import hashlib, json, requests
 
 API_KEY = "pm_YOUR_KEY"
-BASE = "https://xproof.app"
+BASE = "https://provebeforeact.com"
 
 # ── Step 1: Anchor WHY via check_coherence MCP tool ──────────────────────────
 # MCP call: { "name": "check_coherence", "arguments": { ... } }
@@ -1003,7 +1003,7 @@ print(f"WHAT: {BASE}/proof/{what_resp['proof_id']}")`} />
               <li>• Link call: <code className="font-mono bg-muted px-1 rounded">POST /api/coherence/link</code> records the WHY→WHAT pair and computes a coherence score (0–100). Unlinked anchors show as <strong className="text-foreground">divergent</strong> in public history after 1h; after the 2h TTL they are also flagged as proposed fault violations</li>
               <li>• Error cases: <code className="font-mono bg-muted px-1 rounded">409 ALREADY_LINKED</code> (anchor linked to a different WHAT), <code className="font-mono bg-muted px-1 rounded">400 NOT_A_COHERENCE_ANCHOR</code> (WHY was not created as a coherence anchor)</li>
               <li>• Public history: <code className="font-mono bg-muted px-1 rounded">GET /api/agents/&#123;wallet&#125;/coherence</code> — per-anchor status (linked / pending / divergent) + aggregate coherence rate</li>
-              <li>• Both proofs are public, independently verifiable at <code className="font-mono bg-muted px-1 rounded">xproof.app/proof/&#123;id&#125;</code></li>
+              <li>• Both proofs are public, independently verifiable at <code className="font-mono bg-muted px-1 rounded">provebeforeact.com/proof/&#123;id&#125;</code></li>
             </ul>
           </div>
 
@@ -1026,7 +1026,7 @@ print(f"WHAT: {BASE}/proof/{what_resp['proof_id']}")`} />
       content: (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            <strong className="text-foreground">xproof_agent_verify</strong> is the autonomous verification agent operated by <a href="https://www.moltbook.com" target="_blank" rel="noopener noreferrer" className="text-primary underline">Moltbook</a> — a platform that certifies AI-generated content before publication. It has been running on xProof continuously since early 2026, making it one of the first documented production deployments of Prove Before Act in the wild.
+            <strong className="text-foreground">xproof_agent_verify</strong> is the autonomous verification agent operated by <a href="https://www.moltbook.com" target="_blank" rel="noopener noreferrer" className="text-primary underline">Moltbook</a> — a platform that certifies AI-generated content before publication. It has been running on Prove Before Act continuously since early 2026, making it one of the first documented production deployments of Prove Before Act in the wild.
           </p>
 
           {/* Key stats grid */}
@@ -1170,7 +1170,7 @@ print(f"WHAT: {BASE}/proof/{what_resp['proof_id']}")`} />
       content: (
         <div className="space-y-5">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            xProof integrates with every major agent framework. All examples use the same core pattern: <strong className="text-foreground">hash locally → anchor before action → proceed with proof_id</strong>.
+            Prove Before Act integrates with every major agent framework. All examples use the same core pattern: <strong className="text-foreground">hash locally → anchor before action → proceed with proof_id</strong>.
           </p>
 
           <div>
@@ -1270,7 +1270,7 @@ agent = ReActAgent.from_tools([xproof_tool, ...], llm=llm)`} />
             <p className="text-xs font-semibold mb-2">Vercel AI SDK (TypeScript)</p>
             <CodeBlock lang="typescript" code={`import { tool } from 'ai';
 import { z } from 'zod';
-import { xproof } from '@xproof/xproof';  // npm install @xproof/xproof
+import { xProof } from '@prove-before-act/sdk';  // npm install @prove-before-act/sdk
 
 const anchorTool = tool({
   description: 'Anchor reasoning on-chain BEFORE executing any significant action. Returns proof_id.',
@@ -1291,7 +1291,7 @@ const anchorTool = tool({
           <div>
             <p className="text-xs font-semibold mb-2">Fetch.ai / uAgents (Python)</p>
             <p className="text-xs text-muted-foreground mb-2 leading-relaxed">
-              xProof integrates natively with the Fetch.ai Agentverse ecosystem via <code className="font-mono bg-muted px-1 rounded">XProofuAgentMiddleware</code>. Every uAgent message handler automatically anchors a WHY proof before processing and a WHAT proof after — making your Fetch.ai agent auditable and trust-scored on the xProof leaderboard.
+              Prove Before Act integrates natively with the Fetch.ai Agentverse ecosystem via <code className="font-mono bg-muted px-1 rounded">XProofuAgentMiddleware</code>. Every uAgent message handler automatically anchors a WHY proof before processing and a WHAT proof after — making your Fetch.ai agent auditable and trust-scored on the Prove Before Act leaderboard.
             </p>
             <CodeBlock lang="python" code={`from uagents import Agent, Context
 from xproof.integrations.fetchai import XProofuAgentMiddleware
@@ -1318,7 +1318,7 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
               </div>
               <div>
                 <p className="text-xs text-muted-foreground font-mono mb-1">// JavaScript / TypeScript</p>
-                <code className="text-xs bg-muted px-2 py-1 rounded block">npm install @xproof/xproof</code>
+                <code className="text-xs bg-muted px-2 py-1 rounded block">npm install @prove-before-act/sdk</code>
               </div>
             </div>
           </div>
@@ -1333,7 +1333,7 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
       content: (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            This section exists because credibility matters more than marketing. xProof is a pragmatic, production-ready tool — and like any tool, it has genuine trade-offs. Knowing them before you integrate is more valuable than discovering them after.
+            This section exists because credibility matters more than marketing. Prove Before Act is a pragmatic, production-ready tool — and like any tool, it has genuine trade-offs. Knowing them before you integrate is more valuable than discovering them after.
           </p>
 
           {/* Real limitations */}
@@ -1342,7 +1342,7 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
               {
                 limitation: "MultiversX dependency",
                 honest: "Your proofs live on MultiversX. If you're already deep in the EVM ecosystem, that's a cross-chain commitment. MultiversX has been live since 2020 with 99.9%+ uptime, but it's not Ethereum.",
-                mitigation: "The proof_id and SHA-256 hash are blockchain-agnostic. You can replicate the hash to another chain later. xProof itself stores the full record off-chain too — your verify URL stays live regardless of MultiversX status.",
+                mitigation: "The proof_id and SHA-256 hash are blockchain-agnostic. You can replicate the hash to another chain later. Prove Before Act itself stores the full record off-chain too — your verify URL stays live regardless of MultiversX status.",
                 severity: "low",
               },
               {
@@ -1352,15 +1352,15 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
                 severity: "low",
               },
               {
-                limitation: "xProof is newer than alternatives",
-                honest: "Arweave has been running since 2018. Sign Protocol has larger EVM adoption. xProof launched in 2024. If 'battle-tested for 5+ years' is a hard requirement, be aware of this.",
+                limitation: "Prove Before Act is newer than alternatives",
+                honest: "Arweave has been running since 2018. Sign Protocol has larger EVM adoption. Prove Before Act launched in 2024. If 'battle-tested for 5+ years' is a hard requirement, be aware of this.",
                 mitigation: "xproof_agent_verify has 4,418 proofs and 16 consecutive weeks of zero failures. The underlying blockchain (MultiversX) is 4+ years old. Newness applies to the agent-specific feature set, not the chain.",
                 severity: "medium",
               },
               {
                 limitation: "Not the right tool for every use case",
-                honest: "xProof is optimized for agent decision accountability, not arbitrary file archiving. If you need to store terabytes of files permanently, Arweave is better. If you need EVM-native attestations with existing Solidity tooling, Sign Protocol is better.",
-                mitigation: "Use xProof for what it's best at: Prove Before Act, agent audit trails, 4W accountability, and trust score building. It's a complement to storage layers, not a replacement.",
+                honest: "Prove Before Act is optimized for agent decision accountability, not arbitrary file archiving. If you need to store terabytes of files permanently, Arweave is better. If you need EVM-native attestations with existing Solidity tooling, Sign Protocol is better.",
+                mitigation: "Use Prove Before Act for what it's best at: Prove Before Act, agent audit trails, 4W accountability, and trust score building. It's a complement to storage layers, not a replacement.",
                 severity: "info",
               },
             ].map((item) => (
@@ -1381,7 +1381,7 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
           {/* When to use vs not */}
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3">
-              <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-2">Use xProof when</p>
+              <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-2">Use Prove Before Act when</p>
               <ul className="text-xs text-muted-foreground space-y-1">
                 <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-emerald-500" />You need Prove Before Act — proof of reasoning BEFORE action</li>
                 <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-emerald-500" />You want zero-account machine payments (x402 + USDC on Base)</li>
@@ -1403,7 +1403,7 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
 
           <div className="rounded-md border border-primary/20 bg-primary/5 p-3">
             <p className="text-xs text-muted-foreground">
-              <strong className="text-foreground">Bottom line:</strong> xProof is the right choice for agents that need to prove their reasoning before acting — especially at low cost, with x402, and without a pre-existing account. It is not trying to replace Arweave or Sign Protocol. It's filling the gap they don't cover: agent decision accountability at $0.01/proof.
+              <strong className="text-foreground">Bottom line:</strong> Prove Before Act is the right choice for agents that need to prove their reasoning before acting — especially at low cost, with x402, and without a pre-existing account. It is not trying to replace Arweave or Sign Protocol. It's filling the gap they don't cover: agent decision accountability at $0.01/proof.
             </p>
           </div>
         </div>
@@ -1417,7 +1417,7 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur">
         <div className="container flex h-14 items-center justify-between gap-4">
           <a href="/" className="flex items-center gap-2 shrink-0" data-testid="link-logo-home">
-            <img src="/xproof-logo.png" alt="xproof" className="h-7 w-auto" />
+            <img src="/xproof-logo.png" alt="Prove Before Act" className="h-7 w-auto" />
           </a>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Bot className="h-3.5 w-3.5 shrink-0" />
@@ -1464,11 +1464,11 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
             </Badge>
             <Badge variant="outline" className="text-xs text-muted-foreground">
               <Network className="mr-1.5 h-3 w-3" />
-              Discoverable via llms.txt + /.well-known/xproof.json
+              Discoverable via llms.txt + /.well-known/provebeforeact.json
             </Badge>
           </div>
           <h1 className="text-3xl sm:text-4xl font-bold mb-3 tracking-tight">
-            xProof Agent Context
+            Prove Before Act Agent Context
           </h1>
           <p className="text-muted-foreground text-base leading-relaxed max-w-2xl mb-4">
             <strong className="text-foreground">Anchor intent before execution.</strong>{" "}
@@ -1499,7 +1499,7 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
               </div>
             </div>
             <CodeBlock lang="bash" code={`# 1. Get API key — no wallet, no card (10 free proofs)
-curl -X POST https://xproof.app/api/agent/register -H "Content-Type: application/json" \\
+curl -X POST https://provebeforeact.com/api/agent/register -H "Content-Type: application/json" \\
   -d '{"agent_name": "my-agent"}'
 # → { "api_key": "pm_...", "trial": { "quota": 10 } }
 
@@ -1507,7 +1507,7 @@ curl -X POST https://xproof.app/api/agent/register -H "Content-Type: application
 FILE_HASH=$(python3 -c "import hashlib,json; print(hashlib.sha256(json.dumps({'why':'RSI=38','what':'BUY BTC'},sort_keys=True).encode()).hexdigest())")
 
 # 3. Anchor BEFORE executing — Prove Before Act
-curl -X POST https://xproof.app/api/proof -H "Authorization: Bearer pm_YOUR_KEY" \\
+curl -X POST https://provebeforeact.com/api/proof -H "Authorization: Bearer pm_YOUR_KEY" \\
   -H "Content-Type: application/json" \\
   -d "{\"file_hash\":\"$FILE_HASH\",\"filename\":\"reasoning.json\",\"metadata\":{\"who\":\"my-agent\",\"what\":\"BUY BTC\",\"why\":\"RSI=38\"}}"
 # → { "proof_id": "prf_...", "verify_url": "/proof/...", "status": "pending" }`} />
@@ -1564,14 +1564,14 @@ reasoning = {
 h = hashlib.sha256(json.dumps(reasoning, sort_keys=True).encode()).hexdigest()
 
 # 2. Anchor BEFORE executing — Prove Before Act
-resp = requests.post("https://xproof.app/api/proof",
+resp = requests.post("https://provebeforeact.com/api/proof",
     headers={"Authorization": "Bearer pm_YOUR_KEY"},
     json={"file_hash": h, "filename": "trade_decision.json", "metadata": reasoning})
 proof_id = resp.json()["proof_id"]  # returned in ~1.1s, on-chain in ~6s
 
 # 3. Execute only after proof is anchored
 execute_trade("BUY", "BTC", 0.5)
-print(f"Audit trail: https://xproof.app/proof/{proof_id}")`,
+print(f"Audit trail: https://provebeforeact.com/proof/{proof_id}")`,
                 codeTs: `import crypto from "crypto";
 
 // 1. Document your reasoning
@@ -1584,7 +1584,7 @@ const sorted = JSON.stringify(reasoning, Object.keys(reasoning).sort() as any);
 const h = crypto.createHash("sha256").update(sorted).digest("hex");
 
 // 2. Anchor BEFORE executing — Prove Before Act
-const resp = await fetch("https://xproof.app/api/proof", {
+const resp = await fetch("https://provebeforeact.com/api/proof", {
   method: "POST",
   headers: { Authorization: "Bearer pm_YOUR_KEY", "Content-Type": "application/json" },
   body: JSON.stringify({ file_hash: h, filename: "trade_decision.json", metadata: reasoning }),
@@ -1594,7 +1594,7 @@ const { proof_id } = await resp.json() as { proof_id: string };
 
 // 3. Execute only after proof is anchored
 await executeTrade("BUY", "BTC", 0.5);
-console.log("Audit trail: https://xproof.app/proof/" + proof_id);`,
+console.log("Audit trail: https://provebeforeact.com/proof/" + proof_id);`,
               },
               {
                 id: "research",
@@ -1612,14 +1612,14 @@ reasoning = {
 h = hashlib.sha256(json.dumps(reasoning, sort_keys=True).encode()).hexdigest()
 
 # 2. Anchor hash — report content never leaves the agent
-resp = requests.post("https://xproof.app/api/proof",
+resp = requests.post("https://provebeforeact.com/api/proof",
     headers={"Authorization": "Bearer pm_YOUR_KEY"},
     json={"file_hash": h, "filename": "research_reasoning.json", "metadata": reasoning})
 proof_id = resp.json()["proof_id"]
 
 # 3. Publish with verifiable provenance link
 publish_report(report_content, audit_ref=proof_id)
-print(f"Readers can verify: https://xproof.app/proof/{proof_id}")`,
+print(f"Readers can verify: https://provebeforeact.com/proof/{proof_id}")`,
                 codeTs: `import crypto from "crypto";
 
 // 1. Summarize reasoning and sources
@@ -1632,7 +1632,7 @@ const sorted = JSON.stringify(reasoning, Object.keys(reasoning).sort() as any);
 const h = crypto.createHash("sha256").update(sorted).digest("hex");
 
 // 2. Anchor hash — report content never leaves the agent
-const resp = await fetch("https://xproof.app/api/proof", {
+const resp = await fetch("https://provebeforeact.com/api/proof", {
   method: "POST",
   headers: { Authorization: "Bearer pm_YOUR_KEY", "Content-Type": "application/json" },
   body: JSON.stringify({ file_hash: h, filename: "research_reasoning.json", metadata: reasoning }),
@@ -1641,7 +1641,7 @@ const { proof_id } = await resp.json() as { proof_id: string };
 
 // 3. Publish with verifiable provenance link
 await publishReport(reportContent, { audit_ref: proof_id });
-console.log("Readers can verify: https://xproof.app/proof/" + proof_id);`,
+console.log("Readers can verify: https://provebeforeact.com/proof/" + proof_id);`,
               },
               {
                 id: "support",
@@ -1659,7 +1659,7 @@ decision = {
 h = hashlib.sha256(json.dumps(decision, sort_keys=True).encode()).hexdigest()
 
 # 2. Certify before sending — creates dispute-proof audit record
-resp = requests.post("https://xproof.app/api/proof",
+resp = requests.post("https://provebeforeact.com/api/proof",
     headers={"Authorization": "Bearer pm_YOUR_KEY"},
     json={"file_hash": h, "filename": "support_decision.json", "metadata": decision})
 proof_id = resp.json()["proof_id"]
@@ -1678,7 +1678,7 @@ const sorted = JSON.stringify(decision, Object.keys(decision).sort() as any);
 const h = crypto.createHash("sha256").update(sorted).digest("hex");
 
 // 2. Certify before sending — creates dispute-proof audit record
-const resp = await fetch("https://xproof.app/api/proof", {
+const resp = await fetch("https://provebeforeact.com/api/proof", {
   method: "POST",
   headers: { Authorization: "Bearer pm_YOUR_KEY", "Content-Type": "application/json" },
   body: JSON.stringify({ file_hash: h, filename: "support_decision.json", metadata: decision }),
@@ -1807,7 +1807,7 @@ await sendToCustomer(ticketId, responseText, { audit_ref: proof_id });`,
             {[
               { label: "REST API docs", href: "/docs" },
               { label: "llms.txt", href: "/llms.txt" },
-              { label: "MCP endpoint", href: "https://xproof.app/mcp" },
+              { label: "MCP endpoint", href: "https://provebeforeact.com/mcp" },
               { label: "Moltbook case study", href: "/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9" },
             ].map((link) => (
               <Button key={link.label} asChild variant="ghost" size="sm" data-testid={`link-footer-${link.label.replace(/\s+/g, "-").toLowerCase()}`}>

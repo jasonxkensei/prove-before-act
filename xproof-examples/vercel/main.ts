@@ -39,7 +39,7 @@ async function main() {
   });
   console.log(`  Proof ID: ${proof1.proofId}`);
   console.log(`  Hash:     ${proof1.fileHash.slice(0, 16)}...`);
-  console.log(`  Verify:   https://xproof.app/verify/${proof1.proofId}`);
+  console.log(`  Verify:   https://provebeforeact.com/verify/${proof1.proofId}`);
   console.log();
 
   console.log("--- Certifying AI generation 2 ---");

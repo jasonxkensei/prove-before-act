@@ -124,7 +124,7 @@ describe("parseRegistrationResult", () => {
       api_key: "pm_test_123",
       agent_name: "my-agent",
       trial: { quota: 10, used: 2, remaining: 8 },
-      endpoints: { proof: "https://xproof.app/api/proof" },
+      endpoints: { proof: "https://provebeforeact.com/api/proof" },
     };
     const reg = parseRegistrationResult(data);
     expect(reg.apiKey).toBe("pm_test_123");
@@ -132,7 +132,7 @@ describe("parseRegistrationResult", () => {
     expect(reg.trial.quota).toBe(10);
     expect(reg.trial.used).toBe(2);
     expect(reg.trial.remaining).toBe(8);
-    expect(reg.endpoints).toEqual({ proof: "https://xproof.app/api/proof" });
+    expect(reg.endpoints).toEqual({ proof: "https://provebeforeact.com/api/proof" });
   });
 
   it("defaults to empty strings and zeros for missing fields", () => {

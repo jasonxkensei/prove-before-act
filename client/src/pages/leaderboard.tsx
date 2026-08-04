@@ -226,7 +226,7 @@ export default function Leaderboard() {
   }, [debouncedSearch, categoryFilter, attestedOnly, calibrationFilter, sortBy, page]);
 
   useEffect(() => {
-    document.title = "Agent Trust Leaderboard | xproof";
+    document.title = "Agent Trust Leaderboard | Prove Before Act";
   }, []);
 
   useEffect(() => {
@@ -273,7 +273,7 @@ export default function Leaderboard() {
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between gap-4">
           <Link href="/" data-testid="link-logo-home" className="flex items-center gap-2">
-            <img src="/xproof-logo.png" alt="xproof" className="h-8 w-auto" />
+            <img src="/xproof-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
           </Link>
           <nav className="flex items-center gap-4">
             <Button asChild variant="ghost" size="sm" data-testid="link-nav-home">

@@ -1,13 +1,13 @@
-name: 'xProof Certify'
+name: 'Prove Before Act Certify'
 description: 'The on-chain notary for AI agents. Anchor CI/CD artifacts and agent outputs on-chain via MultiversX.'
-author: 'xproof'
+author: 'Prove Before Act'
 branding:
   icon: 'shield'
   color: 'green'
 
 inputs:
   api_key:
-    description: 'xProof API key (pm_xxx). Store as a GitHub secret.'
+    description: 'Prove Before Act API key (pm_xxx). Store as a GitHub secret.'
     required: true
   files:
     description: 'Files or glob patterns to certify (space-separated). Example: "build.zip dist/**/*.js"'
@@ -29,9 +29,9 @@ inputs:
     required: false
     default: '3'
   api_url:
-    description: 'xProof API URL (override for testing).'
+    description: 'Prove Before Act API URL (override for testing).'
     required: false
-    default: 'https://xproof.app'
+    default: 'https://provebeforeact.com'
 
 outputs:
   proof_ids:
@@ -54,7 +54,7 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Certify files with xProof
+    - name: Certify files with Prove Before Act
       shell: bash
       env:
         XPROOF_API_KEY: ${{ inputs.api_key }}
@@ -111,7 +111,7 @@ runs:
              + (if $author != "" then {author_name: $author} else {} end)
              + (if $metadata != null then {metadata: $metadata} else {} end)')
 
-          # Call xProof API with bounded retries on transient errors
+          # Call Prove Before Act API with bounded retries on transient errors
           # (429 rate limit or 5xx). Client errors (4xx other than 429) are
           # not retried since retrying won't change the outcome.
           ATTEMPT=0
@@ -165,7 +165,7 @@ runs:
               [ -n "$BADGE_URLS" ] && BADGE_URLS="${BADGE_URLS},"
               BADGE_URLS="${BADGE_URLS}${BADGE_URL}"
 
-              BADGE_MARKDOWN="${BADGE_MARKDOWN}[![xProof Verified](${BADGE_URL})](${VERIFY_URL})"$'\n'
+              BADGE_MARKDOWN="${BADGE_MARKDOWN}[![Prove Before Act Verified](${BADGE_URL})](${VERIFY_URL})"$'\n'
 
               SUMMARY="${SUMMARY}${FILE_NAME}: ${VERIFY_URL}\n"
 
@@ -196,7 +196,7 @@ runs:
         echo "badge_urls=${BADGE_URLS}" >> $GITHUB_OUTPUT
         echo "certified_count=${COUNT}" >> $GITHUB_OUTPUT
         echo "failed_count=${FAILED}" >> $GITHUB_OUTPUT
-        echo "summary=${COUNT} file(s) certified on MultiversX blockchain via xProof" >> $GITHUB_OUTPUT
+        echo "summary=${COUNT} file(s) certified on MultiversX blockchain via Prove Before Act" >> $GITHUB_OUTPUT
         {
           echo "badge_markdown<<XPROOF_EOF"
           echo -n "$BADGE_MARKDOWN"
@@ -231,12 +231,12 @@ runs:
 
         if [ $COUNT -gt 0 ]; then
           echo ""
-          echo "=== xProof Certification Summary ==="
+          echo "=== Prove Before Act Certification Summary ==="
           echo -e "$SUMMARY"
           echo "Total: $COUNT file(s) certified, $FAILED failed"
 
           # Add to GitHub Step Summary
-          echo "## xProof Certification" >> $GITHUB_STEP_SUMMARY
+          echo "## Prove Before Act Certification" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| File | Proof |" >> $GITHUB_STEP_SUMMARY
           echo "|------|-------|" >> $GITHUB_STEP_SUMMARY
@@ -245,7 +245,7 @@ runs:
             echo "| ${FNAME:-file} | [Verify](${url}) |" >> $GITHUB_STEP_SUMMARY
           done
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Powered by [xProof](https://xproof.app)" >> $GITHUB_STEP_SUMMARY
+          echo "Powered by [Prove Before Act](https://provebeforeact.com)" >> $GITHUB_STEP_SUMMARY
         else
           echo "::warning::No files were certified"
         fi

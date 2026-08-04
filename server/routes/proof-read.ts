@@ -171,7 +171,7 @@ export function registerProofReadRoutes(app: Express) {
         filename: cert.fileName,
         status: cert.blockchainStatus,
         created_at: cert.createdAt,
-        proof_url: `https://xproof.app/proof/${cert.id}`,
+        proof_url: `https://provebeforeact.com/proof/${cert.id}`,
         blockchain: {
           transaction_hash: cert.transactionHash,
           transaction_url: cert.transactionUrl,
@@ -482,7 +482,7 @@ export function registerProofReadRoutes(app: Express) {
           level: agentTrust.level,
           certTotal: agentTrust.certTotal,
         } : null,
-        proof_url: `https://xproof.app/proof/${cert.id}`,
+        proof_url: `https://provebeforeact.com/proof/${cert.id}`,
       });
     } catch (err: any) {
       logger.error("Artifact trust lookup error", { error: err.message });
@@ -504,13 +504,13 @@ export function registerProofReadRoutes(app: Express) {
         .from(users)
         .where(eq(users.walletAddress, wallet));
       if (!userCheck || !userCheck.isPublicProfile) {
-        return res.status(404).json({ error: "Wallet not found on xProof", wallet, proof_layer: null, integrated: false });
+        return res.status(404).json({ error: "Wallet not found on Prove Before Act", wallet, proof_layer: null, integrated: false });
       }
 
       const trust = await computeTrustScoreByWallet(wallet);
       if (!trust) {
         return res.status(404).json({
-          error: "Wallet not found on xProof",
+          error: "Wallet not found on Prove Before Act",
           wallet,
           proof_layer: null,
           integrated: false,
@@ -553,13 +553,13 @@ export function registerProofReadRoutes(app: Express) {
           },
         },
         links: {
-          profile: `https://xproof.app/agent/${wallet}`,
-          trust_badge: `https://xproof.app/badge/trust/${wallet}.svg`,
-          trust_badge_md: `https://xproof.app/badge/trust/${wallet}/markdown`,
-          verify_api: `https://xproof.app/api/trust/${wallet}`,
+          profile: `https://provebeforeact.com/agent/${wallet}`,
+          trust_badge: `https://provebeforeact.com/badge/trust/${wallet}.svg`,
+          trust_badge_md: `https://provebeforeact.com/badge/trust/${wallet}/markdown`,
+          verify_api: `https://provebeforeact.com/api/trust/${wallet}`,
         },
         schema_version: "1.0",
-        source: "xproof.app",
+        source: "provebeforeact.com",
       });
     } catch (err: any) {
       logger.error("AgentProof endpoint error", { error: err.message });
@@ -584,7 +584,7 @@ export function registerProofReadRoutes(app: Express) {
         .where(eq(users.walletAddress, wallet));
       if (!user || !user.isPublicProfile) {
         return res.status(404).json({
-          error: "Wallet not found on xProof",
+          error: "Wallet not found on Prove Before Act",
           wallet,
           capauth_compatible: false,
           integration: null,
@@ -594,7 +594,7 @@ export function registerProofReadRoutes(app: Express) {
       const trust = await computeTrustScoreByWallet(wallet);
       if (!trust) {
         return res.status(404).json({
-          error: "Wallet not found on xProof",
+          error: "Wallet not found on Prove Before Act",
           wallet,
           capauth_compatible: false,
           integration: null,
@@ -676,7 +676,7 @@ export function registerProofReadRoutes(app: Express) {
       const architecturalEpochs = transitions.length;
       const latestTransition = transitions.at(-1) ?? null;
 
-      const baseUrl = process.env.REPLIT_DEPLOYMENT ? "https://xproof.app" : `${req.protocol}://${req.get("host")}`;
+      const baseUrl = process.env.REPLIT_DEPLOYMENT ? "https://provebeforeact.com" : `${req.protocol}://${req.get("host")}`;
 
       res.json({
         wallet,
@@ -731,7 +731,7 @@ export function registerProofReadRoutes(app: Express) {
           violations_api: `${baseUrl}/api/agents/${wallet}/violations`,
         },
         schema_version: "1.0",
-        source: "xproof.app",
+        source: "provebeforeact.com",
         partner: "skworld.io",
       });
     } catch (err: any) {
@@ -751,7 +751,7 @@ export function registerProofReadRoutes(app: Express) {
         return res.status(400).json({ error: "Valid SIGIL public key required (10-128 chars, alphanumeric/_-)" });
       }
 
-      const baseUrl = process.env.REPLIT_DEPLOYMENT ? "https://xproof.app" : `${req.protocol}://${req.get("host")}`;
+      const baseUrl = process.env.REPLIT_DEPLOYMENT ? "https://provebeforeact.com" : `${req.protocol}://${req.get("host")}`;
 
       // ── 1. Call SIGIL API (live lookup, 5s timeout, graceful fallback)
       type SigilCompact = {
@@ -875,7 +875,7 @@ export function registerProofReadRoutes(app: Express) {
           xproof_violations: xproofWallet ? `${baseUrl}/api/agents/${xproofWallet}/violations` : null,
         },
         schema_version: "1.0",
-        source: "xproof.app",
+        source: "provebeforeact.com",
         partner: "sigilprotocol.xyz",
       });
     } catch (err: any) {
@@ -898,7 +898,7 @@ export function registerProofReadRoutes(app: Express) {
         });
       }
 
-      const baseUrl = process.env.REPLIT_DEPLOYMENT ? "https://xproof.app" : `${req.protocol}://${req.get("host")}`;
+      const baseUrl = process.env.REPLIT_DEPLOYMENT ? "https://provebeforeact.com" : `${req.protocol}://${req.get("host")}`;
       const normalizedAddress = address.toLowerCase();
 
       // Lookup xProof certs linked to this BNB address via metadata.bnb_wallet.
@@ -979,7 +979,7 @@ export function registerProofReadRoutes(app: Express) {
           violations_api: xproofWallet ? `${baseUrl}/api/agents/${xproofWallet}/violations` : null,
         },
         schema_version: "1.0",
-        source: "xproof.app",
+        source: "provebeforeact.com",
         partner: "bnbchain-skills",
       });
     } catch (err: any) {
@@ -1003,10 +1003,10 @@ export function registerProofReadRoutes(app: Express) {
         .from(users)
         .where(eq(users.walletAddress, wallet));
       if (!userCheck || !userCheck.isPublicProfile) {
-        return res.status(404).json({ error: "Wallet not found on xProof", wallet, onboarding_complete: false });
+        return res.status(404).json({ error: "Wallet not found on Prove Before Act", wallet, onboarding_complete: false });
       }
 
-      const baseUrl = process.env.REPLIT_DEPLOYMENT ? "https://xproof.app" : `${req.protocol}://${req.get("host")}`;
+      const baseUrl = process.env.REPLIT_DEPLOYMENT ? "https://provebeforeact.com" : `${req.protocol}://${req.get("host")}`;
       const trust = await computeTrustScoreByWallet(wallet);
 
       if (!trust) {
@@ -1022,7 +1022,7 @@ export function registerProofReadRoutes(app: Express) {
             spec: `${baseUrl}/.well-known/xproof.md`,
           },
           schema_version: "1.0",
-          source: "xproof.app",
+          source: "provebeforeact.com",
           partner: "mx-moltbot-starter-kit",
         });
       }
@@ -1090,7 +1090,7 @@ export function registerProofReadRoutes(app: Express) {
           ? "resume_activity"
           : "continue",
         schema_version: "1.0",
-        source: "xproof.app",
+        source: "provebeforeact.com",
         partner: "mx-moltbot-starter-kit",
       });
     } catch (err: any) {
@@ -1119,7 +1119,7 @@ export function registerProofReadRoutes(app: Express) {
         });
       }
 
-      const baseUrl = process.env.REPLIT_DEPLOYMENT ? "https://xproof.app" : `${req.protocol}://${req.get("host")}`;
+      const baseUrl = process.env.REPLIT_DEPLOYMENT ? "https://provebeforeact.com" : `${req.protocol}://${req.get("host")}`;
       const isUuid = ELIZA_UUID_REGEX.test(identifier);
       const isWallet = MX_WALLET_REGEX.test(identifier);
       const lookupMode: "character_id" | "wallet" | "unknown" = isUuid
@@ -1299,7 +1299,7 @@ export function registerProofReadRoutes(app: Express) {
           },
         },
         schema_version: "1.0",
-        source: "xproof.app",
+        source: "provebeforeact.com",
         partner: "elizaos",
       });
     } catch (err: any) {
@@ -1330,7 +1330,7 @@ export function registerProofReadRoutes(app: Express) {
         });
       }
 
-      const baseUrl = process.env.REPLIT_DEPLOYMENT ? "https://xproof.app" : `${req.protocol}://${req.get("host")}`;
+      const baseUrl = process.env.REPLIT_DEPLOYMENT ? "https://provebeforeact.com" : `${req.protocol}://${req.get("host")}`;
       const lookupMode: "agent_id" | "wallet" = isWallet ? "wallet" : "agent_id";
 
       let xaiLinked = false;
@@ -1483,7 +1483,7 @@ export function registerProofReadRoutes(app: Express) {
           },
         },
         schema_version: "1.0",
-        source: "xproof.app",
+        source: "provebeforeact.com",
         partner: "xai",
       });
     } catch (err: any) {
@@ -1506,7 +1506,7 @@ export function registerProofReadRoutes(app: Express) {
         });
       }
 
-      const baseUrl = process.env.REPLIT_DEPLOYMENT ? "https://xproof.app" : `${req.protocol}://${req.get("host")}`;
+      const baseUrl = process.env.REPLIT_DEPLOYMENT ? "https://provebeforeact.com" : `${req.protocol}://${req.get("host")}`;
 
       // Only expose linkage when the owning user has opted into a public profile.
       const linkedCerts = await db
@@ -1597,7 +1597,7 @@ export function registerProofReadRoutes(app: Express) {
           },
         },
         schema_version: "1.0",
-        source: "xproof.app",
+        source: "provebeforeact.com",
         partner: "mpp",
       });
     } catch (err: any) {
@@ -1645,7 +1645,7 @@ export function registerProofReadRoutes(app: Express) {
           sql`${certifications.userId} IN (SELECT id FROM users WHERE is_public_profile = true)`
         ));
 
-      const baseUrl = process.env.REPLIT_DEPLOYMENT ? "https://xproof.app" : `${req.protocol}://${req.get("host")}`;
+      const baseUrl = process.env.REPLIT_DEPLOYMENT ? "https://provebeforeact.com" : `${req.protocol}://${req.get("host")}`;
       const uniqueIds = [...new Set(ids)];
       const resultMap = new Map(results.map(r => [r.proof_id, r]));
       const response = uniqueIds.map(id => {

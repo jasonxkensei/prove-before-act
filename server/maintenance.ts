@@ -91,7 +91,7 @@ export async function runDailyMaintenance() {
     // Alert if the proposed-violation review queue has grown beyond the
     // configured threshold without admin attention.  checkAndAlertViolationQueue
     // is a no-op when VIOLATION_QUEUE_ALERT_WEBHOOK_URL is not set.
-    const baseUrl = process.env.APP_BASE_URL || "https://xproof.app";
+    const baseUrl = process.env.APP_BASE_URL || "https://provebeforeact.com";
     await checkAndAlertViolationQueue(baseUrl).catch((err: any) => {
       logger.debug("Violation queue alert check skipped", {
         component: "maintenance",

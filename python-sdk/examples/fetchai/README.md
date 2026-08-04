@@ -1,4 +1,4 @@
-# Fetch.ai uAgents + xProof
+# Fetch.ai uAgents + Prove Before Act
 
 Demonstrates on-chain proof anchoring for Fetch.ai uAgent messages using
 `XProofuAgentMiddleware`.

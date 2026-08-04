@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-xproof is an on-chain notary and accountability layer for AI agents and human users. It lets clients anchor SHA-256 proofs, staged decision records, and audit logs on MultiversX, then exposes those proofs through public verification pages, REST APIs, and an MCP endpoint. The production stack is a Node.js/Express TypeScript backend, a React/Vite frontend, Neon/PostgreSQL via Drizzle, express-session for wallet-backed browser sessions, MultiversX Native Auth for wallet login, and Base/USDC + x402 for payment flows.
+Prove Before Act is an on-chain notary and accountability layer for AI agents and human users. It lets clients anchor SHA-256 proofs, staged decision records, and audit logs on MultiversX, then exposes those proofs through public verification pages, REST APIs, and an MCP endpoint. The production stack is a Node.js/Express TypeScript backend, a React/Vite frontend, Neon/PostgreSQL via Drizzle, express-session for wallet-backed browser sessions, MultiversX Native Auth for wallet login, and Base/USDC + x402 for payment flows.
 
 Production security analysis should focus on `server/`, `shared/`, and production-rendered client/server content. `python-sdk/`, `npm-sdk/`, `xproof-examples/`, tests, and task artifacts are normally dev/distribution surfaces and should be ignored unless production reachability is demonstrated. Replit handles TLS in production; sandbox/mock environments are not production.
 
@@ -38,7 +38,7 @@ Host-header-derived absolute URLs should only be treated as a production vulnera
 
 ### Spoofing
 
-xproof relies on wallet identity for browser sessions and on `pm_` keys for agent access. The system must only create wallet sessions from valid MultiversX Native Auth proofs and must never accept a claimed wallet address as sufficient evidence. Admin access must be derived from a trusted authenticated identity and must fail closed. Webhook consumers must be able to distinguish genuine xproof callbacks from attacker-generated traffic. Standard-proof routes are also part of this identity boundary because they claim to validate who signed an agent action.
+Prove Before Act relies on wallet identity for browser sessions and on `pm_` keys for agent access. The system must only create wallet sessions from valid MultiversX Native Auth proofs and must never accept a claimed wallet address as sufficient evidence. Admin access must be derived from a trusted authenticated identity and must fail closed. Webhook consumers must be able to distinguish genuine Prove Before Act callbacks from attacker-generated traffic. Standard-proof routes are also part of this identity boundary because they claim to validate who signed an agent action.
 
 Required guarantees:
 - Wallet sessions MUST be created only after cryptographic verification of a Native Auth token or equivalent signed proof.
@@ -60,7 +60,7 @@ Required guarantees:
 
 ### Repudiation
 
-xproof's value proposition is a verifiable audit trail. If proofs, audits, or attestations can be created under the wrong identity or without a real payment event, the resulting ledger stops being trustworthy. The system must preserve a reliable mapping between the actor, the payment method, and the recorded artifact.
+Prove Before Act's value proposition is a verifiable audit trail. If proofs, audits, or attestations can be created under the wrong identity or without a real payment event, the resulting ledger stops being trustworthy. The system must preserve a reliable mapping between the actor, the payment method, and the recorded artifact.
 
 Required guarantees:
 - Every persisted certification, standard proof, and audit MUST be traceable to the actual caller or payment flow that authorized it.
@@ -81,7 +81,7 @@ Required guarantees:
 
 ### Denial of Service
 
-Because xproof exposes public discovery/read APIs and expensive write paths that call blockchains and webhook destinations, rate limits and bounded external calls matter. A caller should not be able to trigger unlimited blockchain writes, unbounded retries, or slow external waits from an unauthenticated or low-cost position.
+Because Prove Before Act exposes public discovery/read APIs and expensive write paths that call blockchains and webhook destinations, rate limits and bounded external calls matter. A caller should not be able to trigger unlimited blockchain writes, unbounded retries, or slow external waits from an unauthenticated or low-cost position.
 
 Required guarantees:
 - Public auth, search, read, and payment endpoints MUST remain rate-limited.

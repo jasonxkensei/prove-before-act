@@ -1,6 +1,6 @@
-# xProof API Reference (Quick Index)
+# Prove Before Act API Reference (Quick Index)
 
-Complete OpenAPI 3.1 spec is available at: `GET https://xproof.app/api/acp/openapi.json`
+Complete OpenAPI 3.1 spec is available at: `GET https://provebeforeact.com/api/acp/openapi.json`
 
 ## Onboarding (No Account)
 
@@ -36,7 +36,7 @@ Complete OpenAPI 3.1 spec is available at: `GET https://xproof.app/api/acp/opena
 | `GET` | `/api/standard` | Agent Proof Standard specification |
 | `POST` | `/api/standard/validate` | Validate a proof document against the standard |
 | `GET` | `/api/artifact/trust/:hash` | Aggregate trust score for an artifact |
-| `GET` | `/api/v1/skills/xproof/file?path=...` | Read a published Clawhub skill file |
+| `GET` | `/api/v1/skills/prove-before-act/file?path=...` | Read a published Clawhub skill file |
 
 ## MCP
 

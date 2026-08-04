@@ -10,7 +10,7 @@ import {
   ServerError,
 } from "../src/errors.js";
 
-const BASE = "https://xproof.app";
+const BASE = "https://provebeforeact.com";
 
 function mockFetch(status: number, body: unknown, contentType = "application/json") {
   return vi.fn().mockResolvedValue({

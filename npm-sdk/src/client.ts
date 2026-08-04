@@ -38,7 +38,7 @@ import type {
 import { JURISDICTION_TYPES } from "./types.js";
 
 const VERSION = "0.1.11";
-const DEFAULT_BASE_URL = "https://xproof.app";
+const DEFAULT_BASE_URL = "https://provebeforeact.com";
 const DEFAULT_TIMEOUT = 30_000;
 
 export class XProofClient {

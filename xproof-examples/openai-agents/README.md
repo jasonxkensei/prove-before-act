@@ -1,4 +1,4 @@
-# OpenAI Agents SDK + xProof
+# OpenAI Agents SDK + Prove Before Act
 
 Certify tool executions and agent completions on-chain using the OpenAI Agents SDK.
 
@@ -28,7 +28,7 @@ import asyncio
 from agents import Agent, Runner
 from xproof.integrations.openai_agents import XProofRunHooks
 
-hooks = XProofRunHooks(api_key="pm_...")   # get key at xproof.app
+hooks = XProofRunHooks(api_key="pm_...")   # get key at provebeforeact.com
 agent = Agent(name="analyst", instructions="You analyze financial data.")
 
 result = await Runner.run(agent, input="Summarise Q3 earnings", hooks=hooks)
@@ -55,7 +55,7 @@ No API key or OpenAI key needed for the demo — runs entirely with simulated ob
 
 ## Links
 
-- [xproof.app](https://xproof.app)
-- Docs (LLM-readable): [xproof.app/llms.txt](https://xproof.app/llms.txt)
-- [PyPI: xproof](https://pypi.org/project/xproof)
+- [provebeforeact.com](https://provebeforeact.com)
+- Docs (LLM-readable): [provebeforeact.com/llms.txt](https://provebeforeact.com/llms.txt)
+- [PyPI: Prove Before Act](https://pypi.org/project/xproof)
 - [OpenAI Agents SDK](https://github.com/openai/openai-agents-python)

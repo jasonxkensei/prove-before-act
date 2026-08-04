@@ -609,7 +609,7 @@ export function registerAttestationsRoutes(app: Express) {
       }
 
       doc.moveDown(2);
-      doc.fontSize(9).fillColor(gray).text(`Verified on MultiversX blockchain. Full audit trail: https://xproof.app/agent/${wallet}`, { align: "center" });
+      doc.fontSize(9).fillColor(gray).text(`Verified on MultiversX blockchain. Full audit trail: https://provebeforeact.com/agent/${wallet}`, { align: "center" });
 
       await new Promise<void>((resolve) => { doc.on("end", resolve); doc.end(); });
       const pdfBuf = Buffer.concat(chunks);

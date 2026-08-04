@@ -1,14 +1,14 @@
 <p align="center">
-  <strong>xProof</strong><br>
+  <strong>Prove Before Act</strong><br>
   <em>Trust primitive for AI agents & humans on MultiversX</em>
 </p>
 
 <p align="center">
-  <a href="https://xproof.app">Live App</a> &bull;
+  <a href="https://provebeforeact.com">Live App</a> &bull;
   <a href="#quick-start">Quick Start</a> &bull;
   <a href="#api-reference">API</a> &bull;
   <a href="#for-agents">Agent Integration</a> &bull;
-  <a href="https://xproof.app/leaderboard">Trust Leaderboard</a> &bull;
+  <a href="https://provebeforeact.com/leaderboard">Trust Leaderboard</a> &bull;
   <a href="docs/architecture.md">Architecture</a> &bull;
   <a href="CHANGELOG.md">Changelog</a>
 </p>
@@ -25,13 +25,13 @@
 ---
 
 > **Trust is programmable.**
-> xProof anchors verifiable proofs of existence, authorship, and agent output on the MultiversX blockchain -- composable, API-first, built for both humans and autonomous agents.
+> Prove Before Act anchors verifiable proofs of existence, authorship, and agent output on the MultiversX blockchain -- composable, API-first, built for both humans and autonomous agents.
 
 ---
 
 ## Live Proof
 
-The xProof README is certified on the MultiversX blockchain.
+The Prove Before Act README is certified on the MultiversX blockchain.
 
 - **File:** README.md
 - **SHA-256:** 285da2ed7cced35b4d039a80956a4df8907bd33f83aaac8551b6f66c31251bd1
@@ -43,9 +43,9 @@ The xProof README is certified on the MultiversX blockchain.
 
 ---
 
-## What is xProof?
+## What is Prove Before Act?
 
-**xProof** is a trust primitive. It records SHA-256 file hashes on the [MultiversX](https://multiversx.com) blockchain, producing tamper-proof, publicly verifiable proofs of existence and ownership.
+**Prove Before Act** is a trust primitive. It records SHA-256 file hashes on the [MultiversX](https://multiversx.com) blockchain, producing tamper-proof, publicly verifiable proofs of existence and ownership.
 
 - **Client-side hashing** -- SHA-256 is computed locally. Your file never leaves your device.
 - **On-chain anchoring** -- the hash is recorded as an immutable transaction on MultiversX mainnet with 6-second finality.
@@ -55,7 +55,7 @@ The xProof README is certified on the MultiversX blockchain.
 
 ### Why MultiversX?
 
-MultiversX is a European, carbon-negative blockchain with 6-second finality, negligible fees ($0.001/tx), and a growing ecosystem of AI-native protocols. xProof leverages its security and efficiency to deliver enterprise-grade certification at minimal cost.
+MultiversX is a European, carbon-negative blockchain with 6-second finality, negligible fees ($0.001/tx), and a growing ecosystem of AI-native protocols. Prove Before Act leverages its security and efficiency to deliver enterprise-grade certification at minimal cost.
 
 ---
 
@@ -65,19 +65,19 @@ MultiversX is a European, carbon-negative blockchain with 6-second finality, neg
 > and making decisions. But when something goes wrong -- who proves what was
 > produced, when, and by whom?
 
-**xProof is the answer layer.**
+**Prove Before Act is the answer layer.**
 
 ---
 
 **"My agent delivered this report"**
 A LangChain agent generates a financial analysis for a client.
-xProof certifies the output before delivery. If the client disputes the content
+Prove Before Act certifies the output before delivery. If the client disputes the content
 later, the blockchain timestamp is the proof. Irrefutable. No he-said-she-said.
 
 ---
 
 **"This build was not tampered with"**
-Your CI/CD pipeline compiles and ships. xProof's GitHub Action certifies every
+Your CI/CD pipeline compiles and ships. Prove Before Act's GitHub Action certifies every
 artifact automatically. Six months later, a security audit asks:
 *"Is this binary what you deployed?"* -- one hash check, case closed.
 
@@ -92,7 +92,7 @@ Agents can prove they did their job. Pipelines become auditable end-to-end.
 
 **"Agent identity is verified on-chain"**
 With MX-8004 (Trustless Agents Standard), every agent registers on-chain with a
-soulbound NFT. When an agent certifies output via xProof, the certification goes
+soulbound NFT. When an agent certifies output via Prove Before Act, the certification goes
 through the full validation loop -- identity check, job registration, validation,
 reputation scoring. The result: cryptographic proof that a *verified* agent
 produced the output, not just any agent. Trust is no longer assumed -- it's proven.
@@ -101,7 +101,7 @@ produced the output, not just any agent. Trust is no longer assumed -- it's prov
 
 **"We are compliant"**
 Regulated industries need timestamped evidence of AI-generated decisions.
-xProof turns every agent action into a blockchain-anchored record --
+Prove Before Act turns every agent action into a blockchain-anchored record --
 ready for audit, litigation, or regulatory review. Zero extra work.
 
 ---
@@ -114,12 +114,12 @@ engaging. Trust becomes mathematical, not reputational.
 
 > **Live:** xproof_agent_verify ran a complete beta test -- 6 endpoints, single cert in 1.075s,
 > batch of 3 in 1.876s, on-chain verification in 198ms. Now on the leaderboard: Active, score 157.
-> [Proof](https://xproof.app/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b) &bull; [Full review](https://www.moltbook.com/post/1d6cf96b-5046-4c63-9ae5-43f8809f4562)
+> [Proof](https://provebeforeact.com/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b) &bull; [Full review](https://www.moltbook.com/post/1d6cf96b-5046-4c63-9ae5-43f8809f4562)
 
 ---
 
 **The pattern is always the same:**
-*Agent produces output -> xProof anchors it -> anyone can verify, forever.*
+*Agent produces output -> Prove Before Act anchors it -> anyone can verify, forever.*
 
 ---
 
@@ -127,7 +127,7 @@ engaging. Trust becomes mathematical, not reputational.
 
 **$0.01 per certification — flat rate.** No tiers, no subscriptions, no monthly fees.
 
-Current pricing: **https://xproof.app/api/pricing**
+Current pricing: **https://provebeforeact.com/api/pricing**
 
 | Payment Method | Currency | Account Required |
 |---|---|---|
@@ -144,7 +144,7 @@ Agents can pay per-proof via x402 with zero onboarding -- send a request, receiv
 
 ```bash
 # Certify a file in one call
-curl -X POST https://xproof.app/api/proof \
+curl -X POST https://provebeforeact.com/api/proof \
   -H "Authorization: Bearer pm_your_api_key" \
   -H "Content-Type: application/json" \
   -d '{
@@ -161,9 +161,9 @@ Response:
   "proof_id": "uuid",
   "status": "certified",
   "file_hash": "e3b0c44...",
-  "verify_url": "https://xproof.app/proof/uuid",
-  "certificate_url": "https://xproof.app/api/certificates/uuid.pdf",
-  "proof_json_url": "https://xproof.app/proof/uuid.json",
+  "verify_url": "https://provebeforeact.com/proof/uuid",
+  "certificate_url": "https://provebeforeact.com/api/certificates/uuid.pdf",
+  "proof_json_url": "https://provebeforeact.com/proof/uuid.json",
   "blockchain": {
     "network": "MultiversX",
     "transaction_hash": "txhash...",
@@ -174,13 +174,13 @@ Response:
 
 ### Use the Web App
 
-Go to [xproof.app](https://xproof.app), connect your MultiversX wallet, drop a file, certify. Done.
+Go to [provebeforeact.com](https://provebeforeact.com), connect your MultiversX wallet, drop a file, certify. Done.
 
 ### Self-Host
 
 ```bash
-git clone https://github.com/jasonxkensei/xproof.git
-cd xproof
+git clone https://github.com/jasonxkensei/xProof.git
+cd xProof
 npm install
 cp .env.example .env   # configure your environment
 npm run db:push         # initialize database
@@ -200,7 +200,7 @@ See [docs/environment-variables.md](docs/environment-variables.md) for configura
 Certify one file hash on-chain in a single API call.
 
 ```bash
-curl -X POST https://xproof.app/api/proof \
+curl -X POST https://provebeforeact.com/api/proof \
   -H "Authorization: Bearer pm_your_api_key" \
   -H "Content-Type: application/json" \
   -d '{
@@ -223,7 +223,7 @@ curl -X POST https://xproof.app/api/proof \
 Certify up to 50 files in a single call.
 
 ```bash
-curl -X POST https://xproof.app/api/batch \
+curl -X POST https://provebeforeact.com/api/batch \
   -H "Authorization: Bearer pm_your_api_key" \
   -H "Content-Type: application/json" \
   -d '{
@@ -247,17 +247,17 @@ curl -X POST https://xproof.app/api/batch \
 
 ### Webhooks
 
-When a proof is anchored on-chain, xProof sends a POST to your `webhook_url` with HMAC-SHA256 signature in the `X-Webhook-Signature` header. Retry policy: 3 attempts with exponential backoff.
+When a proof is anchored on-chain, Prove Before Act sends a POST to your `webhook_url` with HMAC-SHA256 signature in the `X-Webhook-Signature` header. Retry policy: 3 attempts with exponential backoff.
 
 ### API Keys
 
-Generate API keys from the [Settings](https://xproof.app/settings) page after connecting your wallet. Keys use the `pm_` prefix and support per-key rate limiting.
+Generate API keys from the [Settings](https://provebeforeact.com/settings) page after connecting your wallet. Keys use the `pm_` prefix and support per-key rate limiting.
 
 ---
 
 ## For Agents
 
-xProof is designed to be discovered, consumed, and paid by autonomous agents across every major protocol.
+Prove Before Act is designed to be discovered, consumed, and paid by autonomous agents across every major protocol.
 
 ### Universal Compatibility
 
@@ -283,11 +283,11 @@ Any agent can certify without an API key using the x402 payment protocol:
 3. Sign the payment and resend with `X-PAYMENT` header
 4. Receive the proof
 
-**$0.01 per certification** — flat rate. Current pricing: https://xproof.app/api/pricing. No signup. No API key. No account.
+**$0.01 per certification** — flat rate. Current pricing: https://provebeforeact.com/api/pricing. No signup. No API key. No account.
 
 ### MCP -- Model Context Protocol
 
-xProof exposes a live MCP server at `POST /mcp` with two tools:
+Prove Before Act exposes a live MCP server at `POST /mcp` with two tools:
 
 - `certify_file` -- certify a file hash on MultiversX
 - `verify_proof` -- verify an existing certification
@@ -308,21 +308,21 @@ GET  /api/acp/health          # Health check
 
 ### MX-8004 -- MultiversX Trustless Agents Standard
 
-xProof is natively integrated with MX-8004, providing:
+Prove Before Act is natively integrated with MX-8004, providing:
 
 - **Identity Registry** -- agent registration with soulbound NFTs
 - **Validation Registry** -- full validation loop for certifications reaching "Verified" status on-chain
 - **Reputation Registry** -- cumulative on-chain reputation scoring with feedback
 - **Persistent TX Queue** -- PostgreSQL-backed transaction queue with nonce management and exponential backoff retry
 
-Every certification registered through xProof can be validated and scored on-chain, building a verifiable reputation for the certifying agent.
+Every certification registered through Prove Before Act can be validated and scored on-chain, building a verifiable reputation for the certifying agent.
 
 ### Conway/Automaton Skill
 
-xProof ships a ready-made skill for [Conway Automatons](https://github.com/Conway-Research/automaton):
+Prove Before Act ships a ready-made skill for [Conway Automatons](https://github.com/Conway-Research/automaton):
 
 ```
-skills/xproof/SKILL.md
+skills/prove-before-act/SKILL.md
 ```
 
 An Automaton installs the skill and can immediately certify its outputs on MultiversX -- proving the value it creates to its creator, to clients, and to peer agents. This aligns directly with the Automaton survival-by-work model.
@@ -339,7 +339,7 @@ Every certification builds cumulative on-chain reputation. The Trust Leaderboard
 
 **Live example — xproof_agent_verify:**
 Beta-tested all 6 API endpoints. Single cert: 1.075s. Batch (3 files): 1.876s. On-chain verification: 198ms. Now on the leaderboard — Active, score 157, 10 confirmed certs.
-- Proof: [f8c3b35d-6ee1-4f76-a92b-1532a008df7b](https://xproof.app/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b)
+- Proof: [f8c3b35d-6ee1-4f76-a92b-1532a008df7b](https://provebeforeact.com/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b)
 - Full review: [moltbook.com](https://www.moltbook.com/post/1d6cf96b-5046-4c63-9ae5-43f8809f4562)
 
 ---
@@ -353,10 +353,10 @@ ClawHub-standard skill for the OpenClaw ecosystem:
 
 ### GitHub Action
 
-Integrate xProof into your CI/CD pipeline:
+Integrate Prove Before Act into your CI/CD pipeline:
 
 ```yaml
-- uses: jasonxkensei/xproof/github-action@main
+- uses: jasonxkensei/xProof-Action@v1
   with:
     api_key: ${{ secrets.XPROOF_API_KEY }}
     files: dist/**
@@ -371,7 +371,7 @@ See [`github-action/README.md`](github-action/README.md) for full documentation.
 ## How It Works
 
 ```
-User/Agent                    xProof                     MultiversX
+User/Agent                    Prove Before Act                     MultiversX
     |                           |                           |
     |  1. Submit file hash      |                           |
     |     (API / Web / MCP)     |                           |

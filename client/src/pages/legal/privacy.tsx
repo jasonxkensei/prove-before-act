@@ -8,7 +8,7 @@ export default function PolitiqueConfidentialite() {
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between">
           <a href="/" className="flex items-center gap-2" data-testid="link-logo-home">
-            <img src="/xproof-logo.png" alt="xproof" className="h-8 w-auto" />
+            <img src="/xproof-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
           </a>
           <Link href="/">
             <Button variant="ghost" size="sm" data-testid="button-back-home">
@@ -26,7 +26,7 @@ export default function PolitiqueConfidentialite() {
           <section>
             <h2 className="text-xl font-semibold mb-4">Introduction</h2>
             <p className="text-muted-foreground leading-relaxed">
-              xproof is committed to protecting the privacy of its users. This privacy 
+              Prove Before Act is committed to protecting the privacy of its users. This privacy 
               policy explains how we collect, use, and protect your personal data in 
               compliance with applicable data protection regulations, including the 
               General Data Protection Regulation (GDPR).
@@ -36,7 +36,7 @@ export default function PolitiqueConfidentialite() {
           <section>
             <h2 className="text-xl font-semibold mb-4">Data collected</h2>
             <p className="text-muted-foreground leading-relaxed mb-4">
-              xproof only collects data strictly necessary for the operation of the service:
+              Prove Before Act only collects data strictly necessary for the operation of the service:
             </p>
             <ul className="space-y-3 text-muted-foreground">
               <li>
@@ -60,7 +60,7 @@ export default function PolitiqueConfidentialite() {
           <section>
             <h2 className="text-xl font-semibold mb-4">Data not collected</h2>
             <p className="text-muted-foreground leading-relaxed mb-4">
-              To ensure the confidentiality of your creations, xproof never collects:
+              To ensure the confidentiality of your creations, Prove Before Act never collects:
             </p>
             <ul className="space-y-2 text-muted-foreground">
               <li>The content of your files</li>

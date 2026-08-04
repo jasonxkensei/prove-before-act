@@ -83,7 +83,7 @@ const protocols = [
   {
     name: "OpenClaw",
     subtitle: "Agent Skill Marketplace",
-    description: "Install xproof as a skill in OpenClaw-compatible agents. One command certification.",
+    description: "Install Prove Before Act as a skill in OpenClaw-compatible agents. One command certification.",
     link: "https://github.com/jasonxkensei/xproof-openclaw-skill",
     icon: Cog,
     badge: "Marketplace",
@@ -180,14 +180,14 @@ export default function AgentsPage() {
   };
 
   useEffect(() => {
-    document.title = "Integrations - xproof";
+    document.title = "Integrations - Prove Before Act";
     const meta = document.querySelector('meta[name="description"]');
     if (meta) {
-      meta.setAttribute("content", "xproof integrates with every major agent protocol. One proof layer, every platform.");
+      meta.setAttribute("content", "Prove Before Act integrates with every major agent protocol. One proof layer, every platform.");
     } else {
       const newMeta = document.createElement("meta");
       newMeta.name = "description";
-      newMeta.content = "xproof integrates with every major agent protocol. One proof layer, every platform.";
+      newMeta.content = "Prove Before Act integrates with every major agent protocol. One proof layer, every platform.";
       document.head.appendChild(newMeta);
     }
   }, []);
@@ -197,7 +197,7 @@ export default function AgentsPage() {
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between">
           <a href="/" className="flex items-center gap-2" data-testid="link-logo-home">
-            <img src="/xproof-logo.png" alt="xproof" className="h-8 w-auto" />
+            <img src="/xproof-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
           </a>
           <nav className="hidden md:flex items-center gap-6">
             <a href="/#how-it-works" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-how-it-works">
@@ -240,7 +240,7 @@ export default function AgentsPage() {
           </h1>
 
           <p className="mx-auto mb-8 max-w-2xl text-lg md:text-xl text-muted-foreground leading-relaxed" data-testid="text-hero-subtitle">
-            xproof integrates with every major agent protocol. One proof layer, every platform.
+            Prove Before Act integrates with every major agent protocol. One proof layer, every platform.
           </p>
         </div>
       </section>
@@ -392,7 +392,7 @@ export default function AgentsPage() {
             <div className="grid gap-8 md:grid-cols-4 mb-12">
               <div className="md:col-span-2">
                 <div className="flex items-center gap-2 mb-4">
-                  <img src="/xproof-logo.png" alt="xproof" className="h-8 w-auto" />
+                  <img src="/xproof-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
                 </div>
                 <p className="text-sm text-muted-foreground max-w-xs">
                   The on-chain notary for AI agents. Verifiable trust, anchored on MultiversX.
@@ -422,7 +422,7 @@ export default function AgentsPage() {
 
             <div className="border-t pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
               <p className="text-sm text-muted-foreground">
-                © {new Date().getFullYear()} xproof. All rights reserved.
+                © {new Date().getFullYear()} Prove Before Act. All rights reserved.
               </p>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <span>Powered by</span>

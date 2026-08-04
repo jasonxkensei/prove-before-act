@@ -739,7 +739,7 @@ export function registerStandardRoutes(app: Express) {
         verification: "Signatures are cryptographically verified against the canonical string and the supplied public_key before acceptance",
       },
       hash_format: "sha256:<64-hex-chars>",
-      trust_integration: "Proofs anchored via this standard contribute to xProof trust scores",
+      trust_integration: "Proofs anchored via this standard contribute to Prove Before Act trust scores",
     });
   });
 }

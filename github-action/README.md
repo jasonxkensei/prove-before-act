@@ -1,4 +1,4 @@
-# xProof Certify — GitHub Action
+# Prove Before Act Certify — GitHub Action
 
 [![Marketplace](https://img.shields.io/badge/Marketplace-xProof%20Certify-blue?logo=github)](https://github.com/marketplace/actions/xproof-certify)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
@@ -6,11 +6,11 @@
 
 > Anchor a verifiable, on-chain proof of your build artifacts and AI agent outputs — in 3 lines of YAML.
 
-Certify build artifacts (or anything hashable) on the MultiversX blockchain directly from your CI/CD pipeline. Files are hashed locally with SHA-256 and never leave your runner — only the hash is sent to xProof. Get back a permanent, publicly verifiable proof, a status badge, and a JSON attestation you can attach to releases.
+Certify build artifacts (or anything hashable) on the MultiversX blockchain directly from your CI/CD pipeline. Files are hashed locally with SHA-256 and never leave your runner — only the hash is sent to Prove Before Act. Get back a permanent, publicly verifiable proof, a status badge, and a JSON attestation you can attach to releases.
 
 ## Get started in 2 minutes
 
-1. Grab an API key: sign in at [xproof.app](https://xproof.app), connect a wallet, and create a key under **Settings → API Keys** ([direct link](https://xproof.app/settings)).
+1. Grab an API key: sign in at [provebeforeact.com](https://provebeforeact.com), connect a wallet, and create a key under **Settings → API Keys** ([direct link](https://provebeforeact.com/settings)).
 2. Add it to your repo as a secret named `XPROOF_API_KEY` (**Settings → Secrets and variables → Actions**).
 3. Drop this into any workflow:
 
@@ -29,7 +29,7 @@ jobs:
       - name: Build
         run: npm run build && zip -r build.zip dist/
 
-      - name: Certify with xProof
+      - name: Certify with Prove Before Act
         uses: jasonxkensei/xProof-Action@v1
         with:
           api_key: ${{ secrets.XPROOF_API_KEY }}
@@ -38,19 +38,19 @@ jobs:
 
 That's it — every push to `main` now anchors a tamper-evident proof of your build artifact on-chain.
 
-> **No API key yet, or building an autonomous agent instead of a CI pipeline?** xProof also supports pay-per-call certification with no account via the **x402** protocol (USDC on Base), through the [`@xproof/xproof` npm SDK](https://www.npmjs.com/package/@xproof/xproof) or [`xproof` PyPI SDK](https://pypi.org/project/xproof/). This GitHub Action always uses an API key because CI runners need a stable, revocable credential rather than a per-call wallet signature.
+> **No API key yet, or building an autonomous agent instead of a CI pipeline?** Prove Before Act also supports pay-per-call certification with no account via the **x402** protocol (USDC on Base), through the [`@prove-before-act/sdk` npm SDK](https://www.npmjs.com/package/@prove-before-act/sdk) or [`Prove Before Act` PyPI SDK](https://pypi.org/project/xproof/). This GitHub Action always uses an API key because CI runners need a stable, revocable credential rather than a per-call wallet signature.
 
 ## Inputs
 
 | Input | Required | Default | Description |
 |-------|----------|---------|-------------|
-| `api_key` | Yes | — | xProof API key (`pm_xxx`). Store as a GitHub secret. |
+| `api_key` | Yes | — | Prove Before Act API key (`pm_xxx`). Store as a GitHub secret. |
 | `files` | Yes | — | Files or glob patterns to certify (space-separated). |
 | `author_name` | No | `''` | Author name to attach to the certification. |
 | `metadata` | No | `''` | JSON object merged into the certification metadata. Use this for AI-agent context, e.g. `{"model_hash":"...","strategy_hash":"...","confidence_level":0.8}`. |
 | `fail_on_error` | No | `'true'` | Fail the step if any file could not be certified. Set to `'false'` to only warn and keep the job green. |
 | `max_retries` | No | `'3'` | Retry attempts per file on transient errors (HTTP 429 or 5xx). |
-| `api_url` | No | `https://xproof.app` | API URL (override for testing). |
+| `api_url` | No | `https://provebeforeact.com` | API URL (override for testing). |
 
 ## Outputs
 
@@ -123,7 +123,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: npm run build && zip -r build.zip dist/
 
-      - name: Certify with xProof
+      - name: Certify with Prove Before Act
         if: startsWith(github.ref, 'refs/tags/v')
         uses: jasonxkensei/xProof-Action@v1
         with:
@@ -165,8 +165,8 @@ The attestation JSON contains full provenance data:
       "filename": "build.zip",
       "sha256": "a1b2c3d4...",
       "proof_id": "uuid-here",
-      "verify_url": "https://xproof.app/proof/uuid-here",
-      "badge_url": "https://xproof.app/badge/uuid-here",
+      "verify_url": "https://provebeforeact.com/proof/uuid-here",
+      "badge_url": "https://provebeforeact.com/badge/uuid-here",
       "tx_hash": "abc123...",
       "explorer_url": "https://explorer.multiversx.com/transactions/abc123..."
     }
@@ -179,7 +179,7 @@ The attestation JSON contains full provenance data:
 Use the `badge_markdown` output directly, or build it manually:
 
 ```markdown
-[![xProof Verified](https://xproof.app/badge/{proof_id})](https://xproof.app/proof/{proof_id})
+[![Prove Before Act Verified](https://provebeforeact.com/badge/{proof_id})](https://provebeforeact.com/proof/{proof_id})
 ```
 
 ### Keep the job green even if certification fails
@@ -187,7 +187,7 @@ Use the `badge_markdown` output directly, or build it manually:
 By default the step fails the job if any file couldn't be certified (`fail_on_error: 'true'`). To only warn instead:
 
 ```yaml
-- name: Certify with xProof
+- name: Certify with Prove Before Act
   uses: jasonxkensei/xProof-Action@v1
   with:
     api_key: ${{ secrets.XPROOF_API_KEY }}
@@ -206,13 +206,13 @@ By default the step fails the job if any file couldn't be certified (`fail_on_er
 ## How it works
 
 1. Calculates SHA-256 hash of each file locally (files never leave your runner)
-2. Sends only the hash, filename, and optional metadata to the xProof API
-3. xProof anchors the hash on the MultiversX blockchain
+2. Sends only the hash, filename, and optional metadata to the Prove Before Act API
+3. Prove Before Act anchors the hash on the MultiversX blockchain
 4. Returns verification URLs, badges, and a JSON attestation file
 
-**Cost:** $0.01 per certification — flat rate, no tiers. Current pricing: https://xproof.app/api/pricing
+**Cost:** $0.01 per certification — flat rate, no tiers. Current pricing: https://provebeforeact.com/api/pricing
 
-**Get an API key:** Visit [xproof.app/settings](https://xproof.app/settings) and connect your wallet.
+**Get an API key:** Visit [provebeforeact.com/settings](https://provebeforeact.com/settings) and connect your wallet.
 
 ## More examples
 

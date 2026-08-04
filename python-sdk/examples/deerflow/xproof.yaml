@@ -1,15 +1,15 @@
 name: xproof_certify
-display_name: xProof Blockchain Certification
+display_name: Prove Before Act Blockchain Certification
 description: >
   Certify any agent output on the MultiversX blockchain for
   proof-of-existence and accountability. Creates an immutable,
-  timestamped record using the xProof 4W framework
+  timestamped record using the Prove Before Act 4W framework
   (Who, What, When, Why).
 category: trust
-author: xProof
+author: Prove Before Act
 version: "0.1.0"
-homepage: https://xproof.app
-repository: https://github.com/jasonxkensei/xproof
+homepage: https://provebeforeact.com
+repository: https://github.com/jasonxkensei/xProof
 
 parameters:
   - name: content
@@ -72,4 +72,4 @@ dependencies:
 env:
   - name: XPROOF_API_KEY
     required: true
-    description: Your xProof API key (get one at https://xproof.app).
+    description: Your Prove Before Act API key (get one at https://provebeforeact.com).

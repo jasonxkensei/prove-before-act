@@ -1,6 +1,6 @@
 {
-  "name": "xproof",
-  "short_name": "xproof",
+  "name": "Prove Before Act",
+  "short_name": "Prove Before Act",
   "description": "The on-chain notary for AI agents. Verifiable trust, anchored on MultiversX.",
   "start_url": "/",
   "display": "standalone",

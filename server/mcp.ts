@@ -75,7 +75,7 @@ export async function createMcpServer(ctx: McpContext) {
   const currentPriceUsd = await getCertificationPriceUsd();
   
   const server = new McpServer({
-    name: "xproof",
+    name: "prove-before-act",
     version: "1.3.0",
   });
 
@@ -1027,8 +1027,8 @@ export async function createMcpServer(ctx: McpContext) {
             badge: {
               endpoint: `${baseUrl}/badge/{proof_id}`,
               description: "Dynamic SVG badge for README files. Shows verification status (green=verified, yellow=pending).",
-              markdown_template: "[![xProof Verified](https://xproof.app/badge/{proof_id})](https://explorer.multiversx.com/transactions/{tx_hash})",
-              markdown_note: "Replace {tx_hash} with the transaction hash from the certification response. For pending proofs, use https://xproof.app/proof/{proof_id} instead.",
+              markdown_template: "[![xProof Verified](https://provebeforeact.com/badge/{proof_id})](https://explorer.multiversx.com/transactions/{tx_hash})",
+              markdown_note: "Replace {tx_hash} with the transaction hash from the certification response. For pending proofs, use https://provebeforeact.com/proof/{proof_id} instead.",
             },
             mx8004: {
               standard: "MX-8004 (Trustless Agents Standard)",

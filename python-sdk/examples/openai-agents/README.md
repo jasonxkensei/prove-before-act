@@ -1,13 +1,13 @@
-# OpenAI Agents SDK + xProof Integration
+# OpenAI Agents SDK + Prove Before Act Integration
 
 Certify every tool call and agent completion from the OpenAI Agents SDK on-chain with 4W metadata (Who, What, When, Why).
 
-This example is self-contained and works with the base `xproof>=0.1.0` package — no additional sub-modules required.
+This example is self-contained and works with the base `Prove Before Act>=0.1.0` package — no additional sub-modules required.
 
 ## Installation
 
 ```bash
-pip install openai-agents xproof
+pip install openai-agents Prove Before Act
 ```
 
 ## Quick Start — RunHooks
@@ -66,7 +66,7 @@ Every certification anchors a SHA-256 hash on MultiversX mainnet. The content it
 ## Get a Free API Key
 
 ```bash
-curl -s -X POST https://xproof.app/api/agent/register \
+curl -s -X POST https://provebeforeact.com/api/agent/register \
   -H "Content-Type: application/json" \
   -d '{"agent_name": "my-openai-agent"}' | python3 -m json.tool
 ```
@@ -84,4 +84,4 @@ The demo uses mock objects — no real API key or LLM backend needed.
 
 ## Links
 
-- [xProof](https://xproof.app) · [API docs](https://xproof.app/docs) · [PyPI](https://pypi.org/project/xproof/) · [GitHub](https://github.com/jasonxkensei/xproof)
+- [Prove Before Act](https://provebeforeact.com) · [API docs](https://provebeforeact.com/docs) · [PyPI](https://pypi.org/project/xproof/) · [GitHub](https://github.com/jasonxkensei/xProof)

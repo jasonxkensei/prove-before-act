@@ -14,7 +14,7 @@ export default function ConditionsUtilisation() {
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between">
           <a href="/" className="flex items-center gap-2" data-testid="link-logo-home">
-            <img src="/xproof-logo.png" alt="xproof" className="h-8 w-auto" />
+            <img src="/xproof-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
           </a>
           <Link href="/">
             <Button variant="ghost" size="sm" data-testid="button-back-home">
@@ -32,7 +32,7 @@ export default function ConditionsUtilisation() {
           <section>
             <h2 className="text-xl font-semibold mb-4">1. Purpose of the service</h2>
             <p className="text-muted-foreground leading-relaxed">
-              xproof is a digital certification service that allows you to record 
+              Prove Before Act is a digital certification service that allows you to record 
               proof of existence of files on the MultiversX blockchain. The service 
               generates a cryptographic fingerprint (SHA-256 hash) of your files and records it 
               permanently on the blockchain, thereby creating a timestamped and immutable proof.
@@ -42,7 +42,7 @@ export default function ConditionsUtilisation() {
           <section>
             <h2 className="text-xl font-semibold mb-4">2. Acceptance of terms</h2>
             <p className="text-muted-foreground leading-relaxed">
-              By using the xproof service, you fully and unconditionally accept these 
+              By using the Prove Before Act service, you fully and unconditionally accept these 
               Terms of Use. If you do not accept these terms, 
               you must not use the service.
             </p>
@@ -56,7 +56,7 @@ export default function ConditionsUtilisation() {
               their wallet and private keys.
             </p>
             <p className="text-muted-foreground leading-relaxed">
-              xproof never has access to your private keys and cannot recover access to 
+              Prove Before Act never has access to your private keys and cannot recover access to 
               your account in case of loss of your wallet credentials.
             </p>
           </section>
@@ -64,7 +64,7 @@ export default function ConditionsUtilisation() {
           <section>
             <h2 className="text-xl font-semibold mb-4">4. Description of the service</h2>
             <p className="text-muted-foreground leading-relaxed mb-4">
-              The xproof service includes:
+              The Prove Before Act service includes:
             </p>
             <ul className="space-y-2 text-muted-foreground">
               <li>Generation of cryptographic fingerprints (SHA-256 hash) of files</li>
@@ -105,12 +105,12 @@ export default function ConditionsUtilisation() {
           <section>
             <h2 className="text-xl font-semibold mb-4">7. Intellectual property</h2>
             <p className="text-muted-foreground leading-relaxed">
-              xproof does not claim any rights over the files you certify. Certification 
+              Prove Before Act does not claim any rights over the files you certify. Certification 
               does not transfer any intellectual property rights. It solely constitutes 
               proof that the file existed in this form at a given date.
             </p>
             <p className="text-muted-foreground leading-relaxed mt-4">
-              <strong className="text-foreground">Important:</strong> xproof certification does not constitute 
+              <strong className="text-foreground">Important:</strong> Prove Before Act certification does not constitute 
               proof of ownership or authorship. It only proves the existence 
               of the file at a specific date.
             </p>
@@ -119,7 +119,7 @@ export default function ConditionsUtilisation() {
           <section>
             <h2 className="text-xl font-semibold mb-4">8. Limitation of liability</h2>
             <p className="text-muted-foreground leading-relaxed mb-4">
-              xproof strives to maintain a reliable and available service, but cannot guarantee:
+              Prove Before Act strives to maintain a reliable and available service, but cannot guarantee:
             </p>
             <ul className="space-y-2 text-muted-foreground">
               <li>Continuous and uninterrupted availability of the service</li>
@@ -127,7 +127,7 @@ export default function ConditionsUtilisation() {
               <li>Permanence of the MultiversX blockchain (third-party infrastructure)</li>
             </ul>
             <p className="text-muted-foreground leading-relaxed mt-4">
-              Under no circumstances shall xproof be held liable for direct or indirect damages, 
+              Under no circumstances shall Prove Before Act be held liable for direct or indirect damages, 
               data loss, revenue loss, or any other harm resulting from the use 
               or inability to use the service.
             </p>
@@ -136,12 +136,12 @@ export default function ConditionsUtilisation() {
           <section>
             <h2 className="text-xl font-semibold mb-4">9. Nature of certifications</h2>
             <p className="text-muted-foreground leading-relaxed">
-              xproof certifications are based on blockchain technology and constitute 
+              Prove Before Act certifications are based on blockchain technology and constitute 
               technical proofs of existence at a given date. Their legal value depends 
               on the applicable legislation and the assessment of the competent courts.
             </p>
             <p className="text-muted-foreground leading-relaxed mt-4">
-              xproof recommends consulting a legal professional for any use 
+              Prove Before Act recommends consulting a legal professional for any use 
               of certifications in a legal context.
             </p>
           </section>
@@ -159,7 +159,7 @@ export default function ConditionsUtilisation() {
           <section>
             <h2 className="text-xl font-semibold mb-4">11. Modification of terms</h2>
             <p className="text-muted-foreground leading-relaxed">
-              xproof reserves the right to modify these Terms of Use 
+              Prove Before Act reserves the right to modify these Terms of Use 
               at any time. Users will be notified of significant changes. 
               Continued use of the service after notification 
               constitutes acceptance of the new terms.

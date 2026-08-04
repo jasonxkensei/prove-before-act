@@ -1,4 +1,4 @@
-# Published — xproof v3.1.0 SKILL.md
+# Published — Prove Before Act v3.1.0 SKILL.md
 
 **Date:** 2026-05-03T16:45:18Z  
 **Target repo:** https://github.com/jasonxkensei/xproof-openclaw-skill  
@@ -16,7 +16,7 @@
 
 Raw URL verification (confirmed via GitHub Contents API after push):
 - `version: 3.1.0` ✓
-- `NEVER send plaintext content to xproof.app` ✓
+- `NEVER send plaintext content to provebeforeact.com` ✓
 - `spending cap` / x402 autonomous payment warning ✓
 - `llms.txt` / `llms-full.txt` runtime note ✓
 
@@ -34,7 +34,7 @@ Raw URL verification (confirmed via GitHub Contents API after push):
 
 ```bash
 curl -sL https://raw.githubusercontent.com/jasonxkensei/xproof-openclaw-skill/main/xproof/SKILL.md \
-  > .agent/skills/xproof/SKILL.md
+  > .agent/skills/prove-before-act/SKILL.md
 ```
 
 ## Note on @octokit/rest

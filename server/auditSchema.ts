@@ -121,7 +121,7 @@ export function buildTimingBreakdown(meta: Record<string, any>): Record<string, 
 
 export const AUDIT_LOG_JSON_SCHEMA = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
-  $id: "https://xproof.app/.well-known/agent-audit-schema.json",
+  $id: "https://provebeforeact.com/.well-known/agent-audit-schema.json",
   title: "xProof Agent Audit Log",
   description:
     "Standard schema for certifying an AI agent's session of work on the MultiversX blockchain. " +

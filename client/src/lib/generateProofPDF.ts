@@ -26,7 +26,7 @@ export async function generateProofPDF(data: ProofPDFData): Promise<void> {
   
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(28);
-  doc.text("xproof", 20, 25);
+  doc.text("Prove Before Act", 20, 25);
   
   doc.setFontSize(12);
   doc.text("Blockchain Certificate of Authenticity", 20, 33);
@@ -84,6 +84,6 @@ export async function generateProofPDF(data: ProofPDFData): Promise<void> {
   doc.setTextColor(150, 150, 150);
   doc.text("This certificate proves the existence of this file at the specified time on MultiversX blockchain.", 20, 200);
   
-  const pdfFileName = `${data.fileName.replace(/\.[^/.]+$/, "")}_xproof_certificate.pdf`;
+  const pdfFileName = `${data.fileName.replace(/\.[^/.]+$/, "")}_pba_certificate.pdf`;
   doc.save(pdfFileName);
 }

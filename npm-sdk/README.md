@@ -1,11 +1,11 @@
-# xproof
+# Prove Before Act
 
-[![npm SDK CI](https://github.com/jasonxkensei/xproof/actions/workflows/npm-sdk.yml/badge.svg?branch=main)](https://github.com/jasonxkensei/xproof/actions/workflows/npm-sdk.yml) [![npm version](https://img.shields.io/npm/v/@xproof/xproof)](https://www.npmjs.com/package/@xproof/xproof) [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
+[![npm SDK CI](https://github.com/jasonxkensei/xProof/actions/workflows/npm-sdk.yml/badge.svg?branch=main)](https://github.com/jasonxkensei/xProof/actions/workflows/npm-sdk.yml) [![npm version](https://img.shields.io/npm/v/@prove-before-act/sdk)](https://www.npmjs.com/package/@prove-before-act/sdk) [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
 
 On-chain decision provenance for autonomous agents. **WHY before acting. WHAT after.** Timestamps written by the chain, not your agent.
 
 ```bash
-npm install @xproof/xproof
+npm install @prove-before-act/sdk
 ```
 
 ---
@@ -15,7 +15,7 @@ npm install @xproof/xproof
 ### Step 1 — Register (no wallet, no payment)
 
 ```bash
-curl -X POST https://xproof.app/api/agent/register \
+curl -X POST https://provebeforeact.com/api/agent/register \
   -H "Content-Type: application/json" \
   -d '{"agent_name": "my-agent"}'
 ```
@@ -29,7 +29,7 @@ curl -X POST https://xproof.app/api/agent/register \
 Hash your reasoning and certify it *before* your agent executes.
 
 ```bash
-curl -X POST https://xproof.app/api/proof \
+curl -X POST https://provebeforeact.com/api/proof \
   -H "Authorization: Bearer pm_..." \
   -H "Content-Type: application/json" \
   -d '{
@@ -49,7 +49,7 @@ curl -X POST https://xproof.app/api/proof \
 Hash your output and link it to the WHY proof.
 
 ```bash
-curl -X POST https://xproof.app/api/proof \
+curl -X POST https://provebeforeact.com/api/proof \
   -H "Authorization: Bearer pm_..." \
   -H "Content-Type: application/json" \
   -d '{
@@ -71,7 +71,7 @@ When something goes wrong, you don't guess. You verify.
 ## TypeScript SDK
 
 ```typescript
-import { XProofClient, hashString } from "@xproof/xproof";
+import { XProofClient, hashString } from "@prove-before-act/sdk";
 
 // Register — zero-friction, no wallet, no payment
 const client = await XProofClient.register("my-agent");
@@ -109,7 +109,7 @@ const client = new XProofClient({ apiKey: "pm_your_key" });
 Full accountability metadata on every certification:
 
 ```typescript
-import { XProofClient, hashString } from "@xproof/xproof";
+import { XProofClient, hashString } from "@prove-before-act/sdk";
 
 const client = new XProofClient({ apiKey: "pm_your_key" });
 
@@ -144,7 +144,7 @@ console.log(result.summary.created); // 2
 ## Hash Utilities
 
 ```typescript
-import { hashFile, hashBuffer, hashString } from "@xproof/xproof";
+import { hashFile, hashBuffer, hashString } from "@prove-before-act/sdk";
 
 const fileHash   = await hashFile("./document.pdf");
 const bufferHash = hashBuffer(Buffer.from("hello"));
@@ -168,8 +168,8 @@ console.log(proof.blockchainStatus); // "confirmed" | "pending"
 Check whether a decision meets governance requirements — without fetching the full confidence trail:
 
 ```typescript
-import { XProofClient } from "@xproof/xproof";
-import type { PolicyCheckResult } from "@xproof/xproof";
+import { XProofClient } from "@prove-before-act/sdk";
+import type { PolicyCheckResult } from "@prove-before-act/sdk";
 
 const client = new XProofClient({ apiKey: "pm_your_key" });
 
@@ -196,8 +196,8 @@ if (result.policyCompliant) {
 Anchor the full decision chronology on-chain alongside the confidence anchor. Three ISO8601 timestamps mark **when the instruction arrived**, **when reasoning began**, and **when the action fired**. A `jurisdictionType` field records who was accountable for the decision.
 
 ```typescript
-import { XProofClient, hashString, JURISDICTION_TYPES } from "@xproof/xproof";
-import type { TimingBreakdown } from "@xproof/xproof";
+import { XProofClient, hashString, JURISDICTION_TYPES } from "@prove-before-act/sdk";
+import type { TimingBreakdown } from "@prove-before-act/sdk";
 
 const client = new XProofClient({ apiKey: "pm_your_key" });
 
@@ -243,7 +243,7 @@ console.log(cert.timingBreakdown?.totalDurationMs);     // ms between instructio
 All valid values are exported as the `JURISDICTION_TYPES` constant for runtime validation:
 
 ```typescript
-import { JURISDICTION_TYPES } from "@xproof/xproof";
+import { JURISDICTION_TYPES } from "@prove-before-act/sdk";
 
 // ["instruction_following", "autonomous_inference", "human_approved"]
 console.log(JURISDICTION_TYPES);
@@ -273,14 +273,14 @@ if (cert.timingBreakdown) {
 
 ## Governance & Policy Enforcement
 
-xProof detects automatically when an agent acted with insufficient confidence on an irreversible action — and writes the evidence on-chain before you ever open an incident report.
+Prove Before Act detects automatically when an agent acted with insufficient confidence on an irreversible action — and writes the evidence on-chain before you ever open an incident report.
 
 ### Mark decisions as reversible, costly, or irreversible
 
 Add `reversibilityClass` to any certified action. The server enforces a policy: **irreversible actions require `confidenceLevel >= 0.95`**. Anything below that threshold generates a policy violation anchored to the chain.
 
 ```typescript
-import { XProofClient, hashString } from "@xproof/xproof";
+import { XProofClient, hashString } from "@prove-before-act/sdk";
 
 const client = new XProofClient({ apiKey: "pm_..." });
 
@@ -305,7 +305,7 @@ const cert = await client.certifyWithConfidence(
 ### Check compliance — without fetching the full trail
 
 ```typescript
-import type { PolicyCheckResult } from "@xproof/xproof";
+import type { PolicyCheckResult } from "@prove-before-act/sdk";
 
 const check: PolicyCheckResult = await client.getPolicyCheck("trade-xyz-2026");
 
@@ -343,8 +343,8 @@ webhook, so Datadog / Grafana / CloudWatch log-based alerts can pick up
 violations without grepping free-form text.
 
 ```typescript
-import { XProofClient } from "@xproof/xproof";
-import type { PolicyViolation } from "@xproof/xproof";
+import { XProofClient } from "@prove-before-act/sdk";
+import type { PolicyViolation } from "@prove-before-act/sdk";
 
 const client = new XProofClient({ apiKey: "pm_..." });
 const decisionId = "trade-xyz-2026"; // the decision ID passed to certifyWithConfidence()
@@ -484,7 +484,7 @@ import {
   AuthenticationError,
   ConflictError,
   RateLimitError,
-} from "@xproof/xproof";
+} from "@prove-before-act/sdk";
 
 try {
   await client.certifyHash(hash, name, author);
@@ -506,7 +506,7 @@ try {
 | Option    | Type     | Default                 |
 |-----------|----------|-------------------------|
 | `apiKey`  | `string` | `""`                    |
-| `baseUrl` | `string` | `"https://xproof.app"`  |
+| `baseUrl` | `string` | `"https://provebeforeact.com"`  |
 | `timeout` | `number` | `30000` (ms)            |
 
 ### Methods
@@ -530,7 +530,7 @@ If you use VS Code, install the [ESLint extension](https://marketplace.visualstu
 
 ## Links
 
-- [xproof.app](https://xproof.app) — dashboard & docs
+- [provebeforeact.com](https://provebeforeact.com) — dashboard & docs
 - [Python SDK](https://pypi.org/project/xproof/) — `pip install xproof`
 - [Examples](https://github.com/jasonxkensei/xproof-examples) — LangChain, CrewAI, AutoGen, LlamaIndex
 

@@ -46,12 +46,12 @@ file_hash = hashlib.sha256(open("decision.md", "rb").read()).hexdigest()
 
 # 2. Anchor — one API call, proof_id returned in ~1 second
 proof = requests.post(
-    "https://xproof.app/api/proof",
+    "https://provebeforeact.com/api/proof",
     headers={"Authorization": "Bearer YOUR_PM_KEY"},
     json={"file_hash": file_hash, "filename": "decision.md"}
 ).json()
 
-print(proof["verify_url"])  # → https://xproof.app/proof/prf_...`,
+print(proof["verify_url"])  # → https://provebeforeact.com/proof/prf_...`,
 
   typescript: `import crypto from "crypto";
 
@@ -60,25 +60,25 @@ const content = await fs.readFile("decision.md");
 const fileHash = crypto.createHash("sha256").update(content).digest("hex");
 
 // 2. Anchor — one fetch call
-const proof = await fetch("https://xproof.app/api/proof", {
+const proof = await fetch("https://provebeforeact.com/api/proof", {
   method: "POST",
   headers: { Authorization: "Bearer YOUR_PM_KEY",
              "Content-Type": "application/json" },
   body: JSON.stringify({ file_hash: fileHash, filename: "decision.md" }),
 }).then(r => r.json());
 
-console.log(proof.verify_url); // → https://xproof.app/proof/prf_...`,
+console.log(proof.verify_url); // → https://provebeforeact.com/proof/prf_...`,
 
   curl: `# 1. Compute SHA-256 locally
 FILE_HASH=$(sha256sum decision.md | awk '{print $1}')
 
 # 2. Anchor — one curl call
-curl -s -X POST https://xproof.app/api/proof \\
+curl -s -X POST https://provebeforeact.com/api/proof \\
   -H "Authorization: Bearer YOUR_PM_KEY" \\
   -H "Content-Type: application/json" \\
   -d "{\\"file_hash\\": \\"$FILE_HASH\\", \\"filename\\": \\"decision.md\\"}" \\
   | jq .verify_url
-# → "https://xproof.app/proof/prf_..."`,
+# → "https://provebeforeact.com/proof/prf_..."`,
 };
 
 function QuickStartCode({ onGetKey }: { onGetKey: () => void }) {
@@ -243,7 +243,7 @@ export default function Landing() {
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between">
           <a href="/" className="flex items-center gap-2" data-testid="link-logo-home">
-            <img src="/xproof-logo.png" alt="xproof" className="h-8 w-auto" />
+            <img src="/xproof-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
           </a>
           <nav className="hidden md:flex items-center gap-6">
             <a href="#how-it-works" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-how-it-works">
@@ -556,8 +556,8 @@ export default function Landing() {
                         variant="outline"
                         onClick={() => {
                           const url = proofResult.verify_url
-                            ? `https://xproof.app${proofResult.verify_url.startsWith("/") ? "" : "/"}${proofResult.verify_url}`
-                            : `https://xproof.app/proof/${proofResult.proof_id}`;
+                            ? `https://provebeforeact.com${proofResult.verify_url.startsWith("/") ? "" : "/"}${proofResult.verify_url}`
+                            : `https://provebeforeact.com/proof/${proofResult.proof_id}`;
                           navigator.clipboard.writeText(url);
                         }}
                         data-testid="button-copy-proof-url"
@@ -699,7 +699,7 @@ export default function Landing() {
                 { id: "AP2", label: "Authority", desc: "Is it authorised?" },
                 { id: "MCP", label: "Communication", desc: "What did it request?" },
                 { id: "x402", label: "Payments", desc: "What did it pay?" },
-                { id: "xProof", label: "Verifiable Intent", desc: "Why did it act?", highlight: true },
+                { id: "Prove Before Act", label: "Verifiable Intent", desc: "Why did it act?", highlight: true },
               ].map((pillar, i) => (
                 <div key={pillar.id} className="flex items-center flex-1 min-w-0">
                   {i > 0 && (
@@ -741,7 +741,7 @@ export default function Landing() {
                 { id: "AP2", label: "Authority", desc: "Is it authorised?" },
                 { id: "MCP", label: "Communication", desc: "What did it request?" },
                 { id: "x402", label: "Payments", desc: "What did it pay?" },
-                { id: "xProof", label: "Verifiable Intent", desc: "Why did it act?", highlight: true },
+                { id: "Prove Before Act", label: "Verifiable Intent", desc: "Why did it act?", highlight: true },
               ].map((pillar) => (
                 <div
                   key={pillar.id}
@@ -767,7 +767,7 @@ export default function Landing() {
               ))}
             </div>
             <p className="mt-8 text-center text-sm text-muted-foreground">
-              xproof is the accountability layer.{" "}
+              Prove Before Act is the accountability layer.{" "}
               <span className="text-foreground font-medium">Every agent action, proven on-chain.</span>
             </p>
           </div>
@@ -927,7 +927,7 @@ proofs = xproof.certify_batch([
                     </div>
                   </div>
                   <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-                    An agent with a wallet but no xProof account can anchor its first proof in a single HTTP session. No registration, no browser, no human in the loop. The agent discovers the price, signs a USDC micro-payment on Base, and gets the proof.
+                    An agent with a wallet but no Prove Before Act account can anchor its first proof in a single HTTP session. No registration, no browser, no human in the loop. The agent discovers the price, signs a USDC micro-payment on Base, and gets the proof.
                   </p>
                   <div className="flex items-center gap-2 flex-wrap text-xs">
                     {["No API key", "USDC on Base", "eip155:8453", "$0.01 per proof", "Coinbase CDP compatible"].map((tag) => (
@@ -972,7 +972,7 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
                 One API call. Permanent accountability.
               </h2>
               <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                Integrate xproof into your agent's execution loop.
+                Integrate Prove Before Act into your agent's execution loop.
                 Every decision, output, and action becomes a verifiable on-chain record.
               </p>
             </div>
@@ -1012,7 +1012,7 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
                 </div>
                 <h3 className="mb-3 text-xl font-semibold">Proof anchored on-chain</h3>
                 <p className="text-muted-foreground">
-                  xproof anchors the fingerprint on MultiversX and returns a <code className="text-xs bg-muted px-1 py-0.5 rounded font-mono">proof_id</code> and a public verification URL.
+                  Prove Before Act anchors the fingerprint on MultiversX and returns a <code className="text-xs bg-muted px-1 py-0.5 rounded font-mono">proof_id</code> and a public verification URL.
                   Your entire fleet now has a tamper-proof audit trail.
                 </p>
               </div>
@@ -1165,7 +1165,7 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
                 <p className="text-sm text-muted-foreground pl-11">Agent sends a POST with no credentials.</p>
                 <div className="rounded-md bg-[#0d1117] p-4 font-mono text-xs text-[#e6edf3] overflow-x-auto" data-testid="code-x402-step1">
                   <div className="text-[#8b949e] mb-2"># No API key, no auth</div>
-                  <div><span className="text-[#79c0ff]">POST</span> <span className="text-[#a5d6ff]">https://xproof.app/api/proof</span></div>
+                  <div><span className="text-[#79c0ff]">POST</span> <span className="text-[#a5d6ff]">https://provebeforeact.com/api/proof</span></div>
                   <div className="text-[#8b949e] mt-2 mb-1">Content-Type: application/json</div>
                   <div className="mt-1">{`{`}</div>
                   <div className="pl-4"><span className="text-[#79c0ff]">"file_hash"</span><span className="text-[#e6edf3]">: </span><span className="text-[#a5d6ff]">"sha256..."</span><span className="text-[#e6edf3]">,</span></div>
@@ -1180,7 +1180,7 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-sm font-bold text-primary-foreground">2</div>
                   <h3 className="font-semibold">Receive payment challenge</h3>
                 </div>
-                <p className="text-sm text-muted-foreground pl-11">xProof replies with payment terms on Base.</p>
+                <p className="text-sm text-muted-foreground pl-11">Prove Before Act replies with payment terms on Base.</p>
                 <div className="rounded-md bg-[#0d1117] p-4 font-mono text-xs text-[#e6edf3] overflow-x-auto" data-testid="code-x402-step2">
                   <div><span className="text-[#f85149]">HTTP 402</span> <span className="text-[#8b949e]">Payment Required</span></div>
                   <div className="mt-2">{`{`}</div>
@@ -1203,13 +1203,13 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
                 <p className="text-sm text-muted-foreground pl-11">Agent retries with payment receipt — gets blockchain proof.</p>
                 <div className="rounded-md bg-[#0d1117] p-4 font-mono text-xs text-[#e6edf3] overflow-x-auto" data-testid="code-x402-step3">
                   <div className="text-[#8b949e] mb-2"># Retry with USDC payment</div>
-                  <div><span className="text-[#79c0ff]">POST</span> <span className="text-[#a5d6ff]">https://xproof.app/api/proof</span></div>
+                  <div><span className="text-[#79c0ff]">POST</span> <span className="text-[#a5d6ff]">https://provebeforeact.com/api/proof</span></div>
                   <div className="text-[#8b949e] mt-2">X-Payment: <span className="text-[#e6edf3]">eyJ...</span></div>
                   <div className="mt-2 text-[#3fb950]">HTTP 200 OK</div>
                   <div className="mt-1">{`{`}</div>
                   <div className="pl-4"><span className="text-[#79c0ff]">"proof_id"</span><span className="text-[#e6edf3]">: </span><span className="text-[#a5d6ff]">"prf_..."</span><span className="text-[#e6edf3]">,</span></div>
                   <div className="pl-4"><span className="text-[#79c0ff]">"tx_hash"</span><span className="text-[#e6edf3]">: </span><span className="text-[#a5d6ff]">"0xab..."</span><span className="text-[#e6edf3]">,</span></div>
-                  <div className="pl-4"><span className="text-[#79c0ff]">"verify_url"</span><span className="text-[#e6edf3]">: </span><span className="text-[#a5d6ff]">"xproof.app/..."</span></div>
+                  <div className="pl-4"><span className="text-[#79c0ff]">"verify_url"</span><span className="text-[#e6edf3]">: </span><span className="text-[#a5d6ff]">"provebeforeact.com/..."</span></div>
                   <div>{`}`}</div>
                 </div>
               </div>
@@ -1228,13 +1228,13 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
                 <div className="pl-4 mt-2 text-[#8b949e]"># 1. Hash locally — nothing sensitive leaves this function</div>
                 <div className="pl-4"><span className="text-[#e3b341]">file_hash</span> = hashlib.sha256(json.dumps(reasoning, sort_keys=<span className="text-[#79c0ff]">True</span>).encode()).hexdigest()</div>
                 <div className="pl-4 mt-2 text-[#8b949e]"># 2. POST without auth → HTTP 402 with price + payment terms</div>
-                <div className="pl-4"><span className="text-[#e3b341]">r</span> = requests.post(<span className="text-[#a5d6ff]">"https://xproof.app/api/proof"</span>, json=&#123;<span className="text-[#a5d6ff]">"file_hash"</span>: file_hash&#125;)</div>
+                <div className="pl-4"><span className="text-[#e3b341]">r</span> = requests.post(<span className="text-[#a5d6ff]">"https://provebeforeact.com/api/proof"</span>, json=&#123;<span className="text-[#a5d6ff]">"file_hash"</span>: file_hash&#125;)</div>
                 <div className="pl-4"><span className="text-[#f97583]">assert</span> r.status_code == <span className="text-[#ffa657]">402</span>  <span className="text-[#8b949e]"># ← this is the x402 challenge</span></div>
                 <div className="pl-4 mt-2 text-[#8b949e]"># 3. Sign USDC on Base (eip155:8453) via your wallet adapter</div>
                 <div className="pl-4"><span className="text-[#e3b341]">signed</span> = wallet_signer.sign_x402(r.json()[<span className="text-[#a5d6ff]">"payment"</span>])</div>
                 <div className="pl-4"><span className="text-[#e3b341]">x_payment</span> = base64.b64encode(json.dumps(signed).encode()).decode()</div>
                 <div className="pl-4 mt-2 text-[#8b949e]"># 4. Resend with X-PAYMENT header → proof_id returned immediately</div>
-                <div className="pl-4"><span className="text-[#e3b341]">proof</span> = requests.post(<span className="text-[#a5d6ff]">"https://xproof.app/api/proof"</span>,</div>
+                <div className="pl-4"><span className="text-[#e3b341]">proof</span> = requests.post(<span className="text-[#a5d6ff]">"https://provebeforeact.com/api/proof"</span>,</div>
                 <div className="pl-8">headers=&#123;<span className="text-[#a5d6ff]">"X-PAYMENT"</span>: x_payment&#125;, json=&#123;<span className="text-[#a5d6ff]">"file_hash"</span>: file_hash&#125;)</div>
                 <div className="pl-4 mt-2"><span className="text-[#f97583]">return</span> proof.json()  <span className="text-[#8b949e]"># &#123; proof_id, verify_url &#125;</span></div>
               </div>
@@ -1247,7 +1247,7 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
             </div>
 
             <div className="mt-10 rounded-md border border-primary/20 bg-primary/5 p-4 text-center">
-              <p className="text-sm font-semibold mb-1">xProof = the standard for agents that take accountability seriously.</p>
+              <p className="text-sm font-semibold mb-1">Prove Before Act = the standard for agents that take accountability seriously.</p>
               <p className="text-xs text-muted-foreground mb-4">
                 Any agent with a Base wallet can anchor its first proof in one HTTP round-trip — no account, no human, no signup. x402 is proof that the machine economy doesn't need intermediaries.
               </p>
@@ -1392,7 +1392,7 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
             <div className="grid gap-8 md:grid-cols-4 mb-12">
               <div className="md:col-span-2">
                 <div className="flex items-center gap-2 mb-4">
-                  <img src="/xproof-logo.png" alt="xproof" className="h-8 w-auto" />
+                  <img src="/xproof-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
                 </div>
                 <p className="text-sm text-muted-foreground max-w-xs">
                   The on-chain notary for AI agents. Verifiable trust, anchored on MultiversX.
@@ -1423,7 +1423,7 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
             
             <div className="border-t pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
               <p className="text-sm text-muted-foreground">
-                © {new Date().getFullYear()} xproof. All rights reserved.
+                © {new Date().getFullYear()} Prove Before Act. All rights reserved.
               </p>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <span>Powered by</span>

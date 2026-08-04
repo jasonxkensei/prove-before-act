@@ -1,4 +1,4 @@
-# LlamaIndex + xProof
+# LlamaIndex + Prove Before Act
 
 Certify every LLM call and query completion in your LlamaIndex pipeline.
 
@@ -43,6 +43,6 @@ No API key required — registers a free trial account automatically.
 
 ## Links
 
-- [xproof.app](https://xproof.app)
-- Docs (LLM-readable): [xproof.app/llms.txt](https://xproof.app/llms.txt)
-- [PyPI: xproof](https://pypi.org/project/xproof)
+- [provebeforeact.com](https://provebeforeact.com)
+- Docs (LLM-readable): [provebeforeact.com/llms.txt](https://provebeforeact.com/llms.txt)
+- [PyPI: Prove Before Act](https://pypi.org/project/xproof)

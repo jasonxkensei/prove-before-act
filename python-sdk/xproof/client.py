@@ -41,7 +41,7 @@ try:
 except Exception:
     __version__ = "0.2.11"  # fallback when running from uninstalled source
 
-DEFAULT_BASE_URL = "https://xproof.app"
+DEFAULT_BASE_URL = "https://provebeforeact.com"
 DEFAULT_TIMEOUT = 30
 
 
@@ -52,7 +52,7 @@ class XProofClient:
         api_key: Your xProof API key (starts with ``pm_``).
             Pass an empty string or omit if you plan to call
             :meth:`register` first.
-        base_url: Override the API base URL (default: ``https://xproof.app``).
+        base_url: Override the API base URL (default: ``https://provebeforeact.com``).
         timeout: Request timeout in seconds (default: 30).
 
     Example::

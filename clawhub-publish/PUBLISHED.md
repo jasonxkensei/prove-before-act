@@ -1,4 +1,4 @@
-# Published — xproof SKILL.md
+# Published — Prove Before Act SKILL.md
 
 ---
 
@@ -16,7 +16,7 @@
 - **New "Coherence Loop" section** — documents the full WHY→WHAT loop: `check_coherence` → act → `certify_file` with `metadata.why_proof_id` → `POST /api/coherence/link`
 - **Error cases table** — `409 ALREADY_LINKED`, `400 NOT_A_COHERENCE_ANCHOR`, `404` ownership cases; idempotent re-link behavior
 - **Score formula** — 50 link + 15 within-1h + 20 references-why + 15 on-chain; base halved when execution preceded intent
-- **SDK helpers referenced** — Python `link_coherence` (xproof ≥ 0.2.10), npm `linkCoherence` (@xproof/xproof ≥ 0.1.11)
+- **SDK helpers referenced** — Python `link_coherence` (Prove Before Act ≥ 0.2.10), npm `linkCoherence` (@prove-before-act/sdk ≥ 0.1.11)
 - **Cheatsheet** — added the link curl command
 
 ---

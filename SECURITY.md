@@ -2,7 +2,7 @@
 
 ## Reporting Vulnerabilities
 
-If you discover a security vulnerability in xproof, please report it responsibly.
+If you discover a security vulnerability in Prove Before Act, please report it responsibly.
 
 **Do NOT open a public GitHub issue for security vulnerabilities.**
 
@@ -25,7 +25,7 @@ Instead, please contact the maintainers directly via email or GitHub private vul
 
 ### File Privacy
 
-xproof **never stores or transmits user files**. SHA-256 hashing is performed entirely in the browser using the Web Crypto API. Only the hash (a 64-character hex string) is sent to the server and recorded on-chain.
+Prove Before Act **never stores or transmits user files**. SHA-256 hashing is performed entirely in the browser using the Web Crypto API. Only the hash (a 64-character hex string) is sent to the server and recorded on-chain.
 
 ### Authentication
 
@@ -41,7 +41,7 @@ xproof **never stores or transmits user files**. SHA-256 hashing is performed en
 
 ### Payment Security
 
-- All payments are processed through xMoney in EGLD. xproof never stores payment credentials.
+- All payments are processed through xMoney in EGLD. Prove Before Act never stores payment credentials.
 - xMoney webhooks use HMAC SHA-256 signature verification with constant-time comparison.
 
 ### Data Protection

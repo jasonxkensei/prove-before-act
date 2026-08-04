@@ -1,4 +1,4 @@
-# DeerFlow + xProof
+# DeerFlow + Prove Before Act
 
 Add on-chain certification to DeerFlow agents via `XProofDeerFlowSkill`.
 
@@ -22,7 +22,7 @@ pip install xproof
 from xproof import XProofClient
 from xproof.integrations.deerflow import XProofDeerFlowSkill
 
-client = XProofClient(api_key="pm_...")   # get key at xproof.app
+client = XProofClient(api_key="pm_...")   # get key at provebeforeact.com
 skill = XProofDeerFlowSkill(client=client, agent_name="research-agent")
 
 # The agent calls the skill to certify its output
@@ -49,10 +49,10 @@ result = skill._run(json.dumps({
 python main.py
 ```
 
-No API key required — the demo uses a mock xProof client.
+No API key required — the demo uses a mock Prove Before Act client.
 
 ## Links
 
-- [xproof.app](https://xproof.app)
-- Docs (LLM-readable): [xproof.app/llms.txt](https://xproof.app/llms.txt)
-- [PyPI: xproof](https://pypi.org/project/xproof)
+- [provebeforeact.com](https://provebeforeact.com)
+- Docs (LLM-readable): [provebeforeact.com/llms.txt](https://provebeforeact.com/llms.txt)
+- [PyPI: Prove Before Act](https://pypi.org/project/xproof)

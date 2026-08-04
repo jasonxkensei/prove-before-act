@@ -1,6 +1,6 @@
-# xProof + MultiversX SC MCP — verifiable smart contract operations
+# Prove Before Act + MultiversX SC MCP — verifiable smart contract operations
 
-Add an on-chain audit trail to every write operation performed by the [MultiversX SC MCP](https://github.com/psorinionut/multiversx-sc-mcp). Before a contract is deployed, upgraded, or called, xProof anchors the **WHY** (decision + authorization) on MultiversX mainnet. After the transaction is confirmed, it anchors the **WHAT** (transaction hash + result). Both proofs share a `session_id`, creating a tamper-proof confidence trail no one can retroactively alter.
+Add an on-chain audit trail to every write operation performed by the [MultiversX SC MCP](https://github.com/psorinionut/multiversx-sc-mcp). Before a contract is deployed, upgraded, or called, Prove Before Act anchors the **WHY** (decision + authorization) on MultiversX mainnet. After the transaction is confirmed, it anchors the **WHAT** (transaction hash + result). Both proofs share a `session_id`, creating a tamper-proof confidence trail no one can retroactively alter.
 
 ## Why this matters
 
@@ -22,8 +22,8 @@ Add both MCP servers to your `claude_desktop_config.json`:
         "NETWORK": "mainnet"
       }
     },
-    "xproof": {
-      "url": "https://xproof.app/mcp",
+    "prove-before-act": {
+      "url": "https://provebeforeact.com/mcp",
       "headers": {
         "Authorization": "Bearer pm_YOUR_XPROOF_API_KEY"
       }
@@ -32,10 +32,10 @@ Add both MCP servers to your `claude_desktop_config.json`:
 }
 ```
 
-Get your free xProof API key (10 certifications, no wallet needed):
+Get your free Prove Before Act API key (10 certifications, no wallet needed):
 
 ```bash
-curl -X POST https://xproof.app/api/agent/register \
+curl -X POST https://provebeforeact.com/api/agent/register \
   -H "Content-Type: application/json" \
   -d '{"agent_name": "sc-deployer"}'
 ```
@@ -60,7 +60,7 @@ Claude:
     risk_summary: "Contract audited by CertiK, approved by DAO vote #183"
 
   → proof_id: "a1b2c3d4-..."
-  → audit_url: https://xproof.app/audit/a1b2c3d4-...
+  → audit_url: https://provebeforeact.com/audit/a1b2c3d4-...
   → WHY anchored on MultiversX. Now deploying.
 ```
 
@@ -85,7 +85,7 @@ Claude:
     author_name: "sc-deployer"
 
   → proof_id: "f5e6d7c8-..."
-  → verify_url: https://xproof.app/proof/f5e6d7c8-...
+  → verify_url: https://provebeforeact.com/proof/f5e6d7c8-...
   → WHAT anchored on MultiversX.
 ```
 
@@ -101,7 +101,7 @@ Claude:
   → WHAT anchored at: 2025-04-11T19:42:31Z
   → decision: "approved"
   → risk_level: "high"
-  → incident_report_url: https://xproof.app/incident/erd1deployer.../a1b2c3d4-...
+  → incident_report_url: https://provebeforeact.com/incident/erd1deployer.../a1b2c3d4-...
 ```
 
 ## Write operations that need certification
@@ -116,7 +116,7 @@ These 15 tools from multiversx-sc-mcp involve wallet signing — each one should
 | `mvx_transfer` | Transfer EGLD/tokens | High |
 | `mvx_sc_query` + call | Query then act on result | Medium |
 
-## xProof MCP tools used in this workflow
+## Prove Before Act MCP tools used in this workflow
 
 | Tool | Purpose |
 |------|---------|
@@ -128,9 +128,9 @@ These 15 tools from multiversx-sc-mcp involve wallet signing — each one should
 
 ## Links
 
-- xProof MCP: `https://xproof.app/mcp`
-- xProof on mcp-marketplace: [mcp-marketplace.io/server/io-github-jasonxkensei-xproof](https://mcp-marketplace.io/server/io-github-jasonxkensei-xproof)
+- Prove Before Act MCP: `https://provebeforeact.com/mcp`
+- Prove Before Act on mcp-marketplace: [mcp-marketplace.io/server/io-github-jasonxkensei-Prove Before Act](https://mcp-marketplace.io/server/io-github-jasonxkensei-Prove Before Act)
 - MultiversX SC MCP: [github.com/psorinionut/multiversx-sc-mcp](https://github.com/psorinionut/multiversx-sc-mcp)
-- Docs (LLM-readable): [xproof.app/llms.txt](https://xproof.app/llms.txt)
-- Register (free): `POST https://xproof.app/api/agent/register`
+- Docs (LLM-readable): [provebeforeact.com/llms.txt](https://provebeforeact.com/llms.txt)
+- Register (free): `POST https://provebeforeact.com/api/agent/register`
 

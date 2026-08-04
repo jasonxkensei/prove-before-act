@@ -942,7 +942,7 @@ export default function AdminDashboard() {
             <Shield className="h-6 w-6 text-primary" />
             <div>
               <h1 className="text-2xl font-bold tracking-tight">Platform Statistics</h1>
-              <p className="text-sm text-muted-foreground">Real-time metrics for xproof.app</p>
+              <p className="text-sm text-muted-foreground">Real-time metrics for provebeforeact.com</p>
             </div>
           </div>
           {isAdmin && pendingViolationCount > 0 && (

@@ -1277,11 +1277,11 @@ function BadgeEmbedPanel({ wallet }: { wallet: string }) {
   const [copiedScript, setCopiedScript] = useState(false);
   const { toast } = useToast();
 
-  const previewUrl = `${typeof window !== "undefined" ? window.location.origin : "https://xproof.app"}/badge/trust/${wallet}.svg`;
-  const canonicalOrigin = "https://xproof.app";
+  const previewUrl = `${typeof window !== "undefined" ? window.location.origin : "https://provebeforeact.com"}/badge/trust/${wallet}.svg`;
+  const canonicalOrigin = "https://provebeforeact.com";
   const snippetBadgeUrl = `${canonicalOrigin}/badge/trust/${wallet}.svg`;
   const snippetLinkUrl = `${canonicalOrigin}/agent/${wallet}`;
-  const markdownSnippet = `[![xproof Trust](${snippetBadgeUrl})](${snippetLinkUrl})`;
+  const markdownSnippet = `[![Prove Before Act Trust](${snippetBadgeUrl})](${snippetLinkUrl})`;
   const scriptSnippet = `<script src="${canonicalOrigin}/widget/trust/${wallet}.js"></script>`;
 
   async function copyText(text: string, setter: (v: boolean) => void, label: string) {
@@ -1303,7 +1303,7 @@ function BadgeEmbedPanel({ wallet }: { wallet: string }) {
             <div className="flex items-center gap-2 rounded-md bg-[#0d1117] px-3 py-2">
               <img
                 src={previewUrl}
-                alt="xproof Trust Badge"
+                alt="Prove Before Act Trust Badge"
                 className="h-7 block"
                 data-testid="img-badge-preview"
               />
@@ -1640,7 +1640,7 @@ export default function AgentProfilePage() {
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between gap-4">
           <Link href="/" data-testid="link-logo-home" className="flex items-center gap-2">
-            <img src="/xproof-logo.png" alt="xproof" className="h-8 w-auto" />
+            <img src="/xproof-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
           </Link>
           <Button asChild variant="ghost" size="sm" data-testid="button-back-leaderboard">
             <Link href="/leaderboard">
@@ -1665,7 +1665,7 @@ export default function AgentProfilePage() {
               <div className="text-center">
                 <p className="font-semibold">Profile not found</p>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  This agent hasn't made their profile public, or doesn't exist on xproof.
+                  This agent hasn't made their profile public, or doesn't exist on Prove Before Act.
                 </p>
               </div>
               <Button asChild variant="outline" data-testid="button-go-leaderboard">

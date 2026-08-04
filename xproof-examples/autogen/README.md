@@ -1,4 +1,4 @@
-# AutoGen + xProof
+# AutoGen + Prove Before Act
 
 Certify every message exchanged between AutoGen agents on the MultiversX blockchain.
 
@@ -20,7 +20,7 @@ from autogen import ConversableAgent
 from xproof import XProofClient
 from xproof.integrations.autogen import register_xproof_hooks
 
-client = XProofClient(api_key="pm_...")   # get key at xproof.app
+client = XProofClient(api_key="pm_...")   # get key at provebeforeact.com
 
 alice = ConversableAgent(name="alice", ...)
 bob   = ConversableAgent(name="bob", ...)
@@ -38,11 +38,11 @@ alice.initiate_chat(bob, message="Summarise the Q3 earnings report.")
 python main.py
 ```
 
-No API key or LLM required — the demo uses simulated agents and a mock xProof client.
+No API key or LLM required — the demo uses simulated agents and a mock Prove Before Act client.
 
 ## Links
 
-- [xproof.app](https://xproof.app)
-- Docs (LLM-readable): [xproof.app/llms.txt](https://xproof.app/llms.txt)
-- [PyPI: xproof](https://pypi.org/project/xproof)
+- [provebeforeact.com](https://provebeforeact.com)
+- Docs (LLM-readable): [provebeforeact.com/llms.txt](https://provebeforeact.com/llms.txt)
+- [PyPI: Prove Before Act](https://pypi.org/project/xproof)
 - [AutoGen](https://github.com/microsoft/autogen)

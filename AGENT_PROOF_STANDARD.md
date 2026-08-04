@@ -1,4 +1,4 @@
-# xProof Agent Proof Standard v1.0
+# Prove Before Act Agent Proof Standard v1.0
 
 An open, chain-agnostic format for AI agent action certification with cryptographic accountability.
 
@@ -6,7 +6,7 @@ An open, chain-agnostic format for AI agent action certification with cryptograp
 
 A minimal specification for recording **what an AI agent decided** (intent) and **what it executed** (action), with a cryptographic proof that intent preceded execution.
 
-Any system can implement this standard independently, on any stack, against any chain. xProof is the reference implementation — not a gatekeeper. You do not need to use xProof infrastructure to create a valid proof.
+Any system can implement this standard independently, on any stack, against any chain. Prove Before Act is the reference implementation — not a gatekeeper. You do not need to use Prove Before Act infrastructure to create a valid proof.
 
 ## Design decisions
 
@@ -23,7 +23,7 @@ The standard stays composable precisely because it makes no assumption about the
 
 ### Signature is mandatory in v1
 
-A proof without a cryptographic signature is not a proof — it is a declaration. This standard exists to produce verifiable accountability, not self-reported logs. If you want to test without building the full signing flow, xProof provides 10 free certifications via the standard `/api/agent/register` trial, which covers the core `/api/proof` endpoint.
+A proof without a cryptographic signature is not a proof — it is a declaration. This standard exists to produce verifiable accountability, not self-reported logs. If you want to test without building the full signing flow, Prove Before Act provides 10 free certifications via the standard `/api/agent/register` trial, which covers the core `/api/proof` endpoint.
 
 The signature requirement has no exceptions in v1.
 
@@ -182,7 +182,7 @@ A proof pair (intent + action) has **temporal integrity** if:
 
 8. The intent proof `timestamp` is strictly earlier than the action proof `timestamp`
 
-Violating rule 8 is the core anomaly that xProof's violation detection identifies — an agent that executed before reasoning is provably out of compliance.
+Violating rule 8 is the core anomaly that Prove Before Act's violation detection identifies — an agent that executed before reasoning is provably out of compliance.
 
 ## Intent-Action Pairing
 
@@ -199,24 +199,24 @@ Link the pair by setting the same values for `post_id`, `target_author`, and bas
 
 ## Anchoring Options
 
-### Option 1 — xProof (reference implementation)
+### Option 1 — Prove Before Act (reference implementation)
 
 **Step 1**: Validate your proof format for free:
 ```bash
-curl -X POST https://xproof.app/api/standard/validate \
+curl -X POST https://provebeforeact.com/api/standard/validate \
   -H "Content-Type: application/json" \
   -d '{"proof": { ... }}'
 ```
 
 **Step 2**: Anchor on MultiversX blockchain (API key or x402 USDC payment):
 ```bash
-curl -X POST https://xproof.app/api/standard/anchor \
+curl -X POST https://provebeforeact.com/api/standard/anchor \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer pm_your_api_key" \
   -d '{"proof": { ... }}'
 ```
 
-Get a free API key (10 certifications): `POST https://xproof.app/api/agent/register`
+Get a free API key (10 certifications): `POST https://provebeforeact.com/api/agent/register`
 
 ### Option 2 — Self-anchor (any chain)
 
@@ -224,11 +224,11 @@ Get a free API key (10 certifications): `POST https://xproof.app/api/agent/regis
 2. Submit that hash as transaction data on your preferred chain
 3. Store the transaction hash in your proof's `chain_anchor` field
 
-You own the anchoring. xProof is not required.
+You own the anchoring. Prove Before Act is not required.
 
 ## Trust Score Integration
 
-xProof computes a public trust score from anchored proofs:
+Prove Before Act computes a public trust score from anchored proofs:
 
 - **Consistency** — regular proof submission over time
 - **Completeness** — paired intent + action proofs per action

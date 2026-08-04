@@ -1,8 +1,8 @@
-# xproof AI Agent Integration Guide
+# Prove Before Act AI Agent Integration Guide
 
 ## Overview
 
-xproof provides blockchain-anchored file certification on MultiversX. AI agents can use xproof to:
+Prove Before Act provides blockchain-anchored file certification on MultiversX. AI agents can use Prove Before Act to:
 
 - **Prove existence** -- Certify that a file or piece of content existed at a specific point in time by anchoring its SHA-256 hash on the blockchain.
 - **Ensure compliance** -- Create immutable audit trails for generated content, reports, or data outputs.
@@ -15,7 +15,7 @@ Each certification costs $0.01 (flat rate) and produces a permanent, publicly ve
 
 ## Discovery
 
-AI agents can automatically discover xproof through several standardized mechanisms.
+AI agents can automatically discover Prove Before Act through several standardized mechanisms.
 
 ### .well-known Endpoints
 
@@ -24,13 +24,13 @@ AI agents can automatically discover xproof through several standardized mechani
 | `/.well-known/ai-plugin.json` | OpenAI Plugin | ChatGPT Plugin manifest with auth and API info |
 | `/.well-known/mcp.json` | MCP | Model Context Protocol manifest |
 | `/.well-known/agent.json` | Agent Protocol | General-purpose agent discovery |
-| `/.well-known/xproof.md` | Custom | Full service specification in Markdown |
+| `/.well-known/provebeforeact.md` | Custom | Full service specification in Markdown |
 
 ### LLM-Friendly Documentation
 
 | URL | Description |
 |-----|-------------|
-| `/llms.txt` | Concise LLM-friendly summary of xproof capabilities |
+| `/llms.txt` | Concise LLM-friendly summary of Prove Before Act capabilities |
 | `/llms-full.txt` | Extended documentation with examples and schemas |
 
 ### Machine-Readable Specifications
@@ -46,9 +46,9 @@ AI agents can automatically discover xproof through several standardized mechani
 
 Before integrating, you need:
 
-1. **An xproof account** -- Connect a MultiversX wallet at the xproof web application.
-2. **An API key** -- Generate one from the Agents page in the xproof dashboard. The key has a `pm_` prefix.
-3. **The xproof base URL** -- The deployed application URL (e.g., `https://xproof.replit.app`).
+1. **An Prove Before Act account** -- Connect a MultiversX wallet at the Prove Before Act web application.
+2. **An API key** -- Generate one from the Agents page in the Prove Before Act dashboard. The key has a `pm_` prefix.
+3. **The Prove Before Act base URL** -- The deployed application URL (e.g., `https://provebeforeact.com`).
 
 ---
 
@@ -56,7 +56,7 @@ Before integrating, you need:
 
 ### Generating Keys
 
-1. Log in to xproof with your MultiversX wallet.
+1. Log in to Prove Before Act with your MultiversX wallet.
 2. Navigate to the Agents page.
 3. Provide a descriptive name and generate a new API key.
 4. Copy the key immediately. It is displayed only once.
@@ -74,7 +74,7 @@ Authorization: Bearer pm_<your_api_key>
 Keys can be revoked instantly from the Agents page or via the API:
 
 ```bash
-curl -X DELETE https://xproof.example.com/api/keys/<key_id> \
+curl -X DELETE https://provebeforeact.com/api/keys/<key_id> \
   -H "Cookie: connect.sid=<session_cookie>"
 ```
 
@@ -82,12 +82,12 @@ curl -X DELETE https://xproof.example.com/api/keys/<key_id> \
 
 ## LangChain Integration
 
-xproof provides a ready-made LangChain tool definition at `/agent-tools/langchain.py`.
+Prove Before Act provides a ready-made LangChain tool definition at `/agent-tools/langchain.py`.
 
 ### Step 1: Download the Tool
 
 ```bash
-curl -o xproof_tool.py https://xproof.example.com/agent-tools/langchain.py
+curl -o xproof_tool.py https://provebeforeact.com/agent-tools/langchain.py
 ```
 
 ### Step 2: Use the Tool in Your Agent
@@ -97,7 +97,7 @@ import hashlib
 import requests
 from langchain.tools import tool
 
-XPROOF_BASE_URL = "https://xproof.example.com"
+XPROOF_BASE_URL = "https://provebeforeact.com"
 XPROOF_API_KEY = "pm_your_api_key_here"
 
 HEADERS = {
@@ -113,7 +113,7 @@ def compute_sha256(content: bytes) -> str:
 
 @tool
 def certify_file(file_path: str, author_name: str = "") -> str:
-    """Certify a file on the MultiversX blockchain via xproof.
+    """Certify a file on the MultiversX blockchain via Prove Before Act.
 
     This tool computes the SHA-256 hash of a file and anchors it on-chain,
     producing a permanent, publicly verifiable proof of existence.
@@ -203,12 +203,12 @@ agent.run("Certify the file at ./report.pdf authored by Alice")
 
 ## CrewAI Integration
 
-xproof provides a CrewAI tool definition at `/agent-tools/crewai.py`.
+Prove Before Act provides a CrewAI tool definition at `/agent-tools/crewai.py`.
 
 ### Step 1: Download the Tool
 
 ```bash
-curl -o xproof_crewai.py https://xproof.example.com/agent-tools/crewai.py
+curl -o xproof_crewai.py https://provebeforeact.com/agent-tools/crewai.py
 ```
 
 ### Step 2: Use the Tool in a CrewAI Agent
@@ -219,7 +219,7 @@ import requests
 from crewai import Agent, Task, Crew
 from crewai.tools import tool
 
-XPROOF_BASE_URL = "https://xproof.example.com"
+XPROOF_BASE_URL = "https://provebeforeact.com"
 XPROOF_API_KEY = "pm_your_api_key_here"
 
 HEADERS = {
@@ -232,7 +232,7 @@ HEADERS = {
 def certify_file_tool(file_path: str, author_name: str = "") -> str:
     """Certify a file on the MultiversX blockchain.
 
-    Computes the SHA-256 hash and anchors it on-chain via xproof,
+    Computes the SHA-256 hash and anchors it on-chain via Prove Before Act,
     producing a verifiable proof of existence.
 
     Args:
@@ -301,14 +301,14 @@ crew.kickoff()
 
 ## GPT Actions / Custom GPTs
 
-xproof can be integrated into Custom GPTs using the OpenAPI Actions specification.
+Prove Before Act can be integrated into Custom GPTs using the OpenAPI Actions specification.
 
 ### Step 1: Get the OpenAPI Specification
 
 The GPT Actions specification is available at:
 
 ```
-https://xproof.example.com/agent-tools/openapi-actions.json
+https://provebeforeact.com/agent-tools/openapi-actions.json
 ```
 
 ### Step 2: Create a Custom GPT
@@ -338,15 +338,15 @@ The Custom GPT will have access to the following actions:
 The Model Context Protocol manifest is available at:
 
 ```
-https://xproof.example.com/.well-known/mcp.json
+https://provebeforeact.com/.well-known/mcp.json
 ```
 
 ### Integration Steps
 
-1. Point your MCP-compatible agent to the xproof MCP manifest URL.
+1. Point your MCP-compatible agent to the Prove Before Act MCP manifest URL.
 2. The agent will discover available tools (certification, proof retrieval).
 3. Configure authentication by providing your API key (`pm_...`) as a bearer token.
-4. The agent can then invoke xproof tools as part of its workflow.
+4. The agent can then invoke Prove Before Act tools as part of its workflow.
 
 The MCP manifest describes:
 
@@ -365,7 +365,7 @@ For agents that do not use a framework, integrate directly with the ACP REST API
 **Step 1: Discover products**
 
 ```bash
-curl https://xproof.example.com/api/acp/products
+curl https://provebeforeact.com/api/acp/products
 ```
 
 Response:
@@ -396,7 +396,7 @@ sha256sum report.pdf
 **Step 3: Create a checkout**
 
 ```bash
-curl -X POST https://xproof.example.com/api/acp/checkout \
+curl -X POST https://provebeforeact.com/api/acp/checkout \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer pm_your_api_key" \
   -d '{
@@ -429,7 +429,7 @@ Transfer the specified `amount_egld` (in atomic units, i.e., 10^-18 EGLD) to the
 **Step 5: Confirm the checkout**
 
 ```bash
-curl -X POST https://xproof.example.com/api/acp/confirm \
+curl -X POST https://provebeforeact.com/api/acp/confirm \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer pm_your_api_key" \
   -d '{
@@ -448,7 +448,7 @@ Response:
     "file_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "file_name": "report.pdf",
     "transaction_hash": "on-chain-tx-hash",
-    "proof_url": "https://xproof.example.com/proof/cert-uuid"
+    "proof_url": "https://provebeforeact.com/proof/cert-uuid"
   }
 }
 ```
@@ -456,7 +456,7 @@ Response:
 **Step 6 (optional): Verify proof**
 
 ```bash
-curl https://xproof.example.com/api/proof/cert-uuid
+curl https://provebeforeact.com/api/proof/cert-uuid
 ```
 
 ---
@@ -508,15 +508,15 @@ Configure a public profile via `PATCH /api/user/agent-profile` (session required
 ### Embed a Trust Badge
 
 ```markdown
-[![xproof trust](https://xproof.app/badge/trust/erd1YOUR_WALLET.svg)](https://xproof.app/agent/erd1YOUR_WALLET)
+[![Prove Before Act trust](https://provebeforeact.com/badge/trust/erd1YOUR_WALLET.svg)](https://provebeforeact.com/agent/erd1YOUR_WALLET)
 ```
 
 ### Live Example
 
 **xproof_agent_verify** — autonomous agent. Full beta test: 6 endpoints, single cert in 1.075s, batch (3 files) in 1.876s, on-chain verification in 198ms. Trust level: Active (score 157, 10 confirmed certs).
 
-- Profile: [xproof.app/agent/erd1qevpwqy4m7cqsynjgtwzuagln27veuhlg9w67nscv6ffj8dac7lqzc69q8](https://xproof.app/agent/erd1qevpwqy4m7cqsynjgtwzuagln27veuhlg9w67nscv6ffj8dac7lqzc69q8)
-- Live proof: [f8c3b35d-6ee1-4f76-a92b-1532a008df7b](https://xproof.app/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b)
+- Profile: [provebeforeact.com/agent/erd1qevpwqy4m7cqsynjgtwzuagln27veuhlg9w67nscv6ffj8dac7lqzc69q8](https://provebeforeact.com/agent/erd1qevpwqy4m7cqsynjgtwzuagln27veuhlg9w67nscv6ffj8dac7lqzc69q8)
+- Live proof: [f8c3b35d-6ee1-4f76-a92b-1532a008df7b](https://provebeforeact.com/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b)
 - Full review: [moltbook.com](https://www.moltbook.com/post/1d6cf96b-5046-4c63-9ae5-43f8809f4562)
 
 ---
@@ -549,7 +549,7 @@ After certification, proofs are publicly accessible in multiple formats:
 
 ### Best Practices
 
-1. **Hash locally** -- Always compute the SHA-256 hash on the client side before calling the API. Do not send file content to xproof.
+1. **Hash locally** -- Always compute the SHA-256 hash on the client side before calling the API. Do not send file content to Prove Before Act.
 
 2. **Store checkout IDs** -- After creating a checkout, persist the `checkout_id` in case the confirmation step fails and needs to be retried.
 

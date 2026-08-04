@@ -44,7 +44,7 @@ interface EndpointGroup {
   endpoints: Endpoint[];
 }
 
-const BASE = "https://xproof.app";
+const BASE = "https://provebeforeact.com";
 
 const ENDPOINT_GROUPS: EndpointGroup[] = [
   {
@@ -78,7 +78,7 @@ const ENDPOINT_GROUPS: EndpointGroup[] = [
         path: "/api/trial",
         auth: "None",
         description: "Get information about the free trial program and registration flow.",
-        response: `{ "name": "xproof Agent Trial", "free_proofs": 10, "register": { ... } }`,
+        response: `{ "name": "Prove Before Act Agent Trial", "free_proofs": 10, "register": { ... } }`,
         curl: `curl ${BASE}/api/trial`,
       },
       {
@@ -272,7 +272,7 @@ const ENDPOINT_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/sigil/:public_key",
         auth: "None",
-        description: "SIGIL Protocol integration endpoint. Crosses SIGIL's WHO-layer (Solana receipt chain, Persistence Score) with xProof's WHEN/WHY-layer (MultiversX decision anchors). Returns persistence_score, receipt_count, critical_pass from SIGIL live API (5s timeout, graceful fallback), plus linked xProof certs and trust score. The convergence field explicitly states what each layer anchors. Link identities by certifying with metadata.sigil_public_key = your SIGIL key.",
+        description: "SIGIL Protocol integration endpoint. Crosses SIGIL's WHO-layer (Solana receipt chain, Persistence Score) with Prove Before Act's WHEN/WHY-layer (MultiversX decision anchors). Returns persistence_score, receipt_count, critical_pass from SIGIL live API (5s timeout, graceful fallback), plus linked Prove Before Act certs and trust score. The convergence field explicitly states what each layer anchors. Link identities by certifying with metadata.sigil_public_key = your SIGIL key.",
         response: `{ "sigil_public_key": "hPyhbS1U9...", "sigil_reachable": true, "persistence_score": 87, "receipt_count": 241, "critical_pass": true, "xproof_linked": true, "xproof_certs_linked": 441, "xproof_trust_score": 4760, "xproof_trust_level": "Verified", "convergence": { "sigil_anchors": "WHO — cryptographic identity continuity", "xproof_anchors": "WHAT/WHEN/WHY — decision provenance", "combined_coverage": "full 4W stack" }, "partner": "sigilprotocol.xyz" }`,
         curl: `curl ${BASE}/api/sigil/hPyhbS1U9...`,
       },
@@ -280,7 +280,7 @@ const ENDPOINT_GROUPS: EndpointGroup[] = [
         method: "GET",
         path: "/api/bnb/:address",
         auth: "None",
-        description: "BNB Chain cross-chain integration. Bridges EVM Ethereum-style 0x addresses with xProof's MultiversX proof layer. Lookup key is the agent's BNB Chain address. Returns linked cert count, on-chain confirmed count, MultiversX wallet, trust score, and bridge description. Link identities by certifying with metadata.bnb_wallet = your 0x address.",
+        description: "BNB Chain cross-chain integration. Bridges EVM Ethereum-style 0x addresses with Prove Before Act's MultiversX proof layer. Lookup key is the agent's BNB Chain address. Returns linked cert count, on-chain confirmed count, MultiversX wallet, trust score, and bridge description. Link identities by certifying with metadata.bnb_wallet = your 0x address.",
         response: `{ "bnb_address": "0x742d35Cc...", "xproof_linked": true, "xproof_wallet": "erd1...", "xproof_certs_linked": 88, "xproof_certs_confirmed_on_chain": 85, "xproof_trust_score": 1200, "xproof_trust_level": "Trusted", "xproof_violations": { "fault": 0, "breach": 0 }, "bridge": { "bnb_chain": "EVM actions on BNB Chain", "multiversx": "Proof anchoring on MultiversX", "integration_hint": "Certify with metadata.bnb_wallet = <0x_address>" }, "partner": "bnbchain-skills" }`,
         curl: `curl ${BASE}/api/bnb/0x742d35Cc6634C0532925a3b8D4C9C0B2C7E2b5b3`,
       },
@@ -289,30 +289,30 @@ const ENDPOINT_GROUPS: EndpointGroup[] = [
         path: "/api/moltbot/:wallet",
         auth: "None",
         description: "Moltbot starter kit bootstrap endpoint. Returns onboarding status, bot health snapshot, activity tier, and ready-to-use URLs for runtime config. Designed to be called at bot startup. Unregistered wallets get registration quickstart links. Registered wallets get trust level, streak, next milestone, and a recommended_action field (continue | first_certify | resume_activity | review_violations).",
-        response: `{ "wallet": "erd1...", "onboarding_complete": true, "bot_status": { "activity_tier": "trusted", "next_milestone": "12 more proofs to reach Verified", "trust_score": 1350, "trust_level": "Trusted", "total_proofs": 88, "streak_weeks": 3, "has_violations": false }, "quick_links": { "certify": "https://xproof.app/api/proof", "mcp": "https://xproof.app/mcp" }, "recommended_action": "continue", "partner": "mx-moltbot-starter-kit" }`,
+        response: `{ "wallet": "erd1...", "onboarding_complete": true, "bot_status": { "activity_tier": "trusted", "next_milestone": "12 more proofs to reach Verified", "trust_score": 1350, "trust_level": "Trusted", "total_proofs": 88, "streak_weeks": 3, "has_violations": false }, "quick_links": { "certify": "https://provebeforeact.com/api/proof", "mcp": "https://provebeforeact.com/mcp" }, "recommended_action": "continue", "partner": "mx-moltbot-starter-kit" }`,
         curl: `curl ${BASE}/api/moltbot/erd1abc...`,
       },
       {
         method: "GET",
         path: "/api/eliza/:identifier",
         auth: "None",
-        description: "ElizaOS integration endpoint. Bridges ElizaOS character identity (WHO — character UUID, runtime, sessions, action types) with xProof's WHAT/WHEN/WHY proof layer (MultiversX anchors). Two lookup modes: erd1 wallet → direct trust score + character stats from cert metadata; UUID → cert metadata lookup via metadata.eliza_agent_id. Returns character stats, trust score, convergence explanation, and a plugin_config block for plugin-xproof.",
-        response: `{ "identifier": "3fa85f64-5717-4562-b3fc-2c963f66afa6", "lookup_mode": "character_id", "eliza_linked": true, "character": { "agent_id": "3fa85f64...", "character_name": "ElizaAgent", "runtime_version": "0.1.9", "certified_sessions": 12, "certified_action_types": ["message", "search"] }, "xproof": { "wallet": "erd1...", "trust_score": 1350, "trust_level": "Trusted", "violations": { "fault": 0, "breach": 0 } }, "convergence": { "elizaos_anchors": "WHO", "xproof_anchors": "WHAT/WHEN/WHY" }, "partner": "elizaos" }`,
+        description: "ElizaOS integration endpoint. Bridges ElizaOS character identity (WHO — character UUID, runtime, sessions, action types) with Prove Before Act's WHAT/WHEN/WHY proof layer (MultiversX anchors). Two lookup modes: erd1 wallet → direct trust score + character stats from cert metadata; UUID → cert metadata lookup via metadata.eliza_agent_id. Returns character stats, trust score, convergence explanation, and a plugin_config block for plugin-prove-before-act.",
+        response: `{ "identifier": "3fa85f64-5717-4562-b3fc-2c963f66afa6", "lookup_mode": "character_id", "eliza_linked": true, "character": { "agent_id": "3fa85f64...", "character_name": "ElizaAgent", "runtime_version": "0.1.9", "certified_sessions": 12, "certified_action_types": ["message", "search"] }, "prove-before-act": { "wallet": "erd1...", "trust_score": 1350, "trust_level": "Trusted", "violations": { "fault": 0, "breach": 0 } }, "convergence": { "elizaos_anchors": "WHO", "xproof_anchors": "WHAT/WHEN/WHY" }, "partner": "elizaos" }`,
         curl: `curl ${BASE}/api/eliza/3fa85f64-5717-4562-b3fc-2c963f66afa6`,
       },
       {
         method: "GET",
         path: "/api/xai/:identifier",
         auth: "None",
-        description: "xAI/Grok integration endpoint. Bridges xAI agent identity (WHO — Grok reasoning engine, model, sessions) with xProof's WHAT/WHEN/WHY proof layer (MultiversX anchors). Two lookup modes: erd1 wallet or xAI agent ID string. Returns agent stats, trust score, convergence explanation, and integration config. Link identities by certifying with metadata.xai_agent_id = <agent_id>.",
-        response: `{ "identifier": "grok-agent-001", "lookup_mode": "agent_id", "xai_linked": true, "agent": { "agent_id": "grok-agent-001", "model": "grok-3", "certified_sessions": 8, "certified_action_types": ["reason", "generate"], "total_certs": 42 }, "xproof": { "wallet": "erd1...", "trust_score": 1350, "trust_level": "Trusted", "violations": { "fault": 0, "breach": 0 } }, "convergence": { "xai_anchors": "WHO — Grok reasoning engine", "xproof_anchors": "WHAT/WHEN/WHY — decision provenance anchored on MultiversX" }, "partner": "xai" }`,
+        description: "xAI/Grok integration endpoint. Bridges xAI agent identity (WHO — Grok reasoning engine, model, sessions) with Prove Before Act's WHAT/WHEN/WHY proof layer (MultiversX anchors). Two lookup modes: erd1 wallet or xAI agent ID string. Returns agent stats, trust score, convergence explanation, and integration config. Link identities by certifying with metadata.xai_agent_id = <agent_id>.",
+        response: `{ "identifier": "grok-agent-001", "lookup_mode": "agent_id", "xai_linked": true, "agent": { "agent_id": "grok-agent-001", "model": "grok-3", "certified_sessions": 8, "certified_action_types": ["reason", "generate"], "total_certs": 42 }, "prove-before-act": { "wallet": "erd1...", "trust_score": 1350, "trust_level": "Trusted", "violations": { "fault": 0, "breach": 0 } }, "convergence": { "xai_anchors": "WHO — Grok reasoning engine", "xproof_anchors": "WHAT/WHEN/WHY — decision provenance anchored on MultiversX" }, "partner": "xai" }`,
         curl: `curl ${BASE}/api/xai/grok-agent-001`,
       },
       {
         method: "GET",
         path: "/api/mpp/:payment_intent_id",
         auth: "None",
-        description: "Machine Payments Protocol integration. Links autonomous agent payments (HOW — Stripe/Tempo settlement) with xProof decision provenance (WHY — intent anchored before transaction). Lookup by Stripe payment intent ID. Returns payment details, linked certs, trust score, and convergence explanation. Link by certifying with metadata.mpp_payment_intent_id = <pi_xxx>.",
+        description: "Machine Payments Protocol integration. Links autonomous agent payments (HOW — Stripe/Tempo settlement) with Prove Before Act decision provenance (WHY — intent anchored before transaction). Lookup by Stripe payment intent ID. Returns payment details, linked certs, trust score, and convergence explanation. Link by certifying with metadata.mpp_payment_intent_id = <pi_xxx>.",
         response: `{ "payment_intent_id": "pi_3abc123def456", "mpp_linked": true, "mpp_network": "tempo", "mpp_amount": "25.00", "mpp_currency": "usd", "xproof_wallet": "erd1...", "xproof_certs_linked": 3, "xproof_trust_score": 1350, "convergence": { "mpp_anchors": "HOW — payment execution via Stripe/Tempo", "xproof_anchors": "WHY — decision intent anchored before transaction" }, "partner": "mpp" }`,
         curl: `curl ${BASE}/api/mpp/pi_3abc123def456`,
       },
@@ -460,18 +460,18 @@ const ENDPOINT_GROUPS: EndpointGroup[] = [
     endpoints: [
       {
         method: "GET",
-        path: "/.well-known/xproof.md",
+        path: "/.well-known/provebeforeact.md",
         auth: "None",
         description: "Machine-readable service description for AI agents.",
-        response: "(Markdown document describing xproof capabilities)",
-        curl: `curl ${BASE}/.well-known/xproof.md`,
+        response: "(Markdown document describing Prove Before Act capabilities)",
+        curl: `curl ${BASE}/.well-known/provebeforeact.md`,
       },
       {
         method: "GET",
         path: "/.well-known/mcp.json",
         auth: "None",
         description: "MCP server discovery metadata.",
-        response: `{ "name": "xproof", "version": "1.0", "tools": [...] }`,
+        response: `{ "name": "Prove Before Act", "version": "1.0", "tools": [...] }`,
         curl: `curl ${BASE}/.well-known/mcp.json`,
       },
       {
@@ -479,7 +479,7 @@ const ENDPOINT_GROUPS: EndpointGroup[] = [
         path: "/.well-known/agent.json",
         auth: "None",
         description: "Agent discovery metadata following the Agent Protocol standard.",
-        response: `{ "name": "xproof", "capabilities": [...] }`,
+        response: `{ "name": "Prove Before Act", "capabilities": [...] }`,
         curl: `curl ${BASE}/.well-known/agent.json`,
       },
       {
@@ -526,7 +526,7 @@ const ENDPOINT_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "(your webhook URL)",
         auth: "HMAC-SHA256 signature",
-        description: `When you provide a webhook_url in POST /api/proof or /api/batch, xproof sends a POST request to your URL when the proof is confirmed on-chain. The request includes an X-xProof-Signature header containing an HMAC-SHA256 signature of the body. For per-proof and per-batch webhooks the signing secret is returned as webhook_secret in the API response — store it securely and use it to verify the signature. For account-level webhooks (set at /api/agents/register) the secret you configured at registration is used instead.`,
+        description: `When you provide a webhook_url in POST /api/proof or /api/batch, Prove Before Act sends a POST request to your URL when the proof is confirmed on-chain. The request includes an X-xProof-Signature header containing an HMAC-SHA256 signature of the body. For per-proof and per-batch webhooks the signing secret is returned as webhook_secret in the API response — store it securely and use it to verify the signature. For account-level webhooks (set at /api/agents/register) the secret you configured at registration is used instead.`,
         response: `{
   "event": "proof.confirmed",
   "proof_id": "uuid",
@@ -649,7 +649,7 @@ assert hmac.compare_digest(expected, request.headers["X-xProof-Signature"])`,
           "proof.action_type": "string (optional) — e.g. moderate, reply, trade",
           "proof.metadata": "object (optional) — additional context",
         },
-        response: `{ "proof_id": "uuid", "canonical_hash": "abc123...", "chain_anchor": { "chain": "multiversx", "network": "mainnet", "tx_hash": "abc...", "explorer_url": "https://explorer.multiversx.com/transactions/abc...", "status": "confirmed" }, "proof_url": "https://xproof.app/proof/uuid", "standard_version": "1.0", "auth_method": "api_key" }`,
+        response: `{ "proof_id": "uuid", "canonical_hash": "abc123...", "chain_anchor": { "chain": "multiversx", "network": "mainnet", "tx_hash": "abc...", "explorer_url": "https://explorer.multiversx.com/transactions/abc...", "status": "confirmed" }, "proof_url": "https://provebeforeact.com/proof/uuid", "standard_version": "1.0", "auth_method": "api_key" }`,
         curl: `curl -X POST ${BASE}/api/standard/anchor \\
   -H "Authorization: Bearer pm_xxx" \\
   -H "Content-Type: application/json" \\
@@ -818,7 +818,7 @@ export default function DocsPage() {
               <a href="/"><ArrowLeft className="h-4 w-4" /></a>
             </Button>
             <a href="/" className="flex items-center gap-2" data-testid="link-logo-docs">
-              <img src="/xproof-logo.png" alt="xproof" className="h-8 w-auto" />
+              <img src="/xproof-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
             </a>
             <Badge variant="outline">API Docs</Badge>
           </div>

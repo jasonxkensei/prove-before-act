@@ -1,8 +1,8 @@
 # xproof-examples
 
-Standalone examples showing how to certify AI agent outputs on the **MultiversX blockchain** using [xProof](https://xproof.app).
+Standalone examples showing how to certify AI agent outputs on the **MultiversX blockchain** using [Prove Before Act](https://provebeforeact.com).
 
-xProof gives every agent action a tamper-proof audit trail anchored on-chain in ~6 seconds. Each certification records the **4W framework**: Who acted, What was produced, When it happened, and Why.
+Prove Before Act gives every agent action a tamper-proof audit trail anchored on-chain in ~6 seconds. Each certification records the **4W framework**: Who acted, What was produced, When it happened, and Why.
 
 ## Examples
 
@@ -26,16 +26,16 @@ xProof gives every agent action a tamper-proof audit trail anchored on-chain in 
 pip install xproof
 
 # TypeScript / Vercel
-npm install @xproof/xproof
+npm install @prove-before-act/sdk
 ```
 
-Get a free API key or start with the trial tier at **[xproof.app](https://xproof.app)**.
+Get a free API key or start with the trial tier at **[provebeforeact.com](https://provebeforeact.com)**.
 
-AI agents: read **[xproof.app/llms.txt](https://xproof.app/llms.txt)** — one page, machine-readable, register + certify in under 2 minutes.
+AI agents: read **[provebeforeact.com/llms.txt](https://provebeforeact.com/llms.txt)** — one page, machine-readable, register + certify in under 2 minutes.
 
 ## Links
 
 - PyPI: [pypi.org/project/xproof](https://pypi.org/project/xproof)
-- npm: [npmjs.com/package/@xproof/xproof](https://www.npmjs.com/package/@xproof/xproof)
-- Docs (LLM-readable): [xproof.app/llms.txt](https://xproof.app/llms.txt)
-- GitHub (SDK): [github.com/jasonxkensei/xproof](https://github.com/jasonxkensei/xproof)
+- npm: [npmjs.com/package/@prove-before-act/sdk](https://www.npmjs.com/package/@prove-before-act/sdk)
+- Docs (LLM-readable): [provebeforeact.com/llms.txt](https://provebeforeact.com/llms.txt)
+- GitHub (SDK): [github.com/jasonxkensei/xProof](https://github.com/jasonxkensei/xProof)

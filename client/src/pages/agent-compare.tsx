@@ -192,7 +192,7 @@ export default function AgentComparePage() {
   const wallets = walletsParam.split(",").filter(Boolean);
 
   useEffect(() => {
-    document.title = "Agent Comparison | xproof";
+    document.title = "Agent Comparison | Prove Before Act";
   }, []);
 
   const { data, isLoading, error } = useQuery<CompareResponse>({

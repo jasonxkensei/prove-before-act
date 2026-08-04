@@ -60,7 +60,7 @@ async function getOrigins(): Promise<string[]> {
 
 // ── Always-present anchors ────────────────────────────────────────────────────
 
-describe("getAcceptedOrigins — always includes the production xproof.app domains", () => {
+describe("getAcceptedOrigins — always includes the production provebeforeact.com domains", () => {
   let saved: Record<string, string | undefined>;
 
   beforeEach(() => {
@@ -70,14 +70,14 @@ describe("getAcceptedOrigins — always includes the production xproof.app domai
 
   afterEach(() => restoreEnv(saved));
 
-  it("always includes https://xproof.app regardless of env vars", async () => {
+  it("always includes https://provebeforeact.com regardless of env vars", async () => {
     const origins = await getOrigins();
-    expect(origins).toContain("https://xproof.app");
+    expect(origins).toContain("https://provebeforeact.com");
   });
 
-  it("always includes https://www.xproof.app regardless of env vars", async () => {
+  it("always includes https://www.provebeforeact.com regardless of env vars", async () => {
     const origins = await getOrigins();
-    expect(origins).toContain("https://www.xproof.app");
+    expect(origins).toContain("https://www.provebeforeact.com");
   });
 });
 

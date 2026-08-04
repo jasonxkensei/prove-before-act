@@ -16,7 +16,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 
-const BASE = "https://xproof.app";
+const BASE = "https://provebeforeact.com";
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -111,7 +111,7 @@ const settlementResponse = `{
   "blockchain_status": "confirmed",
   "transaction_hash":  "75afa1e6f24598d3c8b2a1...",
   "transaction_url":   "https://explorer.multiversx.com/transactions/75afa1e6...",
-  "verify_url":        "https://xproof.app/verify/a3f2b1c4-7890-4def-abcd-1234567890ab",
+  "verify_url":        "https://provebeforeact.com/verify/a3f2b1c4-7890-4def-abcd-1234567890ab",
   "certified_at":      "2026-03-03T18:05:41.320Z"
 }`;
 
@@ -150,7 +150,7 @@ export default function DocsTradingPage() {
               <a href="/docs"><ArrowLeft className="h-4 w-4" /></a>
             </Button>
             <a href="/" className="flex items-center gap-2" data-testid="link-logo">
-              <img src="/xproof-logo.png" alt="xproof" className="h-8 w-auto" />
+              <img src="/xproof-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
             </a>
             <Badge variant="outline">Integration Guide</Badge>
           </div>
@@ -192,7 +192,7 @@ export default function DocsTradingPage() {
           <section data-testid="section-what-to-anchor">
             <SectionHeader icon={Lock} number="01" title="What to anchor" />
             <p className="text-sm text-muted-foreground mb-4">
-              Hash the trade payload before sending. Never send raw strategy logic to xProof.
+              Hash the trade payload before sending. Never send raw strategy logic to Prove Before Act.
               Anchor the <strong>execution commitment</strong>, not strategy secrets.
               You prove you executed what you claimed — nothing more.
             </p>
@@ -216,7 +216,7 @@ export default function DocsTradingPage() {
           <section data-testid="section-async-pattern">
             <SectionHeader icon={Zap} number="02" title="Non-blocking async pattern" />
             <p className="text-sm text-muted-foreground mb-4">
-              Trading execution must never depend synchronously on xProof confirmation.
+              Trading execution must never depend synchronously on Prove Before Act confirmation.
               Execute first, anchor after, always within a 2-second hard timeout.
             </p>
             <CodeBlock code={asyncPattern} language="typescript" />
@@ -240,7 +240,7 @@ export default function DocsTradingPage() {
           <section data-testid="section-circuit-breaker">
             <SectionHeader icon={AlertTriangle} number="03" title="Circuit breaker & local queue" />
             <p className="text-sm text-muted-foreground mb-4">
-              Rule: execution latency impact = 0 ms. xProof is a reputational layer,
+              Rule: execution latency impact = 0 ms. Prove Before Act is a reputational layer,
               not a dependency in the critical path.
             </p>
             <div className="rounded-md border overflow-hidden">
@@ -293,7 +293,7 @@ export default function DocsTradingPage() {
           <section data-testid="section-clock-sync">
             <SectionHeader icon={Clock} number="05" title="Clock synchronization" />
             <p className="text-sm text-muted-foreground mb-4">
-              Use the <code className="text-primary">server_timestamp</code> returned by xProof — not your local clock —
+              Use the <code className="text-primary">server_timestamp</code> returned by Prove Before Act — not your local clock —
               as the authoritative reference for proof integrity.
               If <code className="text-primary">block_height</code> is available, cross-reference with the blockchain explorer for maximum auditability.
             </p>
@@ -393,11 +393,11 @@ export default function DocsTradingPage() {
         <footer className="border-t mt-12 pt-8">
           <div className="text-center text-sm text-muted-foreground">
             <p className="mb-3">
-              <a href={`${BASE}/leaderboard`} className="text-primary hover:underline" data-testid="link-footer-leaderboard">xproof.app/leaderboard</a>
+              <a href={`${BASE}/leaderboard`} className="text-primary hover:underline" data-testid="link-footer-leaderboard">provebeforeact.com/leaderboard</a>
               {" · "}
               <a href="/docs" className="text-primary hover:underline" data-testid="link-footer-docs">API Reference</a>
               {" · "}
-              <a href="/" className="text-primary hover:underline" data-testid="link-footer-home">xproof.app</a>
+              <a href="/" className="text-primary hover:underline" data-testid="link-footer-home">provebeforeact.com</a>
             </p>
             <p className="text-xs">
               If you can't prove execution, your backtests are marketing.

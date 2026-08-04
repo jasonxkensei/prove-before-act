@@ -3,14 +3,14 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "xproof"
+name = "prove-before-act"
 version = "0.2.11"
-description = "Python SDK for xProof — blockchain-anchored proof-of-existence for AI agents on MultiversX"
+description = "Python SDK for Prove Before Act — blockchain-anchored proof-of-existence for AI agents on MultiversX"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.9"
 authors = [
-    {name = "xProof", email = "contact@xproof.app"},
+    {name = "Prove Before Act", email = "contact@provebeforeact.com"},
 ]
 keywords = [
     "blockchain", "multiversx", "proof-of-existence", "certification",
@@ -58,11 +58,11 @@ fetchai = [
 ]
 
 [project.urls]
-Homepage = "https://xproof.app"
-Repository = "https://github.com/jasonxkensei/xproof"
-Documentation = "https://xproof.app/docs"
-Issues = "https://github.com/jasonxkensei/xproof/issues"
-Changelog = "https://github.com/jasonxkensei/xproof/releases"
+Homepage = "https://provebeforeact.com"
+Repository = "https://github.com/jasonxkensei/xProof"
+Documentation = "https://provebeforeact.com/docs"
+Issues = "https://github.com/jasonxkensei/xProof/issues"
+Changelog = "https://github.com/jasonxkensei/xProof/releases"
 
 [tool.setuptools.packages.find]
 include = ["xproof*"]
@@ -73,7 +73,7 @@ xproof = ["py.typed"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 markers = [
-    "integration: marks tests that hit the live xProof API (deselect with '-m \"not integration\"')",
+    "integration: marks tests that hit the live Prove Before Act API (deselect with '-m \"not integration\"')",
 ]
 
 [tool.mypy]

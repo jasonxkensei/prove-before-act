@@ -1,4 +1,4 @@
-# xproof Deployment Guide
+# Prove Before Act Deployment Guide
 
 ## Prerequisites
 
@@ -12,7 +12,7 @@
 
 ## Replit Deployment
 
-Replit is the primary deployment platform for xproof. The project is preconfigured with a workflow that runs the development server and handles both frontend and backend.
+Replit is the primary deployment platform for Prove Before Act. The project is preconfigured with a workflow that runs the development server and handles both frontend and backend.
 
 ### Workflow Configuration
 
@@ -26,7 +26,7 @@ This command starts the Express backend server with Vite middleware for frontend
 
 ### Steps
 
-1. Fork or import the xproof repository into Replit.
+1. Fork or import the Prove Before Act repository into Replit.
 2. Configure all required environment variables (see the Environment Variables section below).
 3. The database is automatically provisioned via the Replit PostgreSQL integration. The `DATABASE_URL` and related `PG*` variables are set automatically.
 4. Run the **Start application** workflow. The server binds to `0.0.0.0:5000`.
@@ -62,8 +62,8 @@ This synchronizes the database schema with the Drizzle schema defined in `shared
 ### 1. Clone the Repository
 
 ```bash
-git clone <repository-url> xproof
-cd xproof
+git clone <repository-url>
+cd xProof
 ```
 
 ### 2. Install Dependencies
@@ -77,13 +77,13 @@ npm install
 Create a PostgreSQL database and note the connection details. Using Neon (recommended):
 
 1. Create a Neon project at https://neon.tech.
-2. Create a database (e.g., `xproof`).
+2. Create a database (e.g., `provebeforeact`).
 3. Copy the connection string.
 
 Alternatively, use a local PostgreSQL instance:
 
 ```bash
-createdb xproof
+createdb provebeforeact
 ```
 
 ### 4. Configure Environment Variables
@@ -91,7 +91,7 @@ createdb xproof
 Create a `.env` file in the project root (see the Environment Variables section below for all required variables):
 
 ```bash
-DATABASE_URL=postgresql://user:password@host:5432/xproof
+DATABASE_URL=postgresql://user:password@host:5432/provebeforeact
 SESSION_SECRET=<random-64-char-string>
 MULTIVERSX_PRIVATE_KEY=<hex-encoded-private-key>
 MULTIVERSX_SENDER_ADDRESS=erd1...
@@ -139,10 +139,10 @@ Place the application behind a reverse proxy (nginx, Caddy) for TLS termination:
 ```nginx
 server {
     listen 443 ssl;
-    server_name xproof.example.com;
+    server_name provebeforeact.com;
 
-    ssl_certificate /etc/ssl/certs/xproof.pem;
-    ssl_certificate_key /etc/ssl/private/xproof.key;
+    ssl_certificate /etc/ssl/certs/provebeforeact.pem;
+    ssl_certificate_key /etc/ssl/private/provebeforeact.key;
 
     location / {
         proxy_pass http://127.0.0.1:5000;
@@ -264,7 +264,7 @@ node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 
 ### HTTPS
 
-xproof requires HTTPS in production for:
+Prove Before Act requires HTTPS in production for:
 
 - Secure session cookies (`secure: true`)
 - MultiversX Native Auth origin verification
@@ -306,7 +306,7 @@ For self-hosted production deployments, use a process manager to keep the server
 
 ```bash
 npm install -g pm2
-pm2 start npm --name xproof -- start
+pm2 start npm --name prove-before-act -- start
 pm2 save
 pm2 startup
 ```
@@ -315,18 +315,18 @@ pm2 startup
 
 ```ini
 [Unit]
-Description=xproof Server
+Description=Prove Before Act Server
 After=network.target
 
 [Service]
 Type=simple
-User=xproof
-WorkingDirectory=/opt/xproof
+User=provebeforeact
+WorkingDirectory=/opt/provebeforeact
 ExecStart=/usr/bin/node dist/index.js
 Restart=on-failure
 Environment=NODE_ENV=production
 Environment=PORT=5000
-EnvironmentFile=/opt/xproof/.env
+EnvironmentFile=/opt/provebeforeact/.env
 
 [Install]
 WantedBy=multi-user.target
@@ -347,7 +347,7 @@ GET /api/acp/health
 ```json
 {
   "status": "ok",
-  "service": "xproof",
+  "service": "Prove Before Act",
   "timestamp": "2026-02-01T12:00:00.000Z"
 }
 ```
@@ -387,6 +387,6 @@ For zero-downtime deployments on self-hosted infrastructure:
 
 1. Build the new version: `npm run build`
 2. Apply any database migrations: `npx drizzle-kit push`
-3. Restart the application process (PM2: `pm2 reload xproof`)
+3. Restart the application process (PM2: `pm2 reload prove-before-act`)
 
 On Replit, deployments are handled automatically when the workflow restarts.

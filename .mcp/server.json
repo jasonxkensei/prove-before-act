@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.jasonxkensei/xproof",
-  "title": "xProof",
+  "name": "io.github.jasonxkensei/prove-before-act",
+  "title": "Prove Before Act",
   "description": "Proof primitive for AI agents on MultiversX. Anchor file hashes on-chain as verifiable proofs.",
   "repository": {
     "url": "https://github.com/jasonxkensei/xProof",
@@ -11,7 +11,7 @@
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://xproof.app/mcp",
+      "url": "https://provebeforeact.com/mcp",
       "headers": [
         {
           "name": "Authorization",

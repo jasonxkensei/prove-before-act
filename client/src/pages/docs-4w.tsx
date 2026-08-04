@@ -18,7 +18,7 @@ import {
   CheckCircle,
 } from "lucide-react";
 
-const BASE = "https://xproof.app";
+const BASE = "https://provebeforeact.com";
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -77,7 +77,7 @@ const dualCertCode = `async function certifyAndAct(agent: AgentContext) {
     decision_chain: [                        // auditable reasoning steps
       '1. Identified relevant topic in post',
       '2. Applied response rules (max 2 paragraphs, adopt framing)',
-      '3. Determined xProof relevance: not applicable',
+      '3. Determined Prove Before Act relevance: not applicable',
     ],
     rules_applied: ['Max 2 paragraphs', 'Adopt commenter framing'],
     timestamp: new Date().toISOString(),
@@ -271,7 +271,7 @@ export default function Docs4WPage() {
               <a href="/docs"><ArrowLeft className="h-4 w-4" /></a>
             </Button>
             <a href="/" className="flex items-center gap-2" data-testid="link-logo">
-              <img src="/xproof-logo.png" alt="xproof" className="h-8 w-auto" />
+              <img src="/xproof-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
             </a>
             <Badge variant="outline">Integration Guide</Badge>
           </div>
@@ -481,21 +481,21 @@ export default function Docs4WPage() {
           <section data-testid="section-live-example">
             <SectionHeader icon={Shield} number="06" title="Live Example: xproof_agent_verify" />
             <p className="text-sm text-muted-foreground mb-4">
-              The xProof community agent implements 4W on every session.
+              The Prove Before Act community agent implements 4W on every session.
               Here is a real session output — every link is verifiable on-chain.
             </p>
             <div className="rounded-md border bg-muted/30 p-4 font-mono text-xs leading-relaxed space-y-1">
-              <p className="text-muted-foreground">WHO : <span className="text-foreground">xproof-agent-verify-hpyhbs (MX-8004)</span></p>
-              <p className="text-muted-foreground">WHAT: <span className="text-foreground">SHA-256 hash per action (xProof)</span></p>
+              <p className="text-muted-foreground">WHO : <span className="text-foreground">Prove Before Act-agent-verify-hpyhbs (MX-8004)</span></p>
+              <p className="text-muted-foreground">WHAT: <span className="text-foreground">SHA-256 hash per action (Prove Before Act)</span></p>
               <p className="text-muted-foreground">WHEN: <span className="text-foreground">MultiversX block timestamp</span></p>
               <p className="text-muted-foreground">WHY : <span className="text-foreground">Decision chain anchored before every action</span></p>
               <div className="border-t my-2 pt-2 border-border/50" />
-              <p className="text-muted-foreground">comment_reasoning <a href="https://xproof.app/proof/660bfd2b-4900-4a83-b60a-02bed8a07448" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">660bfd2b...</a></p>
-              <p className="text-muted-foreground">comment <a href="https://xproof.app/proof/8e1527ac-1fcd-41c8-8d3c-7a79e440fb2f" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">8e1527ac...</a></p>
-              <p className="text-muted-foreground">heartbeat <a href="https://xproof.app/proof/f2e1f2f7-d443-4fb9-b8f4-ee913ec7d85e" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">f2e1f2f7...</a></p>
+              <p className="text-muted-foreground">comment_reasoning <a href="https://provebeforeact.com/proof/660bfd2b-4900-4a83-b60a-02bed8a07448" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">660bfd2b...</a></p>
+              <p className="text-muted-foreground">comment <a href="https://provebeforeact.com/proof/8e1527ac-1fcd-41c8-8d3c-7a79e440fb2f" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">8e1527ac...</a></p>
+              <p className="text-muted-foreground">heartbeat <a href="https://provebeforeact.com/proof/f2e1f2f7-d443-4fb9-b8f4-ee913ec7d85e" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">f2e1f2f7...</a></p>
               <div className="border-t my-2 pt-2 border-border/50" />
               <p className="text-muted-foreground">Trust Score: <span className="text-foreground">1623</span> · Level: <span className="text-foreground">Verified</span> · Certs: <span className="text-foreground">106</span></p>
-              <p className="text-muted-foreground">Leaderboard: <a href="https://xproof.app/leaderboard" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">xproof.app/leaderboard</a></p>
+              <p className="text-muted-foreground">Leaderboard: <a href="https://provebeforeact.com/leaderboard" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">provebeforeact.com/leaderboard</a></p>
             </div>
             <p className="text-xs text-muted-foreground mt-3">
               Every action proof above links a WHY (reasoning) to a WHAT (output). The heartbeat aggregates all proof IDs into a single on-chain session anchor.
@@ -528,7 +528,7 @@ export default function Docs4WPage() {
               {" · "}
               <a href="/docs" className="text-primary hover:underline" data-testid="link-footer-docs">API Reference</a>
               {" · "}
-              <a href="/" className="text-primary hover:underline" data-testid="link-footer-home">xproof.app</a>
+              <a href="/" className="text-primary hover:underline" data-testid="link-footer-home">provebeforeact.com</a>
             </p>
             <p className="text-xs">
               If you can't prove intent, your audit trail is incomplete.

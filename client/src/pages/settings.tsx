@@ -304,7 +304,7 @@ export default function Settings() {
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between gap-4">
           <a href="/" className="flex items-center gap-2" data-testid="link-logo-home">
-            <img src="/xproof-logo.png" alt="xproof" className="h-8 w-auto" />
+            <img src="/xproof-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
           </a>
           <div className="flex items-center gap-2">
             <Button asChild variant="ghost" size="sm" data-testid="button-leaderboard">
@@ -325,7 +325,7 @@ export default function Settings() {
       <div className="container mx-auto max-w-4xl py-12">
         <div className="mb-8">
           <h1 className="mb-2 text-3xl font-bold tracking-tight">Settings</h1>
-          <p className="text-muted-foreground">Your xproof account details</p>
+          <p className="text-muted-foreground">Your Prove Before Act account details</p>
         </div>
 
         {/* Account info */}
@@ -366,7 +366,7 @@ export default function Settings() {
                   Transfer a trial key
                 </CardTitle>
                 <CardDescription className="mt-1">
-                  Tested xproof with a trial key? Transfer all its proofs and credits to this wallet.
+                  Tested Prove Before Act with a trial key? Transfer all its proofs and credits to this wallet.
                 </CardDescription>
               </div>
               {!claimResult?.success && (

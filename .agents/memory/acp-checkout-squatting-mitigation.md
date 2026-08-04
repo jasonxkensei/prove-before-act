@@ -1,6 +1,6 @@
 ---
 name: ACP unpaid checkout squatting mitigation
-description: How xproof bounds abuse of unpaid ACP (Agent Commerce Protocol) checkout reservations on file_hash
+description: How Prove Before Act bounds abuse of unpaid ACP (Agent Commerce Protocol) checkout reservations on file_hash
 ---
 
 Unpaid ACP checkout creation (no payment required until confirm) can be abused to reserve a

@@ -337,7 +337,7 @@ export default function Certify() {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `${certificationResult.fileName.replace(/\.[^/.]+$/, "")}_xproof_certificate.pdf`;
+        a.download = `${certificationResult.fileName.replace(/\.[^/.]+$/, "")}_pba_certificate.pdf`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -379,7 +379,7 @@ export default function Certify() {
         <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="container flex h-16 items-center justify-between gap-4">
             <a href="/" className="flex items-center gap-2" data-testid="link-logo-home">
-              <img src="/xproof-logo.png" alt="xproof" className="h-8 w-auto" />
+              <img src="/xproof-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
             </a>
             <div className="flex items-center gap-2">
               <Button asChild variant="ghost" size="sm" data-testid="button-leaderboard">
@@ -526,7 +526,7 @@ export default function Certify() {
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between gap-4">
           <a href="/" className="flex items-center gap-2" data-testid="link-logo-home">
-            <img src="/xproof-logo.png" alt="xproof" className="h-8 w-auto" />
+            <img src="/xproof-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
           </a>
           <div className="flex items-center gap-2">
             <Button asChild variant="ghost" size="sm" data-testid="button-leaderboard">

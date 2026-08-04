@@ -1,9 +1,9 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
-  "name": "io.github.jasonxkensei/xproof",
+  "name": "io.github.jasonxkensei/prove-before-act",
   "description": "The on-chain notary for AI agents. Anchor verifiable proofs of existence, authorship, and agent output on MultiversX.",
-  "title": "xProof",
-  "websiteUrl": "https://xproof.app",
+  "title": "Prove Before Act",
+  "websiteUrl": "https://provebeforeact.com",
   "repository": {
     "url": "https://github.com/jasonxkensei/xProof",
     "source": "github"
@@ -12,7 +12,7 @@
   "remotes": [
     {
       "type": "streamable-http",
-      "url": "https://xproof.app/mcp",
+      "url": "https://provebeforeact.com/mcp",
       "headers": [
         {
           "description": "Bearer API key (format: Bearer pm_xxx). Optional — x402 payment works without authentication.",

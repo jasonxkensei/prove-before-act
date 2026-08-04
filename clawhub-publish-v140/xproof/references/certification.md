@@ -36,11 +36,11 @@ Get a `pm_` API key instantly with 10 free certifications. No wallet, no credit 
     "remaining": 10
   },
   "endpoints": {
-    "certify": "POST https://xproof.app/api/proof",
-    "batch": "POST https://xproof.app/api/batch",
-    "audit": "POST https://xproof.app/api/audit",
-    "status": "GET https://xproof.app/api/agent/status",
-    "verify": "GET https://xproof.app/api/proof/{proof_id}"
+    "certify": "POST https://provebeforeact.com/api/proof",
+    "batch": "POST https://provebeforeact.com/api/batch",
+    "audit": "POST https://provebeforeact.com/api/audit",
+    "status": "GET https://provebeforeact.com/api/agent/status",
+    "verify": "GET https://provebeforeact.com/api/proof/{proof_id}"
   },
   "quick_start": {
     "steps": [
@@ -86,7 +86,7 @@ Get the agent's current trial credits, last certified proof, and usage statistic
   "last_proof": {
     "id": "proof-uuid",
     "filename": "report.pdf",
-    "verify_url": "https://xproof.app/proof/proof-uuid",
+    "verify_url": "https://provebeforeact.com/proof/proof-uuid",
     "transaction_hash": "abc123...",
     "created_at": "2026-05-02T11:00:00.000Z"
   },
@@ -139,8 +139,8 @@ Creates an immutable certification on MultiversX mainnet.
   "status": "certified",
   "file_hash": "a1b2c3...",
   "filename": "report.pdf",
-  "verify_url": "https://xproof.app/proof/uuid-v4",
-  "certificate_url": "https://xproof.app/api/certificates/uuid-v4.pdf",
+  "verify_url": "https://provebeforeact.com/proof/uuid-v4",
+  "certificate_url": "https://provebeforeact.com/api/certificates/uuid-v4.pdf",
   "blockchain": {
     "network": "MultiversX",
     "transaction_hash": "abc123...",
@@ -182,13 +182,13 @@ See [SKILL.md Section 8](../SKILL.md#8-agent-audit-log-standard) for the full ca
 Returns the structured proof document. Public if the certification was created with `is_public=true` (default for trial users) or by the proof owner.
 
 ```bash
-curl https://xproof.app/api/proof/<proof_id>
+curl https://provebeforeact.com/api/proof/<proof_id>
 ```
 
 ### `GET /api/proof/hash/:hash` -- Lookup by File Hash
 
 ```bash
-curl https://xproof.app/api/proof/hash/<sha256_hex>
+curl https://provebeforeact.com/api/proof/hash/<sha256_hex>
 ```
 
 ### `GET /proof/:id` -- Human-readable proof page
@@ -211,14 +211,14 @@ Returns a shields.io-style SVG badge showing certification status:
 Embed in Markdown:
 
 ```markdown
-![xProof Certified](https://xproof.app/badge/<proof_id>)
+![Prove Before Act Certified](https://provebeforeact.com/badge/<proof_id>)
 ```
 
 ---
 
 ## Webhook Payload
 
-When a certification is confirmed on-chain, xProof sends a POST to the `webhook_url`:
+When a certification is confirmed on-chain, Prove Before Act sends a POST to the `webhook_url`:
 
 ```json
 {

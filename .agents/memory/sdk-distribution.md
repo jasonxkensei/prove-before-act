@@ -1,9 +1,9 @@
 ---
 name: SDK distribution channels
-description: How to publish xproof SDKs to PyPI, npm, GitHub, and clawhub/OpenClaw.
+description: How to publish Prove Before Act SDKs to PyPI, npm, GitHub, and clawhub/OpenClaw.
 ---
 
-# xproof SDK Distribution
+# Prove Before Act SDK Distribution
 
 ## Python SDK → PyPI
 
@@ -23,7 +23,7 @@ description: How to publish xproof SDKs to PyPI, npm, GitHub, and clawhub/OpenCl
 - **Publish:** `cd npm-sdk && pnpm publish --access public --no-git-checks --registry https://registry.npmjs.org/`
 - **Auth file:** `npm-sdk/.npmrc` must contain `//registry.npmjs.org/:_authToken=${NPM_ACCESS_TOKEN}`
 - **Secret:** `NPM_ACCESS_TOKEN`
-- **URL:** https://www.npmjs.com/package/@xproof/xproof
+- **URL:** https://www.npmjs.com/package/@prove-before-act/sdk
 - **Note:** bash blocks `npm` commands; use `pnpm` with explicit registry URL. See npm-publish-replit.md.
 
 ## GitHub → jasonxkensei/xProof

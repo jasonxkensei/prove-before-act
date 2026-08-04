@@ -1,4 +1,4 @@
-# LlamaIndex + xProof Integration
+# LlamaIndex + Prove Before Act Integration
 
 Certify every LLM call, query, and tool invocation from your LlamaIndex pipeline on-chain.
 

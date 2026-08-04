@@ -1,11 +1,11 @@
 # MCP Server
 
-xProof exposes a Model Context Protocol (MCP) JSON-RPC 2.0 endpoint for AI agent integration.
+Prove Before Act exposes a Model Context Protocol (MCP) JSON-RPC 2.0 endpoint for AI agent integration.
 
 ## Endpoint
 
 ```
-POST https://xproof.app/mcp
+POST https://provebeforeact.com/mcp
 ```
 
 **Required headers on every call:**
@@ -106,7 +106,7 @@ Create a blockchain certification for a file.
   "result": {
     "content": [{
       "type": "text",
-      "text": "{\"proof_id\":\"uuid-v4\",\"status\":\"certified\",\"file_hash\":\"a1b2c3...\",\"filename\":\"report.pdf\",\"verify_url\":\"https://xproof.app/proof/uuid-v4\",\"certificate_url\":\"https://xproof.app/api/certificates/uuid-v4.pdf\",\"blockchain\":{\"network\":\"MultiversX\",\"transaction_hash\":\"abc123...\",\"explorer_url\":\"https://explorer.multiversx.com/transactions/abc123...\"},\"timestamp\":\"2026-02-19T12:00:00.000Z\"}"
+      "text": "{\"proof_id\":\"uuid-v4\",\"status\":\"certified\",\"file_hash\":\"a1b2c3...\",\"filename\":\"report.pdf\",\"verify_url\":\"https://provebeforeact.com/proof/uuid-v4\",\"certificate_url\":\"https://provebeforeact.com/api/certificates/uuid-v4.pdf\",\"blockchain\":{\"network\":\"MultiversX\",\"transaction_hash\":\"abc123...\",\"explorer_url\":\"https://explorer.multiversx.com/transactions/abc123...\"},\"timestamp\":\"2026-02-19T12:00:00.000Z\"}"
     }]
   }
 }
@@ -160,7 +160,7 @@ Use `md` format for LLM consumption -- produces human-readable Markdown with all
 
 ### `discover_services` (no auth)
 
-List xProof capabilities, pricing, and usage guidance. No parameters required.
+List Prove Before Act capabilities, pricing, and usage guidance. No parameters required.
 
 **Returns:** Service description, pricing tiers ($0.05 / $0.025 / $0.015 per proof depending on all-time volume), list of tools, certification triggers, batch API details, free trial details, and supported protocols.
 
@@ -227,7 +227,7 @@ Use this when an agent's action is challenged -- the response is a structured ti
 
 ## LLM Prompt Engineering
 
-When exposing xProof to an LLM, use:
+When exposing Prove Before Act to an LLM, use:
 
 > **Skill: Bootstrap (no account)**
 > "If you have no XPROOF_API_KEY in env, call `register_free_trial` first with your agent name. Store the returned `api_key`. You get 10 free proofs."

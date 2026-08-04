@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the **xproof** Python SDK are documented here.
+All notable changes to the **Prove Before Act** Python SDK are documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 Versions follow [Semantic Versioning](https://semver.org/).
@@ -11,7 +11,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- Fallback `__version__` strings in `xproof/__init__.py` and `xproof/client.py` were stale (`0.2.7`); now kept in lockstep with `pyproject.toml`.
+- Fallback `__version__` strings in `Prove Before Act/__init__.py` and `Prove Before Act/client.py` were stale (`0.2.7`); now kept in lockstep with `pyproject.toml`.
 - Clarified `link_coherence` docstring: an unlinked WHY anchor shows as **divergent** in the public coherence history after 1 hour; after the 2-hour TTL it is additionally flagged as a proposed fault violation.
 
 ## [0.2.10] — 2026-07-30
@@ -46,7 +46,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
   top-level or `metadata` sub-dict of the API response, including computed
   duration fields.
 - `CertifyEntry.timing` optional field for use with `batch_certify()`.
-- All three new public symbols exported from `xproof.__all__`.
+- All three new public symbols exported from `Prove Before Act.__all__`.
 - 8 new unit tests covering: timing payload sent, partial timing, no timing,
   `timing_breakdown` deserialisation, absent timing_breakdown → `None`,
   timing + 4W combined, `JURISDICTION_TYPES` export, empty timing dict ignored.
@@ -125,7 +125,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
   `violations` list with full violation details.
 - `threshold_stage` parameter for labeling confidence checkpoints
   (`"draft"`, `"review"`, `"execution"`, `"final"`).
-- `ReversibilityClass` literal type exported from `xproof`.
+- `ReversibilityClass` literal type exported from `Prove Before Act`.
 - Governance & Policy Enforcement section in `README.md`.
 
 ---

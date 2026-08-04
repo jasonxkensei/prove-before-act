@@ -79,8 +79,8 @@ const BAZAAR_PROOF = declareDiscoveryExtension({
       proof_id: "d93e5449-2d4a-4f8c-a2e4-25feaad98048",
       status: "certified",
       file_hash: "a1b2c3d4...sha256",
-      verify_url: "https://xproof.app/proof/d93e5449-2d4a-4f8c-a2e4-25feaad98048",
-      proof_json_url: "https://xproof.app/proof/d93e5449-2d4a-4f8c-a2e4-25feaad98048.json",
+      verify_url: "https://provebeforeact.com/proof/d93e5449-2d4a-4f8c-a2e4-25feaad98048",
+      proof_json_url: "https://provebeforeact.com/proof/d93e5449-2d4a-4f8c-a2e4-25feaad98048.json",
       blockchain: {
         network: "MultiversX",
         transaction_hash: "6c15aeb1ce18aaaee9adef...sha256",
@@ -213,10 +213,10 @@ export async function getPaymentRequirements(route: "proof" | "batch" | "investi
     payTo,
     maxTimeoutSeconds: 60,
     description: route === "batch"
-      ? "xproof batch certification — certify up to 100 files/decisions in one on-chain transaction"
+      ? "Prove Before Act batch certification — certify up to 100 files/decisions in one on-chain transaction"
       : route === "investigate"
-        ? "xproof 4W incident investigation — reconstruct full agent decision audit trail by decision_id"
-        : "xproof single file/decision certification — anchor SHA-256 hash on MultiversX with optional 4W provenance",
+        ? "Prove Before Act 4W incident investigation — reconstruct full agent decision audit trail by decision_id"
+        : "Prove Before Act single file/decision certification — anchor SHA-256 hash on MultiversX with optional 4W provenance",
     extensions: bazaarMeta,
   };
 }

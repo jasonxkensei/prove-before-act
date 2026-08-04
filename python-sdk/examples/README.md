@@ -1,11 +1,11 @@
-# xProof Python SDK — Examples
+# Prove Before Act Python SDK — Examples
 
 End-to-end examples showing how to anchor AI agent decisions on-chain with
-xProof across the most popular agent frameworks.
+Prove Before Act across the most popular agent frameworks.
 
 ## Quick start — no API key required
 
-The fastest way to see xProof in action is the LangChain tool demo, which
+The fastest way to see Prove Before Act in action is the LangChain tool demo, which
 runs entirely with mocked responses so you can explore the certification
 flow without any credentials:
 
@@ -29,12 +29,12 @@ client with your registered API key (see the
 | [`llamaindex/`](llamaindex/README.md) | `XProofCallbackHandler` | Certifies LLM calls, queries, and tool invocations from a LlamaIndex pipeline |
 | [`openai-agents/`](openai-agents/README.md) | `XProofRunHooks`, `XProofTracingProcessor` | Certifies tool calls and agent completions; self-contained, no extra sub-modules |
 | [`fetchai/`](fetchai/README.md) | `XProofuAgentMiddleware` | On-chain proof anchoring for Fetch.ai uAgent messages |
-| [`deerflow/`](deerflow/README.md) | `XProofDeerFlowSkill` | xProof as a DeerFlow skill — blockchain-anchored proof for any DeerFlow agent output |
+| [`deerflow/`](deerflow/README.md) | `XProofDeerFlowSkill` | Prove Before Act as a DeerFlow skill — blockchain-anchored proof for any DeerFlow agent output |
 | [`compliance_observability.py`](compliance_observability.py) | `XProofClient` (core SDK) | Standalone script demonstrating compliance logging and observability patterns |
 
 ## Choosing the right example
 
-- **New to xProof?** Start with `langchain-chain/certify_tool_demo.py` — no
+- **New to Prove Before Act?** Start with `langchain-chain/certify_tool_demo.py` — no
   framework knowledge required and it runs offline.
 - **Building a multi-agent system?** See `crewai-crew/` or `autogen/`.
 - **Using a RAG pipeline?** See `llamaindex/`.
@@ -44,4 +44,4 @@ client with your registered API key (see the
 
 Each subdirectory contains its own `README.md` with installation instructions,
 a walkthrough of the code, and the canonical `delete_pii_records` / `eu-region`
-scenario used throughout the xProof documentation.
+scenario used throughout the Prove Before Act documentation.

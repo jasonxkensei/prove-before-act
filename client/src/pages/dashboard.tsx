@@ -15,13 +15,13 @@ import { ApiKeysSection } from "@/components/api-keys-section";
 function TrustBadgeSection({ wallet, isPublic }: { wallet: string; isPublic: boolean }) {
   const { toast } = useToast();
   // Live preview uses current origin so it works in dev/staging as well.
-  const previewUrl = `${typeof window !== "undefined" ? window.location.origin : "https://xproof.app"}/badge/trust/${wallet}.svg`;
+  const previewUrl = `${typeof window !== "undefined" ? window.location.origin : "https://provebeforeact.com"}/badge/trust/${wallet}.svg`;
   // Snippet text always uses the canonical production URL so copied embed codes
   // point to the live service regardless of where the dashboard is opened.
-  const canonicalOrigin = "https://xproof.app";
+  const canonicalOrigin = "https://provebeforeact.com";
   const snippetBadgeUrl = `${canonicalOrigin}/badge/trust/${wallet}.svg`;
   const snippetLinkUrl = `${canonicalOrigin}/agent/${wallet}`;
-  const markdownSnippet = `[![xproof Trust](${snippetBadgeUrl})](${snippetLinkUrl})`;
+  const markdownSnippet = `[![Prove Before Act Trust](${snippetBadgeUrl})](${snippetLinkUrl})`;
   const scriptSnippet = `<script src="${canonicalOrigin}/widget/trust/${wallet}.js"></script>`;
 
   const handleCopy = async (text: string, label: string) => {
@@ -39,7 +39,7 @@ function TrustBadgeSection({ wallet, isPublic }: { wallet: string; isPublic: boo
           <CardTitle className="text-base">Trust Badge</CardTitle>
         </div>
         <p className="text-sm text-muted-foreground">
-          Add your xproof trust badge to GitHub READMEs or any website
+          Add your Prove Before Act trust badge to GitHub READMEs or any website
         </p>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -60,7 +60,7 @@ function TrustBadgeSection({ wallet, isPublic }: { wallet: string; isPublic: boo
               <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">Live preview</p>
               <img
                 src={previewUrl}
-                alt="xproof Trust Badge"
+                alt="Prove Before Act Trust Badge"
                 className="h-7"
                 data-testid="img-trust-badge-preview"
               />
@@ -290,7 +290,7 @@ export default function Dashboard() {
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between">
           <a href="/" className="flex items-center gap-2" data-testid="link-logo-home">
-            <img src="/xproof-logo.png" alt="xproof" className="h-8 w-auto" />
+            <img src="/xproof-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
           </a>
           <div className="flex items-center gap-2 flex-wrap justify-end">
             <Button asChild variant="ghost" size="sm" data-testid="button-leaderboard">

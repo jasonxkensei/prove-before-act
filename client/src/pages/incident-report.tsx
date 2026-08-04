@@ -304,7 +304,7 @@ function VerdictBanner({
             What does this mean?
           </p>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            xproof requires agents to anchor their reasoning (WHY) before acting (WHAT).
+            Prove Before Act requires agents to anchor their reasoning (WHY) before acting (WHAT).
             This check looks for a WHY proof linked to this specific action.
             When WHY was certified before the action's target existed — for instance,
             reasoning anchored before a post was published — the automatic pairing
@@ -1082,7 +1082,7 @@ export default function IncidentReportPage() {
             >
               <img
                 src="/xproof-logo.png"
-                alt="xproof"
+                alt="Prove Before Act"
                 className="h-7 w-auto"
               />
             </a>
@@ -1495,7 +1495,7 @@ export default function IncidentReportPage() {
                   className="text-primary hover:underline"
                   data-testid="link-home"
                 >
-                  xproof.app
+                  provebeforeact.com
                 </a>
               </p>
             </footer>
