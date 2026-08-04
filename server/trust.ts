@@ -227,12 +227,14 @@ function computeStreakFromWeekNumbers(weekNumbers: number[]): number {
   const sorted = [...new Set(weekNumbers)].sort((a, b) => b - a);
   const currentIsoWeek = getIsoWeekNumber(new Date());
 
-  if (currentIsoWeek - sorted[0] > 2) return 0;
+  // TRUST-M01: strict weekly streak — must have activity this week or last week,
+  // and each consecutive pair of weeks must be adjacent (gap of exactly 1).
+  if (currentIsoWeek - sorted[0] > 1) return 0;
 
   let streak = 1;
   for (let i = 1; i < sorted.length; i++) {
     const gap = sorted[i - 1] - sorted[i];
-    if (gap <= 2) {
+    if (gap <= 1) {
       streak++;
     } else {
       break;

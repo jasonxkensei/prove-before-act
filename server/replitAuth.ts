@@ -3,6 +3,12 @@ import connectPg from "connect-pg-simple";
 import { logger } from "./logger";
 
 export function getSession() {
+  // AUTH-H03: fail fast at startup if SESSION_SECRET is absent — express-session
+  // receives undefined otherwise and may silently generate insecure sessions.
+  if (!process.env.SESSION_SECRET) {
+    throw new Error("SESSION_SECRET environment variable is required but not set. Set it before starting the server.");
+  }
+
   const pgStore = connectPg(session);
   const sessionStore = new pgStore({
     conString: process.env.DATABASE_URL,

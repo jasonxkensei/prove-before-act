@@ -13,14 +13,19 @@ export const isWalletAuthenticated: RequestHandler = (req: any, res, next) => {
 };
 
 export function createWalletSession(req: any, walletAddress: string): Promise<void> {
+  // AUTH-H01: regenerate session ID on authentication to prevent session fixation —
+  // an attacker who captures a pre-auth cookie cannot reuse it after the victim logs in.
   return new Promise((resolve, reject) => {
-    req.session.walletAddress = walletAddress;
-    req.session.save((err: any) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve();
-      }
+    req.session.regenerate((err: any) => {
+      if (err) return reject(err);
+      req.session.walletAddress = walletAddress;
+      req.session.save((saveErr: any) => {
+        if (saveErr) {
+          reject(saveErr);
+        } else {
+          resolve();
+        }
+      });
     });
   });
 }

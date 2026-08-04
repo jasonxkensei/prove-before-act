@@ -403,8 +403,9 @@ export function registerCertificationsRoutes(app: Express) {
         return res.status(400).json({ message: "Invalid MultiversX address" });
       }
 
-      // Get gateway URL from env
-      const gatewayUrl = process.env.MULTIVERSX_GATEWAY_URL || "https://devnet-gateway.multiversx.com";
+      // FE-M04: default to mainnet gateway (same as blockchain.ts); set
+      // MULTIVERSX_GATEWAY_URL to override for testnet/devnet environments.
+      const gatewayUrl = process.env.MULTIVERSX_GATEWAY_URL || "https://gateway.multiversx.com";
       
       // Fetch account info from MultiversX gateway
       const response = await fetch(`${gatewayUrl}/address/${address}`);

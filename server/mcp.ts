@@ -340,7 +340,12 @@ export async function createMcpServer(ctx: McpContext) {
         // double-charge in the second consume block below.
         let creditConsumed = false;
 
-        const [existing] = await db.select().from(certifications).where(eq(certifications.fileHash, file_hash));
+        // MCP-C02: dedup per (fileHash, userId) — different users are allowed to
+        // independently certify the same file hash under their own identity.
+        // A global-hash check would let an early certifier "squat" a hash and
+        // block every subsequent user from certifying it via MCP.
+        const [existing] = await db.select().from(certifications)
+          .where(and(eq(certifications.fileHash, file_hash), eq(certifications.userId, auth.userId!)));
         if (existing) {
           const isAcpReservation = existing.authMethod === "acp" && existing.blockchainStatus === "pending" && !existing.transactionHash;
           if (isAcpReservation) {
