@@ -16,7 +16,7 @@ const config: InitAppType = {
   dAppConfig: {
     environment: EnvironmentsEnum.mainnet,
     nativeAuth: {
-      expirySeconds: 86400,
+      expirySeconds: 3600, // AUTH-M01: 1 hour — matches server maxExpirySeconds
       tokenExpirationToastWarningSeconds: 300
     },
   }

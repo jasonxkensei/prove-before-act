@@ -57,7 +57,7 @@ export function getAcceptedOrigins(): string[] {
 // Initialize Native Auth server for token verification
 const nativeAuthServer = new NativeAuthServer({
   apiUrl: 'https://api.multiversx.com', // Mainnet API
-  maxExpirySeconds: 86400, // 24 hours (must match client config)
+  maxExpirySeconds: 3600, // AUTH-M01: 1 hour — reduces stolen-token window; client config updated to match
   acceptedOrigins: buildAcceptedOrigins(),
 });
 
@@ -89,7 +89,10 @@ export async function verifyNativeAuthToken(
     
     return decoded;
   } catch (error: any) {
-    throw new Error(`Invalid Native Auth token: ${error.message}`);
+    // AUTH-M07 (server side): do not propagate SDK internals — callers log the
+    // original message; callers that surface errors to clients must use a generic
+    // message (see auth.ts catch block).
+    throw new Error('Invalid or expired authentication token');
   }
 }
 

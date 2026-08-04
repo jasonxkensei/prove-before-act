@@ -123,7 +123,19 @@ export default function Certify() {
   // from sendCertificationTransaction before the POST body is known.
   // Removed to eliminate dead code and the confusing duplicate success/error logic.
 
+  // FE-L02: 2 GB client-side limit — hashing a larger file would block the UI
+  // thread and is impractical. Show an immediate error rather than hanging.
+  const MAX_FILE_SIZE_BYTES = 2 * 1024 * 1024 * 1024;
+
   const handleFileSelect = async (selectedFile: File) => {
+    if (selectedFile.size > MAX_FILE_SIZE_BYTES) {
+      toast({
+        title: "File too large",
+        description: "Maximum supported file size is 2 GB.",
+        variant: "destructive",
+      });
+      return;
+    }
     setFile(selectedFile);
     setIsHashing(true);
     setHashProgress(0);
@@ -578,10 +590,20 @@ export default function Certify() {
             <CardContent>
               {!file ? (
                 <div
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Drop your file here or press Enter to browse"
                   onDrop={handleDrop}
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
-                  className={`relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 transition-colors ${
+                  onKeyDown={(e) => {
+                    // FE-L03: keyboard activation — Enter or Space opens the hidden file input
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      (e.currentTarget.querySelector('input[type="file"]') as HTMLInputElement)?.click();
+                    }
+                  }}
+                  className={`relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 transition-colors cursor-pointer ${
                     isDragging
                       ? "border-primary bg-primary/5"
                       : "border-border hover:border-primary/50"
@@ -592,16 +614,19 @@ export default function Certify() {
                     Drop your file here or click to browse
                   </p>
                   <p className="mb-4 text-center text-xs text-muted-foreground">
-                    Supported formats: Images, PDF, Documents, Audio, Video
+                    Any file type · Max 2 GB
                   </p>
                   <Input
                     type="file"
+                    accept="*/*"
                     onChange={(e) => {
                       const selectedFile = e.target.files?.[0];
                       if (selectedFile) handleFileSelect(selectedFile);
                     }}
                     className="absolute inset-0 cursor-pointer opacity-0"
                     data-testid="input-file-upload"
+                    aria-hidden="true"
+                    tabIndex={-1}
                   />
                 </div>
               ) : (

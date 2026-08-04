@@ -69,23 +69,28 @@ export function useWalletAuth() {
     ? (sessionStorage.getItem('walletAddress') || localStorage.getItem('walletAddress'))
     : null;
   const address = sdkAddress || savedAddress || '';
-  const isLoggedIn = isLoggedInSdk || !!savedAddress;
-  
+  // AUTH-M06: isLoggedIn for sync/query gating derives from SDK state only.
+  // savedAddress is an optimistic display hint (reduces flicker on refresh) but
+  // must not act as an auth gate — a stale storage entry must not substitute for
+  // a real SDK connection or a server-confirmed session.
+  const isLoggedIn = isLoggedInSdk;
+
   // Query should only run when:
   // 1. No wallet connected (check for existing session)
   // 2. Wallet connected AND sync completed successfully
   const shouldQueryAuth = !isLoggedIn || (sessionReady && !syncFailed);
-  
-  logger.log('useWalletAuth state:', { 
-    isLoggedInSdk, 
-    sdkAddress: sdkAddress?.slice(0, 20), 
-    savedAddress: savedAddress?.slice(0, 20),
-    effectiveAddress: address?.slice(0, 20),
-    isLoggedIn,
-    sessionReady,
-    syncFailed,
-    shouldQueryAuth
-  });
+
+  // AUTH-L04: Do not log partial wallet addresses to the browser console in
+  // production — DevTools leaks are unnecessary and expose user identity hints.
+  if (process.env.NODE_ENV !== 'production') {
+    logger.log('useWalletAuth state:', {
+      isLoggedInSdk,
+      isLoggedIn,
+      sessionReady,
+      syncFailed,
+      shouldQueryAuth,
+    });
+  }
 
   // Sync wallet with backend when wallet is connected
   // Uses shared promise so all hook instances wait for the same sync
@@ -97,7 +102,7 @@ export function useWalletAuth() {
     }
     
     // Start new sync
-    logger.log('Syncing wallet session:', walletAddress.slice(0, 15));
+    logger.log('Syncing wallet session...');
     lastSyncedAddress = walletAddress;
     
     syncPromise = (async () => {
@@ -196,7 +201,7 @@ export function useWalletAuth() {
         
         if (response.ok) {
           const userData = await response.json();
-          logger.log('User authenticated from existing session:', userData.walletAddress?.slice(0, 15));
+          logger.log('User authenticated from existing session');
           
           if (userData.walletAddress && !sessionStorage.getItem('walletAddress')) {
             sessionStorage.setItem('walletAddress', userData.walletAddress);

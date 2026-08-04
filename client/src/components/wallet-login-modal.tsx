@@ -186,7 +186,7 @@ export function WalletLoginModal({ open, onOpenChange, redirectTo }: WalletLogin
       // Generate the nativeAuth init token. The wallet will sign this and
       // return a signature, which we then compose into the final auth token.
       // Without this, the wallet has nothing to sign and no token comes back.
-      const nativeAuthClient = nativeAuth({ expirySeconds: 86400 });
+      const nativeAuthClient = nativeAuth({ expirySeconds: 3600 }); // AUTH-M01: 1 hour — matches server maxExpirySeconds
       const initToken = await nativeAuthClient.initialize();
       logger.log('Generated nativeAuth init token');
 
