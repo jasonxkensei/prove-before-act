@@ -81,9 +81,12 @@ export function registerAuthRoutes(app: Express) {
 
       res.json(user);
     } catch (error: any) {
+      // AUTH-M07: log the internal SDK error detail server-side but return a
+      // generic message to the client — SDK internals (library versions, token
+      // structure) are useful to attackers and must not be exposed in responses.
       logger.withRequest(req).error("Wallet sync failed", { error: error.message });
       res.status(401).json({ 
-        message: error.message || "Failed to verify authentication token" 
+        message: "Authentication failed. Please try again."
       });
     }
   });

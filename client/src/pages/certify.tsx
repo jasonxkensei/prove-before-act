@@ -207,7 +207,12 @@ export default function Certify() {
             title: "File already certified",
             description: "This file is already on the blockchain. No payment was made. Redirecting to existing proof...",
           });
-          setLocation(checkData.proof_url);
+          // FE-M03: validate proof_url is a same-origin relative path before
+          // navigating — prevents an open redirect if the API returns a crafted URL.
+          const safeUrl = typeof checkData.proof_url === "string" && checkData.proof_url.startsWith("/")
+            ? checkData.proof_url
+            : "/";
+          setLocation(safeUrl);
           return;
         }
       }
@@ -282,7 +287,11 @@ export default function Certify() {
                 title: "File already certified",
                 description: "This file is already on the blockchain. Redirecting to existing proof...",
               });
-              setLocation(checkData.proof_url);
+              // FE-M03: same-origin validation (second occurrence — 409 catch path)
+              const safeUrl = typeof checkData.proof_url === "string" && checkData.proof_url.startsWith("/")
+                ? checkData.proof_url
+                : "/";
+              setLocation(safeUrl);
               return;
             }
           }
