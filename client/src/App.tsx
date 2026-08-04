@@ -94,9 +94,10 @@ function Router() {
           <Route path="/coherence" component={CoherencePage} />
           <Route path="/fleet" component={FleetPage} />
           <Route path="/fleets" component={FleetManagePage} />
-          <Route path="/stats">
-            <Redirect to="/" />
-          </Route>
+          {/* /stats shows public platform metrics (unauthenticated /api/stats endpoint).
+              Accessible without login — admin-only sections are protected server-side via
+              requireAdmin on /api/admin/* routes and simply don't render for non-admins. */}
+          <Route path="/stats" component={AdminDashboard} />
           <Route path="/admin">
             <Redirect to="/" />
           </Route>
