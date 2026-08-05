@@ -221,6 +221,164 @@ function issuerBonusFromCertCount(confirmedCerts: number): number {
   return 10;
 }
 
+// ── Circular-ring discount ─────────────────────────────────────────────────────
+// When two wallets mutually attest each other (A→B + B→A), or when a ring of
+// three wallets exists (A→B→C→A), both sides count toward each agent's trust
+// score, artificially inflating all scores inside the ring.
+//
+// Mitigation: any incoming attestation from a wallet that is part of a circular
+// ring with the subject (rings up to length 3 are detected) receives a 50%
+// bonus discount.  This neutralises pure colluding rings while allowing
+// genuinely reciprocal attestations between well-established issuers to retain
+// meaningful — if reduced — value.
+export const CIRCULAR_ATTESTATION_DISCOUNT = 0.5;
+
+/**
+ * Returns the set of issuer wallets that are part of a ring-2 (mutual A↔B) or
+ * ring-3 (A→B→C→A) circular attestation pattern with `subjectWallet`.
+ *
+ * Ring-2: subjectWallet attested issuerWallet AND issuerWallet attested subjectWallet.
+ * Ring-3: subjectWallet attested J, J attested issuerWallet, issuerWallet attested
+ *         subjectWallet — completing the 3-node cycle.
+ */
+async function detectCircularIssuers(
+  subjectWallet: string,
+  issuerWallets: string[],
+  now: Date,
+): Promise<Set<string>> {
+  if (issuerWallets.length === 0) return new Set();
+
+  // Fetch all wallets that subjectWallet has attested (outgoing edges from S).
+  const outgoingResult = await pool.query<{ subject_wallet: string }>(
+    `SELECT subject_wallet
+     FROM attestations
+     WHERE issuer_wallet = $1
+       AND status = 'active'
+       AND (expires_at IS NULL OR expires_at > $2)`,
+    [subjectWallet, now],
+  );
+  const outgoingSet = new Set(outgoingResult.rows.map((r) => r.subject_wallet));
+  if (outgoingSet.size === 0) return new Set();
+
+  const circular = new Set<string>();
+
+  // Ring-2: S attested I, and I attested S.
+  for (const issuer of issuerWallets) {
+    if (outgoingSet.has(issuer)) circular.add(issuer);
+  }
+
+  // Ring-3: S→J→I→S — S attested some J, J attested I, and I attested S
+  // (i.e., I is in issuerWallets).
+  // Important: J may itself be mutual with S (ring-2) — that must NOT prevent
+  // us from using J to discover additional ring-3 issuers I.
+  const hop1Wallets = [...outgoingSet];
+  if (hop1Wallets.length > 0) {
+    const hop2Result = await pool.query<{ subject_wallet: string }>(
+      `SELECT DISTINCT a.subject_wallet
+       FROM attestations a
+       WHERE a.issuer_wallet = ANY($1)
+         AND a.subject_wallet = ANY($2)
+         AND a.status = 'active'
+         AND (a.expires_at IS NULL OR a.expires_at > $3)`,
+      [hop1Wallets, issuerWallets, now],
+    );
+    for (const row of hop2Result.rows) circular.add(row.subject_wallet);
+  }
+
+  return circular;
+}
+
+/**
+ * Batch version of detectCircularIssuers.  Returns a map from each subject
+ * wallet to the set of its incoming issuer wallets that are part of a ring
+ * (length 2 or 3).
+ */
+async function detectCircularIssuersBatch(
+  walletAddresses: string[],
+  rowsBySubject: Map<string, { issuer_wallet: string; issuer_confirmed_certs: number }[]>,
+  now: Date,
+): Promise<Map<string, Set<string>>> {
+  if (walletAddresses.length === 0) return new Map();
+
+  // All known issuer wallets across all subjects (used as the ring-3 filter set).
+  const allIssuers = new Set<string>();
+  for (const rows of rowsBySubject.values()) {
+    for (const r of rows) allIssuers.add(r.issuer_wallet);
+  }
+  const allIssuerList = [...allIssuers];
+
+  // Fetch outgoing attestations from every subject wallet in the batch.
+  const outgoingResult = await pool.query<{ issuer_wallet: string; subject_wallet: string }>(
+    `SELECT issuer_wallet, subject_wallet
+     FROM attestations
+     WHERE issuer_wallet = ANY($1)
+       AND status = 'active'
+       AND (expires_at IS NULL OR expires_at > $2)`,
+    [walletAddresses, now],
+  );
+  const outgoingBySubject = new Map<string, Set<string>>();
+  for (const row of outgoingResult.rows) {
+    if (!outgoingBySubject.has(row.issuer_wallet)) outgoingBySubject.set(row.issuer_wallet, new Set());
+    outgoingBySubject.get(row.issuer_wallet)!.add(row.subject_wallet);
+  }
+
+  // Ring-2 detection per subject.
+  const circularBySubject = new Map<string, Set<string>>();
+  for (const wallet of walletAddresses) {
+    const issuers = rowsBySubject.get(wallet) ?? [];
+    const outgoing = outgoingBySubject.get(wallet) ?? new Set<string>();
+    const circular = new Set<string>();
+    for (const { issuer_wallet } of issuers) {
+      if (outgoing.has(issuer_wallet)) circular.add(issuer_wallet);
+    }
+    circularBySubject.set(wallet, circular);
+  }
+
+  // Ring-3 detection: collect hop-1 wallets (all outgoing targets).
+  // Important: a wallet already flagged as ring-2 must NOT be excluded here —
+  // it may still be an intermediate node that leads to additional ring-3 issuers.
+  const hop1WalletSet = new Set<string>();
+  for (const wallet of walletAddresses) {
+    const outgoing = outgoingBySubject.get(wallet) ?? new Set<string>();
+    for (const j of outgoing) {
+      hop1WalletSet.add(j);
+    }
+  }
+
+  if (hop1WalletSet.size > 0 && allIssuerList.length > 0) {
+    const hop2Result = await pool.query<{ issuer_wallet: string; subject_wallet: string }>(
+      `SELECT issuer_wallet, subject_wallet
+       FROM attestations
+       WHERE issuer_wallet = ANY($1)
+         AND subject_wallet = ANY($2)
+         AND status = 'active'
+         AND (expires_at IS NULL OR expires_at > $3)`,
+      [[...hop1WalletSet], allIssuerList, now],
+    );
+    const hop2Map = new Map<string, Set<string>>();
+    for (const row of hop2Result.rows) {
+      if (!hop2Map.has(row.issuer_wallet)) hop2Map.set(row.issuer_wallet, new Set());
+      hop2Map.get(row.issuer_wallet)!.add(row.subject_wallet);
+    }
+
+    for (const wallet of walletAddresses) {
+      const issuers = new Set((rowsBySubject.get(wallet) ?? []).map((r) => r.issuer_wallet));
+      const outgoing = outgoingBySubject.get(wallet) ?? new Set<string>();
+      const circular = circularBySubject.get(wallet)!;
+      for (const j of outgoing) {
+        // Do NOT skip j just because it's already ring-2: it may still serve
+        // as an intermediate node that links another issuer I into a ring-3.
+        const hop2Targets = hop2Map.get(j) ?? new Set<string>();
+        for (const i of hop2Targets) {
+          if (issuers.has(i)) circular.add(i);
+        }
+      }
+    }
+  }
+
+  return circularBySubject;
+}
+
 function computeStreakFromWeekNumbers(weekNumbers: number[]): number {
   if (weekNumbers.length === 0) return 0;
 
@@ -314,9 +472,15 @@ async function computeAttestationBonus(walletAddress: string): Promise<{ bonus: 
     `);
     const allRows = rows.rows as any[];
     const count = allRows.length;
+    const issuerWallets = allRows.map((r: any) => r.issuer_wallet as string);
+    const circularIssuers = await detectCircularIssuers(walletAddress, issuerWallets, now);
     const bonus = allRows
       .slice(0, 3)
-      .reduce((sum, r) => sum + issuerBonusFromCertCount(Number(r.issuer_confirmed_certs || 0)), 0);
+      .reduce((sum: number, r: any) => {
+        const base = issuerBonusFromCertCount(Number(r.issuer_confirmed_certs || 0));
+        const factor = circularIssuers.has(r.issuer_wallet as string) ? CIRCULAR_ATTESTATION_DISCOUNT : 1;
+        return sum + Math.round(base * factor);
+      }, 0);
     return { bonus, count };
   } catch {
     return { bonus: 0, count: 0 };
@@ -349,11 +513,17 @@ async function computeAttestationBonusBatch(walletAddresses: string[]): Promise<
       if (!rowsBySubject.has(sw)) rowsBySubject.set(sw, []);
       rowsBySubject.get(sw)!.push({ issuer_wallet: row.issuer_wallet, issuer_confirmed_certs: Number(row.issuer_confirmed_certs || 0) });
     }
+    const circularBySubject = await detectCircularIssuersBatch(walletAddresses, rowsBySubject, now);
     const out = new Map<string, { bonus: number; count: number }>();
     for (const wallet of walletAddresses) {
       const rows = (rowsBySubject.get(wallet) ?? []).sort((a, b) => b.issuer_confirmed_certs - a.issuer_confirmed_certs);
       const count = rows.length;
-      const bonus = rows.slice(0, 3).reduce((sum, r) => sum + issuerBonusFromCertCount(r.issuer_confirmed_certs), 0);
+      const circular = circularBySubject.get(wallet) ?? new Set<string>();
+      const bonus = rows.slice(0, 3).reduce((sum, r) => {
+        const base = issuerBonusFromCertCount(r.issuer_confirmed_certs);
+        const factor = circular.has(r.issuer_wallet) ? CIRCULAR_ATTESTATION_DISCOUNT : 1;
+        return sum + Math.round(base * factor);
+      }, 0);
       out.set(wallet, { bonus, count });
     }
     return out;
