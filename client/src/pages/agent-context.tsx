@@ -1270,7 +1270,7 @@ agent = ReActAgent.from_tools([xproof_tool, ...], llm=llm)`} />
             <p className="text-xs font-semibold mb-2">Vercel AI SDK (TypeScript)</p>
             <CodeBlock lang="typescript" code={`import { tool } from 'ai';
 import { z } from 'zod';
-import { xProof } from '@prove-before-act/sdk';  // npm install @prove-before-act/sdk
+import { xProof } from 'prove-before-act';  // npm install prove-before-act
 
 const anchorTool = tool({
   description: 'Anchor reasoning on-chain BEFORE executing any significant action. Returns proof_id.',
@@ -1318,7 +1318,7 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
               </div>
               <div>
                 <p className="text-xs text-muted-foreground font-mono mb-1">// JavaScript / TypeScript</p>
-                <code className="text-xs bg-muted px-2 py-1 rounded block">npm install @prove-before-act/sdk</code>
+                <code className="text-xs bg-muted px-2 py-1 rounded block">npm install prove-before-act</code>
               </div>
             </div>
           </div>
@@ -1417,7 +1417,7 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur">
         <div className="container flex h-14 items-center justify-between gap-4">
           <a href="/" className="flex items-center gap-2 shrink-0" data-testid="link-logo-home">
-            <img src="/xproof-logo.png" alt="Prove Before Act" className="h-7 w-auto" />
+            <img src="/pba-logo.svg" alt="Prove Before Act" className="h-7 w-auto" />
           </a>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Bot className="h-3.5 w-3.5 shrink-0" />

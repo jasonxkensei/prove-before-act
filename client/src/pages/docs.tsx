@@ -818,7 +818,7 @@ export default function DocsPage() {
               <a href="/"><ArrowLeft className="h-4 w-4" /></a>
             </Button>
             <a href="/" className="flex items-center gap-2" data-testid="link-logo-docs">
-              <img src="/xproof-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
+              <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
             </a>
             <Badge variant="outline">API Docs</Badge>
           </div>

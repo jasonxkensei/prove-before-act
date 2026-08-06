@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to `@prove-before-act/sdk` will be documented here.
+All notable changes to `prove-before-act` will be documented here.
 
 ## [0.1.11] — 2026-07-30
 
@@ -25,7 +25,7 @@ All notable changes to `@prove-before-act/sdk` will be documented here.
 No breaking changes.
 
 ```bash
-npm install @prove-before-act/sdk@0.1.10
+npm install prove-before-act@0.1.10
 ```
 
 ---
@@ -42,7 +42,7 @@ npm install @prove-before-act/sdk@0.1.10
 No breaking changes.
 
 ```bash
-npm install @prove-before-act/sdk@0.1.9
+npm install prove-before-act@0.1.9
 ```
 
 ---
@@ -78,7 +78,7 @@ npm install @prove-before-act/sdk@0.1.9
 No breaking changes. All new fields are optional.
 
 ```bash
-npm install @prove-before-act/sdk@0.1.8
+npm install prove-before-act@0.1.8
 ```
 
 ---

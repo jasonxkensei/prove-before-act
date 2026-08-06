@@ -44,7 +44,7 @@ function Router() {
     return (
       <div className="flex h-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
-          <img src="/xproof-logo.png" alt="Prove Before Act" className="h-12 w-auto animate-pulse" />
+          <img src="/pba-logo.svg" alt="Prove Before Act" className="h-12 w-auto animate-pulse" />
           <div className="flex items-center gap-2 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             <span>Loading...</span>
@@ -57,7 +57,7 @@ function Router() {
   const fallback = (
     <div className="flex h-screen items-center justify-center bg-background">
       <div className="flex flex-col items-center gap-4">
-        <img src="/xproof-logo.png" alt="Prove Before Act" className="h-12 w-auto animate-pulse" />
+        <img src="/pba-logo.svg" alt="Prove Before Act" className="h-12 w-auto animate-pulse" />
         <div className="flex items-center gap-2 text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           <span>Loading...</span>

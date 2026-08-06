@@ -1,7 +1,7 @@
 {
-  "name": "@prove-before-act/sdk",
+  "name": "prove-before-act",
   "version": "0.1.11",
-  "description": "Official SDK for the Prove Before Act blockchain certification API — proof and accountability layer for autonomous agents",
+  "description": "Official SDK for the Prove Before Act blockchain certification API \u2014 proof and accountability layer for autonomous agents",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",

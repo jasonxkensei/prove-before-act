@@ -38,7 +38,7 @@ jobs:
 
 That's it — every push to `main` now anchors a tamper-evident proof of your build artifact on-chain.
 
-> **No API key yet, or building an autonomous agent instead of a CI pipeline?** Prove Before Act also supports pay-per-call certification with no account via the **x402** protocol (USDC on Base), through the [`@prove-before-act/sdk` npm SDK](https://www.npmjs.com/package/@prove-before-act/sdk) or [`Prove Before Act` PyPI SDK](https://pypi.org/project/xproof/). This GitHub Action always uses an API key because CI runners need a stable, revocable credential rather than a per-call wallet signature.
+> **No API key yet, or building an autonomous agent instead of a CI pipeline?** Prove Before Act also supports pay-per-call certification with no account via the **x402** protocol (USDC on Base), through the [`@proveprove-before-act` npm SDK](https://www.npmjs.com/package/@proveprove-before-act) or [`Prove Before Act` PyPI SDK](https://pypi.org/project/xproof/). This GitHub Action always uses an API key because CI runners need a stable, revocable credential rather than a per-call wallet signature.
 
 ## Inputs
 

@@ -23,7 +23,7 @@ description: How to publish Prove Before Act SDKs to PyPI, npm, GitHub, and claw
 - **Publish:** `cd npm-sdk && pnpm publish --access public --no-git-checks --registry https://registry.npmjs.org/`
 - **Auth file:** `npm-sdk/.npmrc` must contain `//registry.npmjs.org/:_authToken=${NPM_ACCESS_TOKEN}`
 - **Secret:** `NPM_ACCESS_TOKEN`
-- **URL:** https://www.npmjs.com/package/@prove-before-act/sdk
+- **URL:** https://www.npmjs.com/package/prove-before-act (published unscoped; @prove-before-act org does not exist yet on npm)
 - **Note:** bash blocks `npm` commands; use `pnpm` with explicit registry URL. See npm-publish-replit.md.
 
 ## GitHub → jasonxkensei/xProof

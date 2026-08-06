@@ -608,7 +608,7 @@ resp = requests.post("${baseUrl}/api/batch",
     <h3>SDKs &amp; frameworks</h3>
     <ul>
       <li>Python: <code>pip install xproof</code> — LangChain, CrewAI, AutoGen, LlamaIndex, OpenAI Agents SDK</li>
-      <li>JavaScript: <code>npm install @prove-before-act/sdk</code> — Vercel AI, LangChain JS</li>
+      <li>JavaScript: <code>npm install prove-before-act</code> — Vercel AI, LangChain JS</li>
     </ul>
   </section>
 
@@ -766,7 +766,7 @@ resp = requests.post("${baseUrl}/api/batch",
     <h3>SDK 与框架</h3>
     <ul>
       <li>Python：<code>pip install xproof</code> — 支持 LangChain、CrewAI、AutoGen、LlamaIndex、OpenAI Agents SDK</li>
-      <li>JavaScript：<code>npm install @prove-before-act/sdk</code> — 支持 Vercel AI、LangChain JS</li>
+      <li>JavaScript：<code>npm install prove-before-act</code> — 支持 Vercel AI、LangChain JS</li>
     </ul>
   </section>
 

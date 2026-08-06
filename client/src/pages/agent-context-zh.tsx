@@ -1140,7 +1140,7 @@ agent.register_hook("process_message_before_send", pre_action_hook)`} />
             <p className="text-xs font-semibold mb-2">Vercel AI SDK（TypeScript）</p>
             <CodeBlock code={`import { tool } from 'ai';
 import { z } from 'zod';
-import { xProof } from '@prove-before-act/sdk';  // npm install @prove-before-act/sdk
+import { xProof } from 'prove-before-act';  // npm install prove-before-act
 
 const anchorTool = tool({
   description: '在执行任何重要操作前将推理过程锚定到链上。返回proof_id。',
@@ -1166,7 +1166,7 @@ const anchorTool = tool({
               </div>
               <div>
                 <p className="text-xs text-muted-foreground font-mono mb-1">// JavaScript / TypeScript</p>
-                <code className="text-xs bg-muted px-2 py-1 rounded block">npm install @prove-before-act/sdk</code>
+                <code className="text-xs bg-muted px-2 py-1 rounded block">npm install prove-before-act</code>
               </div>
             </div>
           </div>
@@ -1260,7 +1260,7 @@ const anchorTool = tool({
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur">
         <div className="container flex h-14 items-center justify-between gap-4">
           <a href="/zh" className="flex items-center gap-2 shrink-0" data-testid="link-logo-home-zh">
-            <img src="/xproof-logo.png" alt="Prove Before Act" className="h-7 w-auto" />
+            <img src="/pba-logo.svg" alt="Prove Before Act" className="h-7 w-auto" />
           </a>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Bot className="h-3.5 w-3.5 shrink-0" />

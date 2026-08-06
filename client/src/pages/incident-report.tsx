@@ -1081,7 +1081,7 @@ export default function IncidentReportPage() {
               data-testid="link-logo"
             >
               <img
-                src="/xproof-logo.png"
+                src="/pba-logo.svg"
                 alt="Prove Before Act"
                 className="h-7 w-auto"
               />

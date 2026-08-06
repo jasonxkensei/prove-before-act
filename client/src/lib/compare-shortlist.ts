@@ -9,7 +9,7 @@
  * that any rename of SHORTLIST_KEY is automatically reflected in tests.
  */
 
-export const SHORTLIST_KEY = "xproof_compare_shortlist";
+export const SHORTLIST_KEY = "pba_compare_shortlist";
 
 /** Hard cap on how many wallets can be in the comparison shortlist. */
 export const SHORTLIST_MAX = 6;

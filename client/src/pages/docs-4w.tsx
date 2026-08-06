@@ -271,7 +271,7 @@ export default function Docs4WPage() {
               <a href="/docs"><ArrowLeft className="h-4 w-4" /></a>
             </Button>
             <a href="/" className="flex items-center gap-2" data-testid="link-logo">
-              <img src="/xproof-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
+              <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
             </a>
             <Badge variant="outline">Integration Guide</Badge>
           </div>

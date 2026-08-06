@@ -2293,17 +2293,17 @@ PyPI: https://pypi.org/project/xproof/ — Integrations: LangChain, CrewAI, Llam
 
 ### SDK — JavaScript / TypeScript
 \\\`\\\`\\\`bash
-npm install @prove-before-act/sdk
+npm install prove-before-act
 \\\`\\\`\\\`
 \\\`\\\`\\\`typescript
-import { XProofClient } from "@prove-before-act/sdk";
+import { XProofClient } from 'prove-before-act';
 const client = new XProofClient({ apiKey: "pm_YOUR_API_KEY" });
 const proof = await client.certifyFile("path/to/file.pdf");
 console.log(proof.verifyUrl);
 // With LangChain
-import { XProofTool } from "@prove-before-act/sdk/langchain";
+import { XProofTool } from 'prove-before-act/vercel';
 \\\`\\\`\\\`
-npm: https://www.npmjs.com/package/@prove-before-act/sdk — Integrations: LangChain, CrewAI, LlamaIndex, AutoGen, OpenAI Agents SDK, Vercel AI
+npm: https://www.npmjs.com/package/prove-before-act — Integrations: LangChain, CrewAI, LlamaIndex, AutoGen, OpenAI Agents SDK, Vercel AI
 
 ### Verification Badge
 Embed a dynamic badge in README: \\\`[![Prove Before Act](https://provebeforeact.com/badge/{proof_id})](https://explorer.multiversx.com/transactions/{tx_hash})\\\`
@@ -2931,11 +2931,11 @@ result = client.verify_proof(proof_id="<uuid>")
 Framework integrations: LangChain, CrewAI, LlamaIndex, AutoGen, OpenAI Agents SDK, Vercel AI.
 
 ### JavaScript / TypeScript SDK
-Install: \`npm install @prove-before-act/sdk\`
-npm: https://www.npmjs.com/package/@prove-before-act/sdk
+Install: \`npm install prove-before-act\`
+npm: https://www.npmjs.com/package/prove-before-act
 
 \`\`\`typescript
-import { XProofClient } from "@prove-before-act/sdk";
+import { XProofClient } from 'prove-before-act';
 
 const client = new XProofClient({ apiKey: "pm_YOUR_API_KEY" });
 
@@ -2953,7 +2953,7 @@ const staged = await client.certifyWithConfidence({
 });
 
 // LangChain tool
-import { XProofTool } from "@prove-before-act/sdk/langchain";
+import { XProofTool } from 'prove-before-act/vercel';
 const tool = new XProofTool({ apiKey: "pm_..." });
 \`\`\`
 

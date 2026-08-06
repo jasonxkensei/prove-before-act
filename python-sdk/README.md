@@ -898,7 +898,7 @@ code --install-extension charliermarsh.ruff
 ## Links
 
 - [provebeforeact.com](https://provebeforeact.com) — dashboard & docs
-- [npm SDK](https://www.npmjs.com/package/@prove-before-act/sdk) — `npm install @prove-before-act/sdk`
+- [npm SDK](https://www.npmjs.com/package/@proveprove-before-act) — `npm install @proveprove-before-act`
 - [Examples](https://github.com/jasonxkensei/xproof-examples) — LangChain, CrewAI, AutoGen, LlamaIndex
 
 ## License

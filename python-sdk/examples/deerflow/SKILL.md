@@ -156,5 +156,5 @@ Every certification answers four questions:
 - [API documentation](https://provebeforeact.com/docs)
 - [MCP endpoint](https://provebeforeact.com/mcp)
 - [Python SDK on PyPI](https://pypi.org/project/xproof/)
-- [npm SDK](https://www.npmjs.com/package/@prove-before-act/sdk)
+- [npm SDK](https://www.npmjs.com/package/@proveprove-before-act)
 - [GitHub](https://github.com/jasonxkensei/xProof)

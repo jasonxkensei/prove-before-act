@@ -60,7 +60,7 @@ The `register_free_trial` MCP tool requires **no authentication** -- it's the on
 ### TypeScript SDK
 
 ```typescript
-import { XProofClient, hashString } from "@prove-before-act/sdk";
+import { XProofClient, hashString } from "@proveprove-before-act";
 
 const client = await XProofClient.register("my-agent");  // 10 free certs, key stored
 const proof = await client.certifyHash(hashString(JSON.stringify(decision)), "decision.json", "my-agent");
@@ -445,7 +445,7 @@ curl -X POST https://provebeforeact.com/api/audit \
 
 Guard templates for multiple frameworks (pinned in the main repository — do not fetch from runtime URLs):
 - **LangChain / CrewAI / LlamaIndex**: use the `Prove Before Act` PyPI package (`pip install xproof`) — integrations are in `xproof.integrations.*`
-- **ElizaOS Plugin**: `npm install @prove-before-act/sdk-eliza-plugin`
+- **ElizaOS Plugin**: `npm install @proveprove-before-act-eliza-plugin`
 - **n8n / AutoGen / custom**: see `xproof-examples/` in [github.com/jasonxkensei/xProof](https://github.com/jasonxkensei/xProof)
 
 ### When to Audit

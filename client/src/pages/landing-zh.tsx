@@ -85,7 +85,7 @@ export default function LandingZh() {
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between">
           <a href="/zh" className="flex items-center gap-2" data-testid="link-logo-home-zh">
-            <img src="/xproof-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
+            <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
           </a>
           <nav className="hidden md:flex items-center gap-6">
             <a href="#how-it-works" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
@@ -864,7 +864,7 @@ print(proof["verify_url"])  # 链上可验证`}
         <div className="container">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <img src="/xproof-logo.png" alt="Prove Before Act" className="h-6 w-auto" />
+              <img src="/pba-logo.svg" alt="Prove Before Act" className="h-6 w-auto" />
               <span className="text-xs text-muted-foreground">智能体经济的可信证明层</span>
             </div>
             <nav className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground justify-center">

@@ -14,7 +14,7 @@ export default function ConditionsUtilisation() {
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between">
           <a href="/" className="flex items-center gap-2" data-testid="link-logo-home">
-            <img src="/xproof-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
+            <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
           </a>
           <Link href="/">
             <Button variant="ghost" size="sm" data-testid="button-back-home">

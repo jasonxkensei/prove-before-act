@@ -79,7 +79,7 @@ done
 - **NEVER send plaintext content to provebeforeact.com** -- always hash locally first (`sha256sum`, `crypto.subtle.digest`, or equivalent). The only field Prove Before Act accepts is `file_hash` (64-char SHA-256 hex). No raw text, documents, or binary data should ever leave your environment.
 - **x402 is opt-in and autonomous** -- once enabled, your agent can initiate USDC payments on Base without per-transaction confirmation. Configure a spending cap in your agent framework and require human approval above your threshold before enabling x402 in production.
 - **`llms.txt` and `llms-full.txt` are static documentation references** -- load them once at install time for API reference, not at runtime on every call. Fetching them dynamically on each invocation creates an unnecessary runtime dependency on provebeforeact.com availability and a potential prompt-injection surface if the file is ever compromised.
-- **Guard/enforcement templates are versioned in the repository** -- never fetch agent enforcement code from a runtime URL. Use the pinned versions in `references/` or the SDK packages (`xproof` on PyPI, `@prove-before-act/sdk` on npm).
+- **Guard/enforcement templates are versioned in the repository** -- never fetch agent enforcement code from a runtime URL. Use the pinned versions in `references/` or the SDK packages (`xproof` on PyPI, `@proveprove-before-act` on npm).
 
 ---
 
@@ -170,7 +170,7 @@ curl -X POST https://provebeforeact.com/api/coherence/link \
 | `400` | `NOT_A_COHERENCE_ANCHOR` | `why_proof_id` is a regular proof. Create the WHY via the `check_coherence` MCP tool, or certify with `metadata.type = "coherence_check"`. |
 | `404` | `WHY_PROOF_NOT_FOUND` / `WHAT_PROOF_NOT_FOUND` | Proof missing or owned by another account. |
 
-**SDK helpers:** `client.link_coherence(why_proof_id, what_proof_id)` (Python `xproof` ≥ 0.2.10) · `client.linkCoherence(whyProofId, whatProofId)` (npm `@prove-before-act/sdk` ≥ 0.1.11).
+**SDK helpers:** `client.link_coherence(why_proof_id, what_proof_id)` (Python `xproof` ≥ 0.2.10) · `client.linkCoherence(whyProofId, whatProofId)` (npm `@proveprove-before-act` ≥ 0.1.11).
 
 **Check your history:** `GET https://provebeforeact.com/api/agents/<wallet>/coherence` — public; per-anchor status (`linked` / `pending` / `divergent`) + aggregate coherence rate.
 

@@ -13,7 +13,7 @@ Each `generateText` or `streamText` call produces one certification with:
 ## Install
 
 ```bash
-npm install @prove-before-act/sdk ai @ai-sdk/openai
+npm install prove-before-act ai @ai-sdk/openai
 ```
 
 Set environment variables:

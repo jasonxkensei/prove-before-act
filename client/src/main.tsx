@@ -1,4 +1,8 @@
 import "./polyfills"; // MUST be first - fixes MultiversX SDK Node.js dependencies
+import { migrateLegacyStorageKeys } from './lib/auth-storage';
+// Run once before anything reads localStorage — moves xproof_* keys → pba_* without
+// breaking existing sessions (users stay logged in after the rebrand key rename).
+migrateLegacyStorageKeys();
 import { createRoot } from "react-dom/client";
 import { initApp } from '@multiversx/sdk-dapp/out/methods/initApp/initApp';
 import type { InitAppType } from '@multiversx/sdk-dapp/out/methods/initApp/initApp.types';
