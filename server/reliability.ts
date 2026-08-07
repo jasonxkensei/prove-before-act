@@ -8,6 +8,7 @@ import { isMultiversXConfigured } from "./blockchain";
 import { execSync } from "child_process";
 import { logger } from "./logger";
 import { getClientIp } from "./routes/helpers";
+import { Sentry } from "./instrument";
 
 // SECURITY: All IP-based rate limiters MUST key on getClientIp() rather than
 // the express-rate-limit default (which uses `req.ip`). Under
@@ -507,23 +508,14 @@ export function setupGracefulShutdown(server: import("http").Server) {
 }
 
 export function setupProcessErrorHandlers() {
-  // Lazy-import Sentry so this module doesn't fail if Sentry is not initialized yet
-  // (instrument.ts is the first import in index.ts, so by the time this runs Sentry is ready)
-  const getSentry = () => {
-    try { return require("@sentry/node") as typeof import("@sentry/node"); }
-    catch { return null; }
-  };
-
   process.on("uncaughtException", (error) => {
     logger.error("Uncaught exception", { component: "reliability", error: error instanceof Error ? error.message : String(error) });
-    try { getSentry()?.captureException(error, { tags: { source: "uncaughtException" } }); } catch {}
+    Sentry.captureException(error, { tags: { source: "uncaughtException" } });
   });
 
   process.on("unhandledRejection", (reason) => {
     logger.error("Unhandled rejection", { component: "reliability", reason: reason instanceof Error ? reason.message : String(reason) });
-    try {
-      const err = reason instanceof Error ? reason : new Error(String(reason));
-      getSentry()?.captureException(err, { tags: { source: "unhandledRejection" } });
-    } catch {}
+    const err = reason instanceof Error ? reason : new Error(String(reason));
+    Sentry.captureException(err, { tags: { source: "unhandledRejection" } });
   });
 }
