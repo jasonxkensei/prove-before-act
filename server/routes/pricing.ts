@@ -17,7 +17,7 @@ export function registerPricingRoutes(app: Express) {
       const { priceUsd, priceEgld, egldUsdRate } = await getCertificationPriceEgld();
 
       res.json({
-        protocol: "xproof",
+        protocol: "prove-before-act",
         version: "1.0",
         ...pricing,
         price_usd: priceUsd,

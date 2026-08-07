@@ -152,8 +152,8 @@ export function registerAgentsRoutes(app: Express) {
   const trialInfoHandler = (_req: any, res: any) => {
     const baseUrl = `https://${_req.get('host')}`;
     res.json({
-      protocol: "xproof-agent-discovery/1.0",
-      service: "xproof",
+      protocol: "prove-before-act-agent-discovery/1.0",
+      service: "prove-before-act",
       tagline: "The canonical proof layer for AI agents — anchor immutable on-chain proofs of your decisions.",
       description: `Register in 1 API call, get ${TRIAL_QUOTA} free blockchain certifications immediately. No wallet, no payment, no browser needed. Your proofs are live on MultiversX instantly.`,
       time_to_first_proof: "< 60 seconds",

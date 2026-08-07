@@ -82,7 +82,7 @@ export function registerAcpRoutes(app: Express) {
     res.json({ 
       protocol: "ACP",
       version: "1.0",
-      provider: "xproof",
+      provider: "prove-before-act",
       chain: "MultiversX",
       products 
     });
@@ -1242,7 +1242,7 @@ export function registerAcpRoutes(app: Express) {
                       properties: {
                         protocol: { type: "string", example: "ACP" },
                         version: { type: "string", example: "1.0" },
-                        provider: { type: "string", example: "xproof" },
+                        provider: { type: "string", example: "prove-before-act" },
                         chain: { type: "string", example: "MultiversX" },
                         products: { type: "array", items: { $ref: "#/components/schemas/Product" } },
                       },
@@ -1663,7 +1663,7 @@ export function registerAcpRoutes(app: Express) {
     const mx8004 = isMX8004Configured();
     res.json({
       status: "operational",
-      service: "xproof",
+      service: "prove-before-act",
       version: "1.0",
       timestamp: new Date().toISOString(),
       mx8004_enabled: mx8004,

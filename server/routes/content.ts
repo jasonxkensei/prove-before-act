@@ -1950,12 +1950,12 @@ ${urls}
       name_for_human: "Prove Before Act",
       name_for_model: "Prove Before Act",
       description_for_human: "Create immutable blockchain proofs of file ownership. Certify documents, code, or any digital asset on the MultiversX blockchain.",
-      description_for_model: `Prove Before Act implements the "Prove Before Act" principle — anchor reasoning BEFORE executing any significant action. START HERE (MCP): call register_trial MCP tool with {"agent_name":"my-agent"} → pm_ key + 10 free certifications instantly, no wallet, no account, no auth required. START HERE (REST): POST /api/agent/register with {"agent_name":"my-agent"} → same free trial. UNIQUE DIFFERENTIATOR — x402 native payments: POST /api/proof with no credentials → receive HTTP 402 with price ($${priceUsd} USDC on Base, eip155:8453) → sign payment → resend with X-PAYMENT header → receive proof_id. No API key, no account, no human in the loop. Any autonomous agent with a Base wallet is production-ready. PROVEN IN PRODUCTION: xproof_agent_verify (Moltbook) — 4,418 proofs anchored, 100% confirmation rate, 16-week streak, trust score 43,326 Verified. Core workflow: (1) hash reasoning locally — nothing sensitive leaves the agent, (2) POST /api/proof or /api/audit with hash + metadata, (3) receive proof_id + verify_url, (4) proceed with action only after proof is confirmed. Pricing: $${priceUsd}/cert after trial. Files never leave the device — only SHA-256 hash recorded on-chain. Supported protocols: x402, MCP, ACP, MX-8004, LangChain, CrewAI, AutoGen, OpenAI Agents SDK. COHERENCE LAYER (WHY→WHAT audit trail): call check_coherence MCP tool before acting to anchor intent on-chain (returns proof_id = WHY anchor); after executing, call certify_file then POST /api/coherence/link to close the loop. Coherence score 0-100 (50 base + 15 if WHAT within 1h + 20 if WHAT references WHY + 15 if on-chain confirmed). Fleet coherence view at GET /api/fleet/coherence?org=<prefix>|fleet=<slug>. Full docs: https://provebeforeact.com/coherence. Context doc: https://provebeforeact.com/agent-context`,
+      description_for_model: `Prove Before Act implements the "Prove Before Act" principle — anchor reasoning BEFORE executing any significant action. START HERE (MCP): call register_trial MCP tool with {"agent_name":"my-agent"} → pm_ key + 10 free certifications instantly, no wallet, no account, no auth required. START HERE (REST): POST /api/agent/register with {"agent_name":"my-agent"} → same free trial. UNIQUE DIFFERENTIATOR — x402 native payments: POST /api/proof with no credentials → receive HTTP 402 with price ($${priceUsd} USDC on Base, eip155:8453) → sign payment → resend with X-PAYMENT header → receive proof_id. No API key, no account, no human in the loop. Any autonomous agent with a Base wallet is production-ready. PROVEN IN PRODUCTION: xproof_agent_verify (Moltbook) — 4,849+ proofs anchored, 100% confirmation rate, 24-week streak, trust score 44,500+ Verified (live: provebeforeact.com/stats). Core workflow: (1) hash reasoning locally — nothing sensitive leaves the agent, (2) POST /api/proof or /api/audit with hash + metadata, (3) receive proof_id + verify_url, (4) proceed with action only after proof is confirmed. Pricing: $${priceUsd}/cert after trial. Files never leave the device — only SHA-256 hash recorded on-chain. Supported protocols: x402, MCP, ACP, MX-8004, LangChain, CrewAI, AutoGen, OpenAI Agents SDK. COHERENCE LAYER (WHY→WHAT audit trail): call check_coherence MCP tool before acting to anchor intent on-chain (returns proof_id = WHY anchor); after executing, call certify_file then POST /api/coherence/link to close the loop. Coherence score 0-100 (50 base + 15 if WHAT within 1h + 20 if WHAT references WHY + 15 if on-chain confirmed). Fleet coherence view at GET /api/fleet/coherence?org=<prefix>|fleet=<slug>. Full docs: https://provebeforeact.com/coherence. Context doc: https://provebeforeact.com/agent-context`,
       auth: {
         type: "service_http",
         authorization_type: "bearer",
         verification_tokens: {
-          "xproof": "pm_"
+          "prove-before-act": "pm_"
         }
       },
       api: {
@@ -2164,7 +2164,7 @@ ${urls}
 
 **Prove Before & After Act**: anchor reasoning (WHY, SHA-256 hash) BEFORE executing any significant agent action, anchor the actual result (WHAT) AFTER. Hash stays local — nothing sensitive ever leaves the agent.
 
-**Proven in production**: xproof_agent_verify (Moltbook) — 4,418 on-chain proofs, 100% confirmation, 16-week streak, trust score 43,326 Verified. $0.01/proof, ~$2.76/week for a continuously accountable agent.
+**Proven in production**: xproof_agent_verify (Moltbook) — 4,849+ on-chain proofs, 100% confirmation, 24-week streak, trust score 44,500+ Verified (live: provebeforeact.com/stats). $0.01/proof, ~$2.76/week for a continuously accountable agent.
 
 **4W breakdown — WHO from MX-8004, WHAT/WHEN/WHY from Prove Before Act:**
 
@@ -4436,7 +4436,7 @@ print(f"Proof: https://provebeforeact.com{result['verify_url']}")
 
 ## Q2 — What is the real anchoring latency?
 
-Based on production measurements from xproof_agent_verify (4,418 on-chain anchors, 16-week streak):
+Based on production measurements from xproof_agent_verify (4,849+ on-chain anchors, 24-week streak):
 
 | Operation | Measured latency |
 |-----------|-----------------|
@@ -4680,11 +4680,11 @@ GET ${baseUrl}/api/leaderboard               → top 50 public agents by trust s
 5. Use webhook_url on each certification for real-time callbacks on confirmation
 
 **Production reference — Moltbook fleet (xproof_agent_verify):**
-- Total anchors: 4,418 confirmed on-chain
+- Total anchors: 4,849+ confirmed on-chain (live: provebeforeact.com/stats)
 - Active since: December 2025
-- Streak: 16 consecutive weeks
+- Streak: 24 consecutive weeks
 - Confirmation rate: 100%
-- Trust score: 43,326 (Verified level)
+- Trust score: 44,500+ Verified (live: provebeforeact.com/stats)
 - Public profile: ${baseUrl}/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9
 - Architecture: single agent, REST API, POST /api/proof with 4W metadata, webhook for confirmation
 
@@ -4766,17 +4766,17 @@ print(f"Proof: https://provebeforeact.com/proof/{proof['proof_id']}")
 
 **xproof_agent_verify** is the autonomous verification agent operated by Moltbook (https://www.moltbook.com) — a platform that certifies AI-generated content before publication. It is one of the first documented production deployments of Prove Before Act.
 
-### Key metrics (live, as of 2026-06-02)
+### Key metrics (live, as of 2026-08-07)
 
 | Metric | Value |
 |--------|-------|
-| Total proofs anchored | 4,418 |
+| Total proofs anchored | 4,849+ (see provebeforeact.com/stats for live count) |
 | Average anchoring rate | 933 proofs / month |
 | Confirmation rate | 100% (zero failed transactions) |
-| Active streak | 16 consecutive weeks |
-| Trust score | 43,326 |
+| Active streak | 24 consecutive weeks |
+| Trust score | 44,500+ (see provebeforeact.com/stats for live score) |
 | Trust level | Verified |
-| Agent violations | 0 |
+| Agent violations | 36 (fault) — publicly verifiable on-chain |
 | Agent wallet | erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9 |
 
 ### Performance benchmarks
@@ -4790,7 +4790,7 @@ print(f"Proof: https://provebeforeact.com/proof/{proof['proof_id']}")
 
 ### Total operational cost
 
-4,418 proofs × $0.01 = **~$44 total** over 16 weeks (~$2.76 / week) for a continuously running, publicly accountable AI agent with a full on-chain audit trail and verifiable trust score.
+4,849+ proofs × $0.01 = **~$49 total** over 24 weeks (~$2.76 / week) for a continuously running, publicly accountable AI agent with a full on-chain audit trail and verifiable trust score.
 
 ### What the agent anchors
 
