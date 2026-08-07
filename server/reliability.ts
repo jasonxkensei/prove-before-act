@@ -507,11 +507,23 @@ export function setupGracefulShutdown(server: import("http").Server) {
 }
 
 export function setupProcessErrorHandlers() {
+  // Lazy-import Sentry so this module doesn't fail if Sentry is not initialized yet
+  // (instrument.ts is the first import in index.ts, so by the time this runs Sentry is ready)
+  const getSentry = () => {
+    try { return require("@sentry/node") as typeof import("@sentry/node"); }
+    catch { return null; }
+  };
+
   process.on("uncaughtException", (error) => {
     logger.error("Uncaught exception", { component: "reliability", error: error instanceof Error ? error.message : String(error) });
+    try { getSentry()?.captureException(error, { tags: { source: "uncaughtException" } }); } catch {}
   });
 
   process.on("unhandledRejection", (reason) => {
     logger.error("Unhandled rejection", { component: "reliability", reason: reason instanceof Error ? reason.message : String(reason) });
+    try {
+      const err = reason instanceof Error ? reason : new Error(String(reason));
+      getSentry()?.captureException(err, { tags: { source: "unhandledRejection" } });
+    } catch {}
   });
 }

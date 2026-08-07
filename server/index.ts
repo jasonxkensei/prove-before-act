@@ -1,3 +1,4 @@
+import { Sentry } from "./instrument"; // MUST be first import — Sentry patches Node internals at load time
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
@@ -45,7 +46,7 @@ const CSP_HEADER =
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
   "font-src 'self' https://fonts.gstatic.com; " +
   "img-src 'self' data: blob: https:; " +
-  "connect-src 'self' https://api.multiversx.com https://gateway.multiversx.com https://devnet-gateway.multiversx.com https://testnet-gateway.multiversx.com https://*.multiversx.com wss://relay.walletconnect.com https://*.walletconnect.com https://*.walletconnect.org https://explorer-api.walletconnect.com https://verify.walletconnect.com https://verify.walletconnect.org; " +
+  "connect-src 'self' https://api.multiversx.com https://gateway.multiversx.com https://devnet-gateway.multiversx.com https://testnet-gateway.multiversx.com https://*.multiversx.com wss://relay.walletconnect.com https://*.walletconnect.com https://*.walletconnect.org https://explorer-api.walletconnect.com https://verify.walletconnect.com https://verify.walletconnect.org https://*.sentry.io; " +
   "frame-src 'self' https://wallet.multiversx.com https://devnet-wallet.multiversx.com https://testnet-wallet.multiversx.com; " +
   "worker-src 'self' blob:;";
 
@@ -167,6 +168,10 @@ app.use((req, res, next) => {
 
   const server = await registerRoutes(app);
 
+  // Sentry Express error handler — must come after registerRoutes() and before
+  // our own error handler so Sentry captures the error before we swallow it.
+  Sentry.setupExpressErrorHandler(app);
+
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const isProduction = process.env.NODE_ENV === "production";
@@ -225,16 +230,25 @@ app.use((req, res, next) => {
     // Sequence: schema → warm caches from existing snapshots (zero compute) →
     // start background scheduler (runs first cycle with jitter, then every 5 min).
     // Daily maintenance continues to run independently once per day.
-    migrateTrustSnapshotSchema().then(() => warmCachesFromSnapshots()).then(() => startTrustRefreshScheduler());
+    migrateTrustSnapshotSchema()
+      .then(() => warmCachesFromSnapshots())
+      .then(() => startTrustRefreshScheduler())
+      .catch((err) => {
+        log("trust snapshot migration/scheduler chain failed");
+        Sentry.captureException(err, { tags: { component: "trust-scheduler-startup" } });
+      });
     // Schema migration (adds divergent_at on older DBs) must complete before
     // the divergence scheduler starts scanning; skip the scheduler if it fails.
     migrateCoherenceDivergenceSchema()
       .then(() => startCoherenceDivergenceScheduler())
-      .catch(() => log("coherence divergence scheduler not started (migration failed)"));
-    runDailyMaintenance();
-    setInterval(runDailyMaintenance, 24 * 60 * 60 * 1000);
-    sweepExpiredAcpReservations();
-    setInterval(sweepExpiredAcpReservations, 5 * 60 * 1000);
+      .catch((err) => {
+        log("coherence divergence scheduler not started (migration failed)");
+        Sentry.captureException(err, { tags: { component: "coherence-divergence-startup" } });
+      });
+    runDailyMaintenance().catch((err) => Sentry.captureException(err, { tags: { component: "daily-maintenance" } }));
+    setInterval(() => runDailyMaintenance().catch((err) => Sentry.captureException(err, { tags: { component: "daily-maintenance" } })), 24 * 60 * 60 * 1000);
+    sweepExpiredAcpReservations().catch((err) => Sentry.captureException(err, { tags: { component: "acp-sweep" } }));
+    setInterval(() => sweepExpiredAcpReservations().catch((err) => Sentry.captureException(err, { tags: { component: "acp-sweep" } })), 5 * 60 * 1000);
   });
 
   setupGracefulShutdown(server);
