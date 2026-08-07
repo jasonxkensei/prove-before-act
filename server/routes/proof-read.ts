@@ -846,7 +846,20 @@ export function registerProofReadRoutes(app: Express) {
         receipt_count: sigilData?.receiptCount ?? latestReceiptCountSnapshot,
         critical_pass: sigilData?.criticalPass ?? null,
         confidence: sigilData?.confidence ?? null,
-        // ── xProof layer (WHAT/WHEN/WHY)
+        // ── Prove Before Act layer (WHAT/WHEN/WHY) — pba_* fields (primary)
+        pba_linked: xproofLinked,
+        pba_wallet: xproofWallet,
+        pba_certs_linked: linkedCerts.length,
+        pba_trust_score: xproofTrust?.score ?? null,
+        pba_trust_level: xproofTrust?.level ?? null,
+        pba_violations: xproofTrust
+          ? {
+              fault: xproofTrust.violations?.fault ?? 0,
+              breach: xproofTrust.violations?.breach ?? 0,
+              proposed: xproofTrust.violations?.proposed ?? 0,
+            }
+          : null,
+        // @deprecated — use pba_* fields above (kept for backward compatibility)
         xproof_linked: xproofLinked,
         xproof_wallet: xproofWallet,
         xproof_certs_linked: linkedCerts.length,
@@ -862,14 +875,19 @@ export function registerProofReadRoutes(app: Express) {
         // ── Convergence: what each layer anchors (the value-add field)
         convergence: {
           sigil_anchors: "WHO — cryptographic identity continuity (Solana receipt chain + Persistence Score)",
-          xproof_anchors: "WHAT/WHEN/WHY — decision provenance per action (MultiversX blockchain)",
-          combined_coverage: "full 4W stack: WHO (SIGIL) + WHAT + WHEN + WHY (xProof)",
-          integration_hint: "Certify with metadata.sigil_public_key = <your_sigil_key> to link SIGIL identity to xProof anchors",
+          pba_anchors: "WHAT/WHEN/WHY — decision provenance per action (MultiversX blockchain)",
+          xproof_anchors: "WHAT/WHEN/WHY — decision provenance per action (MultiversX blockchain)", // @deprecated
+          combined_coverage: "full 4W stack: WHO (SIGIL) + WHAT + WHEN + WHY (Prove Before Act)",
+          integration_hint: "Certify with metadata.sigil_public_key = <your_sigil_key> to link SIGIL identity to Prove Before Act anchors",
         },
         // ── Cross-reference links
         verify_urls: {
           sigil_profile: `https://sigilprotocol.xyz/agent.html?key=${encodeURIComponent(public_key)}`,
           sigil_glyph: `https://sigilprotocol.xyz/api/glyph/${encodeURIComponent(public_key)}`,
+          pba_leaderboard: `${baseUrl}/leaderboard`,
+          pba_profile: xproofWallet ? `${baseUrl}/agent/${xproofWallet}` : null,
+          pba_violations: xproofWallet ? `${baseUrl}/api/agents/${xproofWallet}/violations` : null,
+          // @deprecated — use pba_* fields above
           xproof_leaderboard: `${baseUrl}/leaderboard`,
           xproof_profile: xproofWallet ? `${baseUrl}/agent/${xproofWallet}` : null,
           xproof_violations: xproofWallet ? `${baseUrl}/api/agents/${xproofWallet}/violations` : null,
@@ -946,8 +964,23 @@ export function registerProofReadRoutes(app: Express) {
 
       res.json({
         bnb_address: address,
+        // ── Prove Before Act layer (WHAT/WHEN/WHY) — pba_* fields (primary)
+        pba_linked: xproofLinked,
+        pba_wallet: xproofWallet,
+        pba_certs_linked: linkedCerts.length,
+        pba_certs_confirmed_on_chain: confirmedOnChain,
+        pba_trust_score: xproofTrust?.score ?? null,
+        pba_trust_level: xproofTrust?.level ?? null,
+        pba_streak_weeks: xproofTrust?.streakWeeks ?? null,
+        pba_violations: xproofTrust
+          ? {
+              fault: xproofTrust.violations?.fault ?? 0,
+              breach: xproofTrust.violations?.breach ?? 0,
+              proposed: xproofTrust.violations?.proposed ?? 0,
+            }
+          : null,
+        // @deprecated — use pba_* fields above (kept for backward compatibility)
         xproof_linked: xproofLinked,
-        // ── xProof identity bridge (MultiversX side)
         xproof_wallet: xproofWallet,
         xproof_certs_linked: linkedCerts.length,
         xproof_certs_confirmed_on_chain: confirmedOnChain,
@@ -973,10 +1006,13 @@ export function registerProofReadRoutes(app: Express) {
         },
         // ── Links
         links: {
-          xproof_profile: xproofWallet ? `${baseUrl}/agent/${xproofWallet}` : null,
-          xproof_leaderboard: `${baseUrl}/leaderboard`,
+          pba_profile: xproofWallet ? `${baseUrl}/agent/${xproofWallet}` : null,
+          pba_leaderboard: `${baseUrl}/leaderboard`,
           trust_badge_svg: xproofWallet ? `${baseUrl}/badge/trust/${xproofWallet}.svg` : null,
           violations_api: xproofWallet ? `${baseUrl}/api/agents/${xproofWallet}/violations` : null,
+          // @deprecated — use pba_* fields above
+          xproof_profile: xproofWallet ? `${baseUrl}/agent/${xproofWallet}` : null,
+          xproof_leaderboard: `${baseUrl}/leaderboard`,
         },
         schema_version: "1.0",
         source: "provebeforeact.com",
@@ -1258,7 +1294,28 @@ export function registerProofReadRoutes(app: Express) {
         eliza_linked: elizaLinked,
         // ── Character identity (ElizaOS WHO layer)
         character: characterStats,
-        // ── xProof trust (MultiversX WHAT/WHEN/WHY layer)
+        // ── Prove Before Act trust (MultiversX WHAT/WHEN/WHY layer) — primary key
+        "prove-before-act": elizaLinked
+          ? {
+              wallet: linkedWallet,
+              trust_score: trust?.score ?? null,
+              trust_level: trust?.level ?? null,
+              total_certs: trust?.certTotal ?? null,
+              certs_last_30d: trust?.certLast30d ?? null,
+              streak_weeks: trust?.streakWeeks ?? null,
+              transparency_tier: trust?.transparencyTier ?? null,
+              violations: trust
+                ? {
+                    fault: trust.violations?.fault ?? 0,
+                    breach: trust.violations?.breach ?? 0,
+                    proposed: trust.violations?.proposed ?? 0,
+                  }
+                : null,
+              profile_url: linkedWallet ? `${baseUrl}/agent/${linkedWallet}` : null,
+              trust_badge_svg: linkedWallet ? `${baseUrl}/badge/trust/${linkedWallet}.svg` : null,
+            }
+          : null,
+        // @deprecated — use "prove-before-act" key above
         xproof: elizaLinked
           ? {
               wallet: linkedWallet,
@@ -1282,12 +1339,14 @@ export function registerProofReadRoutes(app: Express) {
         // ── WHO/WHAT/WHEN/WHY convergence (same pattern as SIGIL)
         convergence: {
           elizaos_anchors: "WHO — character identity, runtime version, model configuration",
-          xproof_anchors: "WHAT/WHEN/WHY — decision provenance anchored on MultiversX",
+          pba_anchors: "WHAT/WHEN/WHY — decision provenance anchored on MultiversX",
+          xproof_anchors: "WHAT/WHEN/WHY — decision provenance anchored on MultiversX", // @deprecated
           combined_coverage: "full 4W stack",
         },
-        // ── Ready-to-use config block for plugin-xproof
+        // ── Ready-to-use config block for plugin-prove-before-act
         plugin_config: {
-          xproof_api: `${baseUrl}/api`,
+          pba_api: `${baseUrl}/api`,
+          xproof_api: `${baseUrl}/api`, // @deprecated
           certify_endpoint: `${baseUrl}/api/proof`,
           verify_endpoint: `${baseUrl}/api/eliza/{eliza_agent_id}`,
           metadata_schema: {
@@ -1446,6 +1505,28 @@ export function registerProofReadRoutes(app: Express) {
         lookup_mode: lookupMode,
         xai_linked: xaiLinked,
         agent: agentStats,
+        // ── Prove Before Act trust (MultiversX WHAT/WHEN/WHY layer) — primary key
+        "prove-before-act": xaiLinked
+          ? {
+              wallet: linkedWallet,
+              trust_score: trust?.score ?? null,
+              trust_level: trust?.level ?? null,
+              total_certs: trust?.certTotal ?? null,
+              certs_last_30d: trust?.certLast30d ?? null,
+              streak_weeks: trust?.streakWeeks ?? null,
+              transparency_tier: trust?.transparencyTier ?? null,
+              violations: trust
+                ? {
+                    fault: trust.violations?.fault ?? 0,
+                    breach: trust.violations?.breach ?? 0,
+                    proposed: trust.violations?.proposed ?? 0,
+                  }
+                : null,
+              profile_url: linkedWallet ? `${baseUrl}/agent/${linkedWallet}` : null,
+              trust_badge_svg: linkedWallet ? `${baseUrl}/badge/trust/${linkedWallet}.svg` : null,
+            }
+          : null,
+        // @deprecated — use "prove-before-act" key above
         xproof: xaiLinked
           ? {
               wallet: linkedWallet,
@@ -1468,11 +1549,13 @@ export function registerProofReadRoutes(app: Express) {
           : null,
         convergence: {
           xai_anchors: "WHO — Grok reasoning engine, model identity, session context",
-          xproof_anchors: "WHAT/WHEN/WHY — decision provenance anchored on MultiversX before output",
-          combined_coverage: "full 4W stack: WHO (xAI/Grok) + WHAT + WHEN + WHY (xProof)",
+          pba_anchors: "WHAT/WHEN/WHY — decision provenance anchored on MultiversX before output",
+          xproof_anchors: "WHAT/WHEN/WHY — decision provenance anchored on MultiversX before output", // @deprecated
+          combined_coverage: "full 4W stack: WHO (xAI/Grok) + WHAT + WHEN + WHY (Prove Before Act)",
         },
         integration: {
-          xproof_api: `${baseUrl}/api`,
+          pba_api: `${baseUrl}/api`,
+          xproof_api: `${baseUrl}/api`, // @deprecated
           certify_endpoint: `${baseUrl}/api/proof`,
           verify_endpoint: `${baseUrl}/api/xai/{xai_agent_id}`,
           metadata_schema: {
@@ -1560,6 +1643,20 @@ export function registerProofReadRoutes(app: Express) {
         mpp_network: network,
         mpp_amount: amount,
         mpp_currency: currency,
+        // ── Prove Before Act layer — pba_* fields (primary)
+        pba_wallet: xproofWallet,
+        pba_certs_linked: linkedCerts.length,
+        pba_certs_confirmed_on_chain: confirmedOnChain,
+        pba_trust_score: xproofTrust?.score ?? null,
+        pba_trust_level: xproofTrust?.level ?? null,
+        pba_violations: xproofTrust
+          ? {
+              fault: xproofTrust.violations?.fault ?? 0,
+              breach: xproofTrust.violations?.breach ?? 0,
+              proposed: xproofTrust.violations?.proposed ?? 0,
+            }
+          : null,
+        // @deprecated — use pba_* fields above (kept for backward compatibility)
         xproof_wallet: xproofWallet,
         xproof_certs_linked: linkedCerts.length,
         xproof_certs_confirmed_on_chain: confirmedOnChain,
@@ -1576,15 +1673,19 @@ export function registerProofReadRoutes(app: Express) {
         last_linked_at: lastLinkedAt,
         convergence: {
           mpp_anchors: "HOW — payment execution via Stripe/Tempo settlement layer",
-          xproof_anchors: "WHY — decision intent anchored on MultiversX before transaction",
+          pba_anchors: "WHY — decision intent anchored on MultiversX before transaction",
+          xproof_anchors: "WHY — decision intent anchored on MultiversX before transaction", // @deprecated
           combined_coverage: "payment provenance: intent before transaction, proof after settlement",
           integration_hint: "Certify with metadata.mpp_payment_intent_id = <pi_xxx> to link payment to proof",
         },
         links: {
-          xproof_profile: xproofWallet ? `${baseUrl}/agent/${xproofWallet}` : null,
-          xproof_leaderboard: `${baseUrl}/leaderboard`,
+          pba_profile: xproofWallet ? `${baseUrl}/agent/${xproofWallet}` : null,
+          pba_leaderboard: `${baseUrl}/leaderboard`,
           trust_badge_svg: xproofWallet ? `${baseUrl}/badge/trust/${xproofWallet}.svg` : null,
           violations_api: xproofWallet ? `${baseUrl}/api/agents/${xproofWallet}/violations` : null,
+          // @deprecated — use pba_* fields above
+          xproof_profile: xproofWallet ? `${baseUrl}/agent/${xproofWallet}` : null,
+          xproof_leaderboard: `${baseUrl}/leaderboard`,
         },
         integration: {
           certify_endpoint: `${baseUrl}/api/proof`,

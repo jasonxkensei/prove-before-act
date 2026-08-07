@@ -541,22 +541,22 @@ Crosses SIGIL's WHO-layer (receipt chain, Persistence Score on Solana) with Prov
   "receipt_count": 241,
   "critical_pass": true,
   "confidence": 0.98,
-  "xproof_linked": true,
-  "xproof_wallet": "erd1...",
-  "xproof_certs_linked": 441,
-  "xproof_trust_score": 4760,
-  "xproof_trust_level": "Verified",
-  "xproof_violations": { "fault": 0, "breach": 0, "proposed": 0 },
+  "pba_linked": true,
+  "pba_wallet": "erd1...",
+  "pba_certs_linked": 441,
+  "pba_trust_score": 4760,
+  "pba_trust_level": "Verified",
+  "pba_violations": { "fault": 0, "breach": 0, "proposed": 0 },
   "convergence": {
     "sigil_anchors": "WHO — cryptographic identity continuity (Solana receipt chain + Persistence Score)",
-    "xproof_anchors": "WHAT/WHEN/WHY — decision provenance per action (MultiversX blockchain)",
+    "pba_anchors": "WHAT/WHEN/WHY — decision provenance per action (MultiversX blockchain)",
     "combined_coverage": "full 4W stack: WHO (SIGIL) + WHAT + WHEN + WHY (Prove Before Act)",
     "integration_hint": "Certify with metadata.sigil_public_key = <your_sigil_key> to link SIGIL identity to Prove Before Act anchors"
   },
   "verify_urls": {
     "sigil_profile": "https://sigilprotocol.xyz/agent.html?key=...",
-    "xproof_leaderboard": "https://provebeforeact.com/leaderboard",
-    "xproof_profile": "https://provebeforeact.com/agent/erd1..."
+    "pba_leaderboard": "https://provebeforeact.com/leaderboard",
+    "pba_profile": "https://provebeforeact.com/agent/erd1..."
   },
   "schema_version": "1.0",
   "partner": "sigilprotocol.xyz"
@@ -576,13 +576,13 @@ Cross-chain bridge between BNB Chain (EVM, Ethereum-style addresses) and Multive
 \`\`\`json
 {
   "bnb_address": "0x742d35Cc...",
-  "xproof_linked": true,
-  "xproof_wallet": "erd1...",
-  "xproof_certs_linked": 88,
-  "xproof_certs_confirmed_on_chain": 85,
-  "xproof_trust_score": 1200,
-  "xproof_trust_level": "Trusted",
-  "xproof_violations": { "fault": 0, "breach": 0, "proposed": 0 },
+  "pba_linked": true,
+  "pba_wallet": "erd1...",
+  "pba_certs_linked": 88,
+  "pba_certs_confirmed_on_chain": 85,
+  "pba_trust_score": 1200,
+  "pba_trust_level": "Trusted",
+  "pba_violations": { "fault": 0, "breach": 0, "proposed": 0 },
   "first_linked_at": "2026-01-10T08:00:00Z",
   "bridge": {
     "bnb_chain": "EVM-compatible actions, skills, and agent decisions on BNB Chain",
@@ -673,7 +673,7 @@ Bridges ElizaOS character identity (WHO layer) with Prove Before Act proof ancho
   },
   "convergence": {
     "elizaos_anchors": "WHO — character identity, runtime version, model configuration",
-    "xproof_anchors": "WHAT/WHEN/WHY — decision provenance anchored on MultiversX",
+    "pba_anchors": "WHAT/WHEN/WHY — decision provenance anchored on MultiversX",
     "combined_coverage": "full 4W stack"
   },
   "plugin_config": {
@@ -727,7 +727,7 @@ Bridges xAI agent identity (WHO — Grok reasoning engine, model, session contex
   },
   "convergence": {
     "xai_anchors": "WHO — Grok reasoning engine, model identity, session context",
-    "xproof_anchors": "WHAT/WHEN/WHY — decision provenance anchored on MultiversX before output",
+    "pba_anchors": "WHAT/WHEN/WHY — decision provenance anchored on MultiversX before output",
     "combined_coverage": "full 4W stack: WHO (xAI/Grok) + WHAT + WHEN + WHY (Prove Before Act)"
   },
   "integration": {
@@ -768,14 +768,14 @@ Links autonomous agent payments (HOW — Stripe/Tempo settlement layer) with Pro
   "mpp_network": "tempo",
   "mpp_amount": "25.00",
   "mpp_currency": "usd",
-  "xproof_wallet": "erd1...",
-  "xproof_certs_linked": 3,
-  "xproof_certs_confirmed_on_chain": 3,
-  "xproof_trust_score": 1350,
-  "xproof_trust_level": "Trusted",
+  "pba_wallet": "erd1...",
+  "pba_certs_linked": 3,
+  "pba_certs_confirmed_on_chain": 3,
+  "pba_trust_score": 1350,
+  "pba_trust_level": "Trusted",
   "convergence": {
     "mpp_anchors": "HOW — payment execution via Stripe/Tempo settlement layer",
-    "xproof_anchors": "WHY — decision intent anchored on MultiversX before transaction",
+    "pba_anchors": "WHY — decision intent anchored on MultiversX before transaction",
     "combined_coverage": "payment provenance: intent before transaction, proof after settlement",
     "integration_hint": "Certify with metadata.mpp_payment_intent_id = <pi_xxx> to link payment to proof"
   },

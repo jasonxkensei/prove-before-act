@@ -1176,7 +1176,7 @@ print(f"WHAT: {BASE}/proof/{what_resp['proof_id']}")`} />
           <div>
             <p className="text-xs font-semibold mb-2">LangChain (Python)</p>
             <CodeBlock lang="python" code={`from langchain.tools import tool
-from xproof import xproof  # pip install xproof
+from xproof import xproof  # pip install prove-before-act
 
 @tool
 def prove_before_act(reasoning: str, action: str) -> str:
@@ -1314,7 +1314,7 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
             <div className="grid gap-2 sm:grid-cols-2">
               <div>
                 <p className="text-xs text-muted-foreground font-mono mb-1"># Python</p>
-                <code className="text-xs bg-muted px-2 py-1 rounded block">pip install xproof</code>
+                <code className="text-xs bg-muted px-2 py-1 rounded block">pip install prove-before-act</code>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground font-mono mb-1">// JavaScript / TypeScript</p>
