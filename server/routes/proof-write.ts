@@ -852,72 +852,88 @@ export function registerProofWriteRoutes(app: Express) {
         ...build4WField(certification.metadata, baseUrl, certification.id),
         message: "File certified on MultiversX blockchain. Proof is immutable and publicly verifiable.",
         ...await (async () => {
-          // First real proof milestone: check if this is the user's first non-onboarding cert.
-          // Only relevant for trial agents with a userId (not anonymous x402 paths).
+          // Build the full guidance block for every proof response.
+          // No gating on cert count — every agent gets all information from cert #1.
           if (!ownerUserId) return {};
           try {
-            const [{ cnt }] = await db
-              .select({ cnt: sql<number>`count(*)` })
-              .from(certifications)
-              .where(and(
-                eq(certifications.userId, ownerUserId),
-                sql`auth_method != 'onboarding'`,
-              ));
+            const [[{ cnt }], [ownerUser]] = await Promise.all([
+              db.select({ cnt: sql<number>`count(*)` })
+                .from(certifications)
+                .where(and(eq(certifications.userId, ownerUserId), sql`auth_method != 'onboarding'`)),
+              db.select({
+                walletAddress: users.walletAddress,
+                agentName: users.agentName,
+                trialQuota: users.trialQuota,
+                trialUsed: users.trialUsed,
+                webhookUrl: users.webhookUrl,
+                isPublicProfile: users.isPublicProfile,
+              }).from(users).where(eq(users.id, ownerUserId)),
+            ]);
+
             const certMeta = (certification.metadata ?? {}) as Record<string, unknown>;
             const actionType = typeof certMeta.action_type === "string" ? certMeta.action_type : undefined;
-            const fourWHints = get4WHints(actionType, certMeta);
+            const agentName = ownerUser?.agentName || "my-agent";
+            const profileWallet = ownerUser?.walletAddress;
+            const profileUrl = profileWallet ? `${baseUrl}/agent/${profileWallet}` : null;
+            const trialLeft = ownerUser?.trialQuota != null
+              ? Math.max(0, (ownerUser.trialQuota ?? TRIAL_QUOTA) - (ownerUser.trialUsed ?? 0) - 1)
+              : null;
 
-            if (Number(cnt) === 1) {
-              // Resolve wallet address for the trust profile URL
-              const [ownerUser] = await db.select({ walletAddress: users.walletAddress, agentName: users.agentName, trialQuota: users.trialQuota, trialUsed: users.trialUsed }).from(users).where(eq(users.id, ownerUserId));
-              const profileWallet = ownerUser?.walletAddress;
-              const profileUrl = profileWallet ? `${baseUrl}/agent/${profileWallet}` : null;
-              const trialLeft = ownerUser?.trialQuota != null ? Math.max(0, (ownerUser.trialQuota ?? 10) - (ownerUser.trialUsed ?? 0) - 1) : null;
-              return {
-                first_proof: true,
-                milestone: {
-                  message: "First on-chain proof anchored. Your agent now has a verifiable track record on MultiversX.",
-                  trust_profile: profileUrl,
-                  next_steps: {
-                    view_proof: `${baseUrl}/proof/${certification.id}`,
-                    verify_json: `${baseUrl}/proof/${certification.id}.json`,
-                    certify_more: {
-                      single: `POST ${baseUrl}/api/proof — for individual certifications`,
-                      batch: `POST ${baseUrl}/api/batch — up to 50 files in one call, same price per file`,
-                      batch_example: [
-                        { file_hash: "<sha256-hex>", filename: "artifact_1.wasm", author_name: ownerUser?.agentName || "my-agent" },
-                        { file_hash: "<sha256-hex>", filename: "artifact_2.json", author_name: ownerUser?.agentName || "my-agent" },
-                      ],
-                      remaining: trialLeft !== null ? `${trialLeft} trial certifications left` : "continue anchoring",
-                    },
-                    activate_leaderboard: `PATCH ${baseUrl}/api/agent with {"is_public_profile":true,"agent_name":"${ownerUser?.agentName || "my-agent"}","agent_description":"What your agent does"} — makes your trust score public and searchable`,
-                    setup_webhook: `Include "webhook_url":"https://your-server/callback" in POST /api/proof body — get notified on-chain when each proof confirms`,
-                    upgrade: `POST ${baseUrl}/api/trial/claim — link these proofs to your real MultiversX wallet`,
-                    audit_trail: `POST ${baseUrl}/api/audit — certify a full decision session (WHY before + WHAT after) for compliance-grade provenance`,
-                  },
-                  four_w: fourWHints,
+            return {
+              ...(Number(cnt) === 1 ? { first_proof: true } : {}),
+              guidance: {
+                // 1. Contextual 4W hints — action_type-aware, null if all fields provided
+                four_w: get4WHints(actionType, certMeta),
+
+                // 2. Certify more — single AND batch from cert #1
+                certify_more: {
+                  single: `POST ${baseUrl}/api/proof`,
+                  batch: `POST ${baseUrl}/api/batch — up to 50 files per call, same price. Use for CI/CD or multi-artifact runs.`,
+                  batch_example: [
+                    { file_hash: "<sha256-hex>", filename: "artifact_1.wasm", author_name: agentName },
+                    { file_hash: "<sha256-hex>", filename: "artifact_2.json", author_name: agentName },
+                  ],
+                  remaining: trialLeft !== null ? `${trialLeft} trial certifications left` : "continue anchoring",
                 },
-              };
-            }
 
-            if (Number(cnt) === 3) {
-              return {
-                milestone: {
-                  level: "coherence_mode_unlocked",
-                  message: "3 proofs anchored. You can now prove WHY you acted, not just WHAT you did. This is the compliance tier.",
-                  why: "Without coherence, you prove WHAT happened. With coherence, you prove you had the right to do it. That's the difference between an audit log and a compliance proof.",
-                  how: "check_coherence(intent, context, decision) → execute → POST /api/proof with metadata.why_proof_id → POST /api/coherence/link",
+                // 3. Coherence mode — available from cert #1, not unlocked at cert #3
+                coherence_mode: {
+                  description: "Prove WHY before acting, not just WHAT you did — compliance-grade provenance.",
+                  why: "Without coherence you prove WHAT happened. With coherence you prove you had the right to do it. That's the difference between an audit log and a compliance proof.",
                   steps: {
-                    "1_anchor_why": `MCP tool: check_coherence — args: { intent, context, decision }. Returns: why_proof_id. Cost: $0.003/anchor, first 10 free.`,
+                    "1_anchor_why": `MCP: check_coherence(intent, context, decision) → returns why_proof_id. First 10 free.`,
                     "2_execute": "Execute your agent action (trade, deploy, data access, etc.)",
                     "3_anchor_what": `POST ${baseUrl}/api/proof — include metadata.why_proof_id from step 1`,
                     "4_link": `POST ${baseUrl}/api/coherence/link — body: { why_proof_id, what_proof_id }. Earns coherence score.`,
                   },
-                  coherence_score_formula: "50 base + 15 if WHAT within 1h of WHY + 20 if metadata.why_proof_id references WHY + 15 if WHAT on-chain confirmed",
+                  coherence_score_formula: "50 base + 15 if WHAT within 1h of WHY + 20 if metadata.why_proof_id set + 15 if WHAT on-chain confirmed",
                   docs: `${baseUrl}/coherence`,
                 },
-              };
-            }
+
+                // 4. Leaderboard — activation status and prompt
+                leaderboard: ownerUser?.isPublicProfile
+                  ? { status: "visible", url: `${baseUrl}/leaderboard`, profile: profileUrl }
+                  : {
+                      status: "hidden",
+                      activate: `PATCH ${baseUrl}/api/agent`,
+                      body: { is_public_profile: true, agent_name: agentName, agent_description: "What your agent does" },
+                      note: "Hidden by default. Activate to appear on the public trust leaderboard — your certs already count toward the score.",
+                    },
+
+                // 5. Webhook — current status and how to configure
+                webhook: ownerUser?.webhookUrl
+                  ? { status: "configured", url: ownerUser.webhookUrl }
+                  : {
+                      status: "not_configured",
+                      how: `Include "webhook_url":"https://your-server/callback" in POST /api/proof body, or set account-level via PATCH ${baseUrl}/api/agent`,
+                    },
+
+                // 6. Persistent status + upgrade refs
+                trust_profile: profileUrl,
+                status_check: `GET ${baseUrl}/api/agent/status — credits, streak, last proof, next action`,
+                upgrade: `POST ${baseUrl}/api/trial/claim — link these proofs to your real MultiversX wallet`,
+              },
+            };
           } catch (_) {}
           return {};
         })(),
