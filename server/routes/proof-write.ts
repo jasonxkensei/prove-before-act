@@ -928,10 +928,79 @@ export function registerProofWriteRoutes(app: Express) {
                       how: `Include "webhook_url":"https://your-server/callback" in POST /api/proof body, or set account-level via PATCH ${baseUrl}/api/agent`,
                     },
 
-                // 6. Persistent status + upgrade refs
+                // 6. Full production path — everything needed to go from trial to production
                 trust_profile: profileUrl,
                 status_check: `GET ${baseUrl}/api/agent/status — credits, streak, last proof, next action`,
-                upgrade: `POST ${baseUrl}/api/trial/claim — link these proofs to your real MultiversX wallet`,
+                production_path: {
+                  note: "Follow these steps in order to move from trial to production.",
+
+                  step_1_claim_wallet: {
+                    what: "Links all your trial proofs and this API key to your real MultiversX wallet. Non-destructive — every cert stays verifiable on-chain. Your api_key continues to work unchanged.",
+                    requires: `Wallet auth — connect at ${baseUrl}, then call this endpoint`,
+                    endpoint: `POST ${baseUrl}/api/trial/claim`,
+                    body: { trial_api_key: "<your pm_... key>" },
+                    curl: `curl -X POST "${baseUrl}/api/trial/claim" \\\n  -H "Authorization: Bearer <wallet-session-token>" \\\n  -H "Content-Type: application/json" \\\n  -d '{"trial_api_key":"${trialInfo ? "<your pm_... key>" : "<pm_... key>"}"}'`,
+                    result: "api_key and all certifications transfer to your real wallet identity. Trust score, streak, and leaderboard profile carry over.",
+                  },
+
+                  step_2_ongoing_credits: {
+                    note: "Once trial quota is exhausted — or skip claim and use x402 directly.",
+                    options: {
+                      prepaid: {
+                        ...buildPrepaidCreditsBlock(baseUrl),
+                        recommended: "Best for high-volume or predictable workloads.",
+                      },
+                      x402_per_proof: {
+                        ...buildX402Block(baseUrl),
+                        recommended: "Best for sporadic or stateless agents — no account needed, pay per proof.",
+                      },
+                      egld: {
+                        endpoint: `POST ${baseUrl}/api/acp/checkout`,
+                        note: "Pay with EGLD on MultiversX. Use for agents already operating on the MultiversX ecosystem.",
+                      },
+                    },
+                  },
+
+                  step_3_secure_key: {
+                    note: "Never hardcode your API key in source. Store as an environment variable.",
+                    env_var: "PROVE_BEFORE_ACT_API_KEY",
+                    usage: `Authorization: Bearer $PROVE_BEFORE_ACT_API_KEY`,
+                    examples: {
+                      bash: `export PROVE_BEFORE_ACT_API_KEY="${trialInfo ? "pm_your_key_here" : "pm_your_key_here"}"`,
+                      dotenv: `PROVE_BEFORE_ACT_API_KEY=pm_your_key_here`,
+                      docker: `docker run -e PROVE_BEFORE_ACT_API_KEY=pm_your_key_here your-agent`,
+                      k8s: "kubectl create secret generic pba-creds --from-literal=api-key=pm_your_key_here",
+                    },
+                  },
+
+                  step_4_ci_cd: {
+                    note: "Certify every build artifact automatically in CI/CD.",
+                    github_action: {
+                      marketplace: "https://github.com/marketplace/actions/xproof-certify",
+                      repo: "https://github.com/jasonxkensei/xProof-Action",
+                      example_workflow: [
+                        "- name: Certify build artifact",
+                        "  uses: jasonxkensei/xProof-Action@v1",
+                        "  with:",
+                        "    api-key: ${{ secrets.PROVE_BEFORE_ACT_API_KEY }}",
+                        "    file: ./dist/contract.wasm",
+                        "    action-type: code_deploy",
+                        "    why: 'CI build ${{ github.sha }}'",
+                      ].join("\n"),
+                    },
+                    sdk: {
+                      python: { install: "pip install xproof", import: "from xproof import XProofClient" },
+                      npm: { install: "npm install @xproof/xproof", import: "import { XProofClient } from '@xproof/xproof'" },
+                    },
+                  },
+
+                  step_5_webhook: {
+                    note: "Get notified when each proof is confirmed on-chain — essential for production flows that gate on confirmation.",
+                    configure: `PATCH ${baseUrl}/api/agent`,
+                    body: { webhook_url: "https://your-server/callback" },
+                    verification: "Validate X-xProof-Signature header: HMAC-SHA256(webhook_secret, timestamp + '.' + raw_body)",
+                  },
+                },
               },
             };
           } catch (_) {}
