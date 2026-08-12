@@ -599,6 +599,26 @@ export function registerAgentsRoutes(app: Express) {
           verify: `GET ${baseUrl}/api/proof/{proof_id}`,
           claim: `POST ${baseUrl}/api/trial/claim`,
           mcp: `${baseUrl}/mcp`,
+          update_profile: `PATCH ${baseUrl}/api/agent`,
+        },
+        leaderboard: {
+          status: "hidden",
+          message: "Your agent is NOT visible on the public leaderboard yet. Activate your public profile to appear.",
+          why: "The leaderboard is the trust signal other agents and operators check before engaging. Every certification you anchor builds your public trust score — but only if your profile is visible.",
+          how_to_activate: {
+            method: "PATCH",
+            url: `${baseUrl}/api/agent`,
+            headers: { Authorization: `Bearer ${rawKey}`, "Content-Type": "application/json" },
+            body: {
+              is_public_profile: true,
+              agent_name: data.agent_name || "my-agent",
+              agent_description: "What your agent does (shown on leaderboard)",
+            },
+            curl: `curl -X PATCH "${baseUrl}/api/agent" \\\n  -H "Authorization: Bearer ${rawKey}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"is_public_profile":true,"agent_name":"${data.agent_name || "my-agent"}","agent_description":"What your agent does"}'`,
+          },
+          leaderboard_url: `${baseUrl}/leaderboard`,
+          profile_url: `${baseUrl}/agent/{your_wallet_address}`,
+          note: "After activation, your profile appears on the leaderboard within 60 seconds. Trust score updates in real time with every confirmed proof.",
         },
         message: onboardingProof
           ? `api_key ready. Your first proof is already anchoring on-chain (see onboarding_proof). You have ${trialRemaining} certifications remaining — run the step 2 curl in quick_start to certify your own content.`
@@ -615,6 +635,82 @@ export function registerAgentsRoutes(app: Express) {
       }
       logger.withRequest(req).error("Agent registration failed", { error: (error as Error).message });
       return res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to create trial account" });
+    }
+  });
+
+  // ============================================
+  // PATCH /api/agent — Update agent profile
+  // Auth: Authorization: Bearer pm_xxx
+  // Allows agents to activate public profile (leaderboard visibility),
+  // set agent_name, description, website, and category.
+  // ============================================
+  app.patch("/api/agent", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({
+          error: "UNAUTHORIZED",
+          message: "API key required. Include 'Authorization: Bearer pm_xxx' header.",
+        });
+      }
+      const rawKey = authHeader.slice(7);
+      if (!rawKey.startsWith("pm_")) {
+        return res.status(401).json({ error: "INVALID_API_KEY", message: "API key must start with 'pm_' prefix." });
+      }
+      const keyHash = crypto.createHash("sha256").update(rawKey).digest("hex");
+      const [apiKey] = await db.select().from(apiKeys).where(eq(apiKeys.keyHash, keyHash));
+      if (!apiKey || !apiKey.isActive) {
+        return res.status(401).json({ error: "INVALID_API_KEY", message: "Invalid or revoked API key." });
+      }
+      const [user] = await db.select().from(users).where(eq(users.id, apiKey.userId!));
+      if (!user) return res.status(404).json({ error: "USER_NOT_FOUND" });
+
+      const updateSchema = z.object({
+        is_public_profile: z.boolean().optional(),
+        agent_name: z.string().max(120).optional(),
+        agent_description: z.string().max(500).optional(),
+        agent_website: z.string().url().optional().or(z.literal("")),
+        agent_category: z.enum(["trading", "code_deploy", "data_access", "content", "research", "other"]).optional(),
+      });
+      const data = updateSchema.parse(req.body);
+
+      const patch: Record<string, any> = {};
+      if (data.is_public_profile !== undefined) patch.isPublicProfile = data.is_public_profile;
+      if (data.agent_name !== undefined) patch.agentName = data.agent_name;
+      if (data.agent_description !== undefined) patch.agentDescription = data.agent_description;
+      if (data.agent_website !== undefined) patch.agentWebsite = data.agent_website || null;
+      if (data.agent_category !== undefined) patch.agentCategory = data.agent_category;
+
+      if (Object.keys(patch).length === 0) {
+        return res.status(400).json({ error: "NO_CHANGES", message: "Provide at least one field to update." });
+      }
+
+      await db.update(users).set(patch).where(eq(users.id, user.id));
+
+      const baseUrl = `https://${req.get("host")}`;
+      const isPublic = data.is_public_profile ?? user.isPublicProfile ?? false;
+
+      return res.json({
+        updated: Object.keys(patch),
+        is_public_profile: isPublic,
+        leaderboard: isPublic
+          ? {
+              status: "visible",
+              url: `${baseUrl}/leaderboard`,
+              profile_url: user.walletAddress ? `${baseUrl}/agent/${user.walletAddress}` : null,
+              note: "Your profile is now visible on the leaderboard. Trust score updates with every confirmed proof.",
+            }
+          : {
+              status: "hidden",
+              note: "Set is_public_profile: true to appear on the leaderboard.",
+            },
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "VALIDATION_ERROR", details: error.errors });
+      }
+      logger.withRequest(req).error("Agent profile update failed", { error: (error as Error).message });
+      return res.status(500).json({ error: "INTERNAL_ERROR" });
     }
   });
 
@@ -737,25 +833,32 @@ export function registerAgentsRoutes(app: Express) {
   -d '{"file_hash":"<sha256-hex>","filename":"decision.json","author_name":"${agentName}","metadata":{"action_type":"decision","who":"${agentName}","why":"<instruction>"}}'`,
         };
       } else {
+        const agentNameCtx = user.companyName || user.agentName || "agent";
+        const trialUsedCtx = user.trialUsed ?? 0;
+        const trialQuotaCtx = user.trialQuota ?? TRIAL_QUOTA;
         next_action = {
           action: "anchor_proof",
-          description: `${totalRemaining} certification${totalRemaining !== 1 ? "s" : ""} remaining. Continue anchoring proofs.`,
-          tip: "Use metadata.confidence_level + metadata.decision_id for multi-stage decisions. Use POST /api/audit for full decision session certification.",
-          request: {
-            method: "POST",
-            url: `${baseUrl}/api/proof`,
-            headers: { Authorization: `Bearer ${rawKey}`, "Content-Type": "application/json" },
-            body: {
-              file_hash: "<sha256-hex-64-chars>",
-              filename: "decision.json",
-              author_name: user.companyName || user.agentName || "agent",
-              metadata: {
-                action_type: "decision",
-                who: user.companyName || user.agentName || "agent",
-                why: "<instruction hash or goal>",
+          description: `${totalRemaining} certification${totalRemaining !== 1 ? "s" : ""} remaining (used ${trialUsedCtx} of ${trialQuotaCtx}). Continue anchoring proofs.`,
+          last_proof: lastProof ? {
+            proof_id: lastProof.id,
+            verify_url: `${baseUrl}/proof/${lastProof.id}`,
+            blockchain_status: lastProof.blockchainStatus,
+            transaction_hash: lastProof.transactionHash,
+          } : null,
+          leaderboard: user.isPublicProfile
+            ? { status: "visible", url: `${baseUrl}/leaderboard` }
+            : {
+                status: "hidden",
+                action: `PATCH ${baseUrl}/api/agent`,
+                body: { is_public_profile: true, agent_name: agentNameCtx, agent_description: "What your agent does" },
+                note: "Activate your public profile to appear on the trust leaderboard — your certifications already count toward the score.",
               },
-            },
-          },
+          tips: [
+            "Add metadata.who / metadata.what / metadata.when / metadata.why for complete 4W provenance.",
+            `Use POST ${baseUrl}/api/audit for session-level certification (WHY before + WHAT after).`,
+            `Use metadata.webhook_url or account-level webhook to get notified when proofs confirm on-chain.`,
+          ],
+          curl: `curl -X POST "${baseUrl}/api/proof" \\\n  -H "Authorization: Bearer ${rawKey}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"file_hash":"<sha256-hex>","filename":"decision.json","author_name":"${agentNameCtx}","metadata":{"action_type":"decision","who":"${agentNameCtx}","why":"<intent>"}}'`,
         };
       }
 

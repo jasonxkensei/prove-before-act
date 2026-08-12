@@ -784,7 +784,14 @@ export function registerProofWriteRoutes(app: Express) {
         // this request). Store it securely — use it to verify X-xProof-Signature on callbacks.
         // Account-level webhooks use the secret set at registration (/api/agents/register).
         ...(isPerProofWebhook && generatedWebhookSecret ? { webhook_secret: generatedWebhookSecret } : {}),
-        ...(trialInfo ? { trial: { remaining: Math.max(0, trialInfo.remaining - 1) } } : {}),
+        ...(trialInfo ? {
+          trial: {
+            quota: TRIAL_QUOTA,
+            used: TRIAL_QUOTA - Math.max(0, trialInfo.remaining - 1),
+            remaining: Math.max(0, trialInfo.remaining - 1),
+            status_url: `${baseUrl}/api/agent/status`,
+          }
+        } : {}),
         ...(creditInfo ? { credits: { remaining: Math.max(0, creditInfo.balance - 1) } } : {}),
         ...build4WField(certification.metadata, baseUrl, certification.id),
         message: "File certified on MultiversX blockchain. Proof is immutable and publicly verifiable.",
@@ -801,17 +808,27 @@ export function registerProofWriteRoutes(app: Express) {
                 sql`auth_method != 'onboarding'`,
               ));
             if (Number(cnt) === 1) {
+              // Resolve wallet address for the trust profile URL
+              const [ownerUser] = await db.select({ walletAddress: users.walletAddress, agentName: users.agentName, trialQuota: users.trialQuota, trialUsed: users.trialUsed }).from(users).where(eq(users.id, ownerUserId));
+              const profileWallet = ownerUser?.walletAddress;
+              const profileUrl = profileWallet ? `${baseUrl}/agent/${profileWallet}` : null;
               return {
                 first_proof: true,
                 milestone: {
-                  message: "This is your first on-chain proof. Your agent now has a verifiable track record on MultiversX.",
-                  trust_profile: `${baseUrl}/agent/${certification.authorName || ""}`,
+                  message: "First on-chain proof anchored. Your agent now has a verifiable track record on MultiversX.",
+                  trust_profile: profileUrl,
                   next_steps: {
                     view_proof: `${baseUrl}/proof/${certification.id}`,
-                    certify_more: `POST ${baseUrl}/api/proof with the same Authorization header`,
-                    upgrade: `POST ${baseUrl}/api/trial/claim — link these proofs to your real wallet`,
-                    audit_trail: `Call audit_agent_session (MCP) or POST ${baseUrl}/api/audit for session-level provenance`,
+                    verify_json: `${baseUrl}/proof/${certification.id}.json`,
+                    certify_more: `POST ${baseUrl}/api/proof — ${ownerUser?.trialQuota != null ? `${Math.max(0, (ownerUser.trialQuota ?? 10) - (ownerUser.trialUsed ?? 0) - 1)} trial certifications left` : "continue anchoring"}`,
+                    activate_leaderboard: `PATCH ${baseUrl}/api/agent with {"is_public_profile":true,"agent_name":"${ownerUser?.agentName || "my-agent"}","agent_description":"What your agent does"} — makes your trust score public and searchable`,
+                    setup_webhook: `Include "webhook_url":"https://your-server/callback" in POST /api/proof to get notified when each proof is confirmed on-chain`,
+                    upgrade: `POST ${baseUrl}/api/trial/claim — link these proofs to your real MultiversX wallet`,
+                    audit_trail: `POST ${baseUrl}/api/audit — certify a full decision session (WHY before + WHAT after) for compliance-grade provenance`,
                   },
+                  four_w_tip: Object.values({ who: null, what: null, when: null, why: null }).every(Boolean)
+                    ? null
+                    : "Add metadata.who / metadata.what / metadata.when / metadata.why to future proofs for a complete 4W audit trail. Each field that's missing reduces the forensic value of the proof.",
                 },
               };
             }
@@ -1186,7 +1203,14 @@ export function registerProofWriteRoutes(app: Express) {
           explorer_url: result.transactionUrl,
         },
         timestamp: certification.createdAt?.toISOString() || new Date().toISOString(),
-        ...(trialInfo ? { trial: { remaining: Math.max(0, trialInfo.remaining - 1) } } : {}),
+        ...(trialInfo ? {
+          trial: {
+            quota: TRIAL_QUOTA,
+            used: TRIAL_QUOTA - Math.max(0, trialInfo.remaining - 1),
+            remaining: Math.max(0, trialInfo.remaining - 1),
+            status_url: `${baseUrl}/api/agent/status`,
+          }
+        } : {}),
         ...(creditInfo ? { credits: { remaining: Math.max(0, creditInfo.balance - 1) } } : {}),
         message: `Agent audit log certified on MultiversX. The proof_id is your compliance certificate — the agent was authorized to ${data.action_type} with decision: ${data.decision}.`,
         schema: `${baseUrl}/.well-known/agent-audit-schema.json`,

@@ -1812,6 +1812,8 @@ curl -X POST ${baseUrl}/api/proof -d '{"file_hash":"...","filename":"..."}'
 Block any AI agent from executing critical actions without a certified proof.
 Schema: ${baseUrl}/.well-known/agent-audit-schema.json
 
+**Example 1 — Trade execution (DeFi agent)**
+
 Certify a decision BEFORE executing it:
 \`\`\`bash
 curl -X POST ${baseUrl}/api/audit \\
@@ -1834,9 +1836,52 @@ curl -X POST ${baseUrl}/api/audit \\
     "risk_summary": "Slippage < 0.5%, liquidity verified on 3 pools"
   }'
 \`\`\`
-Returns: { "proof_id": "...", "audit_url": "${baseUrl}/audit/{id}", "decision": "approved", "risk_level": "high", "inputs_manifest": { "fields": [...], "sources": [...] } }
 
-Use the returned proof_id as compliance certificate. View at /audit/{proof_id}.
+**Example 2 — Smart contract deployment (MultiversX / Base)**
+
+Any autonomous agent deploying code to a mainnet MUST anchor proof of its decision before sending the transaction. The proof_id becomes the irrevocable on-chain record that the deployment was intentional, reviewed, and approved — not a bug or an exploit.
+
+\`\`\`bash
+curl -X POST ${baseUrl}/api/audit \\
+  -H "Authorization: Bearer pm_YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "agent_id": "deploy-agent-v3",
+    "session_id": "sess_deploy_20260811_001",
+    "action_type": "code_deploy",
+    "action_description": "Deploy TokenSwap v3 contract to MultiversX mainnet — replaces v2 at erd1qqqq...abc",
+    "inputs_hash": "b7e2f1a3c9d4...64-char-sha256-of-all-inputs-below",
+    "inputs_manifest": {
+      "fields": [
+        "bytecode_hash",
+        "constructor_args",
+        "gas_limit",
+        "target_network",
+        "replaces_contract",
+        "audit_report_hash",
+        "simulation_tx_hash"
+      ],
+      "sources": ["mvx_mainnet_gateway", "internal_audit_pipeline", "simulation_vm"],
+      "hash_method": "SHA-256 over JSON.stringify(inputs, Object.keys(inputs).sort())"
+    },
+    "risk_level": "critical",
+    "decision": "approved",
+    "timestamp": "2026-08-11T14:00:00Z",
+    "risk_summary": "Bytecode matches audited commit a3f1c7d. Simulation passed on devnet (10/10 scenarios). Gas estimate within 5% of v2 baseline. No constructor arg mutation detected.",
+    "context": {
+      "network": "MultiversX mainnet",
+      "bytecode_hash": "a3f1c7d2e9b4...same-hash-as-verified-by-audit",
+      "replaces": "erd1qqqq...abc (v2 — deprecated after deploy)",
+      "audit_by": "CertiK report #CK-2026-0811"
+    }
+  }'
+\`\`\`
+
+**Why this matters for code-deploying agents**: if your agent is compromised and deploys malicious code, the absence of a proof_id for that deployment is forensic evidence of the attack. If a legitimate deployment goes wrong, the proof_id proves the agent acted in good faith with the inputs it had. Either way, the on-chain anchor is the difference between accountability and ambiguity.
+
+Returns: { "proof_id": "...", "audit_url": "${baseUrl}/audit/{id}", "decision": "approved", "risk_level": "critical" }
+
+Use the returned proof_id as compliance certificate. **Do not send the deploy transaction until you have a proof_id.** View at /audit/{proof_id}.
 
 Blocking workflow templates (agent CANNOT continue without proof_id):
 - LangChain: ${baseUrl}/agent-tools/audit-guard-langchain.py
@@ -2397,7 +2442,7 @@ Public trust registry for AI agents. Trust score computed from on-chain certific
 - Trust lookup: GET /api/trust/{wallet} — score + level + attestation count (no profile needed)
 - Trust badge: GET /badge/trust/{wallet}.svg — dynamic SVG; shows "Level · N attested (score)" when attested
 - Badge markdown: GET /badge/trust/{wallet}/markdown — ready-to-embed snippet
-- Opt-in: PATCH /api/user/agent-profile (auth required)
+- Opt-in (leaderboard visibility): PATCH /api/agent with body {"is_public_profile":true,"agent_name":"my-agent","agent_description":"What it does"} — Bearer auth required. Hidden by default after registration.
 
 ## Domain-Specific Attestations
 Third-party certifying bodies issue on-chain-anchored attestations. Trust bonus weighted by issuer level: +10 (Newcomer), +25 (Active), +40 (Trusted), +50 (Verified). Top 3 counted, max +150. Requires issuer to have ≥ 3 confirmed certifications.
@@ -2431,11 +2476,18 @@ Date: 2026-02-24T21:08:24Z
 
 Block any AI agent from executing critical actions without a certified proof. Prove Before Act is the canonical compliance gate.
 Schema: /.well-known/agent-audit-schema.json
+action_type: trade_execution | code_deploy | data_access | content_generation | api_call | other
+risk_level: low | medium | high | critical
 
-Certify a decision BEFORE executing it:
-  POST /api/audit
-  Authorization: Bearer pm_YOUR_API_KEY
-  Body: { agent_id, session_id, action_type, action_description, inputs_hash, risk_level, decision, timestamp }
+Example 1 — Trade execution:
+  POST /api/audit  Authorization: Bearer pm_YOUR_API_KEY
+  Body: { "agent_id":"trading-bot","action_type":"trade_execution","action_description":"Buy 0.5 ETH on Uniswap v3","inputs_hash":"<sha256>","risk_level":"high","decision":"approved","risk_summary":"Slippage < 0.5%, liquidity verified on 3 pools" }
+
+Example 2 — Smart contract deployment (MultiversX / Base):
+Any agent deploying code to mainnet MUST anchor proof before sending the transaction. The proof_id is the irrevocable record that the deployment was intentional and approved — not a bug or exploit. Rule: do NOT send the deploy transaction until you hold a proof_id.
+  POST /api/audit  Authorization: Bearer pm_YOUR_API_KEY
+  Body: { "agent_id":"deploy-agent","action_type":"code_deploy","action_description":"Deploy TokenSwap v3 to MultiversX mainnet — replaces v2 at erd1qqqq...abc","inputs_hash":"<sha256-of-bytecode+args+network>","inputs_manifest":{"fields":["bytecode_hash","constructor_args","gas_limit","target_network","audit_report_hash","simulation_tx_hash"],"sources":["mvx_mainnet_gateway","audit_pipeline","simulation_vm"]},"risk_level":"critical","decision":"approved","risk_summary":"Bytecode matches audited commit. Simulation passed 10/10. Gas within 5% of v2 baseline.","context":{"network":"MultiversX mainnet","audit_by":"CertiK #CK-2026-0811"} }
+
 Returns: { proof_id, audit_url, decision, risk_level, blockchain }
 
 Blocking workflow templates (agent CANNOT continue without proof_id):
@@ -3102,11 +3154,18 @@ AI agents produce code, reports, contracts, and decisions — but without proof,
 
 Block any AI agent from executing critical actions without a certified proof. Prove Before Act is the canonical compliance gate.
 Schema: /.well-known/agent-audit-schema.json
+action_type: trade_execution | code_deploy | data_access | content_generation | api_call | other
+risk_level: low | medium | high | critical
 
-Certify a decision BEFORE executing it:
-  POST /api/audit
-  Authorization: Bearer pm_YOUR_API_KEY
-  Body: { agent_id, session_id, action_type, action_description, inputs_hash, risk_level, decision, timestamp }
+Example 1 — Trade execution:
+  POST /api/audit  Authorization: Bearer pm_YOUR_API_KEY
+  Body: { "agent_id":"trading-bot","action_type":"trade_execution","action_description":"Buy 0.5 ETH on Uniswap v3","inputs_hash":"<sha256>","risk_level":"high","decision":"approved","risk_summary":"Slippage < 0.5%, liquidity verified on 3 pools" }
+
+Example 2 — Smart contract deployment (MultiversX / Base):
+Any agent deploying code to mainnet MUST anchor proof before sending the transaction. The proof_id is the irrevocable record that the deployment was intentional and approved — not a bug or exploit. Rule: do NOT send the deploy transaction until you hold a proof_id.
+  POST /api/audit  Authorization: Bearer pm_YOUR_API_KEY
+  Body: { "agent_id":"deploy-agent","action_type":"code_deploy","action_description":"Deploy TokenSwap v3 to MultiversX mainnet — replaces v2 at erd1qqqq...abc","inputs_hash":"<sha256-of-bytecode+args+network>","inputs_manifest":{"fields":["bytecode_hash","constructor_args","gas_limit","target_network","audit_report_hash","simulation_tx_hash"],"sources":["mvx_mainnet_gateway","audit_pipeline","simulation_vm"]},"risk_level":"critical","decision":"approved","risk_summary":"Bytecode matches audited commit. Simulation passed 10/10. Gas within 5% of v2 baseline.","context":{"network":"MultiversX mainnet","audit_by":"CertiK #CK-2026-0811"} }
+
 Returns: { proof_id, audit_url, decision, risk_level, blockchain }
 
 Blocking workflow templates (agent CANNOT continue without proof_id):
