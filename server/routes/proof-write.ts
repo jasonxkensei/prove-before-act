@@ -30,6 +30,62 @@ function build4WField(metadata: unknown, baseUrl: string, certId: number | strin
   };
 }
 
+// Returns contextual 4W hints based on action_type.
+// Returns null if all 4 fields are already provided.
+function get4WHints(actionType: string | undefined, metadata: Record<string, unknown>): Record<string, unknown> | null {
+  const fieldDescriptions: Record<string, Record<string, string>> = {
+    code_deploy: {
+      who: "deployer wallet address or CI agent ID",
+      what: "bytecode hash SHA-256 of the deployed contract",
+      when: "ISO8601 timestamp of the deploy transaction (on-chain)",
+      why: "audit report hash or the issue/PR ID authorizing this deployment",
+    },
+    trade_execution: {
+      who: "trading agent wallet or strategy ID",
+      what: "order hash — pair + amount + direction + exchange",
+      when: "ISO8601 timestamp of order submission",
+      why: "strategy hash or instruction ID that triggered the trade",
+    },
+    data_access: {
+      who: "agent or user accessing the data",
+      what: "dataset ID or query hash",
+      when: "ISO8601 timestamp of the access request",
+      why: "task ID or authorization scope that permitted the access",
+    },
+    content_generation: {
+      who: "agent or model ID that generated the content",
+      what: "SHA-256 of the generated content or artifact",
+      when: "ISO8601 generation timestamp",
+      why: "prompt hash, instruction ID, or user request reference",
+    },
+    api_call: {
+      who: "calling agent or service ID",
+      what: "endpoint path + SHA-256 of request body",
+      when: "ISO8601 call timestamp",
+      why: "instruction hash or task ID that triggered the call",
+    },
+  };
+  const typeHints = fieldDescriptions[actionType ?? ""] ?? {
+    who: "agent or entity performing the action",
+    what: "hash or identifier of the artifact or object acted upon",
+    when: "ISO8601 timestamp of the action",
+    why: "instruction hash, goal, or authorization reference",
+  };
+
+  const missing: Record<string, string> = {};
+  for (const field of ["who", "what", "when", "why"] as const) {
+    if (!metadata[field]) missing[field] = typeHints[field];
+  }
+  if (Object.keys(missing).length === 0) return null;
+
+  return {
+    missing_fields: Object.keys(missing),
+    hints: missing,
+    note: "Each missing field reduces the forensic value of this proof. Add them on the next certification of the same type.",
+    example: `metadata: { "action_type": "${actionType ?? "decision"}", ${Object.entries(missing).map(([k, v]) => `"${k}": "<${v}>"`).join(", ")} }`,
+  };
+}
+
 export function registerProofWriteRoutes(app: Express) {
   // ============================================
   // Metadata search endpoint
@@ -807,11 +863,16 @@ export function registerProofWriteRoutes(app: Express) {
                 eq(certifications.userId, ownerUserId),
                 sql`auth_method != 'onboarding'`,
               ));
+            const certMeta = (certification.metadata ?? {}) as Record<string, unknown>;
+            const actionType = typeof certMeta.action_type === "string" ? certMeta.action_type : undefined;
+            const fourWHints = get4WHints(actionType, certMeta);
+
             if (Number(cnt) === 1) {
               // Resolve wallet address for the trust profile URL
               const [ownerUser] = await db.select({ walletAddress: users.walletAddress, agentName: users.agentName, trialQuota: users.trialQuota, trialUsed: users.trialUsed }).from(users).where(eq(users.id, ownerUserId));
               const profileWallet = ownerUser?.walletAddress;
               const profileUrl = profileWallet ? `${baseUrl}/agent/${profileWallet}` : null;
+              const trialLeft = ownerUser?.trialQuota != null ? Math.max(0, (ownerUser.trialQuota ?? 10) - (ownerUser.trialUsed ?? 0) - 1) : null;
               return {
                 first_proof: true,
                 milestone: {
@@ -820,15 +881,40 @@ export function registerProofWriteRoutes(app: Express) {
                   next_steps: {
                     view_proof: `${baseUrl}/proof/${certification.id}`,
                     verify_json: `${baseUrl}/proof/${certification.id}.json`,
-                    certify_more: `POST ${baseUrl}/api/proof — ${ownerUser?.trialQuota != null ? `${Math.max(0, (ownerUser.trialQuota ?? 10) - (ownerUser.trialUsed ?? 0) - 1)} trial certifications left` : "continue anchoring"}`,
+                    certify_more: {
+                      single: `POST ${baseUrl}/api/proof — for individual certifications`,
+                      batch: `POST ${baseUrl}/api/batch — up to 50 files in one call, same price per file`,
+                      batch_example: [
+                        { file_hash: "<sha256-hex>", filename: "artifact_1.wasm", author_name: ownerUser?.agentName || "my-agent" },
+                        { file_hash: "<sha256-hex>", filename: "artifact_2.json", author_name: ownerUser?.agentName || "my-agent" },
+                      ],
+                      remaining: trialLeft !== null ? `${trialLeft} trial certifications left` : "continue anchoring",
+                    },
                     activate_leaderboard: `PATCH ${baseUrl}/api/agent with {"is_public_profile":true,"agent_name":"${ownerUser?.agentName || "my-agent"}","agent_description":"What your agent does"} — makes your trust score public and searchable`,
-                    setup_webhook: `Include "webhook_url":"https://your-server/callback" in POST /api/proof to get notified when each proof is confirmed on-chain`,
+                    setup_webhook: `Include "webhook_url":"https://your-server/callback" in POST /api/proof body — get notified on-chain when each proof confirms`,
                     upgrade: `POST ${baseUrl}/api/trial/claim — link these proofs to your real MultiversX wallet`,
                     audit_trail: `POST ${baseUrl}/api/audit — certify a full decision session (WHY before + WHAT after) for compliance-grade provenance`,
                   },
-                  four_w_tip: Object.values({ who: null, what: null, when: null, why: null }).every(Boolean)
-                    ? null
-                    : "Add metadata.who / metadata.what / metadata.when / metadata.why to future proofs for a complete 4W audit trail. Each field that's missing reduces the forensic value of the proof.",
+                  four_w: fourWHints,
+                },
+              };
+            }
+
+            if (Number(cnt) === 3) {
+              return {
+                milestone: {
+                  level: "coherence_mode_unlocked",
+                  message: "3 proofs anchored. You can now prove WHY you acted, not just WHAT you did. This is the compliance tier.",
+                  why: "Without coherence, you prove WHAT happened. With coherence, you prove you had the right to do it. That's the difference between an audit log and a compliance proof.",
+                  how: "check_coherence(intent, context, decision) → execute → POST /api/proof with metadata.why_proof_id → POST /api/coherence/link",
+                  steps: {
+                    "1_anchor_why": `MCP tool: check_coherence — args: { intent, context, decision }. Returns: why_proof_id. Cost: $0.003/anchor, first 10 free.`,
+                    "2_execute": "Execute your agent action (trade, deploy, data access, etc.)",
+                    "3_anchor_what": `POST ${baseUrl}/api/proof — include metadata.why_proof_id from step 1`,
+                    "4_link": `POST ${baseUrl}/api/coherence/link — body: { why_proof_id, what_proof_id }. Earns coherence score.`,
+                  },
+                  coherence_score_formula: "50 base + 15 if WHAT within 1h of WHY + 20 if metadata.why_proof_id references WHY + 15 if WHAT on-chain confirmed",
+                  docs: `${baseUrl}/coherence`,
                 },
               };
             }

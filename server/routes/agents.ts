@@ -853,14 +853,73 @@ export function registerAgentsRoutes(app: Express) {
                 body: { is_public_profile: true, agent_name: agentNameCtx, agent_description: "What your agent does" },
                 note: "Activate your public profile to appear on the trust leaderboard — your certifications already count toward the score.",
               },
+          certify: {
+            single: `POST ${baseUrl}/api/proof — individual certifications`,
+            batch: `POST ${baseUrl}/api/batch — up to 50 files per call, same price. Use for CI/CD or multi-artifact runs.`,
+            batch_curl: `curl -X POST "${baseUrl}/api/batch" \\\n  -H "Authorization: Bearer ${rawKey}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"files":[{"file_hash":"<sha256>","filename":"artifact_1.wasm"},{"file_hash":"<sha256>","filename":"artifact_2.json"}]}'`,
+            single_curl: `curl -X POST "${baseUrl}/api/proof" \\\n  -H "Authorization: Bearer ${rawKey}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"file_hash":"<sha256-hex>","filename":"decision.json","author_name":"${agentNameCtx}","metadata":{"action_type":"decision","who":"${agentNameCtx}","why":"<intent>"}}'`,
+          },
           tips: [
-            "Add metadata.who / metadata.what / metadata.when / metadata.why for complete 4W provenance.",
-            `Use POST ${baseUrl}/api/audit for session-level certification (WHY before + WHAT after).`,
-            `Use metadata.webhook_url or account-level webhook to get notified when proofs confirm on-chain.`,
+            "Add metadata.who / what / when / why for complete 4W provenance. Run GET /api/agent/status after a proof to see which fields are missing.",
+            `Use POST ${baseUrl}/api/audit for session-level certification (WHY before + WHAT after) — compliance grade.`,
+            `POST ${baseUrl}/api/batch for multi-file runs — certify an entire CI/CD artifact set in one call.`,
+            `Use metadata.webhook_url or set account-level webhook via PATCH ${baseUrl}/api/agent to get on-chain confirmation callbacks.`,
           ],
-          curl: `curl -X POST "${baseUrl}/api/proof" \\\n  -H "Authorization: Bearer ${rawKey}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"file_hash":"<sha256-hex>","filename":"decision.json","author_name":"${agentNameCtx}","metadata":{"action_type":"decision","who":"${agentNameCtx}","why":"<intent>"}}'`,
         };
       }
+
+      // --- Streak computation (by userId, no wallet needed for trial agents) ---
+      const EPOCH_BASE_MS = new Date("2024-01-01T00:00:00Z").getTime();
+      const WEEK_MS = 604800_000;
+      const nowMs = Date.now();
+      const currentWeekNum = Math.floor((nowMs - EPOCH_BASE_MS) / WEEK_MS);
+      const lastCertMs = lastProof?.createdAt ? lastProof.createdAt.getTime() : 0;
+      const lastCertWeekNum = lastCertMs > 0 ? Math.floor((lastCertMs - EPOCH_BASE_MS) / WEEK_MS) : -1;
+      const certifiedThisWeek = lastCertWeekNum === currentWeekNum;
+
+      let streakWeeks = 0;
+      try {
+        const weekRows = await db.execute(sql`
+          SELECT DISTINCT FLOOR(EXTRACT(EPOCH FROM created_at - '2024-01-01'::timestamp) / 604800)::int AS week_num
+          FROM certifications
+          WHERE user_id = ${user.id} AND auth_method != 'onboarding'
+          ORDER BY week_num DESC
+          LIMIT 52
+        `);
+        const weekNums = (weekRows.rows as any[]).map(r => Number(r.week_num));
+        if (weekNums.length > 0) {
+          const sorted = [...new Set(weekNums)].sort((a: number, b: number) => b - a);
+          if (sorted[0] >= currentWeekNum - 1) {
+            streakWeeks = 1;
+            for (let i = 1; i < sorted.length; i++) {
+              if (sorted[i] === sorted[i - 1] - 1) streakWeeks++;
+              else break;
+            }
+          }
+        }
+      } catch (_) {}
+
+      // Deadline: end of current week if not yet certified this week; end of next week if already certified
+      const weekDeadlineMs = EPOCH_BASE_MS + (currentWeekNum + (certifiedThisWeek ? 2 : 1)) * WEEK_MS;
+      const hoursLeft = (weekDeadlineMs - nowMs) / 3600000;
+      const streakRisk: "low" | "medium" | "high" = hoursLeft < 24 ? "high" : hoursLeft < 72 ? "medium" : "low";
+      const streakDeadline = new Date(weekDeadlineMs).toISOString();
+
+      const streak = {
+        current_weeks: streakWeeks,
+        certified_this_week: certifiedThisWeek,
+        next_deadline: streakDeadline,
+        hours_until_deadline: Math.round(hoursLeft),
+        risk: streakRisk,
+        bonus_per_week: 8,
+        max_bonus: 100,
+        note: certifiedThisWeek
+          ? `Streak maintained this week (+${Math.min(100, streakWeeks * 8)} pts). Next deadline: ${streakDeadline}.`
+          : streakRisk === "high"
+            ? `⚠ Less than 24h to certify before your streak resets. Deadline: ${streakDeadline}.`
+            : `Certify before ${streakDeadline} to maintain your ${streakWeeks}-week streak.`,
+      };
+      // --- End streak ---
 
       const agentNameForCapabilities = user.companyName || user.agentName || "agent";
 
@@ -904,6 +963,7 @@ export function registerAgentsRoutes(app: Express) {
           total: (await db.select({ count: sql<number>`count(*)` }).from(certifications).where(and(eq(certifications.userId, user.id), ne(certifications.authMethod, 'onboarding'))))[0]?.count ?? 0,
           last_proof: lastProofFormatted,
         },
+        streak,
         webhook: user.webhookUrl
           ? {
               url: user.webhookUrl,
