@@ -41,14 +41,14 @@ Prove Before Act records WHAT / WHEN / WHY context. MX-8004 may provide WHO when
 
 ## Pricing
 
-**Flat rate: $0.01 per proof** -- no tiers, no volume discounts, same price whether you anchor 1 or 100,000 proofs.
+**Flat rate per proof** -- no tiers, no volume discounts, same price whether you anchor 1 or 100,000 proofs. The current per-proof price is served live at `/api/pricing`; multiply it by your volume for a cost estimate.
 
 | Scale | Cost |
 |:---|:---|
-| 1 proof | $0.01 |
-| 1,000 proofs | $10 |
-| 10,000 proofs | $100 |
-| 50 agents × 20 actions/day × 30 days | $300/month |
+| 1 proof | 1× current price |
+| 1,000 proofs | 1,000× current price |
+| 10,000 proofs | 10,000× current price |
+| 50 agents × 20 actions/day × 30 days | 30,000× current price / month |
 
 Payment: USDC on Base (x402, no account) or EGLD on MultiversX (ACP/wallet) or prepaid credits.
 
@@ -118,12 +118,12 @@ Get an API key at [provebeforeact.com](https://provebeforeact.com) (connect wall
 
 ### Option B: x402 Payment Protocol (No Account Required)
 
-No configuration needed. Pay in USDC on Base (eip155:8453) directly in the HTTP request. The 402 response header tells your agent exactly what to pay. Flat rate: $0.01 per proof.
+No configuration needed. Pay in USDC on Base (eip155:8453) directly in the HTTP request. The 402 response header tells your agent exactly what to pay (the current flat per-proof price, also served at `/api/pricing`).
 
 > **WARNING -- autonomous payments:** x402 is an opt-in mode that enables your agent to initiate on-chain USDC transactions without per-transaction user confirmation. Before enabling x402 in production:
 > - Set a **spending cap** in your agent framework (e.g. max $N/day or $N/session).
 > - Require **human approval** for any single call that would exceed your risk threshold.
-> - Note that `POST /api/batch` supports up to 100 items per call -- at $0.01 each, a batch of 100 costs $1.00.
+> - Note that `POST /api/batch` supports up to 100 items per call -- at the current per-item price, a batch of 100 costs 100× that price.
 > - Disable x402 entirely in environments where autonomous spending is not authorised.
 
 ---
