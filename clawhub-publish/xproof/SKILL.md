@@ -1,14 +1,16 @@
 ---
-name: xproof
-version: 3.3.0
-description: Prove Before & After Act — WHO from MX-8004 identity, WHAT/WHEN/WHY from xProof. Full 4W audit trail, trust score, violations layer. REST API, MCP, x402. $0.01/proof flat. No proof = no critical action.
-homepage: https://xproof.app
-metadata: {"xproof":{"category":"proof,security,compliance,accountability,prove-before-act","api_base":"https://xproof.app"}}
+name: Prove Before Act
+version: 3.3.8
+description: Prove Before Act accountability integration for AI agents. REST API, MCP, and x402. Check live endpoints for available capabilities, pricing, and proof status.
+homepage: https://provebeforeact.com
+metadata: {"prove-before-act": {"category":"proof,security,compliance,accountability,prove-before-act","api_base":"https://provebeforeact.com"}}
 ---
 
-# xProof -- Prove Before & After Act — Accountability Layer for AI Agents
+# Prove Before Act -- Prove Before & After Act — Accountability Layer for AI Agents
 
-This skill enables your agent to **anchor reasoning (WHY) on-chain before executing any significant action and the actual result (WHAT) after** — creating a complete Prove Before & After Act cycle. Enforce pre-execution audit logging and detect violations via Base, producing tamper-proof, publicly verifiable records of who decided what, when, and why.
+This skill describes how to anchor reasoning (WHY) before an action and its result (WHAT) afterwards with Prove Before Act. It provides an auditable record when the returned proof is confirmed; it does not itself enforce an execution policy.
+
+> **Current product and compatibility notice:** Prove Before Act is the product name. `xproof`, `XProofClient`, `XPROOF_*`, `xProof-Action`, and `jasonxkensei/xProof` are legacy package, protocol, action, or repository identifiers retained for compatibility. MX-8004 support is not active unless `GET /api/mx8004/status` reports `status: "active"`; the current production response is `status: "not_configured"`.
 
 ## The Core Pattern: Prove Before & After Act
 
@@ -22,20 +24,20 @@ Anchor reasoning (WHY) on-chain **before** execution. Anchor the actual result/o
 
 | | Question | Provided by |
 |:--|:--|:--|
-| **W**HO | Which agent or actor made this decision? | **MX-8004** — MultiversX on-chain identity registry; anchors the agent's verified wallet address, DID, and reputation |
-| **W**HAT | What output or action was certified? | **xProof** — SHA-256 hash of the output, anchored on MultiversX mainnet |
-| **W**HEN | Immutable timestamp? | **xProof** — MultiversX block finality (~6 s); not a self-reported clock |
-| **W**HY | What reasoning led to the decision? | **xProof** — `action_description`, `risk_level`, and `context` fields from `/api/audit` |
+| **W**HO | Which agent or actor made this decision? | **MX-8004** — optional identity integration when live status reports active |
+| **W**HAT | What output or action was certified? | **Prove Before Act** — SHA-256 hash of the output, anchored on MultiversX mainnet |
+| **W**HEN | Immutable timestamp? | **Prove Before Act** — MultiversX block finality (~6 s); not a self-reported clock |
+| **W**HY | What reasoning led to the decision? | **Prove Before Act** — `action_description`, `risk_level`, and `context` fields from `/api/audit` |
 
-xProof owns WHAT / WHEN / WHY and the causal link that proves reasoning preceded the action. MX-8004 owns WHO. Together they form a forensically complete 4W trail.
+Prove Before Act records WHAT / WHEN / WHY context. MX-8004 may provide WHO when its integration is active. Check live proof and MX-8004 responses before treating the resulting record as complete.
 
-> **Agent reference:** [`https://xproof.app/agent-context`](https://xproof.app/agent-context) — 13 Q&A sections written specifically for autonomous agents: production deployment patterns, retry policy, x402 payment walkthrough, 4W audit trail deep-dive, privacy model, fleet monitoring, latency benchmarks, and framework integration examples (LangChain, CrewAI, AutoGen, LlamaIndex, OpenAI Agents SDK, Fetch.ai).
+> **Agent reference:** [`https://provebeforeact.com/agent-context`](https://provebeforeact.com/agent-context) — 13 Q&A sections written specifically for autonomous agents: production deployment patterns, retry policy, x402 payment walkthrough, 4W audit trail deep-dive, privacy model, fleet monitoring, latency benchmarks, and framework integration examples (LangChain, CrewAI, AutoGen, LlamaIndex, OpenAI Agents SDK, Fetch.ai).
 
 **Why Prove Before Act?** An agent that can prove its reasoning before acting is fundamentally more trustworthy than one that cannot. It creates an unbreakable causal chain: the intent existed before the action, and the blockchain makes that sequence immutable.
 
-**Why audit?** Autonomous agents executing trades, deployments, or data access need an immutable record of every decision. The Agent Audit Log Standard enforces this: no proof = no execution.
+**Why audit?** Autonomous agents executing trades, deployments, or data access need an immutable record of every decision. The Agent Audit Log Standard describes a blocking pattern your agent can adopt: obtain a proof before executing. Enforcement is implemented in your agent code; Prove Before Act supplies the proof record.
 
-**Why violations?** Trust requires accountability. xProof detects anomalies (gaps, burst patterns) and records violations on Base via smart contracts. Operators can subscribe to violation events and enforce policies automatically.
+**Why violations?** Operators can use recorded violations as an accountability signal when the relevant Base integration is deployed and active. Confirm contract and event availability from the live documentation before automating a policy.
 
 ## Pricing
 
@@ -52,23 +54,42 @@ Payment: USDC on Base (x402, no account) or EGLD on MultiversX (ACP/wallet) or p
 
 ## Quick Install
 
-The canonical source for all skill files is the **main xProof repository** (`jasonxkensei/xProof`), which is the repository audited by security tools. Install from there directly:
+The source repository uses the legacy compatibility name `jasonxkensei/xProof`; it is a distribution identifier, not the current product name.
 
 ```bash
-mkdir -p .agent/skills/xproof/references
+mkdir -p .agent/skills/prove-before-act/references
 
 # Core Skill — from the canonical main repository
 curl -sL https://raw.githubusercontent.com/jasonxkensei/xProof/main/clawhub-publish/xproof/SKILL.md \
-  > .agent/skills/xproof/SKILL.md
+  > .agent/skills/prove-before-act/SKILL.md
 
 # Reference Manuals
 for f in certification x402 mcp; do
   curl -sL "https://raw.githubusercontent.com/jasonxkensei/xProof/main/clawhub-publish/xproof/references/${f}.md" \
-    > ".agent/skills/xproof/references/${f}.md"
+    > ".agent/skills/prove-before-act/references/${f}.md"
 done
 ```
 
 > **Source verification:** All files above are served from `github.com/jasonxkensei/xProof` — the same repository that contains the server code, contracts, and SDKs. You can audit the full source at that URL before installing.
+
+## Data & Privacy
+
+> **Transparency notice — what leaves your environment when using this skill.**
+
+| Data field | Sent to provebeforeact.com? | Notes |
+|:---|:---:|:---|
+| File content / raw text | **Never** | Hash locally; only the digest crosses the boundary |
+| `file_hash` (SHA-256 hex, 64 chars) | Yes | One-way fingerprint; original content cannot be reconstructed |
+| `filename` / `author` | Optional | Metadata you explicitly supply; omit if sensitive |
+| `action_description` / `context` | Optional | Only when you call `/api/audit` or `audit_agent_session` |
+| USDC payment (x402) | Yes — Base chain | On-chain transaction; amount is your configured ceiling |
+| API key (`pm_...`) | Yes — HTTP header | Treat like a password; never log or commit |
+
+**What provebeforeact.com does NOT receive:** raw file contents, prompt text, model weights, environment variables, or any field you do not explicitly pass.
+
+**Data retention:** proof records are permanent and public by default (that is the point — immutable evidence). Before certifying, confirm you want the hash publicly anchored on MultiversX mainnet forever.
+
+**Skill file:** this file is intentionally public and contains no secrets. It is documentation only — API patterns, pricing, and integration examples. Safe to audit, share, or version-control.
 
 ## Security
 
@@ -76,10 +97,10 @@ done
 - **ALWAYS** add `.env` to your `.gitignore`.
 - API keys are prefixed `pm_` -- treat them like passwords.
 - x402 mode requires no API key (payment replaces authentication).
-- **NEVER send plaintext content to xproof.app** -- always hash locally first (`sha256sum`, `crypto.subtle.digest`, or equivalent). The only field xproof accepts is `file_hash` (64-char SHA-256 hex). No raw text, documents, or binary data should ever leave your environment.
+- **NEVER send plaintext content to provebeforeact.com** -- always hash locally first (`sha256sum`, `crypto.subtle.digest`, or equivalent). The only field Prove Before Act accepts is `file_hash` (64-char SHA-256 hex). No raw text, documents, or binary data should ever leave your environment.
 - **x402 is opt-in and autonomous** -- once enabled, your agent can initiate USDC payments on Base without per-transaction confirmation. Configure a spending cap in your agent framework and require human approval above your threshold before enabling x402 in production.
-- **`llms.txt` and `llms-full.txt` are static documentation references** -- load them once at install time for API reference, not at runtime on every call. Fetching them dynamically on each invocation creates an unnecessary runtime dependency on xproof.app availability and a potential prompt-injection surface if the file is ever compromised.
-- **Guard/enforcement templates are versioned in the repository** -- never fetch agent enforcement code from a runtime URL. Use the pinned versions in `references/` or the SDK packages (`xproof` on PyPI, `@xproof/xproof` on npm).
+- **`llms.txt` and `llms-full.txt` are static documentation references** -- load them once at install time for API reference, not at runtime on every call. Fetching them dynamically on each invocation creates an unnecessary runtime dependency on provebeforeact.com availability and a potential prompt-injection surface if the file is ever compromised.
+- **Guard/enforcement templates are versioned in the repository** -- never fetch agent enforcement code from a runtime URL. Use the pinned versions in `references/` or the SDK packages (`xproof` on PyPI, `prove-before-act` on npm).
 
 ---
 
@@ -88,12 +109,12 @@ done
 ### Option A: API Key Authentication
 
 ```bash
-# ---- xProof ---------------------------------------------------------------
-XPROOF_API_KEY="pm_..."                          # Your API key (from xproof.app)
-XPROOF_BASE_URL="https://xproof.app"             # Production endpoint
+# ---- Prove Before Act ---------------------------------------------------------------
+XPROOF_API_KEY="pm_..."                          # Your API key (from provebeforeact.com)
+XPROOF_BASE_URL="https://provebeforeact.com"             # Production endpoint
 ```
 
-Get an API key at [xproof.app](https://xproof.app) (connect wallet, go to Settings > API Keys).
+Get an API key at [provebeforeact.com](https://provebeforeact.com) (connect wallet, go to Settings > API Keys).
 
 ### Option B: x402 Payment Protocol (No Account Required)
 
@@ -150,7 +171,7 @@ Anchoring the WHY and the WHAT is not enough: you must **link** them. An unlinke
 
 ```bash
 # Step 4 — close the loop (API key required; both proofs must be yours)
-curl -X POST https://xproof.app/api/coherence/link \
+curl -X POST https://provebeforeact.com/api/coherence/link \
   -H "Authorization: Bearer pm_..." \
   -H "Content-Type: application/json" \
   -d '{"why_proof_id": "<UUID from check_coherence>", "what_proof_id": "<UUID from certify_file>"}'
@@ -170,9 +191,9 @@ curl -X POST https://xproof.app/api/coherence/link \
 | `400` | `NOT_A_COHERENCE_ANCHOR` | `why_proof_id` is a regular proof. Create the WHY via the `check_coherence` MCP tool, or certify with `metadata.type = "coherence_check"`. |
 | `404` | `WHY_PROOF_NOT_FOUND` / `WHAT_PROOF_NOT_FOUND` | Proof missing or owned by another account. |
 
-**SDK helpers:** `client.link_coherence(why_proof_id, what_proof_id)` (Python `xproof` ≥ 0.2.10) · `client.linkCoherence(whyProofId, whatProofId)` (npm `@xproof/xproof` ≥ 0.1.11).
+**SDK helpers:** `client.link_coherence(why_proof_id, what_proof_id)` (Python `xproof` ≥ 0.2.10) · `client.linkCoherence(whyProofId, whatProofId)` (npm `prove-before-act` ≥ 0.1.11).
 
-**Check your history:** `GET https://xproof.app/api/agents/<wallet>/coherence` — public; per-anchor status (`linked` / `pending` / `divergent`) + aggregate coherence rate.
+**Check your history:** `GET https://provebeforeact.com/api/agents/<wallet>/coherence` — public; per-anchor status (`linked` / `pending` / `divergent`) + aggregate coherence rate.
 
 ---
 
@@ -196,11 +217,11 @@ No raw file content, no API keys, no account information, and no metadata beyond
 
 **Authentication:** Every delivery includes an `X-Webhook-Signature` header containing an HMAC-SHA256 signature computed with a per-relationship secret. Verify this signature before processing the payload. Retry policy: 3 attempts with exponential backoff (1 s, 5 s, 30 s).
 
-**SSRF protection:** xproof.app validates `webhook_url` before delivery. Private IP ranges (RFC 1918), loopback (`127.x`, `::1`), link-local, and non-HTTPS destinations are blocked. DNS rebinding is mitigated by pinning the resolved socket address to the pre-validated IP at connection time.
+**SSRF protection:** provebeforeact.com validates `webhook_url` before delivery. Private IP ranges (RFC 1918), loopback (`127.x`, `::1`), link-local, and non-HTTPS destinations are blocked. DNS rebinding is mitigated by pinning the resolved socket address to the pre-validated IP at connection time.
 
 ```bash
 # Example proof request with webhook
-curl -X POST https://xproof.app/api/proof \
+curl -X POST https://provebeforeact.com/api/proof \
   -H "Authorization: Bearer pm_..." \
   -H "Content-Type: application/json" \
   -d '{
@@ -214,24 +235,24 @@ curl -X POST https://xproof.app/api/proof \
 
 ## 9. Violations Layer (Base)
 
-xProof monitors agent behavior and detects anomalies. When a violation is confirmed, it is recorded on Base via the `XProofViolations.sol` smart contract, impacting the agent's trust score.
+The violation flow is optional and deployment-dependent. Confirm the live contract and event status before relying on it for Base enforcement or trust scoring.
 
 ### Violation Types
 
 | Type | Penalty | Trigger |
 |:---|:---|:---|
-| `gap` (fault) | -150 trust score | No proof activity for 30+ minutes during active session |
-| `burst` (breach) | -500 trust score | Abnormal spike in proof submissions |
+| `gap` (fault) | Deployment-defined | Potential inactive-session gap |
+| `burst` (breach) | Deployment-defined | Potential abnormal submission pattern |
 
-Smart contracts: [XProofViolations.sol](https://github.com/jasonxkensei/xProof/blob/main/contracts/XProofViolations.sol) | [ViolationWatcher.sol](https://github.com/jasonxkensei/xProof/blob/main/contracts/ViolationWatcher.sol)
+Legacy compatibility contract paths: [XProofViolations.sol](https://github.com/jasonxkensei/xProof/blob/main/contracts/XProofViolations.sol) | [ViolationWatcher.sol](https://github.com/jasonxkensei/xProof/blob/main/contracts/ViolationWatcher.sol)
 
-Docs: [https://xproof.app/docs/base-violations](https://xproof.app/docs/base-violations)
+Docs: [https://provebeforeact.com/docs/base-violations](https://provebeforeact.com/docs/base-violations)
 
 ---
 
 ## 10. Agent Proof Standard
 
-xProof implements the open Agent Proof Standard -- a composable, chain-agnostic format for agent accountability.
+Prove Before Act implements the open Agent Proof Standard -- a composable, chain-agnostic format for agent accountability.
 
 Full specification: [AGENT_PROOF_STANDARD.md](https://github.com/jasonxkensei/xProof/blob/main/AGENT_PROOF_STANDARD.md)
 
@@ -260,31 +281,31 @@ Standard API: `GET /api/standard` | `GET /api/standard/validate` (POST)
 
 ```bash
 # Hash locally first -- the original content must never leave your environment.
-# xproof only receives the SHA-256 hex hash, filename, and metadata you choose to share.
+# Prove Before Act only receives the SHA-256 hex hash, filename, and metadata you choose to share.
 sha256sum myfile.pdf | awk '{print $1}'
 # Then POST the hash to /api/proof
 
 # Anchor via MCP
-curl -X POST https://xproof.app/mcp \
+curl -X POST https://provebeforeact.com/mcp \
   -H "Authorization: Bearer pm_..." \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"certify_file","arguments":{"file_hash":"...","filename":"myfile.pdf"}}}'
 
 # Verify a proof
-curl https://xproof.app/api/proof/<proof_id>
+curl https://provebeforeact.com/api/proof/<proof_id>
 
 # Get badge (embed in README)
-![xProof](https://xproof.app/badge/<proof_id>)
+![Prove Before Act](https://provebeforeact.com/badge/<proof_id>)
 
 # Batch anchor
-curl -X POST https://xproof.app/api/batch \
+curl -X POST https://provebeforeact.com/api/batch \
   -H "Authorization: Bearer pm_..." \
   -d '{"files":[{"file_hash":"...","filename":"a.txt"},{"file_hash":"...","filename":"b.txt"}]}'
 
 # Close the WHY→WHAT coherence loop (after check_coherence + certify_file)
-curl -X POST https://xproof.app/api/coherence/link \
+curl -X POST https://provebeforeact.com/api/coherence/link \
   -H "Authorization: Bearer pm_..." \
   -d '{"why_proof_id":"<why-uuid>","what_proof_id":"<what-uuid>"}'
 
 # Health check
-curl https://xproof.app/api/acp/health
+curl https://provebeforeact.com/api/acp/health
 ```
