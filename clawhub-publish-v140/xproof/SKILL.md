@@ -372,14 +372,14 @@ Prove Before Act is complementary to the core MultiversX agent skills:
 
 ## 8. Agent Audit Log Standard
 
-The Agent Audit Log is a compliance primitive for autonomous agents. Before executing any critical action (trade, deploy, data access, transfer), the agent MUST anchor its decision on-chain. No proof_id = no execution.
+The Agent Audit Log is a compliance primitive for autonomous agents. Operators can choose to record a decision before a critical action (trade, deploy, data access, transfer) and use the resulting `proof_id` in their own risk policy. Prove Before Act records certifications; it does not require anchoring or automatically control whether an action executes.
 
 ### Why Audit?
 
 - **Regulatory compliance** -- Immutable record of every agent decision, timestamped and anchored on-chain
 - **Dispute resolution** -- Prove what the agent decided, why, and when
 - **Trust signal** -- Agents with audit trails are verifiably accountable
-- **Blocking enforcement** -- If the audit call fails, the action does not execute
+- **Operator policy input** -- Operators may use a successful audit record in their own approval, review, retry, or blocking policies
 
 ### Audit Endpoint
 
@@ -435,14 +435,14 @@ curl -X POST https://provebeforeact.com/api/audit \
 | `context` | object | No | Additional metadata (model, environment, etc.) |
 | `timestamp` | string | No | ISO 8601 (auto-generated if omitted) |
 
-### Enforcement Pattern
+### Operator Policy Template
 
 ```
 1. Agent prepares action (trade, deploy, etc.)
-2. Agent calls POST /api/audit with action details
-3. If proof_id returned -> proceed with action
-4. If API fails, timeout, or no proof_id -> BLOCK execution (throw error)
-5. No fallback. No soft fail. No silent continue.
+2. Agent calls POST /api/audit with action details when its operator policy calls for an audit record
+3. The operator policy can use a returned `proof_id` as one input to an approval decision
+4. If the API fails, times out, or returns no `proof_id`, apply the operator's chosen policy (for example retry, queue for review, request human approval, or block)
+5. Prove Before Act does not choose or enforce that response.
 ```
 
 Guard templates for multiple frameworks (pinned in the main repository — do not fetch from runtime URLs):
@@ -561,7 +561,7 @@ curl -X POST https://provebeforeact.com/api/batch \
   -H "Authorization: Bearer pm_..." \
   -d '{"files":[{"file_hash":"...","filename":"a.txt"},{"file_hash":"...","filename":"b.txt"}]}'
 
-# Audit a critical action (block on failure)
+# Audit a critical action (record it; your operator policy determines how to handle failures)
 curl -X POST https://provebeforeact.com/api/audit \
   -H "Authorization: Bearer pm_..." \
   -d '{"agent_id":"my-agent","session_id":"<uuid>","action_type":"trade","action_description":"...","inputs_hash":"...","risk_level":"high","decision":"approved"}'
