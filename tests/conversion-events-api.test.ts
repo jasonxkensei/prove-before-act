@@ -15,7 +15,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import crypto from "crypto";
 import { pool } from "../server/db";
 
-const BASE = "http://127.0.0.1:5000";
+const BASE = process.env.TEST_BASE_URL || "http://127.0.0.1:5000";
 
 // Unique marker so we can find rows created by this test run via ip_hash
 // seeding (aggregation tests) without interfering with real telemetry.
@@ -26,6 +26,18 @@ function seededHash(tag: string): string {
   const h = crypto.createHash("sha256").update(`cta-test-${RUN_TAG}-${tag}`).digest("hex");
   seededIpHashes.push(h);
   return h;
+}
+
+function telemetryHashForIp(ip: string): string {
+  const secret = process.env.SESSION_SECRET;
+  if (!secret) throw new Error("SESSION_SECRET is required for conversion telemetry tests");
+  const hash = crypto
+    .createHmac("sha256", secret)
+    .update("pba-conversion-visitor-v1\0")
+    .update(ip, "utf8")
+    .digest("hex");
+  seededIpHashes.push(hash);
+  return hash;
 }
 
 async function insertCtaEvent(ipHash: string, outcome: "seen" | "clicked") {
@@ -39,6 +51,24 @@ async function insertCtaEvent(ipHash: string, outcome: "seen" | "clicked") {
 async function countRows(where: string, params: unknown[]): Promise<number> {
   const r = await pool.query(`SELECT COUNT(*)::int AS n FROM conversion_events WHERE ${where}`, params);
   return r.rows[0].n as number;
+}
+
+async function waitForOutcomeRows(ipHash: string, stage: "registration" | "proof") {
+  let rows: Array<Record<string, unknown>> = [];
+  for (let i = 0; i < 30; i++) {
+    const result = await pool.query(
+      `SELECT event_type, stage, outcome, http_status, http_class, ip_hash,
+              referrer_host, utm_source, to_jsonb(conversion_events) AS stored_event
+       FROM conversion_events
+       WHERE ip_hash = $1 AND stage = $2
+       ORDER BY id`,
+      [ipHash, stage],
+    );
+    rows = result.rows;
+    if (rows.length >= 2) return rows;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return rows;
 }
 
 afterAll(async () => {
@@ -119,6 +149,73 @@ describe("POST /api/conversion-events", () => {
       });
       expect(res.status).toBe(400);
     }
+  });
+});
+
+// ── Registration / proof request-outcome telemetry ───────────────────────────
+
+describe("conversion outcome middleware", () => {
+  it("records registration started + final 4xx outcome without request payload data", async () => {
+    const ip = `198.51.100.${Number.parseInt(RUN_TAG.slice(0, 2), 16)}`;
+    const ipHash = telemetryHashForIp(ip);
+    const res = await fetch(`${BASE}/api/agent/register`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        // getClientIp intentionally uses the rightmost proxy-attested value.
+        "X-Forwarded-For": `203.0.113.1, ${ip}`,
+      },
+      body: JSON.stringify({}), // Invalid registration: validate the final failure path.
+    });
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(res.status).toBeLessThan(500);
+
+    const rows = await waitForOutcomeRows(ipHash, "registration");
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row) => ({
+      event_type: row.event_type,
+      outcome: row.outcome,
+      http_status: row.http_status,
+      http_class: row.http_class,
+    }))).toEqual([
+      { event_type: "registration_request", outcome: "started", http_status: null, http_class: "0xx" },
+      { event_type: "registration_request", outcome: "failure", http_status: res.status, http_class: "4xx" },
+    ]);
+
+    // The telemetry row is deliberately an allow-list: prove no raw request
+    // body, raw IP, URL, cookie, or user-agent can be retained by this path.
+    expect(Object.keys(rows[0].stored_event as object).sort()).toEqual([
+      "created_at", "event_type", "http_class", "http_status", "id", "ip_hash",
+      "outcome", "referrer_host", "stage", "traffic_segment", "utm_source",
+    ]);
+  });
+
+  it("records proof started + final 4xx outcome even when authentication rejects it", async () => {
+    const ip = `198.51.101.${Number.parseInt(RUN_TAG.slice(2, 4), 16)}`;
+    const ipHash = telemetryHashForIp(ip);
+    const res = await fetch(`${BASE}/api/proof`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer pm_not_a_real_key",
+        "X-Forwarded-For": `203.0.113.1, ${ip}`,
+      },
+      body: JSON.stringify({ file_name: "must-not-be-stored.json", secret: "must-not-be-stored" }),
+    });
+    expect(res.status).toBe(401);
+
+    const rows = await waitForOutcomeRows(ipHash, "proof");
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row) => ({
+      event_type: row.event_type,
+      outcome: row.outcome,
+      http_status: row.http_status,
+      http_class: row.http_class,
+    }))).toEqual([
+      { event_type: "proof_request", outcome: "started", http_status: null, http_class: "0xx" },
+      { event_type: "proof_request", outcome: "failure", http_status: 401, http_class: "4xx" },
+    ]);
+    expect(JSON.stringify(rows.map((row) => row.stored_event))).not.toContain("must-not-be-stored");
   });
 });
 

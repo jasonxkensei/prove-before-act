@@ -21,8 +21,13 @@ export function trackAgentCta(event: CtaEvent, page: CtaPage, cta: CtaName) {
   const body = JSON.stringify({ event, page, cta });
   try {
     if (navigator.sendBeacon) {
-      navigator.sendBeacon("/api/conversion-events", new Blob([body], { type: "application/json" }));
-      return;
+      const accepted = navigator.sendBeacon(
+        "/api/conversion-events",
+        new Blob([body], { type: "application/json" }),
+      );
+      // A false return means the browser rejected the beacon from its queue.
+      // Fall through to fetch so an exposure/click does not silently vanish.
+      if (accepted) return;
     }
     void fetch("/api/conversion-events", {
       method: "POST",

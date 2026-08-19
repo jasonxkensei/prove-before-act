@@ -6,6 +6,8 @@ name: App CI
 #   2. partner contract tests — live pba_*/xproof_* alias parity across the
 #      SIGIL/BNB/ElizaOS/xAI/MPP endpoints plus OpenAPI spec-vs-response
 #      contract checks. These are the release gates for partner field changes.
+#   3. conversion telemetry regression tests — browser CTA delivery, server
+#      request-outcome rows, and the protected admin funnel/alerts endpoint.
 
 on:
   push:
@@ -83,8 +85,14 @@ jobs:
           tail -100 server.log >&2
           exit 1
 
-      - name: Run partner contract tests
-        run: npx vitest run tests/partner-pba-alias-parity.test.ts tests/openapi-partner-contract.test.ts
+      - name: Run partner and conversion regression suites
+        run: >-
+          npx vitest run
+          tests/partner-pba-alias-parity.test.ts
+          tests/openapi-partner-contract.test.ts
+          tests/conversion-cta-tracking.test.ts
+          tests/conversion-events-api.test.ts
+          tests/conversion-funnel-admin.test.ts
 
       - name: Show server log on failure
         if: failure()

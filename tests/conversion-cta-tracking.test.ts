@@ -109,6 +109,24 @@ describe("trackAgentCta", () => {
       cta: "leaderboard_register",
     });
   });
+
+  it("falls back to fetch when sendBeacon rejects the event", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(new Response(null, { status: 202 }));
+    vi.stubGlobal("navigator", { sendBeacon: vi.fn(() => false) });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    trackAgentCta("cta_clicked", "leaderboard", "leaderboard_register");
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0];
+    expect(url).toBe("/api/conversion-events");
+    expect(init.keepalive).toBe(true);
+    expect(JSON.parse(init.body)).toEqual({
+      event: "cta_clicked",
+      page: "leaderboard",
+      cta: "leaderboard_register",
+    });
+  });
 });
 
 // ── Landing-page wiring guards ───────────────────────────────────────────────
