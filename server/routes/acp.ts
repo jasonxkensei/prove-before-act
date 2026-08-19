@@ -1096,11 +1096,11 @@ export function registerAcpRoutes(app: Express) {
     const openApiSpec = {
       openapi: "3.0.3",
       info: {
-        title: "xproof ACP - Agent Commerce Protocol",
-        description: "API for AI agents to certify files on MultiversX blockchain. Create immutable proofs of file ownership with a simple API call. Supports x402 payment protocol (HTTP 402) as an alternative to API key auth — send requests to POST /api/proof or POST /api/batch without an API key, receive 402 with payment requirements, sign payment in USDC on Base (eip155:8453), and resend with X-PAYMENT header.",
-        version: "1.0.0",
+        title: "Prove Before Act ACP - Agent Commerce Protocol",
+        description: "API for AI agents to certify files on MultiversX blockchain. Create immutable proofs of file ownership with a simple API call. Supports x402 payment protocol (HTTP 402) as an alternative to API key auth — send requests to POST /api/proof or POST /api/batch without an API key, receive 402 with payment requirements, sign payment in USDC on Base (eip155:8453), and resend with X-PAYMENT header. Note: the product id 'xproof-certification' and the checkout message prefix 'xproof-acp-checkout' are stable legacy wire identifiers kept for backward compatibility (the service was formerly named xproof).",
+        version: "1.1.0",
         contact: {
-          name: "xproof Support",
+          name: "Prove Before Act Support",
           url: baseUrl,
         },
       },
@@ -1174,7 +1174,7 @@ export function registerAcpRoutes(app: Express) {
                   tx_payload: {
                     type: "object",
                     properties: {
-                      receiver: { type: "string", description: "xproof wallet address" },
+                      receiver: { type: "string", description: "Prove Before Act payment wallet address" },
                       data: { type: "string", description: "Base64 encoded transaction data" },
                       value: { type: "string", description: "EGLD amount in atomic units (1 EGLD = 10^18)" },
                       gas_limit: { type: "integer", example: 100000 },
@@ -1223,6 +1223,51 @@ export function registerAcpRoutes(app: Express) {
             properties: {
               error: { type: "string" },
               message: { type: "string" },
+            },
+          },
+          ViolationCounts: {
+            type: "object",
+            nullable: true,
+            description: "On-chain violation counters for the linked agent (null when no wallet is linked)",
+            properties: {
+              fault: { type: "integer", example: 0 },
+              breach: { type: "integer", example: 0 },
+              proposed: { type: "integer", example: 0 },
+            },
+          },
+          PbaTrustLayer: {
+            type: "object",
+            description: "Prove Before Act trust layer (WHAT/WHEN/WHY provenance on MultiversX). All partner integration endpoints expose these pba_* fields as the primary contract. Matching xproof_* fields are deprecated legacy aliases kept for backward compatibility and will not receive new sub-fields.",
+            properties: {
+              pba_linked: { type: "boolean", description: "Whether any public certifications are linked to this partner identity" },
+              pba_wallet: { type: "string", nullable: true, description: "Linked MultiversX wallet (erd1...), null unless the owner has a public profile", example: "erd1..." },
+              pba_certs_linked: { type: "integer", description: "Number of public certifications linked to this partner identity" },
+              pba_trust_score: { type: "integer", nullable: true, description: "Prove Before Act trust score of the linked agent" },
+              pba_trust_level: { type: "string", nullable: true, enum: ["Newcomer", "Active", "Trusted", "Verified"], description: "Trust level derived from the trust score" },
+              pba_violations: { $ref: "#/components/schemas/ViolationCounts" },
+              xproof_linked: { type: "boolean", deprecated: true, description: "Deprecated legacy alias of pba_linked" },
+              xproof_wallet: { type: "string", nullable: true, deprecated: true, description: "Deprecated legacy alias of pba_wallet" },
+              xproof_certs_linked: { type: "integer", deprecated: true, description: "Deprecated legacy alias of pba_certs_linked" },
+              xproof_trust_score: { type: "integer", nullable: true, deprecated: true, description: "Deprecated legacy alias of pba_trust_score" },
+              xproof_trust_level: { type: "string", nullable: true, deprecated: true, description: "Deprecated legacy alias of pba_trust_level" },
+              xproof_violations: { allOf: [{ $ref: "#/components/schemas/ViolationCounts" }], deprecated: true, description: "Deprecated legacy alias of pba_violations" },
+            },
+          },
+          ProveBeforeActTrust: {
+            type: "object",
+            nullable: true,
+            description: "Prove Before Act trust object (primary key: \"prove-before-act\"). The sibling \"xproof\" key is a deprecated legacy alias with the same shape.",
+            properties: {
+              wallet: { type: "string", nullable: true, example: "erd1..." },
+              trust_score: { type: "integer", nullable: true },
+              trust_level: { type: "string", nullable: true, enum: ["Newcomer", "Active", "Trusted", "Verified"] },
+              total_certs: { type: "integer", nullable: true },
+              certs_last_30d: { type: "integer", nullable: true },
+              streak_weeks: { type: "integer", nullable: true },
+              transparency_tier: { type: "string", nullable: true },
+              violations: { $ref: "#/components/schemas/ViolationCounts" },
+              profile_url: { type: "string", format: "uri", nullable: true },
+              trust_badge_svg: { type: "string", format: "uri", nullable: true },
             },
           },
         },
@@ -1614,6 +1659,213 @@ export function registerAcpRoutes(app: Express) {
               "401": { description: "API key required" },
               "402": { description: "Payment required — trial exhausted or no credits (x402 protocol response body includes payment instructions)" },
               "429": { description: "Rate limit exceeded" },
+            },
+          },
+        },
+        "/api/sigil/{public_key}": {
+          get: {
+            summary: "SIGIL Protocol partner lookup",
+            description: "Cross-references a SIGIL Protocol identity (WHO — Solana receipt chain) with the Prove Before Act trust layer (WHAT/WHEN/WHY on MultiversX). Public, no authentication. Primary fields use the pba_* prefix; matching xproof_* fields are deprecated legacy aliases.",
+            security: [],
+            parameters: [
+              { name: "public_key", in: "path", required: true, schema: { type: "string" }, description: "SIGIL public key" },
+            ],
+            responses: {
+              "200": {
+                description: "SIGIL identity with Prove Before Act trust data",
+                content: {
+                  "application/json": {
+                    schema: {
+                      allOf: [
+                        { $ref: "#/components/schemas/PbaTrustLayer" },
+                        {
+                          type: "object",
+                          properties: {
+                            sigil_public_key: { type: "string" },
+                            sigil_reachable: { type: "boolean" },
+                            sigil_profile: { type: "string", format: "uri" },
+                            sigil_glyph: { type: "string", format: "uri" },
+                            persistence_score: { type: "number", nullable: true },
+                            receipt_count: { type: "integer", nullable: true },
+                            critical_pass: { type: "boolean", nullable: true },
+                            confidence: { type: "number", nullable: true },
+                            convergence: { type: "object", description: "What each layer anchors (pba_anchors is primary; xproof_anchors is a deprecated alias)" },
+                            verify_urls: { type: "object", description: "Cross-reference links (pba_leaderboard, pba_profile, pba_violations; xproof_* aliases deprecated)" },
+                            schema_version: { type: "string", example: "1.0" },
+                            source: { type: "string", example: "provebeforeact.com" },
+                            partner: { type: "string", example: "sigilprotocol.xyz" },
+                          },
+                        },
+                      ],
+                    },
+                  },
+                },
+              },
+              "400": { description: "Invalid public key" },
+            },
+          },
+        },
+        "/api/bnb/{address}": {
+          get: {
+            summary: "BNB Chain partner lookup",
+            description: "Cross-chain bridge lookup: links a BNB Chain (EVM 0x) address to Prove Before Act proof provenance on MultiversX. Public, no authentication. Primary fields use the pba_* prefix; matching xproof_* fields are deprecated legacy aliases.",
+            security: [],
+            parameters: [
+              { name: "address", in: "path", required: true, schema: { type: "string", pattern: "^0x[a-fA-F0-9]{40}$" }, description: "BNB Chain (EVM) address" },
+            ],
+            responses: {
+              "200": {
+                description: "BNB address with Prove Before Act trust data",
+                content: {
+                  "application/json": {
+                    schema: {
+                      allOf: [
+                        { $ref: "#/components/schemas/PbaTrustLayer" },
+                        {
+                          type: "object",
+                          properties: {
+                            bnb_address: { type: "string" },
+                            pba_certs_confirmed_on_chain: { type: "integer" },
+                            pba_streak_weeks: { type: "integer", nullable: true },
+                            xproof_certs_confirmed_on_chain: { type: "integer", deprecated: true, description: "Deprecated legacy alias of pba_certs_confirmed_on_chain" },
+                            xproof_streak_weeks: { type: "integer", nullable: true, deprecated: true, description: "Deprecated legacy alias of pba_streak_weeks" },
+                            first_linked_at: { type: "string", format: "date-time", nullable: true },
+                            last_linked_at: { type: "string", format: "date-time", nullable: true },
+                            bridge: { type: "object", description: "Cross-chain bridge description" },
+                            links: { type: "object", description: "pba_profile, pba_leaderboard, trust_badge_svg, violations_api (xproof_* aliases deprecated)" },
+                            schema_version: { type: "string", example: "1.0" },
+                            source: { type: "string", example: "provebeforeact.com" },
+                            partner: { type: "string", example: "bnbchain-skills" },
+                          },
+                        },
+                      ],
+                    },
+                  },
+                },
+              },
+              "400": { description: "Invalid address" },
+            },
+          },
+        },
+        "/api/eliza/{identifier}": {
+          get: {
+            summary: "ElizaOS partner lookup",
+            description: "Bridges an ElizaOS character identity (WHO) with Prove Before Act proof anchoring (WHAT/WHEN/WHY). Accepts a MultiversX wallet (erd1...) or an ElizaOS character UUID. Public, no authentication. The primary trust object is under the \"prove-before-act\" key; the sibling \"xproof\" key is a deprecated legacy alias.",
+            security: [],
+            parameters: [
+              { name: "identifier", in: "path", required: true, schema: { type: "string" }, description: "ElizaOS character UUID or MultiversX wallet address" },
+            ],
+            responses: {
+              "200": {
+                description: "ElizaOS character with Prove Before Act trust data",
+                content: {
+                  "application/json": {
+                    schema: {
+                      type: "object",
+                      properties: {
+                        identifier: { type: "string" },
+                        lookup_mode: { type: "string", enum: ["wallet", "character_id"] },
+                        eliza_linked: { type: "boolean" },
+                        character: { type: "object", nullable: true, description: "Certified character stats (sessions, action types, timestamps)" },
+                        "prove-before-act": { $ref: "#/components/schemas/ProveBeforeActTrust" },
+                        xproof: { allOf: [{ $ref: "#/components/schemas/ProveBeforeActTrust" }], deprecated: true, description: "Deprecated legacy alias of the \"prove-before-act\" key (same shape and values)" },
+                        convergence: { type: "object", description: "pba_anchors is primary; xproof_anchors is a deprecated alias" },
+                        plugin_config: { type: "object", description: "Ready-to-use config (pba_api is primary; xproof_api is a deprecated alias)" },
+                        schema_version: { type: "string", example: "1.0" },
+                        source: { type: "string", example: "provebeforeact.com" },
+                        partner: { type: "string", example: "elizaos" },
+                      },
+                    },
+                  },
+                },
+              },
+              "400": { description: "Invalid identifier" },
+            },
+          },
+        },
+        "/api/xai/{identifier}": {
+          get: {
+            summary: "xAI/Grok partner lookup",
+            description: "Links an xAI/Grok agent identity (WHO) with Prove Before Act decision provenance (WHAT/WHEN/WHY). Accepts a MultiversX wallet (erd1...) or an xAI agent id. Public, no authentication. The primary trust object is under the \"prove-before-act\" key; the sibling \"xproof\" key is a deprecated legacy alias.",
+            security: [],
+            parameters: [
+              { name: "identifier", in: "path", required: true, schema: { type: "string" }, description: "xAI agent id or MultiversX wallet address" },
+            ],
+            responses: {
+              "200": {
+                description: "xAI agent with Prove Before Act trust data",
+                content: {
+                  "application/json": {
+                    schema: {
+                      type: "object",
+                      properties: {
+                        identifier: { type: "string" },
+                        lookup_mode: { type: "string", enum: ["wallet", "agent_id"] },
+                        xai_linked: { type: "boolean" },
+                        agent: { type: "object", nullable: true, description: "Certified agent stats (model, sessions, action types, timestamps)" },
+                        "prove-before-act": { $ref: "#/components/schemas/ProveBeforeActTrust" },
+                        xproof: { allOf: [{ $ref: "#/components/schemas/ProveBeforeActTrust" }], deprecated: true, description: "Deprecated legacy alias of the \"prove-before-act\" key (same shape and values)" },
+                        convergence: { type: "object", description: "pba_anchors is primary; xproof_anchors is a deprecated alias" },
+                        integration: { type: "object", description: "pba_api is primary; xproof_api is a deprecated alias" },
+                        schema_version: { type: "string", example: "1.0" },
+                        source: { type: "string", example: "provebeforeact.com" },
+                        partner: { type: "string", example: "xai" },
+                      },
+                    },
+                  },
+                },
+              },
+              "400": { description: "Invalid identifier" },
+            },
+          },
+        },
+        "/api/mpp/{payment_intent_id}": {
+          get: {
+            summary: "Machine Payments Protocol partner lookup",
+            description: "Links autonomous agent payments (HOW — Stripe/Tempo settlement) with Prove Before Act decision provenance (WHY on MultiversX). Public, no authentication. Primary fields use the pba_* prefix; matching xproof_* fields are deprecated legacy aliases.",
+            security: [],
+            parameters: [
+              { name: "payment_intent_id", in: "path", required: true, schema: { type: "string", pattern: "^[A-Za-z0-9_-]{5,128}$" }, description: "Payment intent id (e.g. Stripe pi_xxx)" },
+            ],
+            responses: {
+              "200": {
+                description: "Payment intent with Prove Before Act provenance data",
+                content: {
+                  "application/json": {
+                    schema: {
+                      type: "object",
+                      properties: {
+                        payment_intent_id: { type: "string" },
+                        mpp_linked: { type: "boolean" },
+                        mpp_network: { type: "string", nullable: true },
+                        mpp_amount: { type: "string", nullable: true },
+                        mpp_currency: { type: "string", nullable: true },
+                        pba_wallet: { type: "string", nullable: true },
+                        pba_certs_linked: { type: "integer" },
+                        pba_certs_confirmed_on_chain: { type: "integer" },
+                        pba_trust_score: { type: "integer", nullable: true },
+                        pba_trust_level: { type: "string", nullable: true },
+                        pba_violations: { $ref: "#/components/schemas/ViolationCounts" },
+                        xproof_wallet: { type: "string", nullable: true, deprecated: true, description: "Deprecated legacy alias of pba_wallet" },
+                        xproof_certs_linked: { type: "integer", deprecated: true, description: "Deprecated legacy alias of pba_certs_linked" },
+                        xproof_certs_confirmed_on_chain: { type: "integer", deprecated: true, description: "Deprecated legacy alias of pba_certs_confirmed_on_chain" },
+                        xproof_trust_score: { type: "integer", nullable: true, deprecated: true, description: "Deprecated legacy alias of pba_trust_score" },
+                        xproof_trust_level: { type: "string", nullable: true, deprecated: true, description: "Deprecated legacy alias of pba_trust_level" },
+                        xproof_violations: { allOf: [{ $ref: "#/components/schemas/ViolationCounts" }], deprecated: true, description: "Deprecated legacy alias of pba_violations" },
+                        first_linked_at: { type: "string", format: "date-time", nullable: true },
+                        last_linked_at: { type: "string", format: "date-time", nullable: true },
+                        convergence: { type: "object", description: "pba_anchors is primary; xproof_anchors is a deprecated alias" },
+                        links: { type: "object", description: "pba_profile, pba_leaderboard, trust_badge_svg, violations_api (xproof_* aliases deprecated)" },
+                        integration: { type: "object", description: "How to link a payment to a proof via metadata.mpp_payment_intent_id" },
+                        schema_version: { type: "string", example: "1.0" },
+                        source: { type: "string", example: "provebeforeact.com" },
+                        partner: { type: "string", example: "mpp" },
+                      },
+                    },
+                  },
+                },
+              },
+              "400": { description: "Invalid payment intent id" },
             },
           },
         },

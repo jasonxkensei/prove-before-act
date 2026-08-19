@@ -9,7 +9,7 @@ describe("xproof API", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.status).toBe("operational");
-      expect(body.service).toBe("xproof");
+      expect(body.service).toBe("prove-before-act");
       expect(body.version).toBeDefined();
       expect(body.timestamp).toBeDefined();
       expect(body.endpoints).toBeDefined();
@@ -20,7 +20,7 @@ describe("xproof API", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.protocol).toBe("ACP");
-      expect(body.provider).toBe("xproof");
+      expect(body.provider).toBe("prove-before-act");
       expect(body.chain).toBe("MultiversX");
       expect(Array.isArray(body.products)).toBe(true);
       expect(body.products.length).toBeGreaterThan(0);
@@ -40,13 +40,15 @@ describe("xproof API", () => {
       expect(text).toContain("xproof");
     });
 
-    it("GET /.well-known/xproof.md should return xproof specification", async () => {
-      const res = await fetch(`${BASE_URL}/.well-known/xproof.md`);
-      expect(res.status).toBe(200);
-      const contentType = res.headers.get("content-type");
-      expect(contentType).toContain("text/markdown");
-      const text = await res.text();
-      expect(text).toContain("xproof Specification");
+    it("GET /.well-known/xproof.md should redirect to the canonical provebeforeact.md", async () => {
+      const res = await fetch(`${BASE_URL}/.well-known/xproof.md`, { redirect: "manual" });
+      expect(res.status).toBe(301);
+      expect(res.headers.get("location")).toContain("/.well-known/provebeforeact.md");
+
+      const followed = await fetch(`${BASE_URL}/.well-known/xproof.md`);
+      expect(followed.status).toBe(200);
+      const text = await followed.text();
+      expect(text).toContain("Prove Before Act Specification");
     });
 
     it("GET /robots.txt should return robots content", async () => {
@@ -73,7 +75,7 @@ describe("xproof API", () => {
       const res = await fetch(`${BASE_URL}/.well-known/mcp.json`);
       expect(res.status).toBe(200);
       const body = await res.json();
-      expect(body.name).toBe("xproof");
+      expect(body.name).toBe("Prove Before Act");
       expect(body.schema_version).toBe("1.0");
       expect(body.endpoint).toBeDefined();
       expect(body.transport).toBe("streamable-http");
@@ -89,8 +91,8 @@ describe("xproof API", () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.schema_version).toBe("v1");
-      expect(body.name_for_human).toBe("xproof");
-      expect(body.name_for_model).toBe("xproof");
+      expect(body.name_for_human).toBe("Prove Before Act");
+      expect(body.name_for_model).toBe("Prove Before Act");
       expect(body.description_for_human).toBeDefined();
       expect(body.description_for_model).toBeDefined();
       expect(body.auth).toBeDefined();
@@ -218,11 +220,11 @@ describe("xproof API", () => {
   });
 
   describe("GET /api/proof/:id (public)", () => {
-    it("should return 404 for non-existent proof ID", async () => {
+    it("should return 400 for a malformed (non-UUID) proof ID", async () => {
       const res = await fetch(`${BASE_URL}/api/proof/nonexistent-id-12345`);
-      expect(res.status).toBe(404);
+      expect(res.status).toBe(400);
       const body = await res.json();
-      expect(body.message).toBeDefined();
+      expect(body.error).toBeDefined();
     });
 
     it("should return 404 for random UUID", async () => {
@@ -240,7 +242,7 @@ describe("xproof API", () => {
       const text = await res.text();
       expect(text).toContain("Not Found");
       expect(text).toContain("<svg");
-      expect(text).toContain("xproof");
+      expect(text).toContain("Prove Before Act");
     });
   });
 
@@ -251,7 +253,7 @@ describe("xproof API", () => {
       const body = await res.json();
       expect(body.openapi).toBe("3.0.3");
       expect(body.info).toBeDefined();
-      expect(body.info.title).toContain("xproof");
+      expect(body.info.title).toContain("Prove Before Act");
       expect(body.info.version).toBeDefined();
       expect(body.servers).toBeDefined();
       expect(Array.isArray(body.servers)).toBe(true);
@@ -271,7 +273,7 @@ describe("xproof API", () => {
       const res = await fetch(`${BASE_URL}/.well-known/agent.json`);
       expect(res.status).toBe(200);
       const body = await res.json();
-      expect(body.name).toBe("xproof");
+      expect(body.name).toBe("Prove Before Act");
       expect(body.version).toEqual(expect.stringMatching(/^\d+\.\d+\.\d+$/));
       expect(body.capabilities).toBeDefined();
       expect(Array.isArray(body.capabilities)).toBe(true);
@@ -566,7 +568,7 @@ describe("xproof API", () => {
     });
 
     it("4W breakdown header appears identically in /llms.txt, /llms-full.txt, and /agent-context.md", async () => {
-      const HEADER = "4W breakdown — WHO from MX-8004, WHAT/WHEN/WHY from xProof:";
+      const HEADER = "4W breakdown — WHO from MX-8004, WHAT/WHEN/WHY from Prove Before Act:";
       const [r1, r2, r3] = await Promise.all([
         fetch(`${BASE_URL}/llms.txt`).then((r) => r.text()),
         fetch(`${BASE_URL}/llms-full.txt`).then((r) => r.text()),
@@ -617,14 +619,14 @@ describe("xproof API", () => {
       ).toContain("4W Responsibility Split");
     });
 
-    it("GET /agent-context HTML table attributes WHO to MX-8004 and WHAT/WHEN/WHY to xProof — row-level binding matches canonical markdown header", async () => {
+    it("GET /agent-context HTML table attributes WHO to MX-8004 and WHAT/WHEN/WHY to Prove Before Act — row-level binding matches canonical markdown header", async () => {
       // The markdown sources encode the attribution as:
-      //   "4W breakdown — WHO from MX-8004, WHAT/WHEN/WHY from xProof:"
+      //   "4W breakdown — WHO from MX-8004, WHAT/WHEN/WHY from Prove Before Act:"
       // The HTML renders it as a <table> with one <tr> per dimension.
       // This test parses each table row and asserts the row-level provider bindings
-      // so that a swapped attribution (e.g. WHO→xProof, WHAT→MX-8004) fails
+      // so that a swapped attribution (e.g. WHO→Prove Before Act, WHAT→MX-8004) fails
       // deterministically — a pure co-occurrence check cannot catch that inversion.
-      const MARKDOWN_HEADER = "4W breakdown — WHO from MX-8004, WHAT/WHEN/WHY from xProof:";
+      const MARKDOWN_HEADER = "4W breakdown — WHO from MX-8004, WHAT/WHEN/WHY from Prove Before Act:";
 
       const [llmsTxt, llmsFullTxt, agentContextMd, agentContextHtml] = await Promise.all([
         fetch(`${BASE_URL}/llms.txt`).then((r) => r.text()),
@@ -651,18 +653,18 @@ describe("xproof API", () => {
       const whenRow = rowFor("WHEN");
       const whyRow  = rowFor("WHY");
 
-      // WHO row must name MX-8004 as the provider — not xProof.
+      // WHO row must name MX-8004 as the provider — not Prove Before Act.
       expect(whoRow,  "WHO table row must attribute WHO to MX-8004").toContain("MX-8004");
-      expect(whoRow,  "WHO table row must NOT attribute WHO to xProof (attribution inversion)").not.toContain("xProof");
+      expect(whoRow,  "WHO table row must NOT attribute WHO to Prove Before Act (attribution inversion)").not.toContain("Prove Before Act");
 
-      // WHAT, WHEN, WHY rows must each name xProof — not MX-8004.
-      expect(whatRow, "WHAT table row must attribute WHAT to xProof").toContain("xProof");
+      // WHAT, WHEN, WHY rows must each name Prove Before Act — not MX-8004.
+      expect(whatRow, "WHAT table row must attribute WHAT to Prove Before Act").toContain("Prove Before Act");
       expect(whatRow, "WHAT table row must NOT attribute WHAT to MX-8004 (attribution inversion)").not.toContain("MX-8004");
 
-      expect(whenRow, "WHEN table row must attribute WHEN to xProof").toContain("xProof");
+      expect(whenRow, "WHEN table row must attribute WHEN to Prove Before Act").toContain("Prove Before Act");
       expect(whenRow, "WHEN table row must NOT attribute WHEN to MX-8004 (attribution inversion)").not.toContain("MX-8004");
 
-      expect(whyRow,  "WHY table row must attribute WHY to xProof").toContain("xProof");
+      expect(whyRow,  "WHY table row must attribute WHY to Prove Before Act").toContain("Prove Before Act");
       expect(whyRow,  "WHY table row must NOT attribute WHY to MX-8004 (attribution inversion)").not.toContain("MX-8004");
     });
   });

@@ -71,7 +71,7 @@ Prove Before Act provides cryptographic proof of existence, authorship, and time
 
 ## Proof Object Schema (v2.0)
 
-An Prove Before Act proof consists of:
+A Prove Before Act proof consists of:
 
 \`\`\`json
 {
@@ -109,7 +109,7 @@ An Prove Before Act proof consists of:
 
 The \`canonical_id\` follows the format: \`xproof:mvx:{network}:tx:{transaction_hash}\`
 
-- \`Prove Before Act\` - Protocol prefix
+- \`xproof\` - Protocol prefix (stable legacy wire identifier from the former xproof brand, kept so existing canonical IDs remain valid)
 - \`mvx\` - MultiversX blockchain
 - \`{network}\` - \`mainnet\`, \`devnet\`, or \`testnet\`
 - \`tx\` - Transaction type
@@ -128,7 +128,7 @@ Note: Fields marked as optional may not be present in all proofs.
 
 ## Verification Process
 
-To verify an Prove Before Act proof:
+To verify a Prove Before Act proof:
 
 1. Obtain the original file
 2. Compute its SHA-256 hash locally
@@ -2706,7 +2706,7 @@ Without proof, any agent output — code, data, models, reports — has no verif
 
 ### Canonical Identifier Format
 Format: \`xproof:mvx:{network}:tx:{transaction_hash}\`
-- \`Prove Before Act\` - Protocol prefix
+- \`xproof\` - Protocol prefix (stable legacy wire identifier from the former xproof brand, kept so existing canonical IDs remain valid)
 - \`mvx\` - MultiversX blockchain
 - \`{network}\` - mainnet, devnet, or testnet
 - \`tx:{hash}\` - On-chain transaction hash
