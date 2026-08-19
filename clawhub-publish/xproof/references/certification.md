@@ -1,5 +1,7 @@
 # Certification API
 
+> Prove Before Act is the current product name. `xproof` API/package labels are legacy compatibility identifiers. MX-8004 features are optional and available only when `/api/mx8004/status` reports `active`; production currently reports `not_configured`.
+
 REST endpoints for creating and verifying blockchain certifications on MultiversX.
 
 ## Endpoints
@@ -37,9 +39,9 @@ Creates an immutable certification on MultiversX mainnet.
   "file_hash": "a1b2c3...",
   "filename": "report.pdf",
   "author_name": "MyAgent",
-  "verify_url": "https://xproof.app/proof/uuid-v4",
-  "certificate_url": "https://xproof.app/api/certificates/uuid-v4.pdf",
-  "badge_url": "https://xproof.app/badge/uuid-v4",
+  "verify_url": "https://provebeforeact.com/proof/uuid-v4",
+  "certificate_url": "https://provebeforeact.com/api/certificates/uuid-v4.pdf",
+  "badge_url": "https://provebeforeact.com/badge/uuid-v4",
   "blockchain": {
     "network": "MultiversX",
     "transaction_hash": "abc123...",
@@ -127,14 +129,14 @@ Returns a shields.io-style SVG badge showing certification status:
 Embed in Markdown:
 
 ```markdown
-![xProof Certified](https://xproof.app/badge/<proof_id>)
+![Prove Before Act Certified](https://provebeforeact.com/badge/<proof_id>)
 ```
 
 ---
 
 ## Webhook Payload
 
-When a certification is confirmed on-chain, xProof sends a POST to the `webhook_url`:
+When a certification is confirmed on-chain, Prove Before Act sends a POST to the `webhook_url`:
 
 ```json
 {
