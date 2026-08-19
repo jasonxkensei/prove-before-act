@@ -4,12 +4,13 @@ import { paymentRateLimiter } from "../reliability";
 import { createMcpServer, authenticateApiKey } from "../mcp";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { getClientIp } from "../routes/helpers";
+import { CANONICAL_PUBLIC_ORIGIN } from "../publicOrigin";
 
 export function registerMcpRoutesRoutes(app: Express) {
   app.post("/mcp", paymentRateLimiter, async (req, res) => {
     try {
       const auth = await authenticateApiKey(req.headers.authorization);
-      const baseUrl = `https://${req.get('host')}`;
+      const baseUrl = CANONICAL_PUBLIC_ORIGIN;
 
       const method = req.body?.method;
       const toolName = req.body?.params?.name;

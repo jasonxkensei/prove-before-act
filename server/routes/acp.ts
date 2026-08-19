@@ -12,6 +12,7 @@ import { isMX8004Configured, recordCertificationAsJob } from "../mx8004";
 import { isAdminWallet, getApiKeyOwnerWallet, getNetworkLabel, buildCanonicalId, validateApiKey } from "./helpers";
 import { Address } from "@multiversx/sdk-core";
 import { pgCheckRateLimit } from "../pgRateLimit";
+import { CANONICAL_PUBLIC_ORIGIN } from "../publicOrigin";
 
 // Bounds how many unpaid ACP checkouts a single proven payer wallet may create within the
 // window. Deliberately independent of the generic per-API-key rate limiter, since the DoS
@@ -1089,7 +1090,7 @@ export function registerAcpRoutes(app: Express) {
 
   // OpenAPI 3.0 Specification for ACP
   app.get("/api/acp/openapi.json", publicReadRateLimiter, async (req, res) => {
-    const baseUrl = `https://${req.get("host")}`;
+    const baseUrl = CANONICAL_PUBLIC_ORIGIN;
     const priceUsd = await getCertificationPriceUsd();
 
     const openApiSpec = {
@@ -1657,7 +1658,7 @@ export function registerAcpRoutes(app: Express) {
     significance: "This is the first certification ever created on xproof, establishing the genesis of the platform."
   };
 
-  // /.well-known/xproof.md - Canonical specification
+  // The legacy xproof.md compatibility alias is registered by content routes.
 
   app.get("/api/acp/health", (req, res) => {
     const mx8004 = isMX8004Configured();

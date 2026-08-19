@@ -9,6 +9,7 @@ import { AUDIT_LOG_JSON_SCHEMA } from "../auditSchema";
 import { isMX8004Configured, getContractAddresses } from "../mx8004";
 import { TRIAL_QUOTA, getNetworkLabel, buildCanonicalId } from "./helpers";
 import { getTxExplorerUrl } from "../blockchain";
+import { CANONICAL_PUBLIC_ORIGIN } from "../publicOrigin";
 
 export function registerContentRoutes(app: Express) {
   const GENESIS_CERTIFICATION = {
@@ -41,8 +42,8 @@ export function registerContentRoutes(app: Express) {
     significance: "This is the first certification ever created on Prove Before Act, establishing the genesis of the platform."
   };
 
-  app.get("/.well-known/xproof.md", async (req, res) => {
-    const baseUrl = `https://${req.get('host')}`;
+  app.get("/.well-known/provebeforeact.md", async (_req, res) => {
+    const baseUrl = CANONICAL_PUBLIC_ORIGIN;
     const priceUsd = await getCertificationPriceUsd();
     
     const spec = `# Prove Before Act Specification v1.0
@@ -1021,14 +1022,14 @@ Website: ${baseUrl}
     res.send(spec);
   });
 
-  // /.well-known/provebeforeact.md — canonical new URL, serves the same spec
-  app.get("/.well-known/provebeforeact.md", (req, res) => {
-    res.redirect(301, "/.well-known/xproof.md");
+  // xproof.md remains a permanent compatibility alias for existing agents.
+  app.get("/.well-known/xproof.md", (_req, res) => {
+    res.redirect(301, "/.well-known/provebeforeact.md");
   });
 
-  // /.well-known/proofmint.md - Redirect to xproof.md for backwards compatibility
-  app.get("/.well-known/proofmint.md", (req, res) => {
-    res.redirect(301, "/.well-known/xproof.md");
+  // proofmint.md remains a permanent compatibility alias for existing agents.
+  app.get("/.well-known/proofmint.md", (_req, res) => {
+    res.redirect(301, "/.well-known/provebeforeact.md");
   });
 
   // /.well-known/agent-audit-schema.json - Canonical Agent Audit Log JSON Schema
@@ -1092,7 +1093,7 @@ This genesis certification demonstrates:
 ## Machine-Readable
 
 - JSON: ${baseUrl}/genesis.proof.json
-- Specification: ${baseUrl}/.well-known/xproof.md
+- Specification: ${baseUrl}/.well-known/provebeforeact.md
 `;
 
     res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
@@ -1447,7 +1448,7 @@ Proof of Existence is a cryptographic method to prove that a specific digital ar
 
 - [Verification Guide](/learn/verification.md)
 - [API Documentation](/learn/api.md)
-- [Prove Before Act Specification](/.well-known/xproof.md)
+- [Prove Before Act Specification](/.well-known/provebeforeact.md)
 `;
 
     res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
@@ -1676,7 +1677,7 @@ Confirm certification after transaction.
 
 - [Proof of Existence](/learn/proof-of-existence.md)
 - [Verification Guide](/learn/verification.md)
-- [Prove Before Act Specification](/.well-known/xproof.md)
+- [Prove Before Act Specification](/.well-known/provebeforeact.md)
 `;
 
     res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
@@ -1685,7 +1686,7 @@ Confirm certification after transaction.
 
   // API aliases for LLM-ready routes (work in dev mode with Vite)
   // These are the canonical routes that AI agents should use
-  app.get("/api/spec", (req, res) => res.redirect("/.well-known/xproof.md"));
+  app.get("/api/spec", (_req, res) => res.redirect(301, "/.well-known/provebeforeact.md"));
   app.get("/api/genesis", (req, res) => res.redirect("/genesis.proof.json"));
   app.get("/api/genesis.md", (req, res) => res.redirect("/genesis.md"));
   app.get("/api/learn/proof-of-existence", (req, res) => res.redirect("/learn/proof-of-existence.md"));
@@ -1892,9 +1893,9 @@ Blocking workflow templates (agent CANNOT continue without proof_id):
 MCP tool: audit_agent_session (same params, enforces auth)
 
 ## More
-- Compact discovery: ${baseUrl}/.well-known/xproof.json
+- Compact discovery: ${baseUrl}/.well-known/provebeforeact.json
 - Full docs: ${baseUrl}/llms.txt
-- Specification: ${baseUrl}/.well-known/xproof.md
+- Specification: ${baseUrl}/.well-known/provebeforeact.md
 - OpenAPI: ${baseUrl}/api/acp/openapi.json
 - MCP endpoint: ${baseUrl}/mcp
 - Audit Log Schema: ${baseUrl}/.well-known/agent-audit-schema.json
@@ -1925,8 +1926,8 @@ Sitemap: ${baseUrl}/sitemap.xml
 # /skill.md - Agent skill (start here, plain text, no JS needed)
 # /llms.txt - LLM-friendly summary
 # /llms-full.txt - Extended LLM documentation
-# /.well-known/xproof.json - Compact machine-readable discovery (JSON)
-# /.well-known/xproof.md - Full specification (Markdown)
+# /.well-known/provebeforeact.json - Compact machine-readable discovery (JSON)
+# /.well-known/provebeforeact.md - Full specification (Markdown)
 # /.well-known/agent.json - Agent Protocol manifest
 # /.well-known/ai-plugin.json - OpenAI plugin manifest
 # /.well-known/mcp.json - Model Context Protocol manifest
@@ -1987,8 +1988,8 @@ ${urls}
   });
 
   // OpenAI ChatGPT Plugin manifest (/.well-known/ai-plugin.json)
-  app.get("/.well-known/ai-plugin.json", async (req, res) => {
-    const baseUrl = `https://${req.get('host')}`;
+  app.get("/.well-known/ai-plugin.json", async (_req, res) => {
+    const baseUrl = CANONICAL_PUBLIC_ORIGIN;
     const priceUsd = await getCertificationPriceUsd();
     const manifest = {
       schema_version: "v1",
@@ -2016,8 +2017,8 @@ ${urls}
   });
 
   // MCP (Model Context Protocol) server info endpoint
-  app.get("/.well-known/mcp.json", async (req, res) => {
-    const baseUrl = `https://${req.get('host')}`;
+  app.get("/.well-known/mcp.json", async (_req, res) => {
+    const baseUrl = CANONICAL_PUBLIC_ORIGIN;
     const priceUsd = await getCertificationPriceUsd();
     res.json({
       schema_version: "1.0",
@@ -2154,7 +2155,7 @@ ${urls}
       resources: [
         { uri: `${baseUrl}/api/acp/products`, name: "Service catalog", mimeType: "application/json" },
         { uri: `${baseUrl}/api/acp/openapi.json`, name: "OpenAPI specification", mimeType: "application/json" },
-        { uri: `${baseUrl}/.well-known/xproof.md`, name: "Full specification", mimeType: "text/markdown" },
+        { uri: `${baseUrl}/.well-known/provebeforeact.md`, name: "Full specification", mimeType: "text/markdown" },
         { uri: `${baseUrl}/llms.txt`, name: "LLM summary", mimeType: "text/plain" },
         { uri: `${baseUrl}/genesis.proof.json`, name: "Genesis proof", mimeType: "application/json" }
       ],
@@ -2381,7 +2382,7 @@ The markdown version is optimized for LLM indexers and crawlers. It includes cop
 - [MCP Server (JSON-RPC)](/mcp)
 - [MCP Manifest](/.well-known/mcp.json)
 - [OpenAI Plugin](/.well-known/ai-plugin.json)
-- [Full Specification](/.well-known/xproof.md)
+ - [Full Specification](/.well-known/provebeforeact.md)
 
 ## x402 Payment Protocol
 Prove Before Act supports x402 (HTTP 402 Payment Required) as an alternative to API key auth. Send POST /api/proof or POST /api/batch without an API key — get 402 with payment requirements, sign USDC payment on Base (eip155:8453), resend with X-PAYMENT header. Flat $${priceUsd} per certification. No account needed.
@@ -2669,7 +2670,7 @@ Without proof, any agent output — code, data, models, reports — has no verif
 - [MCP Server (JSON-RPC)](${baseUrl}/mcp)
 - [MCP Manifest](${baseUrl}/.well-known/mcp.json)
 - [OpenAI Plugin](${baseUrl}/.well-known/ai-plugin.json)
-- [Full Specification](${baseUrl}/.well-known/xproof.md)
+ - [Full Specification](${baseUrl}/.well-known/provebeforeact.md)
 
 ## Proof Object Schema (v2.0)
 \`\`\`json
@@ -4125,15 +4126,15 @@ export const xproofAuditPlugin: Plugin = {
     res.json(spec);
   });
 
-  // /.well-known/provebeforeact.json — canonical new URL alias
-  app.get("/.well-known/provebeforeact.json", (req, res) => {
-    res.redirect(301, "/.well-known/xproof.json");
+  // xproof.json remains a permanent compatibility alias for existing agents.
+  app.get("/.well-known/xproof.json", (_req, res) => {
+    res.redirect(301, "/.well-known/provebeforeact.json");
   });
 
-  // /.well-known/xproof.json — Unified discovery entry point
+  // /.well-known/provebeforeact.json — Unified discovery entry point
   // Compact, machine-readable, fully actionable. No prose.
-  app.get("/.well-known/xproof.json", async (req, res) => {
-    const baseUrl = `https://${req.get("host")}`;
+  app.get("/.well-known/provebeforeact.json", async (_req, res) => {
+    const baseUrl = CANONICAL_PUBLIC_ORIGIN;
     const priceUsd = await getCertificationPriceUsd();
     res.json({
       v: "1.0",
@@ -4197,7 +4198,7 @@ export const xproofAuditPlugin: Plugin = {
         agent_context: `${baseUrl}/agent-context.md`,
         llms: `${baseUrl}/llms.txt`,
         full: `${baseUrl}/llms-full.txt`,
-        spec: `${baseUrl}/.well-known/xproof.md`,
+        spec: `${baseUrl}/.well-known/provebeforeact.md`,
         agent: `${baseUrl}/.well-known/agent.json`,
         openai_plugin: `${baseUrl}/.well-known/ai-plugin.json`,
         mcp_manifest: `${baseUrl}/.well-known/mcp.json`,
@@ -4205,8 +4206,8 @@ export const xproofAuditPlugin: Plugin = {
     });
   });
 
-  app.get("/.well-known/agent.json", async (req, res) => {
-    const baseUrl = `https://${req.get("host")}`;
+  app.get("/.well-known/agent.json", async (_req, res) => {
+    const baseUrl = CANONICAL_PUBLIC_ORIGIN;
     const priceUsd = await getCertificationPriceUsd();
 
     res.json({
@@ -4279,11 +4280,11 @@ export const xproofAuditPlugin: Plugin = {
       },
       documentation: {
         agent_context: `${baseUrl}/agent-context.md`,
-        specification: `${baseUrl}/.well-known/xproof.md`,
+        specification: `${baseUrl}/.well-known/provebeforeact.md`,
         api_guide: `${baseUrl}/learn/api.md`,
         verification: `${baseUrl}/learn/verification.md`,
         agents_page: `${baseUrl}/agents`,
-        compact_discovery: `${baseUrl}/.well-known/xproof.json`,
+        compact_discovery: `${baseUrl}/.well-known/provebeforeact.json`,
       },
     });
   });
@@ -4293,8 +4294,8 @@ export const xproofAuditPlugin: Plugin = {
   // Answers the 10 exact questions agents ask during discovery tests
   // ============================================
 
-  app.get("/agent-context.md", publicReadRateLimiter, async (req, res) => {
-    const baseUrl = `https://${req.get("host")}`;
+  app.get("/agent-context.md", publicReadRateLimiter, async (_req, res) => {
+    const baseUrl = CANONICAL_PUBLIC_ORIGIN;
     const priceUsd = await getCertificationPriceUsd();
 
     const doc = `---
@@ -4925,7 +4926,7 @@ Full documentation: ${baseUrl}/coherence
 ## Resources
 
 - Human-readable page: ${baseUrl}/agent-context
-- Full spec: ${baseUrl}/.well-known/xproof.md
+- Full spec: ${baseUrl}/.well-known/provebeforeact.md
 - API docs: ${baseUrl}/llms.txt
 - MCP endpoint: ${baseUrl}/mcp
 - Agent leaderboard: ${baseUrl}/leaderboard

@@ -9,6 +9,7 @@ import { generateCertificatePDF } from "../certificateGenerator";
 import { computeDrift, DRIFT_MONITORED_FIELDS } from "./helpers";
 import { IRREVERSIBLE_CONFIDENCE_THRESHOLD, buildTimingBreakdown } from "../auditSchema";
 import { getTxExplorerUrl } from "../blockchain";
+import { CANONICAL_PUBLIC_ORIGIN } from "../publicOrigin";
 
 // Hard cap on rows materialized by any public metadata-keyed lookup. Public
 // integration endpoints filter `certifications.metadata` with JSONB extraction
@@ -676,7 +677,7 @@ export function registerProofReadRoutes(app: Express) {
       const architecturalEpochs = transitions.length;
       const latestTransition = transitions.at(-1) ?? null;
 
-      const baseUrl = process.env.REPLIT_DEPLOYMENT ? "https://provebeforeact.com" : `${req.protocol}://${req.get("host")}`;
+      const baseUrl = CANONICAL_PUBLIC_ORIGIN;
 
       res.json({
         wallet,
@@ -751,7 +752,7 @@ export function registerProofReadRoutes(app: Express) {
         return res.status(400).json({ error: "Valid SIGIL public key required (10-128 chars, alphanumeric/_-)" });
       }
 
-      const baseUrl = process.env.REPLIT_DEPLOYMENT ? "https://provebeforeact.com" : `${req.protocol}://${req.get("host")}`;
+      const baseUrl = CANONICAL_PUBLIC_ORIGIN;
 
       // ── 1. Call SIGIL API (live lookup, 5s timeout, graceful fallback)
       type SigilCompact = {
@@ -916,7 +917,7 @@ export function registerProofReadRoutes(app: Express) {
         });
       }
 
-      const baseUrl = process.env.REPLIT_DEPLOYMENT ? "https://provebeforeact.com" : `${req.protocol}://${req.get("host")}`;
+      const baseUrl = CANONICAL_PUBLIC_ORIGIN;
       const normalizedAddress = address.toLowerCase();
 
       // Lookup xProof certs linked to this BNB address via metadata.bnb_wallet.
@@ -1042,7 +1043,7 @@ export function registerProofReadRoutes(app: Express) {
         return res.status(404).json({ error: "Wallet not found on Prove Before Act", wallet, onboarding_complete: false });
       }
 
-      const baseUrl = process.env.REPLIT_DEPLOYMENT ? "https://provebeforeact.com" : `${req.protocol}://${req.get("host")}`;
+      const baseUrl = CANONICAL_PUBLIC_ORIGIN;
       const trust = await computeTrustScoreByWallet(wallet);
 
       if (!trust) {
@@ -1055,7 +1056,7 @@ export function registerProofReadRoutes(app: Express) {
             register: `${baseUrl}/api/agent/register`,
             certify: `${baseUrl}/api/proof`,
             docs: `${baseUrl}/docs`,
-            spec: `${baseUrl}/.well-known/xproof.md`,
+            spec: `${baseUrl}/.well-known/provebeforeact.md`,
           },
           schema_version: "1.0",
           source: "provebeforeact.com",
@@ -1114,7 +1115,7 @@ export function registerProofReadRoutes(app: Express) {
           trust_badge_md: `${baseUrl}/badge/trust/${wallet}/markdown`,
           violations: `${baseUrl}/api/agents/${wallet}/violations`,
           leaderboard: `${baseUrl}/leaderboard`,
-          spec: `${baseUrl}/.well-known/xproof.md`,
+          spec: `${baseUrl}/.well-known/provebeforeact.md`,
           mcp: `${baseUrl}/mcp`,
         },
         // ── Recommended next action for the bot (machine-readable)
@@ -1155,7 +1156,7 @@ export function registerProofReadRoutes(app: Express) {
         });
       }
 
-      const baseUrl = process.env.REPLIT_DEPLOYMENT ? "https://provebeforeact.com" : `${req.protocol}://${req.get("host")}`;
+      const baseUrl = CANONICAL_PUBLIC_ORIGIN;
       const isUuid = ELIZA_UUID_REGEX.test(identifier);
       const isWallet = MX_WALLET_REGEX.test(identifier);
       const lookupMode: "character_id" | "wallet" | "unknown" = isUuid
@@ -1389,7 +1390,7 @@ export function registerProofReadRoutes(app: Express) {
         });
       }
 
-      const baseUrl = process.env.REPLIT_DEPLOYMENT ? "https://provebeforeact.com" : `${req.protocol}://${req.get("host")}`;
+      const baseUrl = CANONICAL_PUBLIC_ORIGIN;
       const lookupMode: "agent_id" | "wallet" = isWallet ? "wallet" : "agent_id";
 
       let xaiLinked = false;
@@ -1589,7 +1590,7 @@ export function registerProofReadRoutes(app: Express) {
         });
       }
 
-      const baseUrl = process.env.REPLIT_DEPLOYMENT ? "https://provebeforeact.com" : `${req.protocol}://${req.get("host")}`;
+      const baseUrl = CANONICAL_PUBLIC_ORIGIN;
 
       // Only expose linkage when the owning user has opted into a public profile.
       const linkedCerts = await db
@@ -1746,7 +1747,7 @@ export function registerProofReadRoutes(app: Express) {
           sql`${certifications.userId} IN (SELECT id FROM users WHERE is_public_profile = true)`
         ));
 
-      const baseUrl = process.env.REPLIT_DEPLOYMENT ? "https://provebeforeact.com" : `${req.protocol}://${req.get("host")}`;
+      const baseUrl = CANONICAL_PUBLIC_ORIGIN;
       const uniqueIds = [...new Set(ids)];
       const resultMap = new Map(results.map(r => [r.proof_id, r]));
       const response = uniqueIds.map(id => {

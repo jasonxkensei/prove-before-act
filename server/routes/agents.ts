@@ -11,6 +11,7 @@ import { computeTrustScoreByWallet } from "../trust";
 import { TRIAL_QUOTA, REGISTER_RATE_LIMIT_MAX, REGISTER_RATE_LIMIT_WINDOW_MS, getClientIp, buildX402Block, buildPrepaidCreditsBlock, buildTrialExhaustedMessage, buildPaymentRequiredMessage, atomicConsumeTrialCredit, refundTrialCredit } from "./helpers";
 import { pgCheckRateLimit } from "../pgRateLimit";
 import { recordOnBlockchain } from "../blockchain";
+import { CANONICAL_PUBLIC_ORIGIN } from "../publicOrigin";
 
 // ============================================
 // Builds the machine-actionable quick_start guide
@@ -150,7 +151,7 @@ function buildQuickStart(apiKey: string, agentName: string, baseUrl: string) {
 
 export function registerAgentsRoutes(app: Express) {
   const trialInfoHandler = (_req: any, res: any) => {
-    const baseUrl = `https://${_req.get('host')}`;
+    const baseUrl = CANONICAL_PUBLIC_ORIGIN;
     res.json({
       protocol: "prove-before-act-agent-discovery/1.0",
       service: "prove-before-act",
@@ -324,7 +325,7 @@ export function registerAgentsRoutes(app: Express) {
         },
         well_known: {
           ai_plugin: `${baseUrl}/.well-known/ai-plugin.json`,
-          xproof_spec: `${baseUrl}/.well-known/xproof.md`,
+          prove_before_act_spec: `${baseUrl}/.well-known/provebeforeact.md`,
         },
       },
 
@@ -415,7 +416,7 @@ export function registerAgentsRoutes(app: Express) {
       const hasDuplicate = existingByUser.length > 0 || existingByKey.length > 0;
 
       if (hasDuplicate) {
-        const baseUrl = `https://${req.get('host')}`;
+        const baseUrl = CANONICAL_PUBLIC_ORIGIN;
         return res.status(409).json({
           error: "DUPLICATE_AGENT_NAME",
           message: `An agent named "${data.agent_name}" already exists on a real wallet. Registration blocked to prevent duplicates.`,
@@ -473,7 +474,7 @@ export function registerAgentsRoutes(app: Express) {
         hasWebhook: !!data.webhook_url,
       });
 
-      const baseUrl = `https://${req.get('host')}`;
+      const baseUrl = CANONICAL_PUBLIC_ORIGIN;
 
       // ── Onboarding proof — same logic as MCP register_trial ───────────────
       // Anchor a real "proof_of_registration" so the agent sees a complete
@@ -687,7 +688,7 @@ export function registerAgentsRoutes(app: Express) {
 
       await db.update(users).set(patch).where(eq(users.id, user.id));
 
-      const baseUrl = `https://${req.get("host")}`;
+      const baseUrl = CANONICAL_PUBLIC_ORIGIN;
       const isPublic = data.is_public_profile ?? user.isPublicProfile ?? false;
 
       return res.json({
@@ -727,7 +728,7 @@ export function registerAgentsRoutes(app: Express) {
         return res.status(401).json({
           error: "UNAUTHORIZED",
           message: "API key required. Include 'Authorization: Bearer pm_xxx' header.",
-          register: `POST https://${req.get('host')}/api/agent/register`,
+          register: `POST ${CANONICAL_PUBLIC_ORIGIN}/api/agent/register`,
         });
       }
 
@@ -754,7 +755,7 @@ export function registerAgentsRoutes(app: Express) {
         return res.status(404).json({ error: "USER_NOT_FOUND", message: "Account not found." });
       }
 
-      const baseUrl = `https://${req.get('host')}`;
+      const baseUrl = CANONICAL_PUBLIC_ORIGIN;
 
       // Fetch last proof anchored by this agent
       const [lastProof] = await db

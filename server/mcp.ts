@@ -1047,7 +1047,7 @@ export async function createMcpServer(ctx: McpContext) {
               openapi: `${baseUrl}/api/acp/openapi.json`,
               health: `${baseUrl}/api/acp/health`,
               mx8004_status: `${baseUrl}/api/mx8004/status`,
-              specification: `${baseUrl}/.well-known/xproof.md`,
+              specification: `${baseUrl}/.well-known/provebeforeact.md`,
             },
             getting_started: {
               step1: "Call register_trial (MCP tool) — returns a pm_ key with 10 free certifications. No wallet, no credit card, takes <1 second.",
@@ -1570,7 +1570,7 @@ export async function createMcpServer(ctx: McpContext) {
       contents: [{
         uri: "xproof://specification",
         mimeType: "text/markdown",
-        text: `Visit ${baseUrl}/.well-known/xproof.md for the full specification.`,
+        text: `Visit ${baseUrl}/.well-known/provebeforeact.md for the full specification.`,
       }],
     })
   );

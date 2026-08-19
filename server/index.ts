@@ -18,6 +18,7 @@ import { startCoherenceDivergenceScheduler } from "./coherence-divergence";
 import { requestIdMiddleware, logger } from "./logger";
 import { x402PriceConfigWarning, x402NetworkConfigWarning } from "./routes/helpers";
 import { conversionOutcomeMiddleware } from "./conversion-telemetry";
+import { getCanonicalPublicUrl, isLegacyPublicHost } from "./publicOrigin";
 import {
   runDailyMaintenance,
   migrateSystemUserCertifications,
@@ -37,6 +38,16 @@ const app = express();
 
 // Trust proxy for production (Replit uses reverse proxy)
 app.set('trust proxy', 1);
+
+// ── Canonical public domain ─────────────────────────────────────────────────
+// xproof.app and the retired Replit public hostname remain reachable only as
+// compatibility aliases. Redirect before every other middleware so HTML, API,
+// sitemap, and agent-discovery responses can never establish a second identity.
+app.use((req, res, next) => {
+  if (!isLegacyPublicHost(req.hostname)) return next();
+
+  return res.redirect(301, getCanonicalPublicUrl(req.originalUrl));
+});
 
 // ── Security headers ─────────────────────────────────────────────────────────
 // CSP: 'unsafe-eval' and 'unsafe-inline' are required by the MultiversX wallet

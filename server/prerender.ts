@@ -7,6 +7,7 @@ import { getCertificationPriceUsd } from "./pricing";
 import { getLeaderboard, computeTrustScoreByWallet, getTrustLevel } from "./trust";
 import { publicReadRateLimiter } from "./reliability";
 import { getTxExplorerUrl } from "./blockchain";
+import { CANONICAL_PUBLIC_ORIGIN } from "./publicOrigin";
 
 const CRAWLER_USER_AGENTS = [
   "ChatGPT", "GPTBot", "Googlebot", "Bingbot", "Twitterbot",
@@ -884,7 +885,7 @@ async function renderAgentContextPage(baseUrl: string): Promise<string> {
 <main>
   <h1>Prove Before Act Agent Context</h1>
   <p><strong>Anchor intent before execution.</strong> Hash locally → certify on MultiversX → proceed with <code>proof_id</code>. Production reference: ${referenceMetrics} <a href="${baseUrl}/agent/${REFERENCE_AGENT_WALLET}">Moltbook public profile</a>.</p>
-  <p>No API key needed. Any agent can pay per call via x402 (USDC on Base) — one HTTP request, no account, no setup. Discoverable via <a href="${baseUrl}/llms.txt">llms.txt</a> and <a href="${baseUrl}/.well-known/xproof.json">/.well-known/xproof.json</a>.</p>
+  <p>No API key needed. Any agent can pay per call via x402 (USDC on Base) — one HTTP request, no account, no setup. Discoverable via <a href="${baseUrl}/llms.txt">llms.txt</a> and <a href="${baseUrl}/.well-known/provebeforeact.json">/.well-known/provebeforeact.json</a>.</p>
 
   <section>
     <h2>Quick Start — 3 steps</h2>
@@ -1369,7 +1370,7 @@ GET ${escapeHtml(baseUrl)}/api/fleet/coherence?fleet=&lt;slug&gt;</code></pre>
 <ul>
   <li><a href="${escapeHtml(baseUrl)}/agent-context" style="color:#10b981">Agent context page</a> — full API reference for AI agents</li>
   <li><a href="${escapeHtml(baseUrl)}/llms.txt" style="color:#10b981">llms.txt</a> — machine-readable tool list</li>
-  <li><a href="${escapeHtml(baseUrl)}/.well-known/xproof.md" style="color:#10b981">xproof.md</a> — full specification</li>
+  <li><a href="${escapeHtml(baseUrl)}/.well-known/provebeforeact.md" style="color:#10b981">provebeforeact.md</a> — full specification</li>
   <li><a href="${escapeHtml(baseUrl)}/fleet" style="color:#10b981">Fleet view</a> — interactive fleet coherence dashboard</li>
 </ul>
 </main>
@@ -1465,7 +1466,7 @@ Authorization: Bearer pm_YOUR_API_KEY
   <li><a href="${escapeHtml(baseUrl)}/coherence" style="color:#10b981">Coherence Layer docs</a> — check_coherence, require_coherence_anchor, link API</li>
   <li><a href="${escapeHtml(baseUrl)}/agent-context" style="color:#10b981">Agent context page</a> — full API reference</li>
   <li><a href="${escapeHtml(baseUrl)}/llms.txt" style="color:#10b981">llms.txt</a> — MCP tool list</li>
-  <li><a href="${escapeHtml(baseUrl)}/.well-known/xproof.md" style="color:#10b981">xproof.md</a> — full specification</li>
+  <li><a href="${escapeHtml(baseUrl)}/.well-known/provebeforeact.md" style="color:#10b981">provebeforeact.md</a> — full specification</li>
 </ul>
 <p style="margin-top:2rem;color:#888;font-size:.875rem">Interactive fleet dashboard: <a href="${escapeHtml(baseUrl)}/fleet" style="color:#10b981">${escapeHtml(baseUrl)}/fleet</a> — enter a wallet prefix or fleet slug to load live per-agent coherence data.</p>
 </main>
@@ -1475,8 +1476,8 @@ Authorization: Bearer pm_YOUR_API_KEY
 export function prerenderMiddleware() {
   return async (req: Request, res: Response, next: NextFunction) => {
     const path = req.path;
-    const baseUrl = `${req.protocol}://${req.get("host")}`;
-    const agentLinksHeader = `</skill.md>; rel="agent-skill", </.well-known/xproof.json>; rel="agent-info", </llms.txt>; rel="describedby"`;
+    const baseUrl = CANONICAL_PUBLIC_ORIGIN;
+    const agentLinksHeader = `</skill.md>; rel="agent-skill", </.well-known/provebeforeact.json>; rel="agent-info", </llms.txt>; rel="describedby"`;
 
     // /agent-context is designed for AI agents — always serve prerendered HTML
     // to every visitor (browsers, crawlers, LLM tools, curl) regardless of UA
@@ -1555,7 +1556,7 @@ export function prerenderMiddleware() {
     });
     if (res.headersSent) return;
 
-    const agentLinks = `</skill.md>; rel="agent-skill", </.well-known/xproof.json>; rel="agent-info", </llms.txt>; rel="describedby"`;
+    const agentLinks = `</skill.md>; rel="agent-skill", </.well-known/provebeforeact.json>; rel="agent-info", </llms.txt>; rel="describedby"`;
 
     try {
       if (path === "/" || path === "") {
