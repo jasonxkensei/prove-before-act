@@ -43,7 +43,7 @@ export default function LandingZh() {
     current_price_usd: number;
     total_certifications: number;
   }>({ queryKey: ["/api/pricing"] });
-  const price = pricing ? `$${pricing.current_price_usd}` : "$0.01";
+  const price = pricing ? `$${pricing.current_price_usd}` : "实时费率";
 
   const [agentName, setAgentName] = useState("");
   const [trialKey, setTrialKey] = useState<string | null>(null);
@@ -212,7 +212,7 @@ export default function LandingZh() {
               <p className="text-xs text-muted-foreground leading-relaxed">
                 《生成式人工智能服务管理暂行办法》《数据安全法》明确要求AI系统保留可审查的决策记录。
                 一旦发生争议或监管检查，<strong className="text-foreground">无法举证等同于违规</strong>。
-                Prove Before Act 为每次AI决策生成链上不可篡改的证明，每次 $0.01，审计时随时可查。
+                Prove Before Act 为每次AI决策生成链上不可篡改的证明，按 {price} 的实时费率计费（见 <code>/api/pricing</code>），审计时随时可查。
               </p>
             </div>
             <Badge variant="outline" className="text-xs border-amber-500/30 text-amber-600 dark:text-amber-400 whitespace-nowrap shrink-0">
@@ -450,8 +450,8 @@ export default function LandingZh() {
               </h2>
               <p className="text-muted-foreground max-w-xl mx-auto text-sm">
                 一次监管检查无法举证，损失可能是合同终止、罚款或项目叫停。
-                <strong className="text-foreground">每日1000次决策的全量存证，仅需$10</strong>——
-                这是智能体集群最低成本的风控保障，每次 $0.01。
+                <strong className="text-foreground">每日1000次决策的全量存证，按实时费率计算</strong>——
+                这是智能体集群按需付费的风控保障；当前费率见 <code>/api/pricing</code>。
               </p>
             </div>
 
@@ -468,7 +468,7 @@ export default function LandingZh() {
               <div className="rounded-md border border-primary/20 bg-primary/5 p-4">
                 <p className="text-sm font-semibold text-primary mb-2">Prove Before Act 合规风控</p>
                 <ul className="space-y-1.5 text-xs text-muted-foreground">
-                  <li className="flex items-start gap-1.5"><span className="text-primary mt-0.5 shrink-0">✓</span>每日1000次决策全量存证：<strong className="text-foreground">$10/天</strong></li>
+                  <li className="flex items-start gap-1.5"><span className="text-primary mt-0.5 shrink-0">✓</span>每日1000次决策全量存证：<strong className="text-foreground">按实时费率计算</strong></li>
                   <li className="flex items-start gap-1.5"><span className="text-primary mt-0.5 shrink-0">✓</span>监管检查：随时出具链上证明</li>
                   <li className="flex items-start gap-1.5"><span className="text-primary mt-0.5 shrink-0">✓</span>客户争议：完整4W审计轨迹即时导出</li>
                   <li className="flex items-start gap-1.5"><span className="text-primary mt-0.5 shrink-0">✓</span>批量API：单次提交100条，3行代码集成</li>
@@ -482,7 +482,7 @@ export default function LandingZh() {
                   icon: Blocks,
                   title: "批量认证",
                   subtitle: "Batch Certification",
-                  desc: "单次API调用可提交最多100个哈希值，适用于高频操作的智能体集群。每次 $0.01，按需扩展。",
+                  desc: `单次API调用可提交最多100个哈希值，适用于高频操作的智能体集群。每次按 ${price} 的实时费率计费，按需扩展。`,
                   code: `# 批量提交100个操作哈希
 POST /api/batch
 {
@@ -708,7 +708,7 @@ print(proof["verify_url"])  # 链上可验证`}
                 },
                 {
                   title: "按需付费",
-                  price: "$0.01",
+                  price,
                   priceUnit: "/ 次",
                   desc: "无限次，随时可用",
                   features: ["不限量存证", "批量API（100条/次）", "信任评分", "事件报告", "链上锚定"],
@@ -718,7 +718,7 @@ print(proof["verify_url"])  # 链上可验证`}
                 },
                 {
                   title: "x402协议",
-                  price: "$0.01",
+                  price,
                   priceUnit: "/ 次",
                   desc: "无账号，智能体直接支付",
                   features: ["无需注册", "USDC on Base", "HTTP 402原生支持", "Coinbase CDP兼容", "单次HTTP请求完成"],
@@ -809,11 +809,11 @@ print(proof["verify_url"])  # 链上可验证`}
                 },
                 {
                   q: "批量认证适合高频操作的集群吗？",
-                  a: "是的。Prove Before Act的批量API支持单次请求提交最多100个哈希值，每次存证固定收费$0.01，无任何批量溢价。对于每秒产生大量操作的集群，您可以在本地缓冲操作记录，定期批量提交，实现高效可扩展的审计基础设施。",
+                  a: `是的。Prove Before Act的批量API支持单次请求提交最多100个哈希值，按当前实时费率 ${price} 计费，无任何批量溢价。对于每秒产生大量操作的集群，您可以在本地缓冲操作记录，定期批量提交，实现高效可扩展的审计基础设施。`,
                 },
                 {
                   q: "x402协议如何工作？智能体无需账号也能存证吗？",
-                  a: "是的。任何拥有以太坊钱包（包括Base链钱包）的智能体，无需注册账号，即可通过x402协议自主完成存证。流程为：发送POST请求 → 收到HTTP 402支付挑战 → 在Base链上签署$0.01 USDC支付 → 携带X-PAYMENT头重新发送 → 立即获得存证结果。全程无人工干预，完全适合自主智能体。",
+                  a: "是的。任何拥有以太坊钱包（包括Base链钱包）的智能体，无需注册账号，即可通过x402协议自主完成存证。流程为：发送POST请求 → 收到HTTP 402支付挑战（含当前USDC报价）→ 在Base链上签署支付 → 携带X-PAYMENT头重新发送 → 立即获得存证结果。全程无人工干预，完全适合自主智能体。",
                 },
                 {
                   q: "链上数据存储在哪条链上？为什么选择MultiversX？",

@@ -9,7 +9,7 @@ Prove Before Act provides blockchain-anchored file certification on MultiversX. 
 - **Protect intellectual property** -- Establish timestamped ownership records for AI-generated works.
 - **Build trust** -- Provide cryptographic, publicly verifiable proof that content has not been altered.
 
-Each certification costs $0.01 (flat rate) and produces a permanent, publicly verifiable record on the MultiversX blockchain.
+Each certification costs a low flat rate (current price served at /api/pricing) and produces a permanent, publicly verifiable record on the MultiversX blockchain.
 
 ---
 
@@ -513,7 +513,7 @@ Configure a public profile via `PATCH /api/user/agent-profile` (session required
 
 ### Live Example
 
-**xproof_agent_verify** — autonomous agent. Full beta test: 6 endpoints, single cert in 1.075s, batch (3 files) in 1.876s, on-chain verification in 198ms. Trust level: Active (score 157, 10 confirmed certs).
+**xproof_agent_verify** (legacy agent identifier) — autonomous agent that beta-tested all 6 endpoints in a past run. Timings, trust level, and cert counts from that run are historical snapshots; query the live public profile below for current data.
 
 - Profile: [provebeforeact.com/agent/erd1qevpwqy4m7cqsynjgtwzuagln27veuhlg9w67nscv6ffj8dac7lqzc69q8](https://provebeforeact.com/agent/erd1qevpwqy4m7cqsynjgtwzuagln27veuhlg9w67nscv6ffj8dac7lqzc69q8)
 - Live proof: [f8c3b35d-6ee1-4f76-a92b-1532a008df7b](https://provebeforeact.com/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b)
@@ -567,6 +567,6 @@ After certification, proofs are publicly accessible in multiple formats:
 
 API key requests are subject to standard rate limiting to prevent abuse.
 
-**Pricing:** $0.01 per certification — flat rate. No subscriptions or monthly fees.
+**Pricing:** low flat rate per certification (current price at /api/pricing). No subscriptions or monthly fees.
 
 The ACP health endpoint (`/api/acp/health`) and product discovery (`/api/acp/products`) are not rate-limited.

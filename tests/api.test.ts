@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 
 const BASE_URL = "http://localhost:5000";
 
-describe("xproof API", () => {
+describe("Prove Before Act API", () => {
   describe("Discovery Endpoints", () => {
     it("GET /api/acp/health should return operational status", async () => {
       const res = await fetch(`${BASE_URL}/api/acp/health`);
@@ -31,24 +31,20 @@ describe("xproof API", () => {
       expect(product.outputs).toBeDefined();
     });
 
-    it("GET /llms.txt should return text containing xproof", async () => {
+    it("GET /llms.txt should return text containing Prove Before Act", async () => {
       const res = await fetch(`${BASE_URL}/llms.txt`);
       expect(res.status).toBe(200);
       const contentType = res.headers.get("content-type");
       expect(contentType).toContain("text/plain");
       const text = await res.text();
-      expect(text).toContain("xproof");
+      expect(text).toContain("Prove Before Act");
     });
 
-    it("GET /.well-known/xproof.md should redirect to the canonical provebeforeact.md", async () => {
-      const res = await fetch(`${BASE_URL}/.well-known/xproof.md`, { redirect: "manual" });
-      expect(res.status).toBe(301);
-      expect(res.headers.get("location")).toContain("/.well-known/provebeforeact.md");
-
-      const followed = await fetch(`${BASE_URL}/.well-known/xproof.md`);
-      expect(followed.status).toBe(200);
-      const text = await followed.text();
-      expect(text).toContain("Prove Before Act Specification");
+    it("GET /.well-known/xproof.md (legacy alias) returns the Prove Before Act specification", async () => {
+      const res = await fetch(`${BASE_URL}/.well-known/xproof.md`, { redirect: "follow" });
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("text/markdown");
+      expect(await res.text()).toContain("Prove Before Act Specification");
     });
 
     it("GET /robots.txt should return robots content", async () => {
@@ -309,7 +305,7 @@ describe("xproof API", () => {
       const contentType = res.headers.get("content-type");
       expect(contentType).toContain("text/plain");
       const text = await res.text();
-      expect(text).toContain("xproof");
+      expect(text).toContain("Prove Before Act");
       expect(text).toContain("POST /api/proof");
     });
   });
@@ -386,8 +382,12 @@ describe("xproof API", () => {
       const body = await res.json();
       expect(body.standard).toBe("MX-8004");
       expect(body.version).toBe("1.0");
-      expect(body.erc8004_compliant).toBe(true);
+      // The endpoint distinguishes supported (code capability) from active
+      // (deployment configuration); it must not claim compliance flags.
+      expect(body.supported).toBe(true);
+      expect(typeof body.active).toBe("boolean");
       expect(["active", "not_configured"]).toContain(body.status);
+      expect(body.active).toBe(body.status === "active");
       if (body.status === "active") {
         expect(body.contracts).toBeDefined();
         expect(body.capabilities).toBeDefined();
@@ -568,7 +568,7 @@ describe("xproof API", () => {
     });
 
     it("4W breakdown header appears identically in /llms.txt, /llms-full.txt, and /agent-context.md", async () => {
-      const HEADER = "4W breakdown — WHO from MX-8004, WHAT/WHEN/WHY from Prove Before Act:";
+      const HEADER = "4W breakdown — optional WHO from MX-8004, WHAT/WHEN/WHY from Prove Before Act:";
       const [r1, r2, r3] = await Promise.all([
         fetch(`${BASE_URL}/llms.txt`).then((r) => r.text()),
         fetch(`${BASE_URL}/llms-full.txt`).then((r) => r.text()),
@@ -621,12 +621,12 @@ describe("xproof API", () => {
 
     it("GET /agent-context HTML table attributes WHO to MX-8004 and WHAT/WHEN/WHY to Prove Before Act — row-level binding matches canonical markdown header", async () => {
       // The markdown sources encode the attribution as:
-      //   "4W breakdown — WHO from MX-8004, WHAT/WHEN/WHY from Prove Before Act:"
+      //   "4W breakdown — optional WHO from MX-8004, WHAT/WHEN/WHY from Prove Before Act:"
       // The HTML renders it as a <table> with one <tr> per dimension.
       // This test parses each table row and asserts the row-level provider bindings
       // so that a swapped attribution (e.g. WHO→Prove Before Act, WHAT→MX-8004) fails
       // deterministically — a pure co-occurrence check cannot catch that inversion.
-      const MARKDOWN_HEADER = "4W breakdown — WHO from MX-8004, WHAT/WHEN/WHY from Prove Before Act:";
+      const MARKDOWN_HEADER = "4W breakdown — optional WHO from MX-8004, WHAT/WHEN/WHY from Prove Before Act:";
 
       const [llmsTxt, llmsFullTxt, agentContextMd, agentContextHtml] = await Promise.all([
         fetch(`${BASE_URL}/llms.txt`).then((r) => r.text()),

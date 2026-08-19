@@ -1,5 +1,7 @@
 # MCP Server
 
+> Prove Before Act is the current product name. `xproof` API/package labels are legacy compatibility identifiers. MX-8004 features are optional and available only when `/api/mx8004/status` reports `active`; production currently reports `not_configured`.
+
 Prove Before Act exposes a Model Context Protocol (MCP) JSON-RPC 2.0 endpoint for AI agent integration.
 
 ## Endpoint
@@ -162,13 +164,13 @@ Use `md` format for LLM consumption -- produces human-readable Markdown with all
 
 List Prove Before Act capabilities, pricing, and usage guidance. No parameters required.
 
-**Returns:** Service description, pricing tiers ($0.05 / $0.025 / $0.015 per proof depending on all-time volume), list of tools, certification triggers, batch API details, free trial details, and supported protocols.
+**Returns:** Service description, current live pricing (query `/api/pricing`), list of tools, certification triggers, batch API details, free trial details, and supported protocols.
 
 ---
 
 ### `audit_agent_session`
 
-Anchor an agent's decision on-chain BEFORE executing a critical action. If the call fails or no `proof_id` is returned, the agent MUST block execution.
+Anchor an agent's decision on-chain before a critical action. The returned `proof_id` can be used in an operator-owned policy; Prove Before Act records the result and leaves action handling to the operator.
 
 **Parameters:**
 
@@ -184,7 +186,7 @@ Anchor an agent's decision on-chain BEFORE executing a critical action. If the c
 | `risk_summary` | string | No | Explanation of risk factors |
 | `context` | object | No | Free-form metadata (model, env, etc.) |
 
-See [SKILL.md Section 8](../SKILL.md#8-agent-audit-log-standard) for the complete enforcement pattern.
+See [SKILL.md Section 8](../SKILL.md#8-agent-audit-log-standard) for an operator policy template; the service does not enforce execution blocking.
 
 ---
 
@@ -233,10 +235,10 @@ When exposing Prove Before Act to an LLM, use:
 > "If you have no XPROOF_API_KEY in env, call `register_free_trial` first with your agent name. Store the returned `api_key`. You get 10 free proofs."
 
 > **Skill: Certify**
-> "Use this to create an immutable blockchain proof for a file. Compute SHA-256 of the file content, then call `certify_file` with the hash and filename. Cost: trial-free or $0.05."
+> "Use this to create an immutable blockchain proof for a file. Compute SHA-256 of the file content, then call `certify_file` with the hash and filename. Cost: trial-free or the current live rate at `/api/pricing`."
 
 > **Skill: Audit before action**
-> "Before any high-risk action (trade, deploy, transfer), call `audit_agent_session` with the action details. If no `proof_id` is returned, BLOCK the action."
+> "For a high-risk action (trade, deploy, transfer), call `audit_agent_session` when your operator policy requires an audit record. If no `proof_id` is returned, apply that policy's chosen response, such as retry, review, human approval, or a stop."
 
 > **Skill: Verify**
 > "Use this to check if a file has been certified. Pass the proof UUID to `verify_proof`. Returns blockchain transaction, timestamp, and verification status."

@@ -39,7 +39,7 @@ export function registerAcpRoutes(app: Express) {
   // ============================================
   // ACP (Agent Commerce Protocol) Endpoints
   // These endpoints enable AI agents to discover
-  // and use xproof certification services
+  // and use Prove Before Act certification services
   // ============================================
 
   // ACP Products Discovery - Returns available services for AI agents
@@ -49,13 +49,13 @@ export function registerAcpRoutes(app: Express) {
     const products: ACPProduct[] = [
       {
         id: "xproof-certification",
-        name: "xproof Certification",
-        description: "xproof is the canonical proof layer for AI agents. Create cryptographic proof of existence and integrity for digital files on MultiversX blockchain. Records SHA-256 hash with timestamp, providing immutable evidence of file ownership at a specific point in time.",
+        name: "Prove Before Act Certification",
+        description: "Prove Before Act creates cryptographic proof of existence and integrity for digital files on the MultiversX blockchain. It records a SHA-256 hash with a timestamp, providing immutable evidence at a specific point in time. The product ID xproof-certification is a legacy compatibility identifier.",
         pricing: {
           type: "fixed",
           amount: priceUsd.toString(),
           currency: "USD",
-          note: "Price converted to EGLD at checkout based on current exchange rate",
+          note: "Current live price, converted to EGLD at checkout based on the current exchange rate. See /api/pricing for the quoted USD rate.",
         },
         inputs: {
           file_hash: "SHA-256 hash of the file (64 character hex string)",
@@ -1119,7 +1119,7 @@ export function registerAcpRoutes(app: Express) {
             type: "object",
             properties: {
               id: { type: "string", example: "xproof-certification" },
-              name: { type: "string", example: "xproof Certification" },
+              name: { type: "string", example: "Prove Before Act Certification" },
               description: { type: "string" },
               pricing: {
                 type: "object",
@@ -1456,7 +1456,7 @@ export function registerAcpRoutes(app: Express) {
         "/api/audit": {
           post: {
             summary: "Certify an agent audit log",
-            description: "Agent Audit Log Standard — certify an AI agent's work session on the MultiversX blockchain BEFORE executing any critical action (trade, deploy, data access). Returns a proof_id that serves as a compliance certificate. The agent MUST call this endpoint before acting. Schema: /.well-known/agent-audit-schema.json",
+            description: "Agent Audit Log Standard — certify an AI agent's work session on the MultiversX blockchain before a critical action (trade, deploy, data access). Returns a proof_id that an operator can use in its own compliance policy. Prove Before Act records certification; it does not automatically block execution. Schema: /.well-known/agent-audit-schema.json",
             requestBody: {
               required: true,
               content: {
@@ -1511,7 +1511,7 @@ export function registerAcpRoutes(app: Express) {
         "/api/agent/register": {
           post: {
             summary: "Register a free trial agent",
-            description: "Get a free API key instantly — 10 blockchain certifications included. No wallet, no payment, no credit card required. This is the recommended first step for AI agents integrating with xproof.",
+            description: "Get a free API key instantly — 10 blockchain certifications included. No wallet, no payment, no credit card required. This is the recommended first step for AI agents integrating with Prove Before Act.",
             security: [],
             requestBody: {
               required: true,

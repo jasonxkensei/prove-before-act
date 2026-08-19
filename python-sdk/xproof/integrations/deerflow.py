@@ -1,12 +1,12 @@
-"""DeerFlow native skill integration for xProof certification.
+"""DeerFlow native skill integration for Prove Before Act certification.
 
 Provides ``XProofDeerFlowSkill`` — a skill class following DeerFlow's
 tool interface (``name``, ``description``, ``_run(input)``) that
-certifies agent outputs on-chain using the xProof 4W framework
+certifies agent outputs on-chain using the Prove Before Act 4W framework
 (Who, What, When, Why).
 
 DeerFlow (bytedance/deer-flow) is an extensible super-agent harness.
-Adding xProof as a native skill means any DeerFlow agent can certify
+Adding Prove Before Act as a native skill means any DeerFlow agent can certify
 its outputs with a single skill invocation.
 """
 

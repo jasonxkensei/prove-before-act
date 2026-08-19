@@ -124,7 +124,7 @@ describe("/agents/zh and /agent-context always-serve regression guard", () => {
     const body = await res.text();
 
     // The prerendered page contains this h1.  The React SPA shell does not.
-    expect(body).toContain("xProof Agent Context");
+    expect(body).toContain("Prove Before Act Agent Context");
 
     // Sanity: confirm it is not the bare SPA shell.
     expect(body).not.toMatch(/<div id="root">\s*<\/div>/);
@@ -151,6 +151,6 @@ describe("/agents/zh and /agent-context always-serve regression guard", () => {
     });
     expect(res.status).toBe(200);
     const body = await res.text();
-    expect(body).toContain("xProof Agent Context");
+    expect(body).toContain("Prove Before Act Agent Context");
   });
 });

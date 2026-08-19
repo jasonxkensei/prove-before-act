@@ -72,11 +72,16 @@ beforeAll(async () => {
   `);
 
   // 2. Upsert the owner test user.
+  //    is_public_profile MUST be TRUE: the CSV export endpoint enforces a
+  //    profile-visibility boundary (server/routes/calibration.ts) and returns
+  //    404 AGENT_NOT_FOUND for private profiles when the caller is not the
+  //    owner. This fixture exercises the public/all-public export paths, so the
+  //    profile has to be public for the endpoint to resolve the agent at all.
   const userRow = await pool.query<{ id: string }>(
-    `INSERT INTO users (wallet_address)
-     VALUES ($1)
+    `INSERT INTO users (wallet_address, is_public_profile)
+     VALUES ($1, TRUE)
      ON CONFLICT (wallet_address)
-     DO UPDATE SET wallet_address = EXCLUDED.wallet_address
+     DO UPDATE SET is_public_profile = TRUE
      RETURNING id`,
     [CSV_TEST_WALLET],
   );

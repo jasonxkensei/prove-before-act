@@ -89,6 +89,28 @@ export default function AgentContextZhPage() {
   const referenceScore = referenceAgent
     ? new Intl.NumberFormat("zh-CN").format(referenceAgent.score)
     : "实时载入中";
+  const {
+    data: pricing,
+    isLoading: isPricingLoading,
+    isError: isPricingError,
+  } = useQuery<{ current_price_usd: number }>({
+    queryKey: ["/api/pricing"],
+  });
+  const unitPrice = pricing?.current_price_usd;
+  const livePriceState = isPricingError
+    ? "实时价格暂不可用（请访问 /api/pricing）"
+    : isPricingLoading || unitPrice === undefined
+      ? "正在加载实时价格…"
+      : null;
+  const formatLiveCost = (certifications: number, suffix = "") =>
+    livePriceState ?? `$${(unitPrice! * certifications).toFixed(2)}${suffix}`;
+  const priceStr = formatLiveCost(1);
+  const per1k = formatLiveCost(1000);
+  const per10k = formatLiveCost(10000);
+  const perDay1k = `${per1k}/天`;
+  const perMonth1500 = formatLiveCost(1500, "/月");
+  const perMonth30k = formatLiveCost(30000, "/月");
+  const perMonth300k = formatLiveCost(300000, "/月");
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     x402: true,
     latency: true,
@@ -126,7 +148,7 @@ export default function AgentContextZhPage() {
           <div className="grid gap-3 sm:grid-cols-3">
             {[
               { step: "1", title: "发送请求", desc: "不带任何认证头，直接 POST /api/proof" },
-              { step: "2", title: "收到402响应", desc: "获取价格（$0.01 USDC）和待签名的支付载荷" },
+              { step: "2", title: "收到402响应", desc: `获取当前价格（${priceStr} USDC）和待签名的支付载荷` },
               { step: "3", title: "支付并锚定", desc: "携带X-PAYMENT头重新发送 — 立即获得存证" },
             ].map((s) => (
               <div key={s.step} className="rounded-md border bg-muted/30 p-3">
@@ -140,7 +162,7 @@ export default function AgentContextZhPage() {
 curl -X POST https://provebeforeact.com/api/proof \\
   -H "Content-Type: application/json" \\
   -d '{"file_hash": "YOUR_SHA256_HASH", "filename": "decision.md"}'
-# → HTTP 402 {"payment": {"amount": "10000", "currency": "USDC", "network": "eip155:8453", ...}}
+# → HTTP 402 {"payment": {"amount": "<current live raw amount>", "currency": "USDC", "network": "eip155:8453", ...}}
 
 # 步骤3 — 携带在Base链签署的USDC支付重新发送
 curl -X POST https://provebeforeact.com/api/proof \\
@@ -176,7 +198,7 @@ def anchor_x402(reasoning: dict, filename: str, wallet_signer) -> dict:
 
     payment_info = r.json()["payment"]
     # payment_info = {
-    #   "amount": "10000", "currency": "USDC", "network": "eip155:8453",
+    #   "amount": "<current live raw amount>", "currency": "USDC", "network": "eip155:8453",
     #   "payee": "0x...", "payload": { ... x402标准载荷 ... }
     # }
 
@@ -219,8 +241,8 @@ print(f"存证链接: https://provebeforeact.com{result['verify_url']}")`} />
           </p>
           <div className="grid gap-3 sm:grid-cols-3">
             {[
-              { label: "单次认证（API调用→proof_id）", value: "~1.1秒", detail: "端到端实测1.075秒" },
-              { label: "批量3个文件", value: "~1.9秒", detail: "实测1.876秒" },
+              { label: "单次认证（API调用→proof_id）", value: "~1–2秒", detail: "典型值，随负载变化" },
+              { label: "批量3个文件", value: "~2秒", detail: "典型值，随负载变化" },
               { label: "链上确认", value: "~6秒", detail: "MultiversX平均出块时间" },
             ].map((m) => (
               <div key={m.label} className="rounded-md border bg-muted/30 p-3 text-center">
@@ -320,13 +342,13 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
       content: (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Prove Before Act采用<strong className="text-foreground">每次认证固定收费$0.01</strong>的定价模式——无分级、无促销、无量折扣。无论锚定1次还是10,000次，价格完全一致。
+            Prove Before Act按<strong className="text-foreground">每次认证的实时费率{priceStr}</strong>收费。<strong className="text-foreground">该值实时取自<code className="font-mono bg-muted px-1 rounded">/api/pricing</code>，不是预先发布的固定价格。</strong>无分级、无量折扣；无论锚定1次还是10,000次，均适用同一实时费率。
           </p>
           <div className="grid gap-3 sm:grid-cols-3">
             {[
-              { label: "当前价格", value: "$0.01", detail: "每次认证 — 固定费率" },
-              { label: "每1,000次费用", value: "$10", detail: "按$0.01/次计算" },
-              { label: "每10,000次费用", value: "$100", detail: "预充值包 — 同样固定费率" },
+              { label: "当前价格", value: priceStr, detail: "每次认证 — 实时费率" },
+              { label: "每1,000次费用", value: per1k, detail: `按${priceStr}/次计算` },
+              { label: "每10,000次费用", value: per10k, detail: "同样固定费率" },
             ].map((m) => (
               <div key={m.label} className="rounded-md border bg-muted/30 p-3 text-center">
                 <div className="text-2xl font-bold text-primary mb-1">{m.value}</div>
@@ -339,8 +361,8 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
             <p className="text-xs font-semibold">集群场景成本估算（50个智能体，每天每个20次操作）：</p>
             <ul className="text-xs text-muted-foreground space-y-0.5 ml-3">
               <li>• 50个智能体 × 20次操作 × 30天 = <strong className="text-foreground">每月30,000次锚定</strong></li>
-              <li>• 按$0.01计算 = <strong className="text-foreground">每月$300</strong></li>
-              <li>• 每个智能体：<strong className="text-foreground">每月$6</strong> — 远低于大多数SaaS合规工具</li>
+              <li>• 按{priceStr}/次计算 = <strong className="text-foreground">{perMonth30k}</strong></li>
+              <li>• 每个智能体：<strong className="text-foreground">{formatLiveCost(600, "/月")}</strong> — 基于每个智能体每天20次操作的实时估算</li>
               <li>• 批量模式（每次调用最多100个文件）：同等价格，减少API开销</li>
             </ul>
           </div>
@@ -381,7 +403,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
                   { useCase: "智能体信任排行榜+公开档案", "Prove Before Act": "✓ 原生支持", arweave: "✗", ceramic: "✗", sign: "✗" },
                   { useCase: "EVM / Ethereum认证模式（Solidity）", "Prove Before Act": "✗", arweave: "✗", ceramic: "部分支持", sign: "✓ 最佳选择" },
                   { useCase: "置信度分级锚定（预承诺）", "Prove Before Act": "✓ 原生支持", arweave: "✗", ceramic: "✗", sign: "✗" },
-                  { useCase: "每1,000次锚定费用", "Prove Before Act": "~$10", arweave: "~$5–50（文件大小相关）", ceramic: "需自建节点", sign: "~$20–100（Gas费）" },
+                  { useCase: "每1,000次锚定费用", "Prove Before Act": per1k, arweave: "~$5–50（文件大小相关）", ceramic: "需自建节点", sign: "~$20–100（Gas费）" },
                 ].map((row, i) => (
                   <tr key={i} className={`border-b border-border/40 ${i % 2 === 0 ? "bg-muted/10" : ""}`}>
                     <td className="py-2 px-2 text-muted-foreground max-w-[160px]">{row.useCase}</td>
@@ -638,13 +660,13 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
       content: (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            每日1000次决策认证是<strong className="text-foreground">$10/天（$300/月）</strong>。以下是在生产环境中可靠实现这一规模的完整架构，包含批量缓冲、异步提交、合规监控与成本核算。
+            每日1000次决策认证按当前费率约为<strong className="text-foreground">{perDay1k}（{perMonth30k}）</strong>。以下是在生产环境中可靠实现这一规模的完整架构，包含批量缓冲、异步提交、合规监控与成本核算。
           </p>
 
           <div className="grid gap-3 sm:grid-cols-3">
             {[
-              { label: "每日认证1000次", value: "$10/天", detail: "$0.01 × 1000，固定费率" },
-              { label: "每月认证30,000次", value: "$300/月", detail: "50智能体 × 20次/天" },
+              { label: "每日认证1000次", value: perDay1k, detail: `${priceStr} × 1000，实时费率` },
+              { label: "每月认证30,000次", value: perMonth30k, detail: "50智能体 × 20次/天" },
               { label: "单次批量上限", value: "100条", detail: "一次API调用最多100个哈希" },
             ].map((m) => (
               <div key={m.label} className="rounded-md border bg-muted/30 p-3 text-center">
@@ -816,9 +838,9 @@ print(f"已锚定: {status['anchored']} | 待提交: {status['queue_pending']} |
             <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-1">实际成本核算 — 不同规模场景</p>
             <div className="grid gap-2 sm:grid-cols-3 mt-2">
               {[
-                { scale: "小型团队", spec: "5个智能体 × 10次/天", cost: "$15/月" },
-                { scale: "中型集群", spec: "50个智能体 × 20次/天", cost: "$300/月" },
-                { scale: "大型部署", spec: "500个智能体 × 20次/天", cost: "$3,000/月" },
+                { scale: "小型团队", spec: "5个智能体 × 10次/天", cost: perMonth1500 },
+                { scale: "中型集群", spec: "50个智能体 × 20次/天", cost: perMonth30k },
+                { scale: "大型部署", spec: "500个智能体 × 20次/天", cost: perMonth300k },
               ].map((s) => (
                 <div key={s.scale} className="text-center">
                   <div className="text-sm font-bold text-foreground">{s.cost}</div>
@@ -973,18 +995,18 @@ print(f"交易已执行。存证链接: https://provebeforeact.com{outcome['veri
               <p className="text-xs font-semibold">信任档案（公开，实时）</p>
               <div className="space-y-1 text-xs text-muted-foreground">
                 <div className="flex justify-between"><span>信任评分</span><span className="font-mono text-foreground">{referenceScore}</span></div>
-                <div className="flex justify-between"><span>信任等级</span><span className="font-mono text-emerald-500">Verified（已验证）</span></div>
+                <div className="flex justify-between"><span>信任等级</span><span className="font-mono text-foreground">实时数据</span></div>
                 <div className="flex justify-between"><span>活跃连续周数</span><span className="font-mono text-foreground">{referenceStreak}</span></div>
-                <div className="flex justify-between"><span>违规记录</span><span className="font-mono text-emerald-500">0</span></div>
+                <div className="flex justify-between"><span>违规记录</span><span className="font-mono text-foreground">实时数据</span></div>
               </div>
             </div>
             <div className="rounded-md border bg-muted/30 p-3 space-y-2">
               <p className="text-xs font-semibold">性能基准</p>
               <div className="space-y-1 text-xs text-muted-foreground">
-                <div className="flex justify-between"><span>单次认证延迟</span><span className="font-mono text-foreground">~1.1秒</span></div>
-                <div className="flex justify-between"><span>3文件批量</span><span className="font-mono text-foreground">~1.9秒</span></div>
+                <div className="flex justify-between"><span>单次认证延迟</span><span className="font-mono text-foreground">~1–2秒（典型值）</span></div>
+                <div className="flex justify-between"><span>3文件批量</span><span className="font-mono text-foreground">~2秒（典型值）</span></div>
                 <div className="flex justify-between"><span>链上确认</span><span className="font-mono text-foreground">~6秒</span></div>
-                <div className="flex justify-between"><span>每次存证费用</span><span className="font-mono text-foreground">$0.01 USDC</span></div>
+                <div className="flex justify-between"><span>每次存证费用</span><span className="font-mono text-foreground">{priceStr} USDC（实时）</span></div>
               </div>
             </div>
           </div>
@@ -996,7 +1018,7 @@ print(f"交易已执行。存证链接: https://provebeforeact.com{outcome['veri
             <p className="text-xs font-semibold">运营成本</p>
             <div className="text-xs text-muted-foreground space-y-1">
               <p>请结合公开实时证明总量与当前价格计算成本；不使用静态估算。</p>
-              <p>一个持续运行、公开可问责的AI智能体，拥有完整链上审计轨迹和可验证信任评分，每周运营成本约 <strong className="text-foreground">$2.76</strong>。</p>
+              <p>一个持续运行、公开可问责的AI智能体，拥有完整链上审计轨迹和可验证信任评分——每周运营成本取决于实际锚定次数（按当前费率计算）。</p>
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -1272,7 +1294,7 @@ const anchorTool = tool({
           </div>
           <div className="rounded-md border border-primary/20 bg-primary/5 p-3">
             <p className="text-xs text-muted-foreground">
-              <strong className="text-foreground">结论：</strong>对于需要在行动前证明其推理过程的智能体——尤其是低成本、通过x402、且无预有账号的场景——Prove Before Act是正确的选择。它不试图替代Arweave或Sign Protocol，而是填补它们没有覆盖的空白：以$0.01/次的价格实现智能体决策问责。
+              <strong className="text-foreground">结论：</strong>对于需要在行动前证明其推理过程的智能体——尤其是低成本、通过x402、且无预有账号的场景——Prove Before Act是正确的选择。它不试图替代Arweave或Sign Protocol，而是填补它们没有覆盖的空白：以当前实时费率实现智能体决策问责。
             </p>
           </div>
         </div>
@@ -1413,7 +1435,7 @@ h = hashlib.sha256(json.dumps(reasoning, sort_keys=True).encode()).hexdigest()
 resp = requests.post("https://provebeforeact.com/api/proof",
     headers={"Authorization": "Bearer pm_您的密钥"},
     json={"file_hash": h, "filename": "trade_decision.json", "metadata": reasoning})
-proof_id = resp.json()["proof_id"]  # ~1.1秒返回，~6秒链上确认
+proof_id = resp.json()["proof_id"]  # 通常~1–2秒返回，~6秒链上确认
 
 # 3. 存证锚定后才执行交易
 execute_trade("买入", "BTC", 0.5)

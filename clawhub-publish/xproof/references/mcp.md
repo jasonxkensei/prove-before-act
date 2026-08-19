@@ -1,5 +1,7 @@
 # MCP Server
 
+> Prove Before Act is the current product name. `xproof` API/package labels are legacy compatibility identifiers. MX-8004 features are optional and available only when `/api/mx8004/status` reports `active`; production currently reports `not_configured`.
+
 Prove Before Act exposes a Model Context Protocol (MCP) JSON-RPC 2.0 endpoint for AI agent integration.
 
 ## Endpoint
@@ -109,7 +111,7 @@ Use `md` format for LLM consumption -- produces human-readable Markdown with all
 
 List Prove Before Act capabilities, pricing, and usage guidance. No parameters required.
 
-**Returns:** Service description, pricing ($0.01/cert in EGLD), list of tools, certification triggers, batch API details, and supported protocols.
+**Returns:** Service description, pricing (current flat per-cert rate in EGLD, served live at `/api/pricing`), list of tools, certification triggers, batch API details, and supported protocols.
 
 ## Discovery
 
@@ -123,7 +125,7 @@ List Prove Before Act capabilities, pricing, and usage guidance. No parameters r
 When exposing Prove Before Act to an LLM, use:
 
 > **Skill: Certify**
-> "Use this to create an immutable blockchain proof for a file. Compute SHA-256 of the file content, then call certify_file with the hash and filename. Cost: $0.01."
+> "Use this to create an immutable blockchain proof for a file. Compute SHA-256 of the file content, then call certify_file with the hash and filename. Cost: the current flat per-proof price (see /api/pricing)."
 
 > **Skill: Verify**
 > "Use this to check if a file has been certified. Pass the proof UUID to verify_proof. Returns blockchain transaction, timestamp, and verification status."

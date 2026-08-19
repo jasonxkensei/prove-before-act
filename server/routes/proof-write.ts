@@ -456,7 +456,7 @@ export function registerProofWriteRoutes(app: Express) {
               const x402Payload = isX402Configured() ? await build402Response(req, "proof") : {};
               return res.status(402).json({
                 error: "INSUFFICIENT_CREDITS",
-                message: "Credit balance insufficient. Purchase additional credits to continue.",
+                message: buildPaymentRequiredMessage(_b),
                 x402: buildX402Block(_b),
                 prepaid_credits: buildPrepaidCreditsBlock(_b),
                 ...x402Payload,
@@ -484,7 +484,7 @@ export function registerProofWriteRoutes(app: Express) {
           options: [
             { type: "free_trial", method: "POST", url: `${baseUrl}/api/agent/register`, body: { agent_name: "your-agent-name" }, free_certifications: TRIAL_QUOTA, description: `${TRIAL_QUOTA} free certifications, no wallet needed` },
             { type: "api_key", header: "Authorization: Bearer pm_xxx", description: "Use an existing API key" },
-            { type: "x402", price: "$0.01", network: "Base (USDC)", description: "Pay per use, no account needed" },
+            { type: "x402", price: `Current live price — see ${baseUrl}/api/pricing`, network: "Base (USDC)", description: "Pay per use, no account needed" },
           ],
         });
       }
@@ -1544,7 +1544,7 @@ export function registerProofWriteRoutes(app: Express) {
           options: [
             { type: "free_trial", method: "POST", url: `${baseUrl}/api/agent/register`, body: { agent_name: "your-agent-name" }, free_certifications: TRIAL_QUOTA, description: `${TRIAL_QUOTA} free certifications, no wallet needed` },
             { type: "api_key", header: "Authorization: Bearer pm_xxx", description: "Use an existing API key" },
-            { type: "x402", price: "$0.01", network: "Base (USDC)", description: "Pay per use, no account needed" },
+            { type: "x402", price: `Current live price — see ${baseUrl}/api/pricing`, network: "Base (USDC)", description: "Pay per use, no account needed" },
           ],
         });
       }

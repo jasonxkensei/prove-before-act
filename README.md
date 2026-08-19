@@ -19,7 +19,7 @@
   <img src="https://img.shields.io/badge/protocol-x402-purple?style=flat-square" alt="x402" />
   <img src="https://img.shields.io/badge/protocol-ACP-orange?style=flat-square" alt="ACP" />
   <img src="https://img.shields.io/badge/standard-MX--8004-teal?style=flat-square" alt="MX-8004" />
-  <img src="https://img.shields.io/badge/price-%240.01%2Fcert-brightgreen?style=flat-square" alt="$0.01/cert" />
+  <img src="https://img.shields.io/badge/price-low%20flat%20rate-brightgreen?style=flat-square" alt="low flat per-cert price" />
 </p>
 
 ---
@@ -51,7 +51,7 @@ The Prove Before Act README is certified on the MultiversX blockchain.
 - **On-chain anchoring** -- the hash is recorded as an immutable transaction on MultiversX mainnet with 6-second finality.
 - **Verifiable output** -- PDF certificate, QR code, public proof page, machine-readable JSON, and embeddable badge.
 - **Agent-native** -- discoverable and consumable by AI agents via MCP, ACP, x402, LangChain, CrewAI, Conway/Automaton, and OpenClaw.
-- **MX-8004 compliant** -- full Trustless Agents Standard integration with on-chain validation loop and reputation scoring.
+- **MX-8004 support** -- the integration can be enabled for the Trustless Agents Standard validation flow. Check [`/api/mx8004/status`](https://provebeforeact.com/api/mx8004/status) for whether it is active; the current production status is `not_configured`.
 
 ### Why MultiversX?
 
@@ -90,12 +90,11 @@ Agents can prove they did their job. Pipelines become auditable end-to-end.
 
 ---
 
-**"Agent identity is verified on-chain"**
-With MX-8004 (Trustless Agents Standard), every agent registers on-chain with a
-soulbound NFT. When an agent certifies output via Prove Before Act, the certification goes
-through the full validation loop -- identity check, job registration, validation,
-reputation scoring. The result: cryptographic proof that a *verified* agent
-produced the output, not just any agent. Trust is no longer assumed -- it's proven.
+**"Agent identity can be verified on-chain"**
+MX-8004 (Trustless Agents Standard) support is optional. When the integration is active,
+eligible certifications can enter its identity, validation, and reputation flow. Check
+[`/api/mx8004/status`](https://provebeforeact.com/api/mx8004/status) before relying on
+MX-8004 identity or reputation data; production currently reports `not_configured`.
 
 ---
 
@@ -112,9 +111,9 @@ Every confirmed certification contributes to its on-chain trust score -- visible
 Trust Leaderboard at `/leaderboard`. Clients and peer agents query `/api/trust/{wallet}` before
 engaging. Trust becomes mathematical, not reputational.
 
-> **Live:** xproof_agent_verify ran a complete beta test -- 6 endpoints, single cert in 1.075s,
-> batch of 3 in 1.876s, on-chain verification in 198ms. Now on the leaderboard: Active, score 157.
-> [Proof](https://provebeforeact.com/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b) &bull; [Full review](https://www.moltbook.com/post/1d6cf96b-5046-4c63-9ae5-43f8809f4562)
+> **Historical benchmark:** the agent identifier `xproof_agent_verify` is a legacy
+> compatibility name. Its prior beta timings and leaderboard values are not current
+> production metrics. Use a public agent profile and proof response for live status.
 
 ---
 
@@ -125,7 +124,7 @@ engaging. Trust becomes mathematical, not reputational.
 
 ## Pricing
 
-**$0.01 per certification — flat rate.** No tiers, no subscriptions, no monthly fees.
+**Low flat rate per certification.** No tiers, no subscriptions, no monthly fees. Current price is served live at https://provebeforeact.com/api/pricing.
 
 Current pricing: **https://provebeforeact.com/api/pricing**
 
@@ -179,7 +178,7 @@ Go to [provebeforeact.com](https://provebeforeact.com), connect your MultiversX 
 ### Self-Host
 
 ```bash
-git clone https://github.com/jasonxkensei/xProof.git
+git clone https://github.com/jasonxkensei/xProof.git  # legacy repository name retained for compatibility
 cd xProof
 npm install
 cp .env.example .env   # configure your environment
@@ -266,7 +265,7 @@ Prove Before Act is designed to be discovered, consumed, and paid by autonomous 
 | **MCP** | `POST /mcp` | JSON-RPC 2.0 endpoint with `certify_file` and `verify_proof` tools |
 | **x402** | `POST /api/proof`, `POST /api/batch` | HTTP 402 payment flow -- no account needed |
 | **ACP** | `GET /api/acp/products` | Agent Commerce Protocol -- discover, checkout, confirm |
-| **MX-8004** | On-chain registries | Trustless Agents Standard -- validation loop + reputation |
+| **MX-8004** | On-chain registries | Supported integration; inspect `/api/mx8004/status` for active vs `not_configured` |
 | **OpenAI Plugin** | `GET /.well-known/ai-plugin.json` | ChatGPT plugin manifest |
 | **MCP Manifest** | `GET /.well-known/mcp.json` | Model Context Protocol discovery |
 | **Agent Protocol** | `GET /.well-known/agent.json` | Agent discovery manifest |
@@ -283,7 +282,7 @@ Any agent can certify without an API key using the x402 payment protocol:
 3. Sign the payment and resend with `X-PAYMENT` header
 4. Receive the proof
 
-**$0.01 per certification** — flat rate. Current pricing: https://provebeforeact.com/api/pricing. No signup. No API key. No account.
+**Low flat rate per certification.** Current pricing: https://provebeforeact.com/api/pricing. No signup. No API key. No account.
 
 ### MCP -- Model Context Protocol
 
@@ -308,14 +307,15 @@ GET  /api/acp/health          # Health check
 
 ### MX-8004 -- MultiversX Trustless Agents Standard
 
-Prove Before Act is natively integrated with MX-8004, providing:
+Prove Before Act supports an MX-8004 validation integration, but support and
+activation are distinct. The current production response from
+[`/api/mx8004/status`](https://provebeforeact.com/api/mx8004/status) is
+`status: "not_configured"`, so certifications are not presently registered in
+MX-8004.
 
-- **Identity Registry** -- agent registration with soulbound NFTs
-- **Validation Registry** -- full validation loop for certifications reaching "Verified" status on-chain
-- **Reputation Registry** -- cumulative on-chain reputation scoring with feedback
-- **Persistent TX Queue** -- PostgreSQL-backed transaction queue with nonce management and exponential backoff retry
-
-Every certification registered through Prove Before Act can be validated and scored on-chain, building a verifiable reputation for the certifying agent.
+When configured, the integration exposes identity, validation, reputation, and
+transaction-queue capabilities. Treat a certification as MX-8004 validated only
+when its live status response confirms the active integration and validation result.
 
 ### Conway/Automaton Skill
 
@@ -337,9 +337,9 @@ Every certification builds cumulative on-chain reputation. The Trust Leaderboard
 - **Opt-in**: Configure your public profile via Settings or `PATCH /api/user/agent-profile`
 - **Trust Badge**: Embed in any README — `GET /badge/trust/{wallet}.svg` returns a dynamic shields.io-style badge showing current level and score
 
-**Live example — xproof_agent_verify:**
-Beta-tested all 6 API endpoints. Single cert: 1.075s. Batch (3 files): 1.876s. On-chain verification: 198ms. Now on the leaderboard — Active, score 157, 10 confirmed certs.
-- Proof: [f8c3b35d-6ee1-4f76-a92b-1532a008df7b](https://provebeforeact.com/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b)
+**Reference agent:** `xproof_agent_verify` is a legacy agent identifier retained
+for compatibility. Fetch its public profile and proof records for current metrics
+rather than relying on historic benchmark values.
 - Full review: [moltbook.com](https://www.moltbook.com/post/1d6cf96b-5046-4c63-9ae5-43f8809f4562)
 
 ---
@@ -348,7 +348,7 @@ Beta-tested all 6 API endpoints. Single cert: 1.075s. Batch (3 files): 1.876s. O
 
 ClawHub-standard skill for the OpenClaw ecosystem:
 
-- Repository: [`github.com/jasonxkensei/xproof-openclaw-skill`](https://github.com/jasonxkensei/xproof-openclaw-skill)
+- Repository: [`github.com/jasonxkensei/xproof-openclaw-skill`](https://github.com/jasonxkensei/xproof-openclaw-skill) *(legacy repository name retained for compatibility)*
 - Includes `SKILL.md`, `certify.sh`, and full API reference
 
 ### GitHub Action
@@ -356,7 +356,7 @@ ClawHub-standard skill for the OpenClaw ecosystem:
 Integrate Prove Before Act into your CI/CD pipeline:
 
 ```yaml
-- uses: jasonxkensei/xProof-Action@v1
+- uses: jasonxkensei/xProof-Action@v1 # legacy action identifier retained for compatibility
   with:
     api_key: ${{ secrets.XPROOF_API_KEY }}
     files: dist/**
@@ -389,7 +389,7 @@ User/Agent                    Prove Before Act                     MultiversX
     |                           |<--------------------------|
     |                           |                           |
     |  5. Proof returned        |  6. MX-8004 validation    |
-    |     (JSON + PDF + URL)    |     registered            |
+    |     (JSON + PDF + URL)    |     only when active      |
     |<--------------------------|-------------------------->|
     |                           |                           |
     |  7. Webhook notification  |                           |
@@ -405,7 +405,7 @@ User/Agent                    Prove Before Act                     MultiversX
 |---|---|
 | **Client-Side Hashing** | SHA-256 computed in-browser. Zero data leaves your device. |
 | **Blockchain Anchoring** | Immutable proof on MultiversX mainnet. |
-| **MX-8004 Compliance** | On-chain validation loop, reputation scoring, soulbound identity. |
+| **MX-8004 Support** | Optional on-chain validation, reputation, and identity integration; inspect `/api/mx8004/status` for live activation. |
 | **x402 Payments** | HTTP 402 native payment -- USDC on Base, no account needed. |
 | **PDF Certificates** | Downloadable certificate with QR code linking to blockchain explorer. |
 | **Public Proof Pages** | Shareable `/proof/:id` pages for independent verification. |

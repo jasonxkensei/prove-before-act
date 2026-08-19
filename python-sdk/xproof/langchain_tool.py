@@ -1,4 +1,4 @@
-"""LangChain BaseTool wrapper for one-line xProof decision certification."""
+"""LangChain BaseTool wrapper for one-line Prove Before Act decision certification."""
 
 import asyncio
 import hashlib

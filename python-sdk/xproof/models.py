@@ -1,4 +1,4 @@
-"""Data models for the xProof SDK."""
+"""Data models for the Prove Before Act SDK."""
 
 from dataclasses import dataclass, field
 from typing import Any, Literal, Optional, TypedDict, Union
@@ -425,7 +425,7 @@ class PricingTier:
 
 @dataclass
 class PricingInfo:
-    """Current pricing information from the xProof API."""
+    """Current pricing information from the Prove Before Act API."""
 
     protocol: str = ""
     version: str = ""

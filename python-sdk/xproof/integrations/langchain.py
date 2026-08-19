@@ -1,4 +1,4 @@
-"""LangChain callback handler for automatic xProof certification."""
+"""LangChain callback handler for automatic Prove Before Act certification."""
 
 import hashlib
 import json
@@ -30,7 +30,7 @@ class XProofCallbackHandler(BaseCallbackHandler):  # type: ignore[misc]  # BaseC
     """LangChain callback handler that certifies agent actions on-chain.
 
     Automatically creates blockchain-anchored proofs for LLM calls,
-    tool invocations, and chain completions using the xProof 4W framework.
+    tool invocations, and chain completions using the Prove Before Act 4W framework.
 
     Example::
 

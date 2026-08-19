@@ -1,5 +1,6 @@
 import { createPublicClient, http, parseAbiItem } from "viem";
 import { base } from "viem/chains";
+import { getCertificationPriceUsd } from "./pricing";
 
 // USDC contract on Base mainnet (6 decimals)
 const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
@@ -15,38 +16,53 @@ export interface CreditPackage {
   price_per_cert: string;
 }
 
-export const CREDIT_PACKAGES: CreditPackage[] = [
+export interface CreditPackageDefinition {
+  id: string;
+  name: string;
+  description: string;
+  certs: number;
+}
+
+export const CREDIT_PACKAGES: CreditPackageDefinition[] = [
   {
     id: "starter",
     name: "Starter",
     description: "100 certifications — ideal for small agents or testing at scale",
     certs: 100,
-    price_usdc: "1.00",
-    price_usdc_raw: "1000000",
-    price_per_cert: "$0.01",
   },
   {
     id: "pro",
     name: "Pro",
     description: "1,000 certifications — for production agents with regular output",
     certs: 1000,
-    price_usdc: "10.00",
-    price_usdc_raw: "10000000",
-    price_per_cert: "$0.01",
   },
   {
     id: "business",
     name: "Business",
     description: "10,000 certifications — high-volume agents, best unit price",
     certs: 10000,
-    price_usdc: "100.00",
-    price_usdc_raw: "100000000",
-    price_per_cert: "$0.01",
   },
 ];
 
-export function getPackage(id: string): CreditPackage | null {
-  return CREDIT_PACKAGES.find((p) => p.id === id) ?? null;
+function formatUsdc(value: number): string {
+  return value.toFixed(6).replace(/\.?0+$/, "");
+}
+
+async function buildPackages(): Promise<CreditPackage[]> {
+  const currentPriceUsd = await getCertificationPriceUsd();
+  return CREDIT_PACKAGES.map((pkg) => {
+    const totalUsd = currentPriceUsd * pkg.certs;
+    return {
+      ...pkg,
+      price_usdc: formatUsdc(totalUsd),
+      price_usdc_raw: Math.round(totalUsd * 1_000_000).toString(),
+      price_per_cert: `$${formatUsdc(currentPriceUsd)} (current live rate; see /api/pricing)`,
+    };
+  });
+}
+
+export async function getPackage(id: string): Promise<CreditPackage | null> {
+  return (await buildPackages()).find((p) => p.id === id) ?? null;
 }
 
 export interface EffectiveCreditPackage extends CreditPackage {
@@ -54,18 +70,18 @@ export interface EffectiveCreditPackage extends CreditPackage {
 }
 
 /**
- * Returns packages — flat $0.01/cert, no promo.
+ * Returns packages at the authoritative current certification rate, with no promo.
  */
-export function getEffectivePackages(_totalCerts: number): EffectiveCreditPackage[] {
-  return CREDIT_PACKAGES.map((pkg) => ({ ...pkg, promo_active: false }));
+export async function getEffectivePackages(_totalCerts: number): Promise<EffectiveCreditPackage[]> {
+  return (await buildPackages()).map((pkg) => ({ ...pkg, promo_active: false }));
 }
 
 /**
  * Returns the package by id.
  * Returns null if the id is not found.
  */
-export function getEffectivePackage(id: string, _totalCerts: number): EffectiveCreditPackage | null {
-  return getEffectivePackages(0).find((p) => p.id === id) ?? null;
+export async function getEffectivePackage(id: string, _totalCerts: number): Promise<EffectiveCreditPackage | null> {
+  return (await getEffectivePackages(0)).find((p) => p.id === id) ?? null;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

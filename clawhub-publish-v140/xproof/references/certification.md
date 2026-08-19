@@ -1,5 +1,7 @@
 # Certification API
 
+> Prove Before Act is the current product name. `xproof` API/package labels are legacy compatibility identifiers. MX-8004 features are optional and available only when `/api/mx8004/status` reports `active`; production currently reports `not_configured`.
+
 REST endpoints for registering an agent, creating blockchain certifications on MultiversX, and reading status.
 
 ## Bootstrap

@@ -4,7 +4,8 @@
  * variants from localStorage so no auth material lingers after sign-out.
  *
  * Keys under test:
- *   xproof_native_auth_token  — primary key (XPROOF_NATIVE_AUTH_TOKEN_KEY)
+ *   pba_native_auth_token     — primary key (PBA_NATIVE_AUTH_TOKEN_KEY)
+ *   xproof_native_auth_token  — legacy pre-rebrand key (compatibility identifier)
  *   nativeAuthToken           — legacy key written by older app versions
  *   loginToken                — legacy key written by older app versions
  *
@@ -16,7 +17,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import {
   handleLogout,
-  XPROOF_NATIVE_AUTH_TOKEN_KEY,
+  PBA_NATIVE_AUTH_TOKEN_KEY,
 } from "@/lib/auth-storage";
 
 // ---------------------------------------------------------------------------
@@ -59,10 +60,16 @@ describe("handleLogout — localStorage token cleanup", () => {
     vi.unstubAllGlobals();
   });
 
-  it("removes xproof_native_auth_token (primary key) after logout", () => {
-    localStorage.setItem(XPROOF_NATIVE_AUTH_TOKEN_KEY, "tok.primary.abc123");
+  it("removes pba_native_auth_token (primary key) after logout", () => {
+    localStorage.setItem(PBA_NATIVE_AUTH_TOKEN_KEY, "tok.primary.abc123");
     handleLogout();
-    expect(localStorage.getItem(XPROOF_NATIVE_AUTH_TOKEN_KEY)).toBeNull();
+    expect(localStorage.getItem(PBA_NATIVE_AUTH_TOKEN_KEY)).toBeNull();
+  });
+
+  it("removes xproof_native_auth_token (legacy pre-rebrand key) after logout", () => {
+    localStorage.setItem("xproof_native_auth_token", "tok.legacy.prebrand");
+    handleLogout();
+    expect(localStorage.getItem("xproof_native_auth_token")).toBeNull();
   });
 
   it("removes nativeAuthToken (legacy key) after logout", () => {
@@ -77,21 +84,23 @@ describe("handleLogout — localStorage token cleanup", () => {
     expect(localStorage.getItem("loginToken")).toBeNull();
   });
 
-  it("removes all three keys simultaneously when all are present", () => {
-    localStorage.setItem(XPROOF_NATIVE_AUTH_TOKEN_KEY, "tok.primary");
+  it("removes all key variants simultaneously when all are present", () => {
+    localStorage.setItem(PBA_NATIVE_AUTH_TOKEN_KEY, "tok.primary");
+    localStorage.setItem("xproof_native_auth_token", "tok.prebrand");
     localStorage.setItem("nativeAuthToken", "tok.native");
     localStorage.setItem("loginToken", "tok.login");
 
     handleLogout();
 
-    expect(localStorage.getItem(XPROOF_NATIVE_AUTH_TOKEN_KEY)).toBeNull();
+    expect(localStorage.getItem(PBA_NATIVE_AUTH_TOKEN_KEY)).toBeNull();
+    expect(localStorage.getItem("xproof_native_auth_token")).toBeNull();
     expect(localStorage.getItem("nativeAuthToken")).toBeNull();
     expect(localStorage.getItem("loginToken")).toBeNull();
   });
 
   it("leaves unrelated localStorage keys untouched", () => {
     localStorage.setItem("walletAddress", "erd1abc");
-    localStorage.setItem(XPROOF_NATIVE_AUTH_TOKEN_KEY, "tok.primary");
+    localStorage.setItem(PBA_NATIVE_AUTH_TOKEN_KEY, "tok.primary");
 
     handleLogout();
 
@@ -99,16 +108,16 @@ describe("handleLogout — localStorage token cleanup", () => {
   });
 
   it("is idempotent — calling twice does not throw", () => {
-    localStorage.setItem(XPROOF_NATIVE_AUTH_TOKEN_KEY, "tok.primary");
+    localStorage.setItem(PBA_NATIVE_AUTH_TOKEN_KEY, "tok.primary");
     expect(() => {
       handleLogout();
       handleLogout();
     }).not.toThrow();
-    expect(localStorage.getItem(XPROOF_NATIVE_AUTH_TOKEN_KEY)).toBeNull();
+    expect(localStorage.getItem(PBA_NATIVE_AUTH_TOKEN_KEY)).toBeNull();
   });
 
-  it("primary key constant matches the string literal 'xproof_native_auth_token'", () => {
+  it("primary key constant matches the string literal 'pba_native_auth_token'", () => {
     // Guards against a silent rename of the exported constant.
-    expect(XPROOF_NATIVE_AUTH_TOKEN_KEY).toBe("xproof_native_auth_token");
+    expect(PBA_NATIVE_AUTH_TOKEN_KEY).toBe("pba_native_auth_token");
   });
 });

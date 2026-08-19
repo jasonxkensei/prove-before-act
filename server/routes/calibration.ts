@@ -490,6 +490,23 @@ export function registerCalibrationRoutes(app: Express) {
         return res.json(cached.body);
       }
 
+      // Count certifications that carry metadata.confidence_level but have no
+      // submitted outcome yet — surfaced on the public profile as an actionable
+      // "pending outcomes" prompt for the owner. This is safe to expose here:
+      // the endpoint already gates on isPublicProfile above, so private
+      // accounts 404 in full and this count only ever describes a public
+      // profile's own pending certifications (no private-account side channel).
+      const pendingResult = await pool.query<{ cnt: string }>(
+        `SELECT COUNT(*) AS cnt
+         FROM certifications c
+         LEFT JOIN agent_outcomes ao ON ao.certification_id = c.id
+         WHERE c.user_id = $1
+           AND c.metadata->>'confidence_level' IS NOT NULL
+           AND ao.id IS NULL`,
+        [user.id]
+      );
+      const pendingOutcomeCount = parseInt(pendingResult.rows[0]?.cnt ?? "0", 10);
+
       // Fetch last N public outcomes for this agent, most recent first.
       // When a cursor is supplied, keyset-filter to avoid scanning sorted rows
       // before the cursor position (eliminates deep-offset cost).
@@ -527,6 +544,7 @@ export function registerCalibrationRoutes(app: Express) {
           wallet_address: user.walletAddress,
           agent_name: user.agentName ?? null,
           outcome_count: 0,
+          pending_outcome_count: pendingOutcomeCount,
           calibration: null,
           message: "No public outcome data yet for this agent.",
           time_series: [],
@@ -577,6 +595,7 @@ export function registerCalibrationRoutes(app: Express) {
         wallet_address: user.walletAddress,
         agent_name: user.agentName ?? null,
         outcome_count: count,
+        pending_outcome_count: pendingOutcomeCount,
         calibration: {
           mean_gap: roundedMean,
           variance: roundedVariance,

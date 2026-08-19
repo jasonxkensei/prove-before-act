@@ -38,7 +38,7 @@ jobs:
 
 That's it — every push to `main` now anchors a tamper-evident proof of your build artifact on-chain.
 
-> **No API key yet, or building an autonomous agent instead of a CI pipeline?** Prove Before Act also supports pay-per-call certification with no account via the **x402** protocol (USDC on Base), through the [`@proveprove-before-act` npm SDK](https://www.npmjs.com/package/@proveprove-before-act) or [`Prove Before Act` PyPI SDK](https://pypi.org/project/xproof/). This GitHub Action always uses an API key because CI runners need a stable, revocable credential rather than a per-call wallet signature.
+> **No API key yet, or building an autonomous agent instead of a CI pipeline?** Prove Before Act also supports pay-per-call certification with no account via the **x402** protocol (USDC on Base), through the [`prove-before-act` npm SDK](https://www.npmjs.com/package/prove-before-act) or [`Prove Before Act` PyPI SDK](https://pypi.org/project/xproof/). This GitHub Action always uses an API key because CI runners need a stable, revocable credential rather than a per-call wallet signature.
 
 ## Inputs
 
@@ -210,7 +210,7 @@ By default the step fails the job if any file couldn't be certified (`fail_on_er
 3. Prove Before Act anchors the hash on the MultiversX blockchain
 4. Returns verification URLs, badges, and a JSON attestation file
 
-**Cost:** $0.01 per certification — flat rate, no tiers. Current pricing: https://provebeforeact.com/api/pricing
+**Cost:** low flat rate per certification, no tiers. Current pricing: https://provebeforeact.com/api/pricing
 
 **Get an API key:** Visit [provebeforeact.com/settings](https://provebeforeact.com/settings) and connect your wallet.
 

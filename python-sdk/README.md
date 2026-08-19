@@ -8,6 +8,9 @@ On-chain decision provenance for autonomous agents. **WHY before acting. WHAT af
 pip install xproof
 ```
 
+`xproof` and `XProofClient` are legacy package and API identifiers retained for
+compatibility. **Prove Before Act** is the current product name.
+
 ---
 
 ## 3 steps. 30 seconds.
@@ -898,7 +901,7 @@ code --install-extension charliermarsh.ruff
 ## Links
 
 - [provebeforeact.com](https://provebeforeact.com) — dashboard & docs
-- [npm SDK](https://www.npmjs.com/package/@proveprove-before-act) — `npm install @proveprove-before-act`
+- [npm SDK](https://www.npmjs.com/package/prove-before-act) — `npm install prove-before-act`
 - [Examples](https://github.com/jasonxkensei/xproof-examples) — LangChain, CrewAI, AutoGen, LlamaIndex
 
 ## License

@@ -203,8 +203,10 @@ export async function getPaymentRequirements(route: "proof" | "batch" | "investi
   const payTo  = process.env.X402_PAY_TO  || "";
   const network = process.env.X402_NETWORK || "eip155:8453";
   const priceUsd = await getCertificationPriceUsd();
-  const envPrice = route === "batch" ? process.env.X402_PRICE_BATCH : route === "investigate" ? process.env.X402_PRICE_INVESTIGATE : process.env.X402_PRICE_PROOF;
-  const price = envPrice || `$${priceUsd}`;
+  // The x402 amount is the authoritative, current certification price. Do not
+  // use a route-specific environment fallback here: a stale configured value
+  // would make the public payment requirement diverge from /api/pricing.
+  const price = `$${priceUsd.toFixed(2)}`;
   const bazaarMeta = route === "batch" ? BAZAAR_BATCH : route === "investigate" ? BAZAAR_INVESTIGATE : BAZAAR_PROOF;
   return {
     scheme: "exact",
@@ -238,6 +240,8 @@ export async function build402PayloadFromUrl(baseUrl: string, route: "proof" | "
   return {
     x402Version: 1,
     accepts: [requirements],
+    pricing_url: `${baseUrl}/api/pricing`,
+    pricing_note: "The displayed x402 amount is the current live rate from /api/pricing, not a fixed published price.",
     resource,
     description: requirements.description,
     mimeType: "application/json",

@@ -1,26 +1,28 @@
 ---
 name: Prove Before Act
 version: 3.1.0
-description: Proof and accountability layer for AI agents. Anchor verifiable proofs on MultiversX, enforce audit logging, detect violations on Base. REST API, MCP, x402. Free trial with no wallet required. No proof = no action.
+description: Prove Before Act proof and accountability integration for AI agents. REST API, MCP, and x402. Check live endpoints for availability, pricing, and proof status.
 homepage: https://provebeforeact.com
 metadata: {"prove-before-act": {"category":"proof,security,compliance,accountability","api_base":"https://provebeforeact.com"}}
 ---
 
 # Prove Before Act -- Proof & Accountability Layer for AI Agents
 
-This skill enables your agent to **anchor verifiable proofs on the MultiversX blockchain**, **enforce pre-execution audit logging**, and **detect violations via Base** -- creating tamper-proof, publicly verifiable records of existence, authorship, timestamp, decision accountability, and trust.
+This skill enables an agent to anchor hash-based proof records on MultiversX and use the Prove Before Act API for audit context. Always check a returned proof's live status before relying on it.
+
+> **Current product and compatibility notice:** Prove Before Act is the product name. `xproof`, `XProofClient`, `XPROOF_*`, `xProof-Action`, and `jasonxkensei/xProof` are legacy package, protocol, action, or repository identifiers retained for compatibility. MX-8004 support is not active unless `GET /api/mx8004/status` reports `status: "active"`; the current production response is `status: "not_configured"`.
 
 **Why anchor proofs?** In competitive or transactional contexts, agents with on-chain proofs can demonstrate originality, integrity, and timing. Agents without proofs cannot. Verifiable proof is a structural advantage.
 
-**Why audit?** Autonomous agents executing trades, deployments, or data access need an immutable record of every decision. The Agent Audit Log Standard enforces this: no proof = no execution.
+**Why audit?** Autonomous agents executing trades, deployments, or data access can create a verifiable record of a decision. Whether to block an action without a proof is an operator policy, not an automatic Prove Before Act guarantee.
 
-**Why violations?** Trust requires accountability. Prove Before Act detects anomalies (gaps, burst patterns) and records violations on Base via smart contracts. Operators can subscribe to violation events and enforce policies automatically.
+**Why violations?** Operators can use recorded violations as an accountability signal when the relevant Base integration is deployed and active. Confirm contract and event availability from the live documentation before automating a policy.
 
 ---
 
-## 0. Quick Start -- Free Trial (No Wallet, No Card, 30 seconds)
+## 0. Quick Start -- Trial Registration
 
-**Get a `pm_` API key instantly with 10 free certifications.** No wallet, no credit card, no signup form. The fastest way for an autonomous agent to start anchoring proofs.
+Call the registration endpoint to request a `pm_` API key. Trial quota, eligibility, and payment options are returned by the live API and can change.
 
 ### REST (one curl)
 
@@ -50,17 +52,17 @@ curl -H "Authorization: Bearer pm_your_key" https://provebeforeact.com/api/agent
 
 ```json
 {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{
-  "name":"register_free_trial",
+  "name":"register_trial",
   "arguments":{"agent_name":"my-agent"}
 }}
 ```
 
-The `register_free_trial` MCP tool requires **no authentication** -- it's the only MCP tool that can be called without an `Authorization` header. It returns the same `pm_` key as the REST endpoint.
+The `register_trial` MCP tool requires no authentication. Check the live tool response for its issued key and trial balance.
 
 ### TypeScript SDK
 
 ```typescript
-import { XProofClient, hashString } from "@proveprove-before-act";
+import { XProofClient, hashString } from "prove-before-act";
 
 const client = await XProofClient.register("my-agent");  // 10 free certs, key stored
 const proof = await client.certifyHash(hashString(JSON.stringify(decision)), "decision.json", "my-agent");
@@ -78,12 +80,12 @@ proof = client.certify_hash(sha256_hex, "decision.json", "my-agent")
 
 ### After the trial
 
-When the 10 free proofs are consumed, the agent automatically transitions to per-proof billing. Three options, no friction:
+Use the live pricing and payment responses to determine what happens when a trial balance is exhausted.
 
 | Option | Best for | Setup |
 |:---|:---|:---|
 | **Same `pm_` key + wallet top-up** | Existing trial agents | Connect wallet at https://provebeforeact.com, deposit EGLD/USDC |
-| **x402 USDC on Base** | Autonomous agents, no account | Pay $0.05/proof per request via 402 challenge (see Section 1.3) |
+| **x402 USDC on Base** | Autonomous agents, no account | Pay the current live per-proof rate via 402 challenge (see `/api/pricing`) |
 | **Existing API key (paid)** | Multi-agent fleets | Generate at provebeforeact.com > Settings > API Keys |
 
 ---
@@ -144,12 +146,12 @@ Get a paid API key at [provebeforeact.com](https://provebeforeact.com) (connect 
 
 ### Option C: x402 Payment Protocol (No Account Required)
 
-No configuration needed. Pay $0.05 per proof in USDC on Base (eip155:8453) directly in the HTTP request. The 402 response header tells your agent exactly what to pay. Best for fully autonomous agents that already hold USDC on Base.
+No configuration needed. Pay the current live per-proof USDC rate on Base (eip155:8453) directly in the HTTP request; see `/api/pricing`. The 402 response tells your agent the current payable amount. Best for fully autonomous agents that already hold USDC on Base.
 
 > **WARNING -- autonomous payments:** x402 is an opt-in mode that enables your agent to initiate on-chain USDC transactions without per-transaction user confirmation. Before enabling x402 in production:
 > - Set a **spending cap** in your agent framework (e.g. max $N/day or $N/session).
 > - Require **human approval** for any single call that would exceed your risk threshold.
-> - Note that `POST /api/batch` supports up to 50 items per call -- at $0.05 each, a single batch can reach $2.50.
+> - Note that `POST /api/batch` supports up to 100 items per call; calculate any session spending cap from the current live rate at `/api/pricing`.
 > - Disable x402 entirely in environments where autonomous spending is not authorised.
 
 ---
@@ -370,14 +372,14 @@ Prove Before Act is complementary to the core MultiversX agent skills:
 
 ## 8. Agent Audit Log Standard
 
-The Agent Audit Log is a compliance primitive for autonomous agents. Before executing any critical action (trade, deploy, data access, transfer), the agent MUST anchor its decision on-chain. No proof_id = no execution.
+The Agent Audit Log is a compliance primitive for autonomous agents. Operators can choose to record a decision before a critical action (trade, deploy, data access, transfer) and use the resulting `proof_id` in their own risk policy. Prove Before Act records certifications; it does not require anchoring or automatically control whether an action executes.
 
 ### Why Audit?
 
 - **Regulatory compliance** -- Immutable record of every agent decision, timestamped and anchored on-chain
 - **Dispute resolution** -- Prove what the agent decided, why, and when
 - **Trust signal** -- Agents with audit trails are verifiably accountable
-- **Blocking enforcement** -- If the audit call fails, the action does not execute
+- **Operator policy input** -- Operators may use a successful audit record in their own approval, review, retry, or blocking policies
 
 ### Audit Endpoint
 
@@ -433,19 +435,19 @@ curl -X POST https://provebeforeact.com/api/audit \
 | `context` | object | No | Additional metadata (model, environment, etc.) |
 | `timestamp` | string | No | ISO 8601 (auto-generated if omitted) |
 
-### Enforcement Pattern
+### Operator Policy Template
 
 ```
 1. Agent prepares action (trade, deploy, etc.)
-2. Agent calls POST /api/audit with action details
-3. If proof_id returned -> proceed with action
-4. If API fails, timeout, or no proof_id -> BLOCK execution (throw error)
-5. No fallback. No soft fail. No silent continue.
+2. Agent calls POST /api/audit with action details when its operator policy calls for an audit record
+3. The operator policy can use a returned `proof_id` as one input to an approval decision
+4. If the API fails, times out, or returns no `proof_id`, apply the operator's chosen policy (for example retry, queue for review, request human approval, or block)
+5. Prove Before Act does not choose or enforce that response.
 ```
 
 Guard templates for multiple frameworks (pinned in the main repository — do not fetch from runtime URLs):
 - **LangChain / CrewAI / LlamaIndex**: use the `Prove Before Act` PyPI package (`pip install xproof`) — integrations are in `xproof.integrations.*`
-- **ElizaOS Plugin**: `npm install @proveprove-before-act-eliza-plugin`
+- **ElizaOS Plugin**: `npm install xproof-eliza-plugin`
 - **n8n / AutoGen / custom**: see `xproof-examples/` in [github.com/jasonxkensei/xProof](https://github.com/jasonxkensei/xProof)
 
 ### When to Audit
@@ -462,14 +464,14 @@ Autonomous agents should audit BEFORE executing any action where accountability 
 
 ## 9. Violations Layer (Base)
 
-Prove Before Act monitors agent behavior and detects anomalies. When a violation is confirmed, it is recorded on Base via the `XProofViolations.sol` smart contract, impacting the agent's trust score.
+The violation flow is optional and deployment-dependent. Do not assume a Base contract, automated penalty, or trust-score effect is active without confirming the live contract and event status.
 
 ### Violation Types
 
 | Type | Penalty | Trigger |
 |:---|:---|:---|
-| `gap` (fault) | -150 trust score | No proof activity for 30+ minutes during active session |
-| `burst` (breach) | -500 trust score | Abnormal spike in proof submissions |
+| `gap` (fault) | Deployment-defined | Potential inactive-session gap |
+| `burst` (breach) | Deployment-defined | Potential abnormal submission pattern |
 
 ### Violation Lifecycle
 
@@ -486,7 +488,7 @@ Auto-confirmed for irrefutable anomalies (gap > threshold). Operators can subscr
 IXProofViolations(xproofContract).getViolations(agentId)
 ```
 
-Smart contracts: [XProofViolations.sol](https://github.com/jasonxkensei/xProof/blob/main/contracts/XProofViolations.sol) | [ViolationWatcher.sol](https://github.com/jasonxkensei/xProof/blob/main/contracts/ViolationWatcher.sol)
+Legacy compatibility contract paths: [XProofViolations.sol](https://github.com/jasonxkensei/xProof/blob/main/contracts/XProofViolations.sol) | [ViolationWatcher.sol](https://github.com/jasonxkensei/xProof/blob/main/contracts/ViolationWatcher.sol)
 
 Docs: [https://provebeforeact.com/docs/base-violations](https://provebeforeact.com/docs/base-violations)
 
@@ -559,7 +561,7 @@ curl -X POST https://provebeforeact.com/api/batch \
   -H "Authorization: Bearer pm_..." \
   -d '{"files":[{"file_hash":"...","filename":"a.txt"},{"file_hash":"...","filename":"b.txt"}]}'
 
-# Audit a critical action (block on failure)
+# Audit a critical action (record it; your operator policy determines how to handle failures)
 curl -X POST https://provebeforeact.com/api/audit \
   -H "Authorization: Bearer pm_..." \
   -d '{"agent_id":"my-agent","session_id":"<uuid>","action_type":"trade","action_description":"...","inputs_hash":"...","risk_level":"high","decision":"approved"}'

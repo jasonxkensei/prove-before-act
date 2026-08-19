@@ -66,11 +66,11 @@ const protocols = [
   },
   {
     name: "MX-8004",
-    subtitle: "Trustless Agents Standard",
-    description: "On-chain agent identity, validation, and reputation on MultiversX. Soulbound NFTs for agents.",
-    link: "https://github.com/sasurobert/mx-8004",
+    subtitle: "Optional Trustless Agents Integration",
+    description: "Supported integration for on-chain identity, validation, and reputation on MultiversX. It is currently not configured in production; check /api/mx8004/status before relying on it.",
+    link: "/api/mx8004/status",
     icon: Award,
-    badge: "Protocol",
+    badge: "Optional",
   },
   {
     name: "OpenAI Plugin",
@@ -163,7 +163,7 @@ export default function AgentsPage() {
   const { data: pricing } = useQuery<{ current_price_usd: number }>({
     queryKey: ["/api/pricing"],
   });
-  const price = pricing ? `$${pricing.current_price_usd}` : "$0.01";
+  const price = pricing ? `$${pricing.current_price_usd}` : "current live rate";
 
   const { data: calibratedData } = useQuery<LeaderboardResponse>({
     queryKey: ["/api/leaderboard", { calibrated: true, limit: 6, sort: "calibration" }],
@@ -250,10 +250,10 @@ export default function AgentsPage() {
             <div className="mb-16 text-center">
               <Badge variant="outline" className="mb-4">Protocols</Badge>
               <h2 className="mb-4 text-3xl md:text-4xl font-bold" data-testid="text-protocols-title">
-                Supported protocols
+                Protocols and integrations
               </h2>
               <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                Native integrations with every major agent protocol and standard.
+                Current and optional integrations for major agent protocols and standards. Check live status before relying on optional capabilities.
               </p>
             </div>
 

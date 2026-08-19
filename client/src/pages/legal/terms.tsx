@@ -7,7 +7,7 @@ export default function ConditionsUtilisation() {
   const { data: pricing } = useQuery<{ current_price_usd: number }>({
     queryKey: ["/api/pricing"],
   });
-  const price = pricing ? `$${pricing.current_price_usd}` : "$0.01";
+  const price = pricing ? `$${pricing.current_price_usd}` : "the current live rate";
 
   return (
     <div className="min-h-screen bg-background">
@@ -78,7 +78,7 @@ export default function ConditionsUtilisation() {
           <section>
             <h2 className="text-xl font-semibold mb-4">5. Pricing</h2>
             <p className="text-muted-foreground leading-relaxed mb-4">
-              The certification service is currently priced starting at <strong className="text-foreground">{price} per certification</strong>, 
+               <strong className="text-foreground">Current live rate: {price} per certification.</strong> This is not a fixed published price; see <a className="text-primary underline" href="/api/pricing">/api/pricing</a> for the live quoted amount.
               payable in EGLD (the native cryptocurrency of MultiversX) at the exchange rate in effect 
               at the time of the transaction. Pricing is subject to change and may decrease as the network grows.
             </p>

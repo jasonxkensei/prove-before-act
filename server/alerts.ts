@@ -2,7 +2,13 @@ import { logger } from "./logger";
 import { db } from "./db";
 import { txQueue } from "@shared/schema";
 import { eq, and, gte, sql } from "drizzle-orm";
-import { getRateLimitFailOpenEventsInWindow } from "./metrics";
+import { checkAndAlert as checkAndAlertRateLimitImpl } from "./rateLimitAlerts";
+
+// Rate-limit fail-open alerting now lives in its own module (server/
+// rateLimitAlerts.ts) so it carries no DB/drizzle import. Re-exported here
+// under the original names for backward compatibility with existing callers.
+export { getRateLimitAlertConfig } from "./rateLimitAlerts";
+export const checkAndAlertRateLimit = checkAndAlertRateLimitImpl;
 
 /**
  * Return a redacted representation of a webhook URL safe for structured logs.
@@ -156,73 +162,6 @@ export function getAlertConfig(): {
     windowMinutes: txAlertConfig.windowMinutes,
     configured: !!txAlertConfig.webhookUrl,
     lastAlertAt: txLastAlertSentAt > 0 ? new Date(txLastAlertSentAt).toISOString() : null,
-  };
-}
-
-// ============================================================
-// Rate-limit fail-open alerting
-// ============================================================
-
-interface RlAlertPayload {
-  alert: "rate_limit_fail_open_spike";
-  severity: "warning" | "critical";
-  timestamp: string;
-  window_minutes: number;
-  total_fail_opens: number;
-  threshold: number;
-  by_op: Record<string, number>;
-}
-
-const rlAlertConfig = {
-  failureThreshold: parseInt(process.env.RL_FAIL_OPEN_ALERT_THRESHOLD || "10", 10),
-  cooldownMinutes: parseInt(process.env.RL_FAIL_OPEN_ALERT_COOLDOWN_MINUTES || "30", 10),
-  windowMinutes: parseInt(process.env.RL_FAIL_OPEN_ALERT_WINDOW_MINUTES || "5", 10),
-  webhookUrl: process.env.RL_FAIL_OPEN_ALERT_WEBHOOK_URL || process.env.TX_ALERT_WEBHOOK_URL || null,
-};
-
-let rlLastAlertSentAt: number = 0;
-
-// Called from server/pgRateLimit.ts on every rate-limit DB fail-open.
-// Cheap to call: the cooldown check is the very first thing that runs.
-export async function checkAndAlertRateLimit(): Promise<void> {
-  if (!rlAlertConfig.webhookUrl) return;
-
-  const now = Date.now();
-  if (now - rlLastAlertSentAt < rlAlertConfig.cooldownMinutes * 60 * 1000) return;
-
-  try {
-    const windowMs = rlAlertConfig.windowMinutes * 60 * 1000;
-    const { total, by_op } = getRateLimitFailOpenEventsInWindow(windowMs);
-
-    if (total < rlAlertConfig.failureThreshold) return;
-
-    const severity: "warning" | "critical" = total >= rlAlertConfig.failureThreshold * 3 ? "critical" : "warning";
-    const payload: RlAlertPayload = {
-      alert: "rate_limit_fail_open_spike", severity,
-      timestamp: new Date().toISOString(),
-      window_minutes: rlAlertConfig.windowMinutes,
-      total_fail_opens: total,
-      threshold: rlAlertConfig.failureThreshold,
-      by_op,
-    };
-
-    await sendAlertWebhook(rlAlertConfig.webhookUrl, "rate_limit_fail_open_spike", payload);
-    rlLastAlertSentAt = now;
-    logger.warn("Rate-limit fail-open alert sent", { component: "alerts", severity, total, by_op });
-  } catch (err: any) {
-    logger.error("Failed to check/send rate-limit fail-open alert", { component: "alerts", error: err.message });
-  }
-}
-
-export function getRateLimitAlertConfig(): {
-  threshold: number; cooldownMinutes: number; windowMinutes: number; configured: boolean; lastAlertAt: string | null;
-} {
-  return {
-    threshold: rlAlertConfig.failureThreshold,
-    cooldownMinutes: rlAlertConfig.cooldownMinutes,
-    windowMinutes: rlAlertConfig.windowMinutes,
-    configured: !!rlAlertConfig.webhookUrl,
-    lastAlertAt: rlLastAlertSentAt > 0 ? new Date(rlLastAlertSentAt).toISOString() : null,
   };
 }
 

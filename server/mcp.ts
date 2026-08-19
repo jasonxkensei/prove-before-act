@@ -20,6 +20,7 @@ import {
 } from "./routes/helpers";
 import { pgCheckRateLimit } from "./pgRateLimit";
 import { buildCoherenceAnchor } from "./coherence-anchor";
+import { isMX8004Configured } from "./mx8004";
 
 interface McpContext {
   baseUrl: string;
@@ -169,86 +170,19 @@ export async function createMcpServer(ctx: McpContext) {
           ipHash,
         });
 
-        // ── Onboarding proof — consume 1 trial credit, anchor on-chain ────────
-        // Purpose: demonstrate the full certification flow to the agent and show
-        // what a successful certify_file response looks like, so it can immediately
-        // replicate the pattern. This is why register_trial was designed to auto-
-        // anchor one proof: without it, agents call register_trial (no auth needed)
-        // then get UNAUTHORIZED on certify_file because they haven't set the Bearer
-        // token in their MCP client config. Seeing the proof here, with the auth
-        // header pre-filled, removes that friction entirely.
-        const onboardingHash = crypto
+        // No onboarding certification is anchored at registration. Agents only
+        // receive a certification when they explicitly request one via
+        // certify_file (or the REST /api/proof endpoint). Registration therefore
+        // leaves the full trial quota intact (trial_remaining === TRIAL_QUOTA,
+        // trial_used === 0) — see tests/register-trial-first-proof.test.ts.
+        const trialRemaining = TRIAL_QUOTA;
+
+        // Pre-compute a real SHA-256 hash so the rest_example is immediately
+        // executable — no placeholder for the agent to substitute manually.
+        const sampleHash = crypto
           .createHash("sha256")
-          .update(`xproof:onboarding:${trialWallet}:${name}`)
+          .update(`xproof:quick-start:${name}:${rawKey.slice(0, 10)}`)
           .digest("hex");
-
-        let onboardingProof: Record<string, any> | null = null;
-        const creditConsumed = await atomicConsumeTrialCredit(trialUser.id, 1);
-        if (creditConsumed) {
-          try {
-            const [pending] = await db.insert(certifications).values({
-              userId: trialUser.id,
-              fileName: `onboarding-${name}.json`,
-              fileHash: onboardingHash,
-              fileType: "json",
-              authorName: name,
-              blockchainStatus: "pending",
-              isPublic: true,
-              authMethod: "onboarding",
-              metadata: {
-                action_type: "proof_of_registration",
-                who: name,
-                what: "onboarding_certification",
-                why: "Automatically created during registration to demonstrate the complete certification flow and Bearer token usage.",
-              },
-            }).returning();
-
-            // Fire blockchain async — do NOT await. Registration returns in <200ms
-            // with blockchain_status: "pending". The cert upgrades to "confirmed"
-            // in ~5s in the background. The agent can check verify_url for the tx hash.
-            recordOnBlockchain(onboardingHash, `onboarding-${name}.json`, name)
-              .then(async (txResult) => {
-                await db.update(certifications)
-                  .set({
-                    transactionHash: txResult.transactionHash,
-                    transactionUrl: txResult.transactionUrl,
-                    blockchainStatus: "confirmed",
-                    ...(txResult.latencyMs != null ? { blockchainLatencyMs: txResult.latencyMs } : {}),
-                  })
-                  .where(eq(certifications.id, pending.id))
-                  .catch(() => {});
-                logger.info("Onboarding proof confirmed (async) via MCP register_trial", {
-                  agentName: name, userId: trialUser.id, proofId: pending.id,
-                  txHash: txResult.transactionHash,
-                });
-              })
-              .catch(async () => {
-                // Blockchain failed in background — clean up pending row + refund credit.
-                await db.delete(certifications).where(eq(certifications.id, pending.id)).catch(() => {});
-                await refundTrialCredit(trialUser.id).catch(() => {});
-                logger.warn("Onboarding proof blockchain failed (async) — credit refunded", { agentName: name });
-              });
-
-            onboardingProof = {
-              proof_id: pending.id,
-              file_hash: pending.fileHash,
-              filename: pending.fileName,
-              blockchain_status: "pending",
-              verify_url: `${baseUrl}/proof/${pending.id}`,
-              certificate_url: `${baseUrl}/api/certificates/${pending.id}.pdf`,
-              note: "Your first on-chain proof is being anchored — blockchain_status will update to 'confirmed' in ~5 seconds. Call verify_url to see the transaction hash once confirmed.",
-            };
-          } catch (proofErr) {
-            // DB insert failed — refund the trial credit but don't fail registration.
-            await refundTrialCredit(trialUser.id).catch(() => {});
-            logger.warn("Onboarding proof DB insert failed during MCP register_trial — credit refunded", {
-              agentName: name,
-              error: String(proofErr),
-            });
-          }
-        }
-
-        const trialRemaining = onboardingProof ? TRIAL_QUOTA - 1 : TRIAL_QUOTA;
 
         return {
           content: [{
@@ -258,7 +192,6 @@ export async function createMcpServer(ctx: McpContext) {
               api_key: rawKey,
               agent_name: name,
               trial_remaining: trialRemaining,
-              onboarding_proof: onboardingProof,
               authorization_guide: {
                 problem: "register_trial requires NO Authorization header — it is the only tool that works without a key. Every other tool (certify_file, audit_agent_session, etc.) requires Authorization: Bearer <api_key>.",
                 solution: `Add this header to your MCP client before calling any other tool: Authorization: Bearer ${rawKey}`,
@@ -272,15 +205,18 @@ export async function createMcpServer(ctx: McpContext) {
                 },
                 what_happens_without_it: "certify_file returns UNAUTHORIZED — this is the #1 reason agents register but never certify.",
               },
+              quick_start: {
+                mcp_certify: `Call the certify_file MCP tool with { "file_hash": "<sha256-of-your-content>", "filename": "output.json" }. Replace file_hash with the SHA-256 of your own content.`,
+                rest_example: `curl -s -X POST ${baseUrl}/api/proof -H "Authorization: Bearer ${rawKey}" -H "Content-Type: application/json" -d '{"file_hash":"${sampleHash}","filename":"output.json"}'`,
+                batch: `POST ${baseUrl}/api/batch to certify up to 50 files in a single call (Authorization: Bearer ${rawKey}).`,
+              },
               next_step: {
                 action: "Call certify_file",
-                note: "The onboarding_proof above shows exactly what you will receive. Replace file_hash with SHA-256 of your own content.",
+                note: "Replace file_hash with SHA-256 of your own content. No proof is created until you call certify_file.",
                 example: { file_hash: "<sha256-of-your-content>", filename: "output.json" },
-                rest_alternative: `curl -s -X POST ${baseUrl}/api/proof -H "Authorization: Bearer ${rawKey}" -H "Content-Type: application/json" -d '{"file_hash":"${onboardingHash}","filename":"output.json"}'`,
+                rest_alternative: `curl -s -X POST ${baseUrl}/api/proof -H "Authorization: Bearer ${rawKey}" -H "Content-Type: application/json" -d '{"file_hash":"${sampleHash}","filename":"output.json"}'`,
               },
-              message: onboardingProof
-                ? `Registration complete. Your first proof is on-chain (see onboarding_proof). You have ${trialRemaining} certifications remaining. Configure Authorization: Bearer ${rawKey} in your MCP client to start certifying.`
-                : `Registration complete. You have ${trialRemaining} free certifications. Configure Authorization: Bearer ${rawKey} in your MCP client, then call certify_file.`,
+              message: `Registration complete. You have ${trialRemaining} free certifications. Configure Authorization: Bearer ${rawKey} in your MCP client, then call certify_file to anchor your first proof.`,
             }),
           }],
         };
@@ -981,20 +917,22 @@ export async function createMcpServer(ctx: McpContext) {
 
   server.tool(
     "discover_services",
-    "Discover available xproof certification services, pricing, and capabilities. No authentication required.",
+    "Discover available Prove Before Act certification services, live pricing, and capabilities. No authentication required.",
     {},
     async () => {
       const priceUsd = await getCertificationPriceUsd();
+      const mx8004Active = isMX8004Configured();
       return {
         content: [{
           type: "text" as const,
           text: JSON.stringify({
-            service: "xproof",
-            tagline: "The canonical proof layer for AI agents",
-            description: "Immutable blockchain certification on MultiversX. Anchor SHA-256 file hashes as proof of existence and ownership.",
+            service: "Prove Before Act",
+            legacy_compatibility_identifiers: ["xproof package and protocol names", "XProofClient SDK class names"],
+            tagline: "Proof and accountability layer for AI agents",
+            description: "Anchor SHA-256 file hashes on MultiversX for verifiable proof records. Check each proof's returned status before relying on it.",
             pricing: { amount: priceUsd.toString(), currency: "USD", payment_method: "EGLD", note: "Paid in EGLD at current exchange rate" },
             capabilities: [
-              "register_trial - START HERE if you have no key. Get 10 free certifications instantly — no wallet, no account, no auth required.",
+              `register_trial - START HERE if you have no key. Get ${TRIAL_QUOTA} trial certifications, subject to the live registration response.`,
               `certify_file - Create blockchain proof ($${currentPriceUsd}/cert) — requires API key (use register_trial first)`,
               `certify_with_confidence - Staged proof with confidence score (initial/partial/pre-commitment/final) — $${currentPriceUsd}/stage`,
               "audit_agent_session - Certify a full agent decision session BEFORE acting (WHO/WHAT/WHEN/WHY) — Prove Before Act compliance",
@@ -1027,13 +965,18 @@ export async function createMcpServer(ctx: McpContext) {
             badge: {
               endpoint: `${baseUrl}/badge/{proof_id}`,
               description: "Dynamic SVG badge for README files. Shows verification status (green=verified, yellow=pending).",
-              markdown_template: "[![xProof Verified](https://provebeforeact.com/badge/{proof_id})](https://explorer.multiversx.com/transactions/{tx_hash})",
+              markdown_template: "[![Prove Before Act Verified](https://provebeforeact.com/badge/{proof_id})](https://explorer.multiversx.com/transactions/{tx_hash})",
               markdown_note: "Replace {tx_hash} with the transaction hash from the certification response. For pending proofs, use https://provebeforeact.com/proof/{proof_id} instead.",
             },
             mx8004: {
               standard: "MX-8004 (Trustless Agents Standard)",
-              role: "validation_oracle",
-              description: "Each certification is registered as a validated job in the MX-8004 registries, building verifiable on-chain reputation for AI agents.",
+              supported: true,
+              active: mx8004Active,
+              status: mx8004Active ? "active" : "not_configured",
+              role: mx8004Active ? "validation_oracle" : null,
+              description: mx8004Active
+                ? "The active integration registers eligible certifications in the configured MX-8004 validation flow."
+                : "MX-8004 support is available but not active in this environment. Certifications are not currently registered in MX-8004.",
               status_endpoint: `${baseUrl}/api/mx8004/status`,
               reputation_endpoint: `${baseUrl}/api/agent/{nonce}/reputation`,
               specification: "https://github.com/sasurobert/mx-8004/blob/master/docs/specification.md",
@@ -1068,14 +1011,20 @@ export async function createMcpServer(ctx: McpContext) {
             integrations: {
               mcp: `${baseUrl}/mcp`,
               acp: `${baseUrl}/api/acp/products`,
-              openclaw_skill: "https://github.com/jasonxkensei/xproof-openclaw-skill",
-              github_action: "https://github.com/marketplace/actions/xproof-certify",
+              openclaw_skill: {
+                url: "https://github.com/jasonxkensei/xproof-openclaw-skill",
+                compatibility_note: "The repository name is retained as a legacy distribution identifier.",
+              },
+              github_action: {
+                url: "https://github.com/marketplace/actions/xproof-certify",
+                compatibility_note: "The xProof action name is retained as a legacy compatibility identifier.",
+              },
               openai_plugin: `${baseUrl}/.well-known/ai-plugin.json`,
               langchain: `${baseUrl}/tools/langchain.json`,
               crewai: `${baseUrl}/tools/crewai.json`
             },
             bazaar_discovery: {
-              description: "xproof endpoints are registered in the x402 Bazaar — the canonical discovery layer for x402-compatible services. AI agents with Bazaar MCP access can find, evaluate, and call xproof without reading any documentation.",
+              description: "Prove Before Act endpoints are available through the x402 Bazaar discovery layer. Check the live payment response for currently available endpoints and pricing.",
               bazaar_mcp: "GET https://api.cdp.coinbase.com/platform/v2/x402/discovery/mcp",
               search_terms: ["proof of existence", "blockchain certification", "audit trail", "decision provenance", "agent accountability", "file hash", "SHA-256 anchor"],
               discoverable_endpoints: [
@@ -1083,7 +1032,7 @@ export async function createMcpServer(ctx: McpContext) {
                 { path: "POST /api/batch", description: "Batch certify up to 100 files in one transaction" },
                 { path: "POST /api/proof (investigate)", description: "4W incident investigation — reconstruct agent decision audit trail" },
               ],
-              note: "Bazaar metadata (input/output schemas, examples) is included in every 402 response from xproof. The facilitator catalogs xproof the first time it processes a payment for each endpoint.",
+              note: "Bazaar metadata (input/output schemas and examples) is included in Prove Before Act x402 responses. Check the live response before relying on catalog availability.",
             },
             compatible_agents: ["Conway Terminal", "OpenClaw", "Claude Code", "Codex", "LangChain", "CrewAI", "Any MCP/x402 agent"],
           }),
@@ -1094,7 +1043,7 @@ export async function createMcpServer(ctx: McpContext) {
 
   server.tool(
     "audit_agent_session",
-    `Certify an AI agent's work session on the MultiversX blockchain BEFORE executing any critical action (trade, deploy, data access). Returns a proof_id compliance certificate. The agent MUST call this tool before acting — certification failure blocks execution. Governance: set reversibility_class='irreversible' for actions that cannot be undone — a policy violation is flagged if confidence_level < 0.95 on irreversible decisions. Schema: ${baseUrl}/.well-known/agent-audit-schema.json`,
+    `Certify an AI agent's work session on the MultiversX blockchain before a critical action (trade, deploy, data access). Returns a proof_id that an operator can use in its own compliance policy. This tool records certification; whether a missing or failed certification blocks execution is an operator-implemented policy decision. Governance: set reversibility_class='irreversible' for actions that cannot be undone — a policy violation is flagged if confidence_level < 0.95 on irreversible decisions. Schema: ${baseUrl}/.well-known/agent-audit-schema.json`,
     {
       agent_id: z.string().min(1).describe("Identifier of the agent making the decision"),
       session_id: z.string().min(1).describe("Unique session identifier (UUID or timestamp-based)"),
@@ -1335,7 +1284,7 @@ export async function createMcpServer(ctx: McpContext) {
 
   server.tool(
     "check_attestations",
-    "Check domain-specific attestations for an AI agent wallet on xproof. Returns active attestations issued by third-party certifying bodies (healthcare, finance, legal, security, research). Each active attestation adds +50 to the agent's trust score (max +150 from 3 attestations). Use this to verify an agent's credentials before delegating a sensitive task.",
+    "Check domain-specific attestations for an AI agent wallet on Prove Before Act. Returns active attestations issued by third-party certifying bodies (healthcare, finance, legal, security, research). Use the returned attestation data when assessing credentials before delegating a sensitive task.",
     {
       wallet: z.string().min(3).describe("MultiversX wallet address (erd1...) of the agent to check"),
     },
@@ -1427,7 +1376,7 @@ export async function createMcpServer(ctx: McpContext) {
 
   server.tool(
     "investigate_proof",
-    "Reconstruct the full 4W audit trail for a contested agent action. Returns WHO (agent identity + SIGIL), WHAT (SHA-256 hash on-chain), WHEN (MultiversX block timestamp), WHY (decision chain anchored before acting). Includes verification summary with intent_preceded_execution flag, chronological timeline of WHY/WHAT proofs, and session heartbeat anchor. Requires x402 payment ($0.01 USDC on Base via X-PAYMENT header) or API key authentication. Without payment, returns payment requirements with USDC address and amount.",
+    "Reconstruct the full 4W audit trail for a contested agent action. Returns WHO (agent identity + SIGIL), WHAT (SHA-256 hash on-chain), WHEN (MultiversX block timestamp), WHY (decision chain anchored before acting). Includes verification summary with intent_preceded_execution flag, chronological timeline of WHY/WHAT proofs, and session heartbeat anchor. Requires x402 payment (current per-call USDC price on Base via X-PAYMENT header) or API key authentication. Without payment, returns payment requirements with USDC address and amount.",
     {
       proof_id: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i).describe("UUID of any proof in the action pair — WHY (reasoning), WHAT (action), or heartbeat session proof"),
       wallet: z.string().min(3).describe("Agent wallet address (erd1...) that owns the proof"),
@@ -1452,7 +1401,7 @@ export async function createMcpServer(ctx: McpContext) {
                   message: "x402 payment required for investigate_proof. Include X-PAYMENT header with USDC payment on Base.",
                   payment_requirements: paymentInfo,
                   incident_report_url: `${baseUrl}/incident/${wallet}/${proof_id}`,
-                  hint: "Include the x-payment header in your MCP POST request to /mcp. Payment is $0.01 USDC on Base (EIP-155:8453).",
+                  hint: "Include the x-payment header in your MCP POST request to /mcp. Payment is the current per-call USDC price on Base (EIP-155:8453); the exact amount is in the payment_requirements block.",
                 }) }],
                 isError: true,
               };
@@ -1565,7 +1514,7 @@ export async function createMcpServer(ctx: McpContext) {
   server.resource(
     "specification",
     "xproof://specification",
-    { description: "Full xproof specification document", mimeType: "text/markdown" },
+    { description: "Full Prove Before Act specification document (legacy xproof URI)", mimeType: "text/markdown" },
     async () => ({
       contents: [{
         uri: "xproof://specification",
@@ -2053,11 +2002,12 @@ export async function createMcpServer(ctx: McpContext) {
   // pattern): before delegating or executing a sub-action, check whether a
   // valid, unexpired WHY anchor already exists for the given intent. Returns
   // { allowed: true/false, anchor_id?, expires_at? }. When allowed=false the
-  // orchestrator should block execution and require a check_coherence call
+  // An operator may configure its orchestrator to pause delegation and require
+  // a check_coherence call; Prove Before Act does not enforce this automatically.
   // first. Read-only and free — it never consumes credits.
   server.tool(
     "require_coherence_anchor",
-    `Policy gate: verify a valid, unexpired coherence anchor (WHY proof) exists for a given intent BEFORE allowing an action to execute. Call this from an orchestrator before delegating a sub-action. Pass either the exact intent_hash (the coherence_anchor returned by check_coherence) or the same intent + context + decision payload (the anchor hash is recomputed deterministically). Returns { allowed, anchor_id, expires_at }. If allowed=false, block execution and call check_coherence first. Free — no credit consumed.`,
+    `Optional policy helper: verify a valid, unexpired coherence anchor (WHY proof) exists for a given intent before allowing an action to execute. An operator can call this from its orchestrator before delegating a sub-action. Pass either the exact intent_hash (the coherence_anchor returned by check_coherence) or the same intent + context + decision payload (the anchor hash is recomputed deterministically). Returns { allowed, anchor_id, expires_at }. If allowed=false, the operator's orchestrator can choose to pause and call check_coherence first. Free — no credit consumed.`,
     {
       intent_hash: sha256HexSchema.optional().describe("The coherence_anchor hash returned by check_coherence (64 hex chars). Fastest path — pass this if you have it."),
       intent: z.string().min(1).max(2000).optional().describe("The stated goal — must be byte-identical to the check_coherence call (used with context + decision to recompute the anchor hash)"),
@@ -2104,7 +2054,7 @@ export async function createMcpServer(ctx: McpContext) {
               text: JSON.stringify({
                 allowed: false,
                 reason: "NO_ANCHOR",
-                message: "No coherence anchor exists for this intent. Block execution and call check_coherence (intent + context + decision) to anchor the WHY first.",
+                message: "No coherence anchor exists for this intent. An operator policy may pause delegation and call check_coherence (intent + context + decision) to anchor the WHY first.",
                 required_action: "check_coherence",
               }),
             }],
@@ -2122,7 +2072,7 @@ export async function createMcpServer(ctx: McpContext) {
               text: JSON.stringify({
                 allowed: false,
                 reason: "ANCHOR_EXPIRED",
-                message: `A coherence anchor exists but is older than ${ttlMinutes} minutes. Block execution and call check_coherence again to re-anchor the intent.`,
+                message: `A coherence anchor exists but is older than ${ttlMinutes} minutes. An operator policy may pause delegation and call check_coherence again to re-anchor the intent.`,
                 anchor_id: row.proofId,
                 anchor_created_at: row.createdAt ? new Date(row.createdAt).toISOString() : null,
                 expired_at: new Date(expiresAtMs).toISOString(),

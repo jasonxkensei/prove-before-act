@@ -1,8 +1,8 @@
-"""Exception classes for the xProof SDK."""
+"""Exception classes for the Prove Before Act SDK."""
 
 
 class XProofError(Exception):
-    """Base exception for all xProof SDK errors."""
+    """Base exception for all Prove Before Act SDK errors."""
 
     def __init__(self, message: str, status_code: int = 0, response: object = None) -> None:
         super().__init__(message)

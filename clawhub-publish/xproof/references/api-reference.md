@@ -1,5 +1,7 @@
 # Prove Before Act API Reference
 
+> Prove Before Act is the current product name. `xproof` API/package labels are legacy compatibility identifiers. MX-8004 features are optional and available only when `/api/mx8004/status` reports `active`; production currently reports `not_configured`.
+
 Base URL: `https://provebeforeact.com`
 
 ## Authentication
@@ -119,4 +121,4 @@ Available tools: `certify_file`, `verify_proof`, `get_proof`, `discover_services
 
 ## Pricing
 
-$0.01 per certification.
+The current flat per-certification price (served live at `/api/pricing`).

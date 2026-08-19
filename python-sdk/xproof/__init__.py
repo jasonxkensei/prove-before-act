@@ -1,4 +1,7 @@
-"""xProof Python SDK — blockchain proof-of-existence on MultiversX."""
+"""Prove Before Act Python SDK — blockchain proof records on MultiversX.
+
+The ``xproof`` package name is retained as a legacy compatibility identifier.
+"""
 
 from .client import XProofClient
 from .exceptions import (

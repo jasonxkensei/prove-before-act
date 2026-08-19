@@ -1,5 +1,7 @@
 # Prove Before Act API Reference (Quick Index)
 
+> Prove Before Act is the current product name. `xproof` API/package labels are legacy compatibility identifiers. MX-8004 features are optional and available only when `/api/mx8004/status` reports `active`; production currently reports `not_configured`.
+
 Complete OpenAPI 3.1 spec is available at: `GET https://provebeforeact.com/api/acp/openapi.json`
 
 ## Onboarding (No Account)

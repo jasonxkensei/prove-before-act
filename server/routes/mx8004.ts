@@ -12,9 +12,10 @@ export function registerMx8004Routes(app: Express) {
       return res.status(503).json({
         standard: "MX-8004",
         version: "1.0",
-        erc8004_compliant: true,
+        supported: true,
+        active: false,
         status: "not_configured",
-        message: "MX-8004 integration is not active. Set MX8004_* environment variables to enable.",
+        message: "MX-8004 support is available but not active in this environment. Set MX8004_* environment variables to enable it.",
         documentation: "https://github.com/sasurobert/mx-8004",
         agents_explorer: "https://agents.multiversx.com",
       });
@@ -25,10 +26,11 @@ export function registerMx8004Routes(app: Express) {
     return res.json({
       standard: "MX-8004",
       version: "1.0",
-      erc8004_compliant: true,
+      supported: true,
+      active: true,
       status: "active",
       role: "validation_oracle",
-      description: "xproof acts as a validation oracle: each certification is registered as a validated job in the MX-8004 Validation Registry, with full ERC-8004 validation loop (init_job → submit_proof → validation_request → validation_response → append_response).",
+      description: "Prove Before Act acts as a validation oracle: each certification is registered as a validated job in the MX-8004 Validation Registry, with the configured validation loop (init_job → submit_proof → validation_request → validation_response → append_response).",
       contracts,
       capabilities: {
         identity: ["register_agent", "get_agent", "set_metadata", "set_service_configs"],
@@ -40,8 +42,8 @@ export function registerMx8004Routes(app: Express) {
         steps: [
           "1. init_job — create job in Validation Registry",
           "2. submit_proof — attach file hash + blockchain tx as proof",
-          "3. validation_request — xproof nominates itself as validator",
-          "4. validation_response — xproof submits score 100 (verified)",
+          "3. validation_request — Prove Before Act nominates itself as validator",
+          "4. validation_response — Prove Before Act submits the configured validation response",
           "5. append_response — attach certificate URL to job",
         ],
         final_status: "Verified",

@@ -148,7 +148,7 @@ export default function Landing() {
   }>({
     queryKey: ["/api/pricing"],
   });
-  const price = pricing ? `$${pricing.current_price_usd}` : "$0.01";
+  const price = pricing ? `$${pricing.current_price_usd}` : "current live rate";
 
   const [agentName, setAgentName] = useState("");
   const [trialKey, setTrialKey] = useState<string | null>(null);
@@ -856,7 +856,7 @@ for response in agent_responses:
                   <span className="text-sm font-bold">Multi-agent Orchestration</span>
                   <Badge variant="secondary" className="text-xs ml-auto">Fleet</Badge>
                 </div>
-                <p className="text-xs text-muted-foreground mb-3">One proof layer for 50+ agents. Batch up to 100 actions per call — $10 per 1,000 anchors.</p>
+                <p className="text-xs text-muted-foreground mb-3">One proof layer for 50+ agents. Batch up to 100 actions per call — cost per 1,000 anchors is calculated from the current live rate at <code>/api/pricing</code>.</p>
                 <pre className="rounded bg-muted/60 border border-border/40 p-3 text-xs font-mono leading-relaxed overflow-x-auto whitespace-pre">{`# Batch: up to 100 actions per call
 proofs = xproof.certify_batch([
   {"file_hash": sha256(action1),
@@ -947,7 +947,7 @@ proofs = xproof.certify_batch([
                     An agent with a wallet but no Prove Before Act account can anchor its first proof in a single HTTP session. No registration, no browser, no human in the loop. The agent discovers the price, signs a USDC micro-payment on Base, and gets the proof.
                   </p>
                   <div className="flex items-center gap-2 flex-wrap text-xs">
-                    {["No API key", "USDC on Base", "eip155:8453", "$0.01 per proof", "Coinbase CDP compatible"].map((tag) => (
+                    {["No API key", "USDC on Base", "eip155:8453", `${price} / proof`, "Coinbase CDP compatible"].map((tag) => (
                       <Badge key={tag} variant="secondary" className="text-xs">{tag}</Badge>
                     ))}
                   </div>
@@ -1168,7 +1168,7 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
                 Agents pay natively.<br className="hidden md:block" /> No signup, no API key.
               </h2>
               <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                Any x402-compatible agent anchors proofs in one round-trip. $0.01 in USDC on Base. No account required.
+                Any x402-compatible agent anchors proofs in one round-trip. The current rate is {price} in USDC on Base (see <code>/api/pricing</code>). No account required.
               </p>
             </div>
 
@@ -1203,7 +1203,7 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
                   <div className="mt-2">{`{`}</div>
                   <div className="pl-4"><span className="text-[#79c0ff]">"x402Version"</span><span className="text-[#e6edf3]">: </span><span className="text-[#ffa657]">1</span><span className="text-[#e6edf3]">,</span></div>
                   <div className="pl-4"><span className="text-[#79c0ff]">"accepts"</span><span className="text-[#e6edf3]">: [{`{`}</span></div>
-                  <div className="pl-8"><span className="text-[#79c0ff]">"price"</span><span className="text-[#e6edf3]">: </span><span className="text-[#a5d6ff]">"$0.01"</span><span className="text-[#e6edf3]">,</span></div>
+                  <div className="pl-8"><span className="text-[#79c0ff]">"price"</span><span className="text-[#e6edf3]">: </span><span className="text-[#a5d6ff]">"{price}"</span><span className="text-[#e6edf3]">,</span></div>
                   <div className="pl-8"><span className="text-[#79c0ff]">"network"</span><span className="text-[#e6edf3]">: </span><span className="text-[#a5d6ff]">"eip155:8453"</span><span className="text-[#e6edf3]">,</span></div>
                   <div className="pl-8"><span className="text-[#79c0ff]">"asset"</span><span className="text-[#e6edf3]">: </span><span className="text-[#a5d6ff]">"USDC"</span></div>
                   <div className="pl-4"><span className="text-[#e6edf3]">{`}]`}</span></div>
@@ -1258,7 +1258,7 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
             </div>
 
             <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
-              {["USDC", "Base Mainnet", "eip155:8453", "No account needed", "$0.01 / proof"].map((label) => (
+              {["USDC", "Base Mainnet", "eip155:8453", "No account needed", `${price} / proof`].map((label) => (
                 <Badge key={label} variant="outline" className="text-xs font-mono" data-testid={`badge-x402-${label.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}>{label}</Badge>
               ))}
             </div>

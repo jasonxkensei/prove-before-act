@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Prove Before Act — The on-chain notary for AI agents</title>
-    <meta name="description" content="The on-chain notary for AI agents. Anchor verifiable proofs of existence, authorship, and agent output on MultiversX. API-first, x402-compatible, $0.01 per proof." />
+    <meta name="description" content="The on-chain notary for AI agents. Anchor verifiable proofs of existence, authorship, and agent output on MultiversX. API-first, x402-compatible, low flat per-proof pricing (see /api/pricing)." />
     
     <!-- Favicon & Icons -->
     <link rel="icon" href="/favicon-new.png" type="image/png" />
@@ -126,7 +126,7 @@
           "name": "How much does a proof cost?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Each proof costs $0.01 with no subscription or hidden fees. Payment is accepted in USDC on Base mainnet or EGLD on MultiversX. New API key registrations include 10 free proofs."
+            "text": "Each proof costs a low flat fee with no subscription or hidden fees — the current price is served live at /api/pricing. Payment is accepted in USDC on Base mainnet or EGLD on MultiversX. New API key registrations include 10 free proofs."
           }
         },
         {
@@ -134,7 +134,7 @@
           "name": "What blockchain does Prove Before Act use?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Prove Before Act anchors proofs on the MultiversX blockchain, a high-performance, eco-friendly European blockchain. Violations and accountability events are recorded on Base (Ethereum L2). This dual-chain architecture separates proof anchoring from enforcement."
+            "text": "Prove Before Act anchors proofs on the MultiversX blockchain, a high-performance, eco-friendly European blockchain. Violation detection and trust scoring run server-side today; publishing violation events to Base (Ethereum L2) is a planned integration — see the Base violations documentation for current status."
           }
         },
         {
@@ -142,7 +142,7 @@
           "name": "How do AI agents integrate with Prove Before Act?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "AI agents can integrate via REST API with an API key, Model Context Protocol (MCP) for autonomous decision anchoring, or x402 HTTP-native payments for zero-setup proof creation. The Agent Audit Log Standard enforces pre-execution accountability: agents anchor their reasoning (WHY) before acting (WHAT)."
+            "text": "AI agents can integrate via REST API with an API key, Model Context Protocol (MCP) for autonomous decision anchoring, or x402 HTTP-native payments for zero-setup proof creation. The Agent Audit Log Standard describes a pre-execution accountability pattern — agents anchor their reasoning (WHY) before acting (WHAT); blocking on a proof is a policy the operator implements in agent code."
           }
         },
         {

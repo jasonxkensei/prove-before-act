@@ -43,7 +43,7 @@ function CopyButton({ text }: { text: string }) {
 const EMITTER_SOL = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-contract XProofViolations {
+contract ProveBeforeActViolations {
     address public owner;
     address public emitter;
 
@@ -100,7 +100,7 @@ contract XProofViolations {
 const WATCHER_SOL = `// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-interface IXProofViolations {
+interface IProveBeforeActViolations {
     enum ViolationType { FAULT, BREACH }
 
     event ViolationConfirmed(
@@ -114,20 +114,18 @@ interface IXProofViolations {
 
 contract ViolationWatcher {
     address public owner;
-    address public xproofContract;
+    address public proveBeforeActContract;
+    address public relayer;
 
     enum ResponseMode {
-        ALERT_ONLY,        // Emit event, no action
-        AUTO_PAUSE_FAULT,  // Pause on any violation
-        AUTO_PAUSE_BREACH  // Pause on breach only
+        ALERT_ONLY,          // Emit an alert event, no state signal
+        PAUSE_SIGNAL_FAULT,  // Write a pause signal for any violation
+        PAUSE_SIGNAL_BREACH  // Write a pause signal for a breach only
     }
 
     ResponseMode public mode;
     bytes32 public watchedAgent;
     bool public paused;
-
-    address public alertTarget;
-    address public pauseTarget;
 
     uint256 public faultCount;
     uint256 public breachCount;
@@ -135,12 +133,12 @@ contract ViolationWatcher {
 
     event AgentPaused(
         bytes32 indexed agentWallet,
-        IXProofViolations.ViolationType reason,
+        IProveBeforeActViolations.ViolationType reason,
         bytes32 proofId
     );
     event AlertFired(
         bytes32 indexed agentWallet,
-        IXProofViolations.ViolationType reason,
+        IProveBeforeActViolations.ViolationType reason,
         bytes32 proofId
     );
     event AgentResumed(bytes32 indexed agentWallet);
@@ -150,32 +148,37 @@ contract ViolationWatcher {
         _;
     }
 
-    constructor(
-        address _xproofContract,
-        bytes32 _watchedAgent,
-        ResponseMode _mode,
-        address _alertTarget,
-        address _pauseTarget
-    ) {
-        owner = msg.sender;
-        xproofContract = _xproofContract;
-        watchedAgent = _watchedAgent;
-        mode = _mode;
-        alertTarget = _alertTarget;
-        pauseTarget = _pauseTarget;
+    modifier onlyRelayer() {
+        require(msg.sender == relayer, "Not relayer");
+        _;
     }
 
+    constructor(
+        address _proveBeforeActContract,
+        bytes32 _watchedAgent,
+        ResponseMode _mode,
+        address _relayer
+    ) {
+        require(_relayer != address(0), "Zero relayer");
+        owner = msg.sender;
+        proveBeforeActContract = _proveBeforeActContract;
+        watchedAgent = _watchedAgent;
+        mode = _mode;
+        relayer = _relayer;
+    }
+
+    // An off-chain relayer observes ViolationConfirmed and submits this call.
+    // Solidity events cannot invoke this contract on their own.
     function onViolation(
         bytes32 agentWallet,
         bytes32 proofId,
-        IXProofViolations.ViolationType violationType
-    ) external {
-        require(msg.sender == xproofContract, "Not Prove Before Act");
+        IProveBeforeActViolations.ViolationType violationType
+    ) external onlyRelayer {
         require(agentWallet == watchedAgent, "Not watched agent");
 
         lastViolationTime = block.timestamp;
 
-        if (violationType == IXProofViolations.ViolationType.FAULT) {
+        if (violationType == IProveBeforeActViolations.ViolationType.FAULT) {
             faultCount++;
         } else {
             breachCount++;
@@ -183,12 +186,12 @@ contract ViolationWatcher {
 
         emit AlertFired(agentWallet, violationType, proofId);
 
-        if (mode == ResponseMode.AUTO_PAUSE_FAULT) {
+        if (mode == ResponseMode.PAUSE_SIGNAL_FAULT) {
             paused = true;
             emit AgentPaused(agentWallet, violationType, proofId);
         } else if (
-            mode == ResponseMode.AUTO_PAUSE_BREACH &&
-            violationType == IXProofViolations.ViolationType.BREACH
+            mode == ResponseMode.PAUSE_SIGNAL_BREACH &&
+            violationType == IProveBeforeActViolations.ViolationType.BREACH
         ) {
             paused = true;
             emit AgentPaused(agentWallet, violationType, proofId);
@@ -207,6 +210,11 @@ contract ViolationWatcher {
 
     function setWatchedAgent(bytes32 _agent) external onlyOwner {
         watchedAgent = _agent;
+    }
+
+    function setRelayer(address _relayer) external onlyOwner {
+        require(_relayer != address(0), "Zero relayer");
+        relayer = _relayer;
     }
 
     function transferOwnership(address newOwner) external onlyOwner {
@@ -242,9 +250,8 @@ export default function DocsBaseViolationsPage() {
             Violation Events on Base
           </h1>
           <p className="text-lg text-muted-foreground max-w-3xl">
-            When a violation moves from <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">proposed</code> to{" "}
-            <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">confirmed</code>, Prove Before Act emits an immutable event on Base.
-            Any protocol can read it. No API dependency. No trust required.
+            This page documents the Base violation-events design. When the emitter contract is deployed (see Current Status below), a violation moving from <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">proposed</code> to{" "}
+            <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">confirmed</code> will be emitted as an immutable event on Base that any protocol can read without an API dependency. Today, violation detection, confirmation, and trust-score penalties run server-side; query <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">GET /api/agents/:wallet/violations</code> for live data.
           </p>
         </div>
 
@@ -272,7 +279,7 @@ export default function DocsBaseViolationsPage() {
                       <h3 className="font-semibold text-sm">Base</h3>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Violation events emitted on-chain. USDC payments via x402. Public, composable, no API dependency.
+                      Target chain for violation events (emitter deployment pending — see Current Status). USDC payments via x402 are live today.
                     </p>
                   </div>
                   <div className="rounded-lg border p-4">
@@ -287,9 +294,9 @@ export default function DocsBaseViolationsPage() {
                 </div>
                 <div className="rounded-md bg-muted/50 p-4 text-sm">
                   <p className="font-mono text-xs">
-                    <span className="text-muted-foreground">Flow:</span>{" "}
-                    Violation detected → confirmed in Prove Before Act DB → <code>XProofViolations.emitViolation()</code> on Base →{" "}
-                    <code>ViolationConfirmed</code> event → Operator's <code>ViolationWatcher.onViolation()</code> fires
+                     <span className="text-muted-foreground">Planned flow (once the emitter is deployed):</span>{" "}
+                    Violation detected → confirmed in Prove Before Act DB → <code>ProveBeforeActViolations.emitViolation()</code> on Base →{" "}
+                     <code>ViolationConfirmed</code> event → operator&apos;s off-chain relayer observes it → relayer calls <code>ViolationWatcher.onViolation()</code>
                   </p>
                 </div>
               </div>
@@ -304,15 +311,15 @@ export default function DocsBaseViolationsPage() {
               </h2>
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  The <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">ViolationConfirmed</code> event is emitted by the Prove Before Act Base contract
-                  every time a violation is confirmed. Both <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">agentWallet</code> and{" "}
-                  <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">proofId</code> are indexed for efficient filtering.
+                   This is the proposed <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">ViolationConfirmed</code> event schema for a future Prove Before Act Base contract.
+                   If that contract is deployed and active, <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">agentWallet</code> and{" "}
+                   <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">proofId</code> will be indexed for efficient filtering.
                 </p>
                 <div className="relative group/code">
                   <pre className="bg-[#0d1117] rounded-md p-4 text-xs font-mono text-[#e6edf3] overflow-x-auto" data-testid="code-event-schema">{`event ViolationConfirmed(
     bytes32 indexed agentWallet,  // Keccak256 of the erd1... address
     bytes32 indexed proofId,      // Keccak256 of the UUID proof ID
-    ViolationType violationType,  // 0 = FAULT (-150), 1 = BREACH (-500)
+    ViolationType violationType,  // 0 = FAULT, 1 = BREACH (penalties are server-defined)
     uint256 timestamp,            // Block timestamp
     string details                // Human-readable violation summary
 );
@@ -329,7 +336,7 @@ enum ViolationType {
                     <div className="flex items-center gap-2 mb-1">
                       <AlertTriangle className="h-3.5 w-3.5 text-yellow-500" />
                       <span className="font-semibold text-sm">FAULT</span>
-                      <Badge variant="outline" className="text-xs">-150 trust</Badge>
+                      <Badge variant="outline" className="text-xs">server-defined penalty</Badge>
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Technical slip. Timing gap exceeding 30 minutes between WHY and WHAT. Missing heartbeat. Auto-confirmed when blockchain timestamps prove the gap.
@@ -339,7 +346,7 @@ enum ViolationType {
                     <div className="flex items-center gap-2 mb-1">
                       <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
                       <span className="font-semibold text-sm">BREACH</span>
-                      <Badge variant="outline" className="text-xs">-500 trust</Badge>
+                      <Badge variant="outline" className="text-xs">server-defined penalty</Badge>
                     </div>
                     <p className="text-xs text-muted-foreground">
                       Intentional violation. Content hash mismatch between anchored proof and published output. Unauthorized action without prior reasoning proof.
@@ -354,10 +361,10 @@ enum ViolationType {
             <CardContent className="p-6">
               <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
                 <Shield className="h-5 w-5 text-primary" />
-                Emitter Contract — <code className="text-sm font-mono">XProofViolations.sol</code>
+                Emitter Contract — <code className="text-sm font-mono">ProveBeforeActViolations.sol</code>
               </h2>
               <p className="text-sm text-muted-foreground mb-4">
-                Deployed by Prove Before Act on Base. Only the authorized Prove Before Act backend wallet can call <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">emitViolation()</code>.
+                Template for the emitter Prove Before Act will deploy on Base (deployment pending — see Current Status). Once live, only the authorized Prove Before Act backend wallet can call <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">emitViolation()</code>.
                 Operators don't deploy this — they read its events.
               </p>
               <div className="relative group/code">
@@ -374,8 +381,7 @@ enum ViolationType {
                 Operator Template — <code className="text-sm font-mono">ViolationWatcher.sol</code>
               </h2>
               <p className="text-sm text-muted-foreground mb-4">
-                Deploy this contract on Base to watch your agent. Three response modes, configurable at deploy time.
-                Read it in 5 minutes, deploy it in 10.
+                 Operator template for recording a response after an off-chain relayer observes your agent&apos;s violation event on Base. The relayer is a required constructor parameter; Solidity events cannot call this watcher automatically.
               </p>
 
               <div className="grid gap-3 md:grid-cols-3 mb-6">
@@ -385,25 +391,25 @@ enum ViolationType {
                     <span className="font-semibold text-sm">ALERT_ONLY</span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Emit an event on every violation. No automated response. Monitor and respond manually.
+                     The relayer writes an alert event on every violation. Your operator tooling monitors and responds.
                   </p>
                 </div>
                 <div className="rounded-lg border p-3">
                   <div className="flex items-center gap-2 mb-1">
                     <Pause className="h-3.5 w-3.5 text-yellow-500" />
-                    <span className="font-semibold text-sm">AUTO_PAUSE_FAULT</span>
+                     <span className="font-semibold text-sm">PAUSE_SIGNAL_FAULT</span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Pause agent on any confirmed violation — fault or breach. Conservative. Resume manually.
+                     The relayer writes <code>paused = true</code> for any violation. Your agent or automation must read and honor that signal.
                   </p>
                 </div>
                 <div className="rounded-lg border p-3">
                   <div className="flex items-center gap-2 mb-1">
                     <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
-                    <span className="font-semibold text-sm">AUTO_PAUSE_BREACH</span>
+                     <span className="font-semibold text-sm">PAUSE_SIGNAL_BREACH</span>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Pause agent only on breach (intentional). Faults trigger alerts but don't pause. Balanced.
+                     The relayer writes a pause signal only for a breach. Faults emit alerts; the operator decides how any system reacts.
                   </p>
                 </div>
               </div>
@@ -423,7 +429,8 @@ enum ViolationType {
               </h2>
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  Deploy a <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">ViolationWatcher</code> on Base to monitor your agent.
+                   Deploy a <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">ViolationWatcher</code> on Base if your operator wants on-chain response state.
+                   Run an off-chain relayer that filters the emitter&apos;s <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">ViolationConfirmed</code> events and submits <code className="text-xs bg-muted px-1.5 py-0.5 rounded font-mono">onViolation()</code> transactions.
                   Constructor parameters:
                 </p>
 
@@ -438,7 +445,7 @@ enum ViolationType {
                     </thead>
                     <tbody className="font-mono text-xs">
                       <tr className="border-b">
-                        <td className="py-2 pr-4">_xproofContract</td>
+                        <td className="py-2 pr-4">_proveBeforeActContract</td>
                         <td className="py-2 pr-4 text-muted-foreground">address</td>
                         <td className="py-2 font-sans text-muted-foreground">Prove Before Act violations contract on Base</td>
                       </tr>
@@ -450,17 +457,12 @@ enum ViolationType {
                       <tr className="border-b">
                         <td className="py-2 pr-4">_mode</td>
                         <td className="py-2 pr-4 text-muted-foreground">uint8</td>
-                        <td className="py-2 font-sans text-muted-foreground">0 = ALERT_ONLY, 1 = AUTO_PAUSE_FAULT, 2 = AUTO_PAUSE_BREACH</td>
+                        <td className="py-2 font-sans text-muted-foreground">0 = ALERT_ONLY, 1 = PAUSE_SIGNAL_FAULT, 2 = PAUSE_SIGNAL_BREACH</td>
                       </tr>
                       <tr className="border-b">
-                        <td className="py-2 pr-4">_alertTarget</td>
+                        <td className="py-2 pr-4">_relayer</td>
                         <td className="py-2 pr-4 text-muted-foreground">address</td>
-                        <td className="py-2 font-sans text-muted-foreground">Address to receive alert notifications</td>
-                      </tr>
-                      <tr>
-                        <td className="py-2 pr-4">_pauseTarget</td>
-                        <td className="py-2 pr-4 text-muted-foreground">address</td>
-                        <td className="py-2 font-sans text-muted-foreground">Address controlling the agent's pause/resume logic</td>
+                        <td className="py-2 font-sans text-muted-foreground">Off-chain relayer wallet authorized to submit observed violation events</td>
                       </tr>
                     </tbody>
                   </table>
@@ -472,12 +474,11 @@ forge create --rpc-url https://mainnet.base.org \\
   --private-key $DEPLOYER_KEY \\
   contracts/ViolationWatcher.sol:ViolationWatcher \\
   --constructor-args \\
-    0xXPROOF_BASE_CONTRACT \\
+    0xPROVE_BEFORE_ACT_BASE_CONTRACT \\
     0x$(cast keccak "erd1your_agent_wallet_address") \\
     2 \\
-    0xYOUR_ALERT_ADDRESS \\
-    0xYOUR_PAUSE_ADDRESS`}</pre>
-                  <CopyButton text={`forge create --rpc-url https://mainnet.base.org \\\n  --private-key $DEPLOYER_KEY \\\n  contracts/ViolationWatcher.sol:ViolationWatcher \\\n  --constructor-args \\\n    0xXPROOF_BASE_CONTRACT \\\n    0x$(cast keccak "erd1your_agent_wallet_address") \\\n    2 \\\n    0xYOUR_ALERT_ADDRESS \\\n    0xYOUR_PAUSE_ADDRESS`} />
+    0xYOUR_RELAYER_ADDRESS`}</pre>
+                   <CopyButton text={`forge create --rpc-url https://mainnet.base.org \\\n  --private-key $DEPLOYER_KEY \\\n  contracts/ViolationWatcher.sol:ViolationWatcher \\\n  --constructor-args \\\n    0xPROVE_BEFORE_ACT_BASE_CONTRACT \\\n    0x$(cast keccak "erd1your_agent_wallet_address") \\\n    2 \\\n    0xYOUR_RELAYER_ADDRESS`} />
                 </div>
               </div>
             </CardContent>
@@ -490,15 +491,15 @@ forge create --rpc-url https://mainnet.base.org \\
                 Query Violation Events
               </h2>
               <p className="text-sm text-muted-foreground mb-4">
-                Any protocol can query Base for confirmed violations without touching the Prove Before Act API. 
-                Filter by agent wallet or proof ID using the indexed event parameters.
+                After an emitter contract is deployed and its address is published, a protocol will be able to query Base for confirmed violations without touching the Prove Before Act API.
+                Until then, query the server-side violations API. The example below is a deployment-dependent integration template.
               </p>
               <div className="relative group/code">
                 <pre className="bg-[#0d1117] rounded-md p-4 text-xs font-mono text-[#e6edf3] overflow-x-auto" data-testid="code-query-events">{`// ethers.js v6 — query violation events for an agent
 import { ethers } from "ethers";
 
 const provider = new ethers.JsonRpcProvider("https://mainnet.base.org");
-const contract = new ethers.Contract(XPROOF_BASE_ADDRESS, [
+const contract = new ethers.Contract(PROVE_BEFORE_ACT_BASE_ADDRESS, [
   "event ViolationConfirmed(bytes32 indexed agentWallet, bytes32 indexed proofId, uint8 violationType, uint256 timestamp, string details)"
 ], provider);
 
@@ -518,7 +519,7 @@ for (const event of events) {
     details: event.args.details
   });
 }`}</pre>
-                <CopyButton text={`import { ethers } from "ethers";\n\nconst provider = new ethers.JsonRpcProvider("https://mainnet.base.org");\nconst contract = new ethers.Contract(XPROOF_BASE_ADDRESS, [\n  "event ViolationConfirmed(bytes32 indexed agentWallet, bytes32 indexed proofId, uint8 violationType, uint256 timestamp, string details)"\n], provider);\n\nconst agentHash = ethers.keccak256(ethers.toUtf8Bytes("erd1your_agent_wallet"));\nconst events = await contract.queryFilter(contract.filters.ViolationConfirmed(agentHash));\n\nfor (const event of events) {\n  console.log({\n    proofId: event.args.proofId,\n    type: event.args.violationType === 0 ? "FAULT" : "BREACH",\n    timestamp: new Date(Number(event.args.timestamp) * 1000),\n    details: event.args.details\n  });\n}`} />
+                <CopyButton text={`import { ethers } from "ethers";\n\nconst provider = new ethers.JsonRpcProvider("https://mainnet.base.org");\nconst contract = new ethers.Contract(PROVE_BEFORE_ACT_BASE_ADDRESS, [\n  "event ViolationConfirmed(bytes32 indexed agentWallet, bytes32 indexed proofId, uint8 violationType, uint256 timestamp, string details)"\n], provider);\n\nconst agentHash = ethers.keccak256(ethers.toUtf8Bytes("erd1your_agent_wallet"));\nconst events = await contract.queryFilter(contract.filters.ViolationConfirmed(agentHash));\n\nfor (const event of events) {\n  console.log({\n    proofId: event.args.proofId,\n    type: event.args.violationType === 0 ? "FAULT" : "BREACH",\n    timestamp: new Date(Number(event.args.timestamp) * 1000),\n    details: event.args.details\n  });\n}`} />
               </div>
             </CardContent>
           </Card>
@@ -527,12 +528,11 @@ for (const event of events) {
             <CardContent className="p-6">
               <h2 className="text-xl font-semibold mb-3">Composability</h2>
               <p className="text-sm text-muted-foreground mb-3">
-                Prove Before Act emits the signal. The operator's contract decides what to do with it.
+                 If the planned Base emitter is deployed, Prove Before Act can emit a signal and the operator's contract can decide what to do with it.
               </p>
               <p className="text-sm text-muted-foreground">
-                The violation event is public, immutable, and indexable. Any protocol building on top can query Base
-                for confirmed violations without touching the Prove Before Act API. This is not infrastructure Prove Before Act has to build.
-                This is infrastructure operators build on top of Prove Before Act because the standard is open and the events are public.
+                 A deployed violation event would be public, immutable, and indexable. Once a contract address is published, protocols could query Base
+                 for confirmed violations without touching the Prove Before Act API. This is an integration pattern operators may choose to build after deployment, not active Prove Before Act infrastructure today.
               </p>
               <div className="flex flex-wrap gap-2 mt-4">
                 {["Open standard", "Base Mainnet", "No API dependency", "Composable", "Immutable events"].map((label) => (
@@ -559,7 +559,7 @@ for (const event of events) {
                 </div>
                 <div className="flex items-center gap-3">
                   <Badge variant="default" className="text-xs">Live</Badge>
-                  <span className="text-muted-foreground">Trust score penalty on confirmed violations (-150 fault / -500 breach)</span>
+                  <span className="text-muted-foreground">Trust score penalty on confirmed violations (server-defined; breach weighted heavier than fault)</span>
                 </div>
                 <div className="flex items-center gap-3">
                   <Badge variant="outline" className="text-xs">Template ready</Badge>
@@ -567,7 +567,7 @@ for (const event of events) {
                 </div>
                 <div className="flex items-center gap-3">
                   <Badge variant="outline" className="text-xs">Next</Badge>
-                  <span className="text-muted-foreground">Deploy <code className="text-xs bg-muted px-1 py-0.5 rounded font-mono">XProofViolations</code> on Base + backend integration</span>
+                  <span className="text-muted-foreground">Deploy <code className="text-xs bg-muted px-1 py-0.5 rounded font-mono">ProveBeforeActViolations</code> on Base + backend integration</span>
                 </div>
               </div>
             </CardContent>

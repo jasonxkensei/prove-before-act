@@ -2,7 +2,7 @@ import crypto from "crypto";
 import { pool } from "./db";
 import { logger } from "./logger";
 import { recordRateLimitFailOpen } from "./metrics";
-import { checkAndAlertRateLimit } from "./alerts";
+import { checkAndAlert as checkAndAlertRateLimit } from "./rateLimitAlerts";
 
 // ── Shared fail-open logging/metrics helper ─────────────────────────────────
 // Every write path below (check/increment/decrement/resetKey) degrades to a

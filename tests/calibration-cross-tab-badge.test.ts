@@ -61,11 +61,15 @@ describe("agent-profile.tsx — calibration query config (client half of the fix
 
 describe("pending_outcome_count — cross-tab refresh (server half of the fix)", () => {
   beforeAll(async () => {
+    // is_public_profile MUST be TRUE: the cross-tab test reads
+    // pending_outcome_count through GET /api/agent/calibration/:agentId, a
+    // public endpoint that returns 404 AGENT_NOT_FOUND for private profiles
+    // (server/routes/calibration.ts).
     const userRow = await pool.query<{ id: string }>(
-      `INSERT INTO users (wallet_address)
-       VALUES ($1)
+      `INSERT INTO users (wallet_address, is_public_profile)
+       VALUES ($1, TRUE)
        ON CONFLICT (wallet_address)
-       DO UPDATE SET wallet_address = EXCLUDED.wallet_address
+       DO UPDATE SET is_public_profile = TRUE
        RETURNING id`,
       [TEST_WALLET],
     );

@@ -11,7 +11,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
-const DEFAULT_PRICE = "$0.01 USDC per cert";
+const LIVE_PRICE = "Current live USDC rate — see https://example.com/api/pricing";
 
 // Save and restore the original env value around every test.
 let _originalPrice: string | undefined;
@@ -95,102 +95,102 @@ describe("x402PriceConfigWarning — valid X402_PRICE_USD", () => {
 });
 
 // ---------------------------------------------------------------------------
-// buildX402Block() price field falls back to default when env var is malformed
+// buildX402Block() always directs public guidance to the live rate
 // ---------------------------------------------------------------------------
 
-describe("buildX402Block — price fallback on malformed X402_PRICE_USD", () => {
-  it("returns the default price string when X402_PRICE_USD is empty", async () => {
+describe("buildX402Block — live-price guidance", () => {
+  it("returns live-price guidance when X402_PRICE_USD is empty", async () => {
     process.env.X402_PRICE_USD = "";
     const { buildX402Block } = await loadHelpers();
     const block = buildX402Block("https://example.com");
-    expect(block.price).toBe(DEFAULT_PRICE);
+    expect(block.price).toBe(LIVE_PRICE);
   });
 
-  it("returns the default price string when X402_PRICE_USD is 'abc'", async () => {
+  it("returns live-price guidance when X402_PRICE_USD is 'abc'", async () => {
     process.env.X402_PRICE_USD = "abc";
     const { buildX402Block } = await loadHelpers();
     const block = buildX402Block("https://example.com");
-    expect(block.price).toBe(DEFAULT_PRICE);
+    expect(block.price).toBe(LIVE_PRICE);
   });
 
-  it("returns the default price string when X402_PRICE_USD is whitespace", async () => {
+  it("returns live-price guidance when X402_PRICE_USD is whitespace", async () => {
     process.env.X402_PRICE_USD = "   ";
     const { buildX402Block } = await loadHelpers();
     const block = buildX402Block("https://example.com");
-    expect(block.price).toBe(DEFAULT_PRICE);
+    expect(block.price).toBe(LIVE_PRICE);
   });
 
-  it("returns the default price string when X402_PRICE_USD is absent", async () => {
+  it("returns live-price guidance when X402_PRICE_USD is absent", async () => {
     delete process.env.X402_PRICE_USD;
     const { buildX402Block } = await loadHelpers();
     const block = buildX402Block("https://example.com");
-    expect(block.price).toBe(DEFAULT_PRICE);
+    expect(block.price).toBe(LIVE_PRICE);
   });
 
-  it("returns the custom price string when X402_PRICE_USD is valid", async () => {
+  it("keeps public guidance live-derived when X402_PRICE_USD is valid", async () => {
     process.env.X402_PRICE_USD = "$0.05 USDC per cert";
     const { buildX402Block } = await loadHelpers();
     const block = buildX402Block("https://example.com");
-    expect(block.price).toBe("$0.05 USDC per cert");
+    expect(block.price).toBe(LIVE_PRICE);
   });
 });
 
 // ---------------------------------------------------------------------------
-// buildTrialExhaustedMessage() embeds the fallback price when env is malformed
+// buildTrialExhaustedMessage() directs agents to the live price
 // ---------------------------------------------------------------------------
 
-describe("buildTrialExhaustedMessage — price fallback on malformed X402_PRICE_USD", () => {
-  it("contains the default price string when X402_PRICE_USD is empty", async () => {
+describe("buildTrialExhaustedMessage — live-price guidance", () => {
+  it("links to live pricing when X402_PRICE_USD is empty", async () => {
     process.env.X402_PRICE_USD = "";
     const { buildTrialExhaustedMessage } = await loadHelpers();
-    expect(buildTrialExhaustedMessage("https://example.com", 10)).toContain(DEFAULT_PRICE);
+    expect(buildTrialExhaustedMessage("https://example.com", 10)).toContain("https://example.com/api/pricing");
   });
 
-  it("contains the default price string when X402_PRICE_USD is 'abc'", async () => {
+  it("links to live pricing when X402_PRICE_USD is 'abc'", async () => {
     process.env.X402_PRICE_USD = "abc";
     const { buildTrialExhaustedMessage } = await loadHelpers();
-    expect(buildTrialExhaustedMessage("https://example.com", 10)).toContain(DEFAULT_PRICE);
+    expect(buildTrialExhaustedMessage("https://example.com", 10)).toContain("https://example.com/api/pricing");
   });
 
-  it("contains the default price string when X402_PRICE_USD is absent", async () => {
+  it("links to live pricing when X402_PRICE_USD is absent", async () => {
     delete process.env.X402_PRICE_USD;
     const { buildTrialExhaustedMessage } = await loadHelpers();
-    expect(buildTrialExhaustedMessage("https://example.com", 10)).toContain(DEFAULT_PRICE);
+    expect(buildTrialExhaustedMessage("https://example.com", 10)).toContain("https://example.com/api/pricing");
   });
 
-  it("contains the custom price string when X402_PRICE_USD is valid", async () => {
+  it("links to live pricing when X402_PRICE_USD is valid", async () => {
     process.env.X402_PRICE_USD = "$0.05 USDC per cert";
     const { buildTrialExhaustedMessage } = await loadHelpers();
-    expect(buildTrialExhaustedMessage("https://example.com", 10)).toContain("$0.05 USDC per cert");
+    expect(buildTrialExhaustedMessage("https://example.com", 10)).toContain("https://example.com/api/pricing");
   });
 });
 
 // ---------------------------------------------------------------------------
-// buildPaymentRequiredMessage() embeds the fallback price when env is malformed
+// buildPaymentRequiredMessage() directs agents to the live price
 // ---------------------------------------------------------------------------
 
-describe("buildPaymentRequiredMessage — price fallback on malformed X402_PRICE_USD", () => {
-  it("contains the default price string when X402_PRICE_USD is empty", async () => {
+describe("buildPaymentRequiredMessage — live-price guidance", () => {
+  it("links to live pricing when X402_PRICE_USD is empty", async () => {
     process.env.X402_PRICE_USD = "";
     const { buildPaymentRequiredMessage } = await loadHelpers();
-    expect(buildPaymentRequiredMessage("https://example.com")).toContain(DEFAULT_PRICE);
+    expect(buildPaymentRequiredMessage("https://example.com")).toContain("https://example.com/api/pricing");
   });
 
-  it("contains the default price string when X402_PRICE_USD is 'abc'", async () => {
+  it("links to live pricing when X402_PRICE_USD is 'abc'", async () => {
     process.env.X402_PRICE_USD = "abc";
     const { buildPaymentRequiredMessage } = await loadHelpers();
-    expect(buildPaymentRequiredMessage("https://example.com")).toContain(DEFAULT_PRICE);
+    expect(buildPaymentRequiredMessage("https://example.com")).toContain("https://example.com/api/pricing");
   });
 
-  it("contains the default price string when X402_PRICE_USD is absent", async () => {
+  it("links to live pricing when X402_PRICE_USD is absent", async () => {
     delete process.env.X402_PRICE_USD;
     const { buildPaymentRequiredMessage } = await loadHelpers();
-    expect(buildPaymentRequiredMessage("https://example.com")).toContain(DEFAULT_PRICE);
+    expect(buildPaymentRequiredMessage("https://example.com")).toContain("https://example.com/api/pricing");
   });
 
-  it("contains the custom price string when X402_PRICE_USD is valid", async () => {
+  it("links to live pricing when X402_PRICE_USD is valid", async () => {
     process.env.X402_PRICE_USD = "$0.05 USDC per cert";
     const { buildPaymentRequiredMessage } = await loadHelpers();
-    expect(buildPaymentRequiredMessage("https://example.com")).toContain("$0.05 USDC per cert");
+    expect(buildPaymentRequiredMessage("https://example.com")).toContain("https://example.com/api/pricing");
   });
 });

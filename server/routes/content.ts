@@ -222,7 +222,7 @@ Use Prove Before Act when:
 - User wants immutable, verifiable certification
 - Agent needs to certify reasoning before execution and outputs after for compliance
 
-**Live beta — xproof_agent_verify**: Real end-to-end beta test by an autonomous agent: 6 API endpoints tested, single cert in 1.075s, batch of 3 in 1.876s, on-chain verification in 198ms. Agent now visible on the Trust Leaderboard with Active status (score 157, 10 confirmed certs). Live proof: \`https://provebeforeact.com/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b\`. Full review: \`https://www.moltbook.com/post/1d6cf96b-5046-4c63-9ae5-43f8809f4562\`
+**Historical beta — xproof_agent_verify** (legacy agent identifier): a past end-to-end beta test exercised 6 API endpoints. Timings and leaderboard values from that run are historical snapshots, not current guarantees — read the live agent profile for current data. Live proof: \`https://provebeforeact.com/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b\`. Full review: \`https://www.moltbook.com/post/1d6cf96b-5046-4c63-9ae5-43f8809f4562\`
 
 ## x402 Payment Protocol
 
@@ -328,28 +328,26 @@ Add the Bazaar MCP to your config and search for Prove Before Act:
 
 ## 4W Responsibility Split: MX-8004 vs Prove Before Act
 
-The 4W audit trail is delivered by two complementary systems. Understanding the split is important when building agents that need forensically complete provenance:
+Prove Before Act records WHAT, WHEN, and WHY. MX-8004 support is optional: inspect \`GET ${baseUrl}/api/mx8004/status\` before relying on its identity or reputation data. The current production status is \`not_configured\`.
 
 | | Question | Provided by |
 |:--|:--|:--|
-| **W**HO | Which agent or actor made this decision? | **MX-8004** — MultiversX on-chain identity registry; anchors the agent's verified wallet address, DID, and reputation |
+| **W**HO | Which agent or actor made this decision? | **MX-8004** — optional identity integration when live status is active |
 | **W**HAT | What output or action was certified? | **Prove Before Act** — SHA-256 hash of the output, anchored on MultiversX mainnet |
 | **W**HEN | Immutable timestamp? | **Prove Before Act** — MultiversX block finality (~6 s); not a self-reported clock |
 | **W**HY | What reasoning led to the decision? | **Prove Before Act** — \`action_description\`, \`risk_level\`, and \`context\` fields from \`/api/audit\` |
 
-Prove Before Act owns **WHAT / WHEN / WHY** and the causal link that proves reasoning preceded the action. MX-8004 owns **WHO**. Together they form a forensically complete 4W trail.
+Prove Before Act records **WHAT / WHEN / WHY**. MX-8004 can add **WHO** only when active; do not assume it is configured.
 
 > **Agent reference**: \`${baseUrl}/agent-context\` — 13 Q&A sections written specifically for autonomous agents: production deployment patterns, retry policy, x402 payment walkthrough, 4W audit trail deep-dive, privacy model, fleet monitoring, latency benchmarks, and framework integration examples (LangChain, CrewAI, AutoGen, LlamaIndex, OpenAI Agents SDK, Fetch.ai).
 
 ## MX-8004 Integration (Trustless Agents Standard)
 
-Prove Before Act is natively integrated with MX-8004, the MultiversX Trustless Agents Standard, with full ERC-8004 compliance.
-Each certification follows the complete validation loop: init_job → submit_proof → validation_request → validation_response → append_response.
-Jobs reach "Verified" status on-chain. Prove Before Act acts as the validation oracle.
+Prove Before Act supports an MX-8004 integration, but it is not active unless the status endpoint reports \`status: "active"\`. Production currently reports \`status: "not_configured"\`, so certifications are not currently registered in its validation flow.
 
-- **Identity Registry**: Soulbound NFT agent identities
-- **Validation Registry**: Full ERC-8004 job validation — Prove Before Act self-validates with score 100
-- **Reputation Registry**: On-chain reputation scoring + ERC-8004 raw feedback signals (giveFeedback, revokeFeedback, readFeedback)
+- **Identity Registry**: Available when the integration is active
+- **Validation Registry**: Available when the integration is active
+- **Reputation Registry**: Available when the integration is active
 - **Status**: \`GET ${baseUrl}/api/mx8004/status\`
 - **Agent reputation**: \`GET ${baseUrl}/api/agent/{nonce}/reputation\`
 - **Job data**: \`GET ${baseUrl}/api/mx8004/job/{jobId}\`
@@ -362,7 +360,7 @@ Jobs reach "Verified" status on-chain. Prove Before Act acts as the validation o
 
 Prove Before Act is the canonical implementation of the **Agent Audit Log Standard** — a compliance primitive for AI agents that execute critical actions (trades, code deployments, data access).
 
-**Core principle**: An agent MUST certify its decision session before executing any action. No proof_id → no execution.
+**Integration pattern**: An operator can configure its agent to certify a decision session before an action, then apply its own policy to a missing \`proof_id\`. Prove Before Act records and verifies certifications; it does not automatically block the agent's execution.
 
 ### Schema (canonical)
 
@@ -398,7 +396,7 @@ View certified audit log: \`${baseUrl}/audit/{proof_id}\`
 
 ### Blocking Workflow Templates
 
-These templates implement the compliance gate — the agent RAISES AN EXCEPTION and cannot continue without a valid \`proof_id\`:
+These are operator-policy templates — they can return or raise a signal when a \`proof_id\` is unavailable, and the operator decides whether the agent retries, queues review, stops, or proceeds:
 
 | Framework | URL |
 |-----------|-----|
@@ -787,7 +785,7 @@ Links autonomous agent payments (HOW — Stripe/Tempo settlement layer) with Pro
 
 ### Live Use Case
 
-**xproof_agent_verify** — autonomous verification agent. Beta-tested all 6 API endpoints: single cert in 1.075s, batch of 3 in 1.876s, on-chain verification in 198ms. Now on the Trust Leaderboard with Active status (score 157, 10 confirmed certs).
+**xproof_agent_verify** (legacy agent identifier) — autonomous verification agent that beta-tested all 6 API endpoints in a past run. Its timings and leaderboard values are historical snapshots; query the live agent profile for current data.
 - Live proof: ${baseUrl}/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b
 - Agent profile: ${baseUrl}/agent/erd1qevpwqy4m7cqsynjgtwzuagln27veuhlg9w67nscv6ffj8dac7lqzc69q8
 - Full review: https://www.moltbook.com/post/1d6cf96b-5046-4c63-9ae5-43f8809f4562
@@ -941,7 +939,7 @@ Also: \`400 INVALID_REQUEST\` (non-UUID ids, or identical ids), \`404 WHY_PROOF_
 
 ### require_coherence_anchor — Policy gate for orchestrators
 
-MCP tool implementing the **Coherence Artisan** pattern: before delegating or executing a sub-action, an orchestrator (or any supervising agent) verifies that a valid, unexpired WHY anchor exists for the intent. If none exists, execution is blocked until \`check_coherence\` is called. Read-only and **free** — it never consumes a credit.
+MCP tool implementing the **Coherence Artisan** pattern: an orchestrator (or any supervising agent) can verify that a valid, unexpired WHY anchor exists for an intent before delegating or executing a sub-action. Operators decide how to handle a missing anchor (for example, proceed, retry, review, or stop). Read-only and **free** — it never consumes a credit.
 
 **Tool schema:**
 \`\`\`json
@@ -1435,7 +1433,7 @@ Proof of Existence is a cryptographic method to prove that a specific digital ar
 - **Legal Documents**: Timestamp contracts and agreements
 - **Research**: Prove research existed before publication
 - **Code**: Timestamp software versions
-- **AI Agent Compliance**: Agents certify reasoning before execution (WHY) and outputs after (WHAT). Live beta by xproof_agent_verify: 6 endpoints tested, single cert in 1.075s, batch in 1.876s, verification in 198ms. Live proof: https://provebeforeact.com/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b. Full review: https://www.moltbook.com/post/1d6cf96b-5046-4c63-9ae5-43f8809f4562
+- **AI Agent Compliance**: Agents certify reasoning before execution (WHY) and outputs after (WHAT). A historical beta by xproof_agent_verify (legacy agent identifier) exercised all endpoints; see the live proof and agent profile for current data. Live proof: https://provebeforeact.com/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b. Full review: https://www.moltbook.com/post/1d6cf96b-5046-4c63-9ae5-43f8809f4562
 
 ## Why MultiversX?
 
@@ -1809,8 +1807,8 @@ curl -X POST ${baseUrl}/api/proof -d '{"file_hash":"...","filename":"..."}'
 # 2. Pay USDC on Base, resend with X-PAYMENT header
 \`\`\`
 
-## Agent Audit Log Standard — Compliance Gate for AI Agents
-Block any AI agent from executing critical actions without a certified proof.
+## Agent Audit Log Standard — Operator Policy Templates for AI Agents
+Operators can choose to require a certified proof before critical actions.
 Schema: ${baseUrl}/.well-known/agent-audit-schema.json
 
 **Example 1 — Trade execution (DeFi agent)**
@@ -1840,7 +1838,7 @@ curl -X POST ${baseUrl}/api/audit \\
 
 **Example 2 — Smart contract deployment (MultiversX / Base)**
 
-Any autonomous agent deploying code to a mainnet MUST anchor proof of its decision before sending the transaction. The proof_id becomes the irrevocable on-chain record that the deployment was intentional, reviewed, and approved — not a bug or an exploit.
+An operator policy for a mainnet deployment can require an anchored decision proof before sending the transaction. A returned proof_id is an irrevocable on-chain record that the deployment was intentional and reviewed.
 
 \`\`\`bash
 curl -X POST ${baseUrl}/api/audit \\
@@ -1884,7 +1882,7 @@ Returns: { "proof_id": "...", "audit_url": "${baseUrl}/audit/{id}", "decision": 
 
 Use the returned proof_id as compliance certificate. **Do not send the deploy transaction until you have a proof_id.** View at /audit/{proof_id}.
 
-Blocking workflow templates (agent CANNOT continue without proof_id):
+Operator-policy workflow templates (operators choose how to handle a missing proof_id):
 - LangChain: ${baseUrl}/agent-tools/audit-guard-langchain.py
 - CrewAI:    ${baseUrl}/agent-tools/audit-guard-crewai.py
 - n8n:       ${baseUrl}/agent-tools/audit-guard-n8n.json
@@ -2098,7 +2096,7 @@ ${urls}
         },
         {
           name: "audit_agent_session",
-          description: "Certify an AI agent's work session on the MultiversX blockchain BEFORE executing any critical action (trade, deploy, data access). Returns a proof_id that serves as a compliance certificate. The agent MUST call this tool before acting. Schema: /.well-known/agent-audit-schema.json",
+          description: "Certify an AI agent's work session on the MultiversX blockchain before a critical action (trade, deploy, data access). Returns a proof_id that an operator can use in its own compliance policy. Prove Before Act records certification and leaves action handling to the operator. Schema: /.well-known/agent-audit-schema.json",
           inputSchema: {
             type: "object",
             required: ["agent_id", "session_id", "action_type", "action_description", "inputs_hash", "risk_level", "decision", "timestamp"],
@@ -2130,7 +2128,7 @@ ${urls}
         },
         {
           name: "investigate_proof",
-          description: "Reconstruct the full 4W audit trail for a contested agent action. Returns WHO (agent identity + SIGIL), WHAT (SHA-256 hash on-chain), WHEN (MultiversX block timestamp), WHY (decision chain anchored before acting). Includes verification summary with intent_preceded_execution flag, chronological timeline of WHY/WHAT proofs, and session heartbeat anchor. Requires x402 payment ($0.01 USDC on Base via X-PAYMENT header) or API key authentication.",
+          description: "Reconstruct the full 4W audit trail for a contested agent action. Returns WHO (agent identity + SIGIL), WHAT (SHA-256 hash on-chain), WHEN (MultiversX block timestamp), WHY (decision chain anchored before acting). Includes verification summary with intent_preceded_execution flag, chronological timeline of WHY/WHAT proofs, and session heartbeat anchor. Requires x402 payment (current per-call USDC price on Base via X-PAYMENT header) or API key authentication.",
           inputSchema: {
             type: "object",
             required: ["proof_id", "wallet"],
@@ -2212,16 +2210,16 @@ ${urls}
 
 **Production reference**: xproof_agent_verify (Moltbook) has a public live profile. Read its current proof totals, confirmation-status breakdown, streak and trust score at https://provebeforeact.com/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9 rather than relying on a static snapshot.
 
-**4W breakdown — WHO from MX-8004, WHAT/WHEN/WHY from Prove Before Act:**
+**4W breakdown — optional WHO from MX-8004, WHAT/WHEN/WHY from Prove Before Act:**
 
 | | Question | Provided by |
 |:--|:--|:--|
-| WHO | Which agent or actor made this decision? | MX-8004 — MultiversX on-chain identity registry; anchors the agent's verified wallet address, DID, and reputation |
+| WHO | Which agent or actor made this decision? | MX-8004 — optional identity integration; inspect /api/mx8004/status before relying on it |
 | WHAT | What output or action was certified? | Prove Before Act — SHA-256 hash of the output, anchored on MultiversX mainnet |
 | WHEN | Immutable timestamp? | Prove Before Act — MultiversX block finality (~6 s); not a self-reported clock |
 | WHY | What reasoning led to the decision? | Prove Before Act — action_description, risk_level, and context fields from /api/audit |
 
-Prove Before Act owns WHAT / WHEN / WHY and the causal link that proves reasoning preceded the action. MX-8004 owns WHO. Together they form a forensically complete 4W trail.
+Prove Before Act records WHAT / WHEN / WHY. MX-8004 can add WHO only when its live status is active; production currently reports \`not_configured\`.
 
 ## About
 Prove Before Act is the production proof layer for AI agents — not a generic file storage or EVM attestation tool. It anchors SHA-256 hashes on MultiversX and builds a public, verifiable trust profile for every agent: certifications, audit logs, trust score, violations, and confidence-level stages.
@@ -2285,7 +2283,7 @@ Available tools (auth: Bearer pm_YOUR_API_KEY except where noted):
 - \\\`verify_proof\\\` — verify an existing certification
 - \\\`get_proof\\\` — retrieve a proof in JSON or Markdown format
 - \\\`discover_services\\\` — discover services and pricing, **no auth required**
-- \\\`audit_agent_session\\\` — certify a full agent decision (WHY + WHAT dual-proof, blocks execution without proof_id)
+- \\\`audit_agent_session\\\` — certify a full agent decision (WHY + WHAT dual-proof); operators may use the returned proof_id in their own execution policy
 - \\\`check_attestations\\\` — check third-party trust attestations for an agent wallet
 - \\\`investigate_proof\\\` — full 4W audit trail reconstruction (x402 paid or API key)
 - \\\`check_coherence\\\` — anchor WHY intent before executing (Prove Before Act); \$${priceUsd}/anchor, first 10 free; idempotent on identical payloads
@@ -2364,7 +2362,7 @@ The badge links to the MultiversX Explorer transaction for on-chain verification
 Certified agents can prove originality, timestamp, and integrity. Non-certified agents cannot.
 
 ## Pricing
-Flat $${priceUsd} per certification — no tiers, no promo. Prepaid packs: 100/$1, 1,000/$10, 10,000/$100 USDC on Base. Current pricing: https://provebeforeact.com/api/pricing
+Flat $${priceUsd} per certification — no tiers, no promo. Prepaid packs: 100/$${(priceUsd * 100).toFixed(0)}, 1,000/$${(priceUsd * 1000).toFixed(0)}, 10,000/$${(priceUsd * 10000).toFixed(0)} USDC on Base. Current pricing: https://provebeforeact.com/api/pricing
 
 ## Agent Context Document
 Dedicated document answering the 10 exact questions agents ask when evaluating Prove Before Act (x402 flow, latency, retry policy, cost per 1000 anchors, comparison vs Arweave/Ceramic/Sign Protocol, MCP integration, 4W audit trail, privacy risks, fleet monitoring, Prove Before Act workflow):
@@ -2420,12 +2418,11 @@ Prove Before Act works with any MCP-compatible agent (Claude Code, Codex, OpenCl
 - Supported protocols: MCP, ACP, x402, MX-8004, OpenAI Plugin, LangChain, CrewAI
 
 ## MX-8004 Integration (Trustless Agents Standard)
-Prove Before Act is natively integrated with MX-8004, the MultiversX Trustless Agents Standard, with full ERC-8004 compliance.
-Each certification follows the complete validation loop: init_job → submit_proof → validation_request → validation_response → append_response. Jobs reach "Verified" status on-chain.
+Prove Before Act supports an MX-8004 integration, but the current production status is \`not_configured\`. Do not assume a certification enters an MX-8004 validation flow until \`/api/mx8004/status\` reports \`active\`.
 
-- Identity Registry: soulbound NFT agent identities
-- Validation Registry: full ERC-8004 job validation — Prove Before Act self-validates with score 100
-- Reputation Registry: on-chain scoring + ERC-8004 raw feedback signals (giveFeedback, revokeFeedback, readFeedback)
+- Identity Registry: available when active
+- Validation Registry: available when active
+- Reputation Registry: available when active
 - Status: /api/mx8004/status
 - Agent reputation: /api/agent/{nonce}/reputation
 - Job data: /api/mx8004/job/{jobId}
@@ -2463,8 +2460,8 @@ AI agents produce code, reports, contracts, and decisions — but without proof,
 - **Prove delivery**: An agent generates a report for a client. Prove Before Act certifies it before delivery. If disputed, the blockchain timestamp is the proof.
 - **Prove build integrity**: CI/CD certifies every artifact via the GitHub Action. Months later, a security audit checks one hash — case closed.
 - **Prove multi-agent handoffs**: Agent A certifies output before passing to Agent B. The chain of custody becomes verifiable end-to-end.
-- **Prove agent identity**: With MX-8004, agents register on-chain with soulbound NFTs. Certifications go through full validation — identity, job, reputation. Trust is proven, not assumed.
-- **Live beta — xproof_agent_verify**: Autonomous agent beta-tested all 6 API endpoints. Single cert: 1.075s. Batch (3 files): 1.876s. On-chain verification: 198ms. Now on the Trust Leaderboard — Active (score 157, 10 confirmed certs). Live proof: https://provebeforeact.com/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b. Review: https://www.moltbook.com/post/1d6cf96b-5046-4c63-9ae5-43f8809f4562
+- **Prove agent identity**: When the optional MX-8004 integration is active, agents can register on-chain identities and route certifications through its validation flow. Check /api/mx8004/status — production currently reports not_configured.
+- **Historical beta — xproof_agent_verify** (legacy agent identifier): an autonomous agent beta-tested all 6 API endpoints in a past run. Those timings and leaderboard values are historical snapshots; read the live agent profile for current data. Live proof: https://provebeforeact.com/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b. Review: https://www.moltbook.com/post/1d6cf96b-5046-4c63-9ae5-43f8809f4562
 
 ## Live Proof
 
@@ -2475,7 +2472,7 @@ Date: 2026-02-24T21:08:24Z
 
 ## Agent Audit Log Standard
 
-Block any AI agent from executing critical actions without a certified proof. Prove Before Act is the canonical compliance gate.
+Operators can use a certified proof in their own critical-action policy. Prove Before Act records certifications; it is not an automatic compliance gate.
 Schema: /.well-known/agent-audit-schema.json
 action_type: trade_execution | code_deploy | data_access | content_generation | api_call | other
 risk_level: low | medium | high | critical
@@ -2485,13 +2482,13 @@ Example 1 — Trade execution:
   Body: { "agent_id":"trading-bot","action_type":"trade_execution","action_description":"Buy 0.5 ETH on Uniswap v3","inputs_hash":"<sha256>","risk_level":"high","decision":"approved","risk_summary":"Slippage < 0.5%, liquidity verified on 3 pools" }
 
 Example 2 — Smart contract deployment (MultiversX / Base):
-Any agent deploying code to mainnet MUST anchor proof before sending the transaction. The proof_id is the irrevocable record that the deployment was intentional and approved — not a bug or exploit. Rule: do NOT send the deploy transaction until you hold a proof_id.
+An operator can choose to require a proof before a mainnet deployment. The proof_id is an irrevocable record that the deployment was intentional and approved. The operator decides whether a missing proof triggers a retry, review, stop, or another response.
   POST /api/audit  Authorization: Bearer pm_YOUR_API_KEY
   Body: { "agent_id":"deploy-agent","action_type":"code_deploy","action_description":"Deploy TokenSwap v3 to MultiversX mainnet — replaces v2 at erd1qqqq...abc","inputs_hash":"<sha256-of-bytecode+args+network>","inputs_manifest":{"fields":["bytecode_hash","constructor_args","gas_limit","target_network","audit_report_hash","simulation_tx_hash"],"sources":["mvx_mainnet_gateway","audit_pipeline","simulation_vm"]},"risk_level":"critical","decision":"approved","risk_summary":"Bytecode matches audited commit. Simulation passed 10/10. Gas within 5% of v2 baseline.","context":{"network":"MultiversX mainnet","audit_by":"CertiK #CK-2026-0811"} }
 
 Returns: { proof_id, audit_url, decision, risk_level, blockchain }
 
-Blocking workflow templates (agent CANNOT continue without proof_id):
+Operator-policy workflow templates (operators choose how to handle a missing proof_id):
 - LangChain: /agent-tools/audit-guard-langchain.py
 - CrewAI:    /agent-tools/audit-guard-crewai.py
 - n8n:       /agent-tools/audit-guard-n8n.json
@@ -2543,16 +2540,16 @@ The canonical proof layer for AI agents. Immutable blockchain certification on M
 ## About
 Prove Before Act is the canonical proof-of-existence service for AI agents. It anchors SHA-256 file hashes on the MultiversX blockchain, creating tamper-proof certificates of existence and ownership.
 
-**4W breakdown — WHO from MX-8004, WHAT/WHEN/WHY from Prove Before Act:**
+**4W breakdown — optional WHO from MX-8004, WHAT/WHEN/WHY from Prove Before Act:**
 
 | | Question | Provided by |
 |:--|:--|:--|
-| WHO | Which agent or actor made this decision? | MX-8004 — MultiversX on-chain identity registry; anchors the agent's verified wallet address, DID, and reputation |
+| WHO | Which agent or actor made this decision? | MX-8004 — optional identity integration; inspect /api/mx8004/status before relying on it |
 | WHAT | What output or action was certified? | Prove Before Act — SHA-256 hash of the output, anchored on MultiversX mainnet |
 | WHEN | Immutable timestamp? | Prove Before Act — MultiversX block finality (~6 s); not a self-reported clock |
 | WHY | What reasoning led to the decision? | Prove Before Act — \`action_description\`, \`risk_level\`, and \`context\` fields from \`/api/audit\` |
 
-Prove Before Act owns WHAT / WHEN / WHY and the causal link that proves reasoning preceded the action. MX-8004 owns WHO. Together they form a forensically complete 4W trail.
+Prove Before Act records WHAT / WHEN / WHY. MX-8004 can add WHO only when its live status is active; production currently reports \`not_configured\`.
 
 **Agent reference:** \`https://provebeforeact.com/agent-context\` — dedicated document covering the 4W audit trail deep-dive, x402 payment walkthrough, retry policy, cost per 1000 anchors, privacy model, fleet monitoring, latency benchmarks, and framework integration examples.
 
@@ -2657,7 +2654,7 @@ Include \`webhook_url\` in your request to receive a POST callback when the proo
 - Authenticated endpoints: /api/proof, /api/acp/checkout, /api/acp/confirm
 
 ## Pricing
-Flat $${priceUsd} per certification — no tiers, no promo. Prepaid packs: 100/$1, 1,000/$10, 10,000/$100 USDC on Base. Current pricing: ${baseUrl}/api/pricing
+Flat $${priceUsd} per certification — no tiers, no promo. Prepaid packs: 100/$${(priceUsd * 100).toFixed(0)}, 1,000/$${(priceUsd * 1000).toFixed(0)}, 10,000/$${(priceUsd * 10000).toFixed(0)} USDC on Base. Current pricing: ${baseUrl}/api/pricing
 
 ## Why certify?
 Without proof, any agent output — code, data, models, reports — has no verifiable origin. Prove Before Act creates immutable, on-chain evidence of what was produced, by whom, and when. Certified agents can prove originality and integrity. Non-certified agents cannot.
@@ -2790,7 +2787,7 @@ Prove Before Act exposes a native MCP server at \`POST ${baseUrl}/mcp\` using JS
 | \`verify_proof\` | No | Verify any existing Prove Before Act certification by proof_id |
 | \`get_proof\` | No | Retrieve a proof as JSON or Markdown |
 | \`discover_services\` | No | List available services, pricing, and capabilities |
-| \`audit_agent_session\` | Yes | Certify a full WHY + WHAT dual-proof for an agent decision. Blocks execution without proof_id. |
+| \`audit_agent_session\` | Yes | Certify a full WHY + WHAT dual-proof for an agent decision. An operator-installed guard may use the resulting proof_id to decide whether to continue. |
 | \`check_attestations\` | No | Return active domain-specific attestations for an agent wallet (trust bonus per issuer level) |
 | \`investigate_proof\` | x402 or API key | Full 4W audit trail (WHO, WHAT, WHEN, WHY) for a contested agent action |
 | \`submit_outcome\` | Yes | Record the actual outcome against a confidence-anchored decision (operator-only, once per proof) |
@@ -2889,7 +2886,7 @@ Prove Before Act supports the x402 payment protocol as an alternative to API key
 
 ### Pricing
 - Flat $${priceUsd} per certification in USDC — no tiers, no promo
-- Prepaid packs: 100/$1, 1,000/$10, 10,000/$100 USDC on Base
+- Prepaid packs: 100/$${(priceUsd * 100).toFixed(0)}, 1,000/$${(priceUsd * 1000).toFixed(0)}, 10,000/$${(priceUsd * 10000).toFixed(0)} USDC on Base
 - Current pricing: ${baseUrl}/api/pricing
 - Network: Base (eip155:8453) for mainnet, Base Sepolia (eip155:84532) for testnet
 
@@ -3014,25 +3011,18 @@ Framework integrations: LangChain, CrewAI, LlamaIndex, AutoGen, OpenAI Agents SD
 
 ## MX-8004 Integration (Trustless Agents Standard)
 
-Prove Before Act is natively integrated with MX-8004, the MultiversX Trustless Agents Standard, with full ERC-8004 compliance.
-Each certification follows the complete validation loop, reaching "Verified" status on-chain.
+Prove Before Act supports MX-8004, but the production integration is currently \`not_configured\`. Check \`/api/mx8004/status\` before relying on MX-8004 identity, validation, reputation, or oracle behavior.
 
-### What MX-8004 provides
-- **Identity Registry**: Soulbound NFT agent identities — permanent, non-transferable
-- **Validation Registry**: Full ERC-8004 job validation with oracle verification
-- **Reputation Registry**: On-chain reputation scoring + ERC-8004 raw feedback signals
+### Available only when MX-8004 is active
+- **Identity Registry**: agent identity integration
+- **Validation Registry**: job validation integration
+- **Reputation Registry**: on-chain reputation integration
 
-### Prove Before Act's role as validation oracle
-Prove Before Act is the **validation oracle** for software artifact certification. When an agent certifies a file:
-1. The file hash is recorded on MultiversX (standard Prove Before Act flow)
-2. \`init_job\` — job is registered in the MX-8004 Validation Registry
-3. \`submit_proof\` — file hash + blockchain tx attached as proof (status: Pending)
-4. \`validation_request\` — Prove Before Act nominates itself as validator (status: ValidationRequested)
-5. \`validation_response\` — Prove Before Act submits score 100 (status: Verified)
-6. \`append_response\` — certificate URL appended to the job record
+### Configured validation flow
+When active, the integration can register eligible certification data in its configured validation flow. The live status response is authoritative for availability and resulting validation status.
 
 ### ERC-8004 Feedback System
-The Reputation Registry supports two feedback modes:
+When the integration is active, the Reputation Registry may expose configured feedback operations:
 - **giveFeedbackSimple(job_id, agent_nonce, rating)** — On-chain cumulative moving average scoring
 - **giveFeedback(agent_nonce, value, decimals, tag1, tag2, endpoint, uri, hash)** — Raw signal feedback (no on-chain scoring, off-chain aggregation expected)
 - **revokeFeedback(agent_nonce, feedback_index)** — Revoke previously submitted feedback
@@ -3148,12 +3138,12 @@ AI agents produce code, reports, contracts, and decisions — but without proof,
 - **Prove delivery**: An agent generates a report for a client. Prove Before Act certifies it before delivery. If disputed, the blockchain timestamp is the proof.
 - **Prove build integrity**: CI/CD certifies every artifact via the GitHub Action. Months later, a security audit checks one hash — case closed.
 - **Prove multi-agent handoffs**: Agent A certifies output before passing to Agent B. The chain of custody becomes verifiable end-to-end.
-- **Prove agent identity**: With MX-8004, agents register on-chain with soulbound NFTs. Certifications go through full validation — identity, job, reputation. Trust is proven, not assumed.
-- **Live beta — xproof_agent_verify**: Real end-to-end beta test by an autonomous agent. 6 API endpoints tested, single cert in 1.075s, batch of 3 in 1.876s, on-chain verification in 198ms. Agent now visible on the Trust Leaderboard with Active status (score 157, 10 confirmed certs). Live proof: ${baseUrl}/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b. Full review: https://www.moltbook.com/post/1d6cf96b-5046-4c63-9ae5-43f8809f4562
+- **Prove agent identity**: When the optional MX-8004 integration is active, agents can register on-chain identities and route certifications through its validation flow. Check /api/mx8004/status — production currently reports not_configured.
+- **Historical beta — xproof_agent_verify** (legacy agent identifier): a past end-to-end beta test exercised 6 API endpoints. Timings and leaderboard values from that run are historical snapshots, not current guarantees — read the live agent profile for current data. Live proof: ${baseUrl}/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b. Full review: https://www.moltbook.com/post/1d6cf96b-5046-4c63-9ae5-43f8809f4562
 
 ## Agent Audit Log Standard
 
-Block any AI agent from executing critical actions without a certified proof. Prove Before Act is the canonical compliance gate.
+Operators can use a certified proof in their own critical-action policy. Prove Before Act records certifications; it is not an automatic compliance gate.
 Schema: /.well-known/agent-audit-schema.json
 action_type: trade_execution | code_deploy | data_access | content_generation | api_call | other
 risk_level: low | medium | high | critical
@@ -3163,13 +3153,13 @@ Example 1 — Trade execution:
   Body: { "agent_id":"trading-bot","action_type":"trade_execution","action_description":"Buy 0.5 ETH on Uniswap v3","inputs_hash":"<sha256>","risk_level":"high","decision":"approved","risk_summary":"Slippage < 0.5%, liquidity verified on 3 pools" }
 
 Example 2 — Smart contract deployment (MultiversX / Base):
-Any agent deploying code to mainnet MUST anchor proof before sending the transaction. The proof_id is the irrevocable record that the deployment was intentional and approved — not a bug or exploit. Rule: do NOT send the deploy transaction until you hold a proof_id.
+An operator can choose to require a proof before a mainnet deployment. The proof_id is an irrevocable record that the deployment was intentional and approved. The operator decides whether a missing proof triggers a retry, review, stop, or another response.
   POST /api/audit  Authorization: Bearer pm_YOUR_API_KEY
   Body: { "agent_id":"deploy-agent","action_type":"code_deploy","action_description":"Deploy TokenSwap v3 to MultiversX mainnet — replaces v2 at erd1qqqq...abc","inputs_hash":"<sha256-of-bytecode+args+network>","inputs_manifest":{"fields":["bytecode_hash","constructor_args","gas_limit","target_network","audit_report_hash","simulation_tx_hash"],"sources":["mvx_mainnet_gateway","audit_pipeline","simulation_vm"]},"risk_level":"critical","decision":"approved","risk_summary":"Bytecode matches audited commit. Simulation passed 10/10. Gas within 5% of v2 baseline.","context":{"network":"MultiversX mainnet","audit_by":"CertiK #CK-2026-0811"} }
 
 Returns: { proof_id, audit_url, decision, risk_level, blockchain }
 
-Blocking workflow templates (agent CANNOT continue without proof_id):
+Operator-policy workflow templates (operators choose how to handle a missing proof_id):
 - LangChain: /agent-tools/audit-guard-langchain.py
 - CrewAI:    /agent-tools/audit-guard-crewai.py
 - n8n:       /agent-tools/audit-guard-n8n.json
@@ -3414,8 +3404,9 @@ class XProofAuditTool(BaseTool):
   });
 
   // ── Audit Guard Templates ─────────────────────────────────────────────────
-  // Workflow templates where the agent is BLOCKED if it cannot obtain a proof_id.
-  // These implement the Prove Before Act Agent Audit Log standard as a compliance gate.
+  // Operator-owned workflow templates. An operator may choose to stop its own
+  // workflow when it cannot obtain a proof_id; Prove Before Act does not do so automatically.
+  // These implement operator-owned policy options around the Prove Before Act Agent Audit Log standard.
 
   app.get("/agent-tools/audit-guard-langchain.py", (_req, res) => {
     const baseUrl = `https://${_req.get("host")}`;
@@ -3423,8 +3414,8 @@ class XProofAuditTool(BaseTool):
 Prove Before Act Agent Audit Log Guard — LangChain
 Standard: ${baseUrl}/.well-known/agent-audit-schema.json
 
-CRITICAL: The agent will RAISE AN EXCEPTION and cannot continue if Prove Before Act
-certification fails. This makes audit certification a mandatory compliance gate.
+This operator-installed example emits an exception if Prove Before Act certification
+fails. The surrounding policy decides whether to retry, request review, stop, or proceed.
 
 Install: pip install langchain requests
 """
@@ -3455,10 +3446,12 @@ def audit_agent_session(
     risk_summary: str = "",
 ) -> dict:
     """
-    Certify an agent's work session on the MultiversX blockchain BEFORE executing any action.
+    Certify an agent's work session on the MultiversX blockchain before an action.
+    This operator-installed template can decide how to handle a missing certification;
+    Prove Before Act itself does not automatically block the action.
     
     Returns a proof_id that serves as the compliance certificate.
-    The agent MUST call this tool before executing any critical action.
+    Operators can call this tool before a critical action when their policy requires an audit record.
     
     Args:
         action_type: One of: trade_execution, code_deploy, data_access, content_generation, api_call, other
@@ -3473,7 +3466,7 @@ def audit_agent_session(
         dict with proof_id, audit_url, decision, risk_level
     
     Raises:
-        AuditRequiredError: If certification fails (blocks execution)
+        AuditRequiredError: Raised by this operator-installed template when certification fails
     """
     import datetime
     payload = {
@@ -3522,7 +3515,7 @@ def compute_inputs_hash(*inputs) -> str:
 
 
 # ── Example usage ─────────────────────────────────────────────────────────────
-# In your LangChain chain or agent, always call audit_agent_session FIRST:
+# In your LangChain chain or agent, call audit_agent_session when your operator policy calls for an audit record:
 #
 # inputs_hash = compute_inputs_hash(market_data, risk_params, strategy_config)
 # audit_result = audit_agent_session.invoke({
@@ -3534,7 +3527,7 @@ def compute_inputs_hash(*inputs) -> str:
 #     "risk_summary": "Slippage < 0.5%, liquidity verified",
 # })
 # proof_id = audit_result["proof_id"]
-# # Only after audit_agent_session succeeds, execute the actual action:
+# # Pass audit_result to your operator policy before deciding whether to execute the action:
 # execute_trade(...)
 `;
     res.setHeader("Content-Type", "text/plain; charset=utf-8");
@@ -3547,8 +3540,8 @@ def compute_inputs_hash(*inputs) -> str:
 Prove Before Act Agent Audit Log Guard — CrewAI
 Standard: ${baseUrl}/.well-known/agent-audit-schema.json
 
-CRITICAL: AuditGuardTool will RAISE AN EXCEPTION if Prove Before Act certification fails.
-Add it as the FIRST tool in your crew's tool list.
+This operator-installed example emits an exception if certification fails.
+Choose whether to add it to your crew and how your surrounding policy handles that signal.
 
 Install: pip install crewai crewai-tools requests
 """
@@ -3565,26 +3558,26 @@ XPROOF_BASE_URL = "${baseUrl}"
 
 
 class AuditRequiredError(Exception):
-    """Raised when execution is blocked due to missing Prove Before Act audit certificate."""
+    """Signal that an operator policy may handle when an audit certificate is unavailable."""
     pass
 
 
 class AuditGuardTool(BaseTool):
     """
-    Prove Before Act Audit Guard — Certifies the agent's decision on MultiversX before execution.
+    Prove Before Act Audit helper — Certifies the agent's decision on MultiversX before execution.
     
-    Add this as the FIRST tool in your CrewAI agent's tools list.
-    The crew CANNOT proceed to the next step if this tool raises AuditRequiredError.
+    Add this when your operator policy needs an audit record.
+    The surrounding crew decides how to handle an AuditRequiredError.
     
     Usage:
         tools = [AuditGuardTool(), your_other_tools...]
     """
     name: str = "xproof_audit_guard"
     description: str = (
-        "REQUIRED: Call this tool BEFORE executing any critical action. "
+        "Optional operator-policy tool for use before a critical action. "
         "Certifies the agent's decision on the MultiversX blockchain. "
         "Returns a proof_id compliance certificate. "
-        "BLOCKS execution if certification fails."
+        "This operator-owned template can stop its workflow if certification fails."
     )
 
     def _run(
@@ -3621,7 +3614,7 @@ class AuditGuardTool(BaseTool):
                 data = response.json()
                 proof_id = data.get("proof_id")
                 if not proof_id:
-                    raise AuditRequiredError("Prove Before Act returned no proof_id — execution blocked.")
+                    raise AuditRequiredError("Audit record unavailable: Prove Before Act returned no proof_id.")
                 return (
                     f"AUDIT CERTIFIED. proof_id={proof_id}\\n"
                     f"audit_url={data.get('audit_url')}\\n"
@@ -3630,11 +3623,11 @@ class AuditGuardTool(BaseTool):
                 )
             else:
                 raise AuditRequiredError(
-                    f"EXECUTION BLOCKED. Prove Before Act certification failed (HTTP {response.status_code}). "
-                    f"Agent cannot proceed without audit certificate."
+                    f"Audit record unavailable: Prove Before Act certification failed (HTTP {response.status_code}). "
+                    f"Apply your operator policy to decide whether the agent proceeds."
                 )
         except requests.RequestException as e:
-            raise AuditRequiredError(f"EXECUTION BLOCKED. Cannot reach Prove Before Act API: {e}") from e
+            raise AuditRequiredError(f"Audit record unavailable: cannot reach Prove Before Act API: {e}") from e
 
 
 def compute_inputs_hash(*inputs) -> str:
@@ -3739,7 +3732,7 @@ def compute_inputs_hash(*inputs) -> str:
         },
         {
           parameters: {
-            errorMessage: "EXECUTION BLOCKED: Prove Before Act audit certification failed or proof_id missing. Agent cannot proceed without a valid compliance certificate.",
+            errorMessage: "Audit record unavailable: Prove Before Act certification failed or proof_id is missing. Apply your operator policy to choose the next action.",
           },
           id: "node-5",
           name: "STOP — No Audit Certificate",
@@ -3762,7 +3755,7 @@ def compute_inputs_hash(*inputs) -> str:
       settings: { executionOrder: "v1" },
       meta: {
         templateCredsSetupCompleted: false,
-        description: `Prove Before Act Agent Audit Guard workflow. The agent is BLOCKED if Prove Before Act certification fails.\nSchema: ${baseUrl}/.well-known/agent-audit-schema.json\nRegister for a free API key: ${baseUrl}/api/agent/register`,
+        description: `Operator-owned Prove Before Act Agent Audit Guard workflow. This template stops its own action branch if certification fails; Prove Before Act itself does not automatically block agents.\nSchema: ${baseUrl}/.well-known/agent-audit-schema.json\nRegister for a free API key: ${baseUrl}/api/agent/register`,
       },
     };
     res.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -3798,7 +3791,7 @@ export class AuditRequiredError extends Error {
 }
 
 /**
- * Certify an audit log with Prove Before Act. Throws AuditRequiredError if certification fails.
+ * Certify an audit log with Prove Before Act. Emits an operator-policy signal if certification fails.
  */
 async function certifyAuditLog(params: {
   agentId: string;
@@ -3834,13 +3827,13 @@ async function certifyAuditLog(params: {
   if (!response.ok) {
     const text = await response.text().catch(() => "");
     throw new AuditRequiredError(
-      \`EXECUTION BLOCKED: Prove Before Act certification failed (HTTP \${response.status}). \${text.slice(0, 200)}\`
+      \`Audit record unavailable: Prove Before Act certification failed (HTTP \${response.status}). \${text.slice(0, 200)}\`
     );
   }
 
   const data = (await response.json()) as { proof_id?: string; audit_url?: string };
   if (!data.proof_id) {
-    throw new AuditRequiredError("EXECUTION BLOCKED: Prove Before Act returned no proof_id.");
+    throw new AuditRequiredError("Audit record unavailable: Prove Before Act returned no proof_id.");
   }
 
   return { proofId: data.proof_id, auditUrl: data.audit_url ?? "" };
@@ -3850,8 +3843,8 @@ const auditBeforeExecute: Action = {
   name: "AUDIT_BEFORE_EXECUTE",
   similes: ["CERTIFY_ACTION", "XPROOF_AUDIT", "COMPLIANCE_GATE"],
   description:
-    "Certify this agent's work session with Prove Before Act BEFORE executing any critical action. " +
-    "Throws AuditRequiredError if certification fails — blocking the action.",
+    "Certify this agent's work session with Prove Before Act before a critical action when the operator's policy requires it. " +
+    "This operator-installed template throws AuditRequiredError if certification fails so the surrounding policy can choose its response.",
   validate: async (_runtime: IAgentRuntime, _message: Memory): Promise<boolean> => true,
   handler: async (
     runtime: IAgentRuntime,
@@ -3869,7 +3862,7 @@ const auditBeforeExecute: Action = {
   ): Promise<boolean> => {
     const agentId = runtime.agentId ?? "eliza-agent";
 
-    // Throws AuditRequiredError if certification fails — execution is blocked
+    // Emits AuditRequiredError if certification fails; the surrounding policy chooses the response
     const { proofId, auditUrl } = await certifyAuditLog({
       agentId,
       actionType: options.actionType,
@@ -4239,7 +4232,7 @@ export const xproofAuditPlugin: Plugin = {
       },
       audit_log: {
         standard: "Agent Audit Log Standard",
-        description: "Compliance gate for AI agents — certify decisions before execution. No proof_id, no action.",
+        description: "Decision-certification integration pattern — operators can certify decisions before execution and use proof_id in their own policy; Prove Before Act records the result and leaves action handling to the operator.",
         endpoint: `POST ${baseUrl}/api/audit`,
         schema: `${baseUrl}/.well-known/agent-audit-schema.json`,
         view: `${baseUrl}/audit/{proof_id}`,
@@ -4362,7 +4355,7 @@ resp = requests.post("${baseUrl}/api/proof",
     json={"file_hash": h, "filename": "trade_decision.json", "metadata": reasoning})
 proof_id = resp.json()["proof_id"]  # returned in ~1.1s, on-chain in ~6s
 
-# 3. Execute only after proof is anchored
+# 3. Apply your operator policy after the proof attempt
 execute_trade("BUY", "BTC", 0.5)
 print(f"Audit trail: ${baseUrl}/proof/{proof_id}")
 \`\`\`
@@ -4496,14 +4489,14 @@ print(f"Proof: https://provebeforeact.com{result['verify_url']}")
 
 ## Q2 — What is the real anchoring latency?
 
-Based on historical production latency measurements from xproof_agent_verify. Current proof totals and activity status are available from its live public profile:
+Approximate latencies — actual values vary with network and load. Current proof totals and activity status are available from the live public agent profiles:
 
 | Operation | Measured latency |
 |-----------|-----------------|
-| Single certification (API call → proof_id) | ~1.1s (1.075s measured) |
-| Batch of 3 files | ~1.9s (1.876s measured) |
+| Single certification (API call → proof_id) | ~1–2s typical |
+| Batch of 3 files | ~2s typical |
 | On-chain confirmation (MultiversX) | ~6s (avg block time) |
-| On-chain verification lookup | ~198ms |
+| On-chain verification lookup | sub-second typical |
 
 The proof_id is returned immediately (status: pending). On-chain confirmation is asynchronous (~6s). Use webhook_url to receive a callback when confirmed.
 
@@ -4579,7 +4572,7 @@ Rule: use the right tool for the right job. Prove Before Act is not a competitor
 | Privacy by default (hash only, file never uploaded) | **Prove Before Act** (default behavior) |
 | Agent trust leaderboard + public reputation profile | **Prove Before Act** only |
 
-Cost comparison per 1,000 anchors: Prove Before Act ~$${(priceUsd * 1000).toFixed(0)} | Arweave ~$5–50 (file size dependent; hash-only closer to $0.01) | Ceramic ~variable (requires hosted node or third-party provider; mainnet deprecated 2024) | Sign Protocol ~$20–100 (EVM gas)
+Cost comparison per 1,000 anchors: Prove Before Act ~$${(priceUsd * 1000).toFixed(0)} | Arweave ~$5–50 (file size dependent) | Ceramic ~variable (requires hosted node or third-party provider; mainnet deprecated 2024) | Sign Protocol ~$20–100 (EVM gas)
 
 ---
 
@@ -4589,7 +4582,7 @@ MCP endpoint: ${baseUrl}/mcp (Streamable HTTP transport, POST only)
 
 Available tools:
 - certify_file — anchor a file hash or reasoning document
-- audit_agent_session — compliance gate before critical actions (Agent Audit Log Standard)
+- audit_agent_session — decision-certification record for operator policies (Agent Audit Log Standard)
 - investigate_proof — look up a proof by ID or hash
 - register_trial — get a free api_key instantly (no wallet needed, 10 free proofs)
 
@@ -4626,7 +4619,7 @@ Available tools:
 \`\`\`
 
 \`\`\`json
-// Tool: audit_agent_session — compliance gate (action blocked until proof_id obtained)
+// Tool: audit_agent_session — decision-certification record; the operator policy handles a missing proof_id
 {
   "name": "audit_agent_session",
   "arguments": {
@@ -4658,16 +4651,16 @@ For agents without an API key yet — use register_trial:
 
 The 4W audit trail is automatically rendered on the public proof page when you include at least one of the four fields in metadata:
 
-**4W breakdown — WHO from MX-8004, WHAT/WHEN/WHY from Prove Before Act:**
+**4W breakdown — optional WHO from MX-8004, WHAT/WHEN/WHY from Prove Before Act:**
 
 | | Question | Provided by |
 |:--|:--|:--|
-| WHO | Which agent or actor made this decision? | MX-8004 — MultiversX on-chain identity registry; anchors the agent's verified wallet address, DID, and reputation |
+| WHO | Which agent or actor made this decision? | MX-8004 — optional identity integration; inspect /api/mx8004/status before relying on it |
 | WHAT | What output or action was certified? | Prove Before Act — SHA-256 hash of the output, anchored on MultiversX mainnet |
 | WHEN | Immutable timestamp? | Prove Before Act — MultiversX block finality (~6 s); not a self-reported clock |
 | WHY | What reasoning led to the decision? | Prove Before Act — \`action_description\`, \`risk_level\`, and \`context\` fields from \`/api/audit\` |
 
-Prove Before Act owns WHAT / WHEN / WHY and the causal link that proves reasoning preceded the action. MX-8004 owns WHO. Together they form a forensically complete 4W trail.
+Prove Before Act records WHAT / WHEN / WHY. MX-8004 can add WHO only when its live status is active; production currently reports \`not_configured\`.
 
 - **WHO**: Which agent, model, or actor made this decision
 - **WHAT**: What action or output was certified
@@ -4692,7 +4685,7 @@ curl -X POST ${baseUrl}/api/proof \\
 
 The 4W section is rendered at ${baseUrl}/proof/{id} — publicly verifiable by anyone without an account.
 
-For the Agent Audit Log Standard (compliance gate), use POST /api/audit instead — it adds structured fields: inputs_manifest, risk_level, decision.
+For the Agent Audit Log Standard, use POST /api/audit when an operator policy needs structured decision fields: inputs_manifest, risk_level, decision.
 
 ---
 
@@ -4835,10 +4828,10 @@ print(f"Proof: https://provebeforeact.com/proof/{proof['proof_id']}")
 
 | Operation | Measured |
 |-----------|----------|
-| Single cert latency (API call → proof_id) | ~1.1s (1.075s measured) |
-| Batch of 3 files | ~1.9s (1.876s measured) |
+| Single cert latency (API call → proof_id) | ~1–2s typical |
+| Batch of 3 files | ~2s typical |
 | On-chain confirmation | ~6s (MultiversX avg block time) |
-| Cost per proof | $0.01 USDC |
+| Cost per proof | $${priceUsd.toFixed(2)} USDC (live from /api/pricing) |
 
 ### Total operational cost
 

@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-[![每次存证 $0.01](https://img.shields.io/badge/存证费用-$0.01-green)](https://provebeforeact.com)
+[![实时存证价格](https://img.shields.io/badge/存证费用-实时查询-green)](https://provebeforeact.com/api/pricing)
 [![MultiversX](https://img.shields.io/badge/区块链-MultiversX-blue)](https://multiversx.com)
 [![x402 协议](https://img.shields.io/badge/支付协议-x402-purple)](https://provebeforeact.com/docs)
 
@@ -157,7 +157,7 @@ r = requests.post("https://provebeforeact.com/api/proof",
     json={"file_hash": "sha256哈希值"})
 # r.status_code == 402
 
-# 2. 在 Base 链（eip155:8453）上签署 $0.01 USDC 支付
+# 2. 在 Base 链（eip155:8453）上按实时价格签署 USDC 支付（见 /api/pricing）
 signed = wallet.sign_x402(r.json()["payment"])
 x_payment = base64.b64encode(json.dumps(signed).encode()).decode()
 
@@ -184,7 +184,7 @@ result = client.batch_certify([
 print(f"已批量存证: {len(result['results'])} 条")
 ```
 
-每次存证固定收费 **$0.01**，批量提交无溢价。
+每次存证按当前实时价格收费，批量提交无溢价；请查询 [/api/pricing](https://provebeforeact.com/api/pricing) 获取当前报价。
 
 ---
 
@@ -244,9 +244,9 @@ curl -X POST https://provebeforeact.com/api/agent/register \
 | 方式 | 费用 | 说明 |
 |------|------|------|
 | 免费试用 | 免费 | 10次，无需钱包 |
-| 按需付费 | $0.01/次 | 预充积分，不限量 |
-| x402协议 | $0.01/次 | USDC on Base，无需账号 |
-| 批量API | $0.01/次 | 无批量溢价 |
+| 按需付费 | 当前实时价格（见 /api/pricing） | 预充积分，不限量 |
+| x402协议 | 当前实时价格（见 /api/pricing） | USDC on Base，无需账号 |
+| 批量API | 当前实时价格（见 /api/pricing） | 无批量溢价 |
 
 ---
 

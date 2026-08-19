@@ -1,14 +1,16 @@
 ---
 name: Prove Before Act
-version: 3.3.0
-description: Prove Before & After Act — WHO from MX-8004 identity, WHAT/WHEN/WHY from Prove Before Act. Full 4W audit trail, trust score, violations layer. REST API, MCP, x402. $0.01/proof flat. No proof = no critical action.
+version: 3.3.8
+description: Prove Before Act accountability integration for AI agents. REST API, MCP, and x402. Check live endpoints for available capabilities, pricing, and proof status.
 homepage: https://provebeforeact.com
 metadata: {"prove-before-act": {"category":"proof,security,compliance,accountability,prove-before-act","api_base":"https://provebeforeact.com"}}
 ---
 
 # Prove Before Act -- Prove Before & After Act — Accountability Layer for AI Agents
 
-This skill enables your agent to **anchor reasoning (WHY) on-chain before executing any significant action and the actual result (WHAT) after** — creating a complete Prove Before & After Act cycle. Enforce pre-execution audit logging and detect violations via Base, producing tamper-proof, publicly verifiable records of who decided what, when, and why.
+This skill describes how to anchor reasoning (WHY) before an action and its result (WHAT) afterwards with Prove Before Act. It provides an auditable record when the returned proof is confirmed; it does not itself enforce an execution policy.
+
+> **Current product and compatibility notice:** Prove Before Act is the product name. `xproof`, `XProofClient`, `XPROOF_*`, `xProof-Action`, and `jasonxkensei/xProof` are legacy package, protocol, action, or repository identifiers retained for compatibility. MX-8004 support is not active unless `GET /api/mx8004/status` reports `status: "active"`; the current production response is `status: "not_configured"`.
 
 ## The Core Pattern: Prove Before & After Act
 
@@ -22,37 +24,37 @@ Anchor reasoning (WHY) on-chain **before** execution. Anchor the actual result/o
 
 | | Question | Provided by |
 |:--|:--|:--|
-| **W**HO | Which agent or actor made this decision? | **MX-8004** — MultiversX on-chain identity registry; anchors the agent's verified wallet address, DID, and reputation |
+| **W**HO | Which agent or actor made this decision? | **MX-8004** — optional identity integration when live status reports active |
 | **W**HAT | What output or action was certified? | **Prove Before Act** — SHA-256 hash of the output, anchored on MultiversX mainnet |
 | **W**HEN | Immutable timestamp? | **Prove Before Act** — MultiversX block finality (~6 s); not a self-reported clock |
 | **W**HY | What reasoning led to the decision? | **Prove Before Act** — `action_description`, `risk_level`, and `context` fields from `/api/audit` |
 
-Prove Before Act owns WHAT / WHEN / WHY and the causal link that proves reasoning preceded the action. MX-8004 owns WHO. Together they form a forensically complete 4W trail.
+Prove Before Act records WHAT / WHEN / WHY context. MX-8004 may provide WHO when its integration is active. Check live proof and MX-8004 responses before treating the resulting record as complete.
 
 > **Agent reference:** [`https://provebeforeact.com/agent-context`](https://provebeforeact.com/agent-context) — 13 Q&A sections written specifically for autonomous agents: production deployment patterns, retry policy, x402 payment walkthrough, 4W audit trail deep-dive, privacy model, fleet monitoring, latency benchmarks, and framework integration examples (LangChain, CrewAI, AutoGen, LlamaIndex, OpenAI Agents SDK, Fetch.ai).
 
 **Why Prove Before Act?** An agent that can prove its reasoning before acting is fundamentally more trustworthy than one that cannot. It creates an unbreakable causal chain: the intent existed before the action, and the blockchain makes that sequence immutable.
 
-**Why audit?** Autonomous agents executing trades, deployments, or data access need an immutable record of every decision. The Agent Audit Log Standard enforces this: no proof = no execution.
+**Why audit?** Autonomous agents executing trades, deployments, or data access need an immutable record of every decision. The Agent Audit Log Standard describes a blocking pattern your agent can adopt: obtain a proof before executing. Enforcement is implemented in your agent code; Prove Before Act supplies the proof record.
 
-**Why violations?** Trust requires accountability. Prove Before Act detects anomalies (gaps, burst patterns) and records violations on Base via smart contracts. Operators can subscribe to violation events and enforce policies automatically.
+**Why violations?** Operators can use recorded violations as an accountability signal when the relevant Base integration is deployed and active. Confirm contract and event availability from the live documentation before automating a policy.
 
 ## Pricing
 
-**Flat rate: $0.01 per proof** -- no tiers, no volume discounts, same price whether you anchor 1 or 100,000 proofs.
+**Flat rate per proof** -- no tiers, no volume discounts, same price whether you anchor 1 or 100,000 proofs. The current per-proof price is served live at `/api/pricing`; multiply it by your volume for a cost estimate.
 
 | Scale | Cost |
 |:---|:---|
-| 1 proof | $0.01 |
-| 1,000 proofs | $10 |
-| 10,000 proofs | $100 |
-| 50 agents × 20 actions/day × 30 days | $300/month |
+| 1 proof | 1× current price |
+| 1,000 proofs | 1,000× current price |
+| 10,000 proofs | 10,000× current price |
+| 50 agents × 20 actions/day × 30 days | 30,000× current price / month |
 
 Payment: USDC on Base (x402, no account) or EGLD on MultiversX (ACP/wallet) or prepaid credits.
 
 ## Quick Install
 
-The canonical source for all skill files is the **main Prove Before Act repository** (`jasonxkensei/xProof`), which is the repository audited by security tools. Install from there directly:
+The source repository uses the legacy compatibility name `jasonxkensei/xProof`; it is a distribution identifier, not the current product name.
 
 ```bash
 mkdir -p .agent/skills/prove-before-act/references
@@ -70,6 +72,25 @@ done
 
 > **Source verification:** All files above are served from `github.com/jasonxkensei/xProof` — the same repository that contains the server code, contracts, and SDKs. You can audit the full source at that URL before installing.
 
+## Data & Privacy
+
+> **Transparency notice — what leaves your environment when using this skill.**
+
+| Data field | Sent to provebeforeact.com? | Notes |
+|:---|:---:|:---|
+| File content / raw text | **Never** | Hash locally; only the digest crosses the boundary |
+| `file_hash` (SHA-256 hex, 64 chars) | Yes | One-way fingerprint; original content cannot be reconstructed |
+| `filename` / `author` | Optional | Metadata you explicitly supply; omit if sensitive |
+| `action_description` / `context` | Optional | Only when you call `/api/audit` or `audit_agent_session` |
+| USDC payment (x402) | Yes — Base chain | On-chain transaction; amount is your configured ceiling |
+| API key (`pm_...`) | Yes — HTTP header | Treat like a password; never log or commit |
+
+**What provebeforeact.com does NOT receive:** raw file contents, prompt text, model weights, environment variables, or any field you do not explicitly pass.
+
+**Data retention:** proof records are permanent and public by default (that is the point — immutable evidence). Before certifying, confirm you want the hash publicly anchored on MultiversX mainnet forever.
+
+**Skill file:** this file is intentionally public and contains no secrets. It is documentation only — API patterns, pricing, and integration examples. Safe to audit, share, or version-control.
+
 ## Security
 
 - **NEVER** commit API keys to a public repository.
@@ -79,7 +100,7 @@ done
 - **NEVER send plaintext content to provebeforeact.com** -- always hash locally first (`sha256sum`, `crypto.subtle.digest`, or equivalent). The only field Prove Before Act accepts is `file_hash` (64-char SHA-256 hex). No raw text, documents, or binary data should ever leave your environment.
 - **x402 is opt-in and autonomous** -- once enabled, your agent can initiate USDC payments on Base without per-transaction confirmation. Configure a spending cap in your agent framework and require human approval above your threshold before enabling x402 in production.
 - **`llms.txt` and `llms-full.txt` are static documentation references** -- load them once at install time for API reference, not at runtime on every call. Fetching them dynamically on each invocation creates an unnecessary runtime dependency on provebeforeact.com availability and a potential prompt-injection surface if the file is ever compromised.
-- **Guard/enforcement templates are versioned in the repository** -- never fetch agent enforcement code from a runtime URL. Use the pinned versions in `references/` or the SDK packages (`xproof` on PyPI, `@proveprove-before-act` on npm).
+- **Guard/enforcement templates are versioned in the repository** -- never fetch agent enforcement code from a runtime URL. Use the pinned versions in `references/` or the SDK packages (`xproof` on PyPI, `prove-before-act` on npm).
 
 ---
 
@@ -97,12 +118,12 @@ Get an API key at [provebeforeact.com](https://provebeforeact.com) (connect wall
 
 ### Option B: x402 Payment Protocol (No Account Required)
 
-No configuration needed. Pay in USDC on Base (eip155:8453) directly in the HTTP request. The 402 response header tells your agent exactly what to pay. Flat rate: $0.01 per proof.
+No configuration needed. Pay in USDC on Base (eip155:8453) directly in the HTTP request. The 402 response header tells your agent exactly what to pay (the current flat per-proof price, also served at `/api/pricing`).
 
 > **WARNING -- autonomous payments:** x402 is an opt-in mode that enables your agent to initiate on-chain USDC transactions without per-transaction user confirmation. Before enabling x402 in production:
 > - Set a **spending cap** in your agent framework (e.g. max $N/day or $N/session).
 > - Require **human approval** for any single call that would exceed your risk threshold.
-> - Note that `POST /api/batch` supports up to 100 items per call -- at $0.01 each, a batch of 100 costs $1.00.
+> - Note that `POST /api/batch` supports up to 100 items per call -- at the current per-item price, a batch of 100 costs 100× that price.
 > - Disable x402 entirely in environments where autonomous spending is not authorised.
 
 ---
@@ -170,7 +191,7 @@ curl -X POST https://provebeforeact.com/api/coherence/link \
 | `400` | `NOT_A_COHERENCE_ANCHOR` | `why_proof_id` is a regular proof. Create the WHY via the `check_coherence` MCP tool, or certify with `metadata.type = "coherence_check"`. |
 | `404` | `WHY_PROOF_NOT_FOUND` / `WHAT_PROOF_NOT_FOUND` | Proof missing or owned by another account. |
 
-**SDK helpers:** `client.link_coherence(why_proof_id, what_proof_id)` (Python `xproof` ≥ 0.2.10) · `client.linkCoherence(whyProofId, whatProofId)` (npm `@proveprove-before-act` ≥ 0.1.11).
+**SDK helpers:** `client.link_coherence(why_proof_id, what_proof_id)` (Python `xproof` ≥ 0.2.10) · `client.linkCoherence(whyProofId, whatProofId)` (npm `prove-before-act` ≥ 0.1.11).
 
 **Check your history:** `GET https://provebeforeact.com/api/agents/<wallet>/coherence` — public; per-anchor status (`linked` / `pending` / `divergent`) + aggregate coherence rate.
 
@@ -214,16 +235,16 @@ curl -X POST https://provebeforeact.com/api/proof \
 
 ## 9. Violations Layer (Base)
 
-Prove Before Act monitors agent behavior and detects anomalies. When a violation is confirmed, it is recorded on Base via the `XProofViolations.sol` smart contract, impacting the agent's trust score.
+The violation flow is optional and deployment-dependent. Confirm the live contract and event status before relying on it for Base enforcement or trust scoring.
 
 ### Violation Types
 
 | Type | Penalty | Trigger |
 |:---|:---|:---|
-| `gap` (fault) | -150 trust score | No proof activity for 30+ minutes during active session |
-| `burst` (breach) | -500 trust score | Abnormal spike in proof submissions |
+| `gap` (fault) | Deployment-defined | Potential inactive-session gap |
+| `burst` (breach) | Deployment-defined | Potential abnormal submission pattern |
 
-Smart contracts: [XProofViolations.sol](https://github.com/jasonxkensei/xProof/blob/main/contracts/XProofViolations.sol) | [ViolationWatcher.sol](https://github.com/jasonxkensei/xProof/blob/main/contracts/ViolationWatcher.sol)
+Legacy compatibility contract paths: [XProofViolations.sol](https://github.com/jasonxkensei/xProof/blob/main/contracts/XProofViolations.sol) | [ViolationWatcher.sol](https://github.com/jasonxkensei/xProof/blob/main/contracts/ViolationWatcher.sol)
 
 Docs: [https://provebeforeact.com/docs/base-violations](https://provebeforeact.com/docs/base-violations)
 

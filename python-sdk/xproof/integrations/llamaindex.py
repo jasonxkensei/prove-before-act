@@ -1,4 +1,4 @@
-"""LlamaIndex callback handler for automatic xProof certification."""
+"""LlamaIndex callback handler for automatic Prove Before Act certification."""
 
 import hashlib
 import json
@@ -31,7 +31,7 @@ class XProofCallbackHandler(BaseCallbackHandler):  # type: ignore[misc]  # BaseC
     """LlamaIndex callback handler that certifies agent actions on-chain.
 
     Automatically creates blockchain-anchored proofs for LLM calls,
-    query completions, and function/tool calls using the xProof 4W framework.
+    query completions, and function/tool calls using the Prove Before Act 4W framework.
 
     Example::
 

@@ -427,7 +427,7 @@ AI agents discover Prove Before Act capabilities through multiple standard endpo
 ```
 [1] GET /api/acp/products
     - Returns available products with pricing
-    - Product: "blockchain-certification" at $0.01 in EGLD
+    - Product: "blockchain-certification" at the current flat rate in EGLD (see /api/pricing)
       |
 [2] POST /api/acp/checkout
     Authorization: Bearer pm_<api_key>

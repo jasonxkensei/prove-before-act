@@ -1,8 +1,8 @@
-"""OpenAI Agents SDK integration for automatic xProof certification.
+"""OpenAI Agents SDK integration for automatic Prove Before Act certification.
 
 Provides ``XProofRunHooks`` (extends ``RunHooks``) and an optional
 ``XProofTracingProcessor`` (implements ``TracingProcessor``) that
-auto-certify agent and tool outputs on-chain using the xProof 4W
+auto-certify agent and tool outputs on-chain using the Prove Before Act 4W
 framework (Who, What, When, Why).
 
 Targets the official ``openai-agents`` package.
@@ -23,7 +23,7 @@ def _hash_data(data: Any) -> str:
 
 
 class XProofRunHooks:
-    """OpenAI Agents SDK ``RunHooks`` implementation for xProof certification.
+    """OpenAI Agents SDK ``RunHooks`` implementation for Prove Before Act certification.
 
     Hooks into ``on_tool_end`` and ``on_agent_end`` to automatically
     certify tool outputs and final agent responses with 4W metadata.
@@ -176,7 +176,7 @@ except ImportError:
 
 
 class XProofTracingProcessor:
-    """Span-based tracing processor for xProof certification.
+    """Span-based tracing processor for Prove Before Act certification.
 
     Implements the ``TracingProcessor`` interface from the OpenAI Agents
     SDK.  Certifies completed spans whose kind is ``tool``, ``function``

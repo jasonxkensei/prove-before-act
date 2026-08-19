@@ -1,4 +1,4 @@
-"""Utility helpers for the xProof SDK."""
+"""Utility helpers for the Prove Before Act SDK."""
 
 import hashlib
 from pathlib import Path

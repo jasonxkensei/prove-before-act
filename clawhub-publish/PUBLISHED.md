@@ -2,7 +2,34 @@
 
 ---
 
-## v3.3.0 — 2026-07-30 (PENDING LIVE PUBLISH)
+## v3.3.8 — 2026-08-19
+
+**Target repo:** https://github.com/jasonxkensei/xproof-openclaw-skill  
+**Branch:** main
+
+| Item | Value |
+|---|---|
+| SKILL.md blob SHA (live) | `5779a9325c9790d80bbc0f93624cd48b3022f252` |
+| SKILL.md commit | `c39908fe9d153242a440421e5be11e50faa042b2` |
+| Archive `xproof/SKILL-v3.3.8.md` commit | `8b436f11fb2a5d1c5134e16f9516babeb8a0de1f` |
+| `references/api-reference.md` commit | `056a72c399b61ea7a25de136d307ec4e8752df9b` |
+| `references/certification.md` commit | `7e881dfba4b9517843160024fa5f264f57a11c07` |
+| `references/mcp.md` commit | `15e1ef9ca4677bc79d64522d9c5b593a8244aa09` |
+| `references/x402.md` commit | `8206c9a6a4c4a50c7ae3d6054589122f14f6d91b` |
+| Live URL | https://github.com/jasonxkensei/xproof-openclaw-skill/blob/main/xproof/SKILL.md |
+
+### Changes in v3.3.8
+
+- **Rebrand** — Prove Before Act is the current product name throughout; `xproof`, `XProofClient`, `XPROOF_*`, `xProof-Action`, and `jasonxkensei/xProof` are explicitly labeled legacy compatibility identifiers
+- **MX-8004 status-gated** — WHO/identity wording now says MX-8004 is optional and only applies when `GET /api/mx8004/status` reports `active`; production currently reports `not_configured`
+- **Removed stale guarantees** — fixed trust-score penalties (-150/-500), "no proof = no execution" enforcement claims, and historical benchmark numbers replaced with deployment-defined / live-endpoint wording
+- **Data & Privacy section restored** — transparency table updated for provebeforeact.com
+- **Coherence Loop retained** — v3.3.0 pending content (loop, error table, score formula, SDK helpers, cheatsheet) is now live as part of this publish
+- Also republished all four reference manuals (`api-reference`, `certification`, `mcp`, `x402`) with current-brand and MX-8004 status notices
+
+---
+
+## v3.3.0 — 2026-07-30 (superseded by v3.3.8 before live publish)
 
 **Target repo:** https://github.com/jasonxkensei/xproof-openclaw-skill  
 **Branch:** main

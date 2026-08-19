@@ -1,4 +1,8 @@
-"""Main client for the xProof API."""
+"""Main client for the Prove Before Act API.
+
+The ``xproof`` package and ``XProofClient`` class names are legacy
+compatibility identifiers.
+"""
 
 import math
 from collections.abc import Sequence
@@ -46,10 +50,10 @@ DEFAULT_TIMEOUT = 30
 
 
 class XProofClient:
-    """Client for interacting with the xProof API.
+    """Client for interacting with the Prove Before Act API.
 
     Args:
-        api_key: Your xProof API key (starts with ``pm_``).
+        api_key: Your Prove Before Act API key (starts with ``pm_``).
             Pass an empty string or omit if you plan to call
             :meth:`register` first.
         base_url: Override the API base URL (default: ``https://provebeforeact.com``).
@@ -92,7 +96,7 @@ class XProofClient:
         params: Optional[dict[str, Any]] = None,
         auth_required: bool = True,
     ) -> dict[str, Any]:
-        """Send an HTTP request to the xProof API and return parsed JSON."""
+        """Send an HTTP request to the Prove Before Act API and return parsed JSON."""
         url = f"{self.base_url}{path}"
 
         headers: Optional[dict[str, str]] = None
@@ -209,7 +213,7 @@ class XProofClient:
     ) -> Certification:
         """Certify a file by path. The file is hashed locally (SHA-256).
 
-        Supports the xProof 4W framework via optional keyword arguments.
+        Supports the Prove Before Act 4W framework via optional keyword arguments.
 
         Args:
             path: Path to the file to certify.
@@ -258,7 +262,7 @@ class XProofClient:
     ) -> Certification:
         """Certify a file using a pre-computed SHA-256 hash.
 
-        Supports the xProof 4W framework via optional keyword arguments:
+        Supports the Prove Before Act 4W framework via optional keyword arguments:
 
         - **who**: Agent identity (wallet, name, or ID)
         - **what**: Action hash or description being certified

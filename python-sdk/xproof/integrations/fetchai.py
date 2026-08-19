@@ -1,4 +1,4 @@
-"""Fetch.ai uAgents integration for automatic xProof certification.
+"""Fetch.ai uAgents integration for automatic Prove Before Act certification.
 
 Wraps uAgent message handlers and interval tasks to anchor the 4W audit
 trail (Who, What, When, Why) on MultiversX mainnet before and after every
@@ -74,13 +74,13 @@ class _CertFlag:
 
 
 class XProofuAgentMiddleware:
-    """Central xProof certification middleware for a uAgent.
+    """Central Prove Before Act certification middleware for a uAgent.
 
     Instantiate once per agent, then pass it to :func:`xproof_handler`
     or call :meth:`certify_incoming` / :meth:`certify_outgoing` directly.
 
     Args:
-        api_key: xProof API key (``pm_...``). Ignored when *client* is given.
+        api_key: Prove Before Act API key (``pm_...``). Ignored when *client* is given.
         client: Pre-configured :class:`~xproof.client.XProofClient`.
         agent_name: Used as WHO in the 4W metadata. Defaults to ``"uagent"``.
         certify_incoming: Certify the incoming message (the WHY). Default ``True``.
@@ -309,7 +309,7 @@ class XProofuAgentMiddleware:
         """Certify a complete agent action as a WHY+WHAT pair.
 
         Creates two linked proofs sharing a ``decision_id`` — the canonical
-        xProof dual-certification pattern for verifiable agent accountability.
+        Prove Before Act dual-certification pattern for verifiable agent accountability.
 
         Args:
             action_name: Descriptive name of the action (used in file names).
@@ -415,7 +415,7 @@ def xproof_handler(
     incoming_context: str = "Incoming uAgent message",
     outgoing_context: str = "uAgent response",
 ) -> Callable[..., Any]:
-    """Decorator that wraps a uAgent ``on_message`` handler with xProof certification.
+    """Decorator that wraps a uAgent ``on_message`` handler with Prove Before Act certification.
 
     Certifies the incoming message (WHY) before the handler runs, then
     certifies the response (WHAT) if the handler returns a value.
@@ -487,7 +487,7 @@ def wrap_agent(
 
     Args:
         agent: A uAgents ``Agent`` instance.
-        api_key: xProof API key. Ignored when *client* is provided.
+        api_key: Prove Before Act API key. Ignored when *client* is provided.
         client: Pre-configured :class:`~xproof.client.XProofClient`.
         agent_name: Override the name used in 4W metadata.
         certify_incoming: Certify incoming messages. Default ``True``.

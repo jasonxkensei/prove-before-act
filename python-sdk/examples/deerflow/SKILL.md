@@ -147,7 +147,7 @@ Every certification answers four questions:
 
 ## Payment Options
 
-- **API key**: Get 10 free certifications via `/api/agent/register`. Purchase more at $0.01/cert.
+- **API key**: Get 10 free certifications via `/api/agent/register`. Purchase more at the current flat per-cert price (see /api/pricing).
 - **x402**: Pay per-request with USDC on Base — no account needed. Machine-native.
 
 ## Links
@@ -156,5 +156,5 @@ Every certification answers four questions:
 - [API documentation](https://provebeforeact.com/docs)
 - [MCP endpoint](https://provebeforeact.com/mcp)
 - [Python SDK on PyPI](https://pypi.org/project/xproof/)
-- [npm SDK](https://www.npmjs.com/package/@proveprove-before-act)
+- [npm SDK](https://www.npmjs.com/package/prove-before-act)
 - [GitHub](https://github.com/jasonxkensei/xProof)

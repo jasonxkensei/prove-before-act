@@ -15,9 +15,10 @@ export function registerCreditsRoutes(app: Express) {
   app.get("/api/credits/packages", async (_req, res) => {
     const baseUrl = `https://${_req.get("host")}`;
     const totalCerts = await getTotalCertificationCount();
-    const effectivePackages = getEffectivePackages(totalCerts);
+    const effectivePackages = await getEffectivePackages(totalCerts);
     res.json({
       packages: effectivePackages,
+      pricing_url: `${baseUrl}/api/pricing`,
       promo: { active: false },
       payment: {
         network: "eip155:8453",
@@ -57,12 +58,12 @@ export function registerCreditsRoutes(app: Express) {
 
       const body = req.body as { package_id?: string; payer_address?: string; signature?: string };
       const totalCerts = await getTotalCertificationCount();
-      const pkg = getEffectivePackage(body?.package_id || "", totalCerts);
+      const pkg = await getEffectivePackage(body?.package_id || "", totalCerts);
       if (!pkg) {
         return res.status(400).json({
           error: "INVALID_PACKAGE",
           message: `Unknown package. Available: ${CREDIT_PACKAGES.map((p) => p.id).join(", ")}`,
-          packages: getEffectivePackages(totalCerts),
+          packages: await getEffectivePackages(totalCerts),
         });
       }
 
@@ -159,6 +160,8 @@ export function registerCreditsRoutes(app: Express) {
           amount_usdc: pkg.price_usdc,
           amount_raw: pkg.price_usdc_raw,
           decimals: 6,
+          pricing_url: `https://${req.get("host")}/api/pricing`,
+          pricing_note: "The requested amount is calculated from the current live certification rate, not a fixed published price.",
         },
         intent_token: intentToken,
         next_step: "After sending USDC on Base from payer_address, call POST /api/credits/confirm with { package_id, tx_hash, intent_token }",
@@ -190,7 +193,7 @@ export function registerCreditsRoutes(app: Express) {
       }
 
       const body = req.body as { package_id?: string; tx_hash?: string; intent_token?: string };
-      const pkg = getPackage(body?.package_id || "");
+      const pkg = await getPackage(body?.package_id || "");
       if (!pkg) {
         return res.status(400).json({
           error: "INVALID_PACKAGE",

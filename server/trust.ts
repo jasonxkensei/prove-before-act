@@ -734,26 +734,42 @@ async function computeAllLeaderboardEntries(): Promise<LeaderboardEntry[]> {
   const cutoff30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
   const rows = await db.execute(sql`
-    SELECT
-      u.id,
-      u.wallet_address,
-      u.agent_name,
-      u.agent_category,
-      u.agent_description,
-      u.agent_website,
-      COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) AS cert_total,
-      COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding') AND c.created_at >= ${cutoff30d}) AS cert_last_30d,
-      MIN(c.created_at) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) AS first_cert_at,
-      MAX(c.created_at) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) AS last_cert_at,
-      -- TRUST-C2: require minimum field lengths (mirrors computeTransparencyCounts fix).
-      COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding') AND c.metadata IS NOT NULL AND (length(c.metadata->>'model_hash') >= 16 OR length(c.metadata->>'strategy_hash') >= 16 OR length(c.metadata->>'version_number') >= 3)) AS metadata_count,
-      COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding') AND c.metadata IS NOT NULL AND length(c.metadata->>'agent_id') >= 8) AS audit_count
-    FROM users u
-    LEFT JOIN certifications c ON c.user_id = u.id
-    WHERE u.is_public_profile = true
-      AND u.wallet_address NOT LIKE 'erd1trial%'
-    GROUP BY u.id, u.wallet_address, u.agent_name, u.agent_category, u.agent_description, u.agent_website
-    HAVING COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) > 0
+    SELECT * FROM (
+      SELECT
+        u.id,
+        u.wallet_address,
+        u.agent_name,
+        u.agent_category,
+        u.agent_description,
+        u.agent_website,
+        COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) AS cert_total,
+        COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding') AND c.created_at >= ${cutoff30d}) AS cert_last_30d,
+        MIN(c.created_at) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) AS first_cert_at,
+        MAX(c.created_at) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) AS last_cert_at,
+        -- TRUST-C2: require minimum field lengths (mirrors computeTransparencyCounts fix).
+        COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding') AND c.metadata IS NOT NULL AND (length(c.metadata->>'model_hash') >= 16 OR length(c.metadata->>'strategy_hash') >= 16 OR length(c.metadata->>'version_number') >= 3)) AS metadata_count,
+        COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding') AND c.metadata IS NOT NULL AND length(c.metadata->>'agent_id') >= 8) AS audit_count,
+        -- active_attest_count is a correlated subquery against the attestations table — it counts
+        -- active, non-expired attestations whose issuer has a public profile, matching the filter
+        -- used by computeAttestationBonusBatch.  The correlated subquery runs once per post-HAVING
+        -- row (at most a few thousand agents) and is covered by the partial index
+        -- idx_attestations_subject_active (subject_wallet, status WHERE status = 'active').
+        COALESCE((
+            SELECT COUNT(*)::int
+            FROM attestations a_sub
+            JOIN users issuer_u ON issuer_u.wallet_address = a_sub.issuer_wallet
+              AND issuer_u.is_public_profile = true
+            WHERE a_sub.subject_wallet = u.wallet_address
+              AND a_sub.status = 'active'
+              AND (a_sub.expires_at IS NULL OR a_sub.expires_at > NOW())
+          ), 0) AS active_attest_count
+      FROM users u
+      LEFT JOIN certifications c ON c.user_id = u.id
+      WHERE u.is_public_profile = true
+        AND u.wallet_address NOT LIKE 'erd1trial%'
+      GROUP BY u.id, u.wallet_address, u.agent_name, u.agent_category, u.agent_description, u.agent_website
+      HAVING COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) > 0
+    ) ranked
     -- TRUST-H4: cap at 200 so the leaderboard job doesn't scale with total user count.
     -- We order by a composite score proxy so that all trust-score components are represented
     -- before the cap is applied:
@@ -761,26 +777,14 @@ async function computeAllLeaderboardEntries(): Promise<LeaderboardEntry[]> {
     --   cert_total * (1 + metadata_count + audit_count)   ← cert quality proxy
     --   + active_attest_count                             ← external attestation signal
     --
-    -- metadata_count / audit_count are already aggregated from certifications above, so they
-    -- cost no extra join.  active_attest_count is a correlated subquery against the attestations
-    -- table — it counts active, non-expired attestations whose issuer has a public profile,
-    -- matching the filter used by computeAttestationBonusBatch.  The correlated subquery runs
-    -- once per post-HAVING row (at most a few thousand agents) and is covered by the partial
-    -- index idx_attestations_subject_active (subject_wallet, status WHERE status = 'active').
+    -- The grouped/aggregated projection above is wrapped in a subquery so these output-column
+    -- aliases can be combined in an arithmetic ORDER BY expression: Postgres only allows a bare
+    -- alias as a standalone ORDER BY item, not inside a larger expression, so referencing the
+    -- aliases directly in the outer query is both correct and avoids re-declaring the aggregates.
     -- This ensures high-attestation agents with zero metadata/audit certs are not displaced by
     -- the 200-row cap.
     ORDER BY
-      cert_total * (1 + metadata_count + audit_count)
-      + COALESCE((
-          SELECT COUNT(*)::int
-          FROM attestations a_sub
-          JOIN users issuer_u ON issuer_u.wallet_address = a_sub.issuer_wallet
-            AND issuer_u.is_public_profile = true
-          WHERE a_sub.subject_wallet = u.wallet_address
-            AND a_sub.status = 'active'
-            AND (a_sub.expires_at IS NULL OR a_sub.expires_at > NOW())
-        ), 0)
-    DESC
+      cert_total * (1 + metadata_count + audit_count) + active_attest_count DESC
     LIMIT 200
   `);
 

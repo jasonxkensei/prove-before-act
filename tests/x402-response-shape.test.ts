@@ -326,9 +326,9 @@ describe("POST /api/proof — TRIAL_EXHAUSTED 402 shape", () => {
   );
 });
 
-describe("POST /api/proof — PAYMENT_REQUIRED 402 shape", () => {
+describe("POST /api/proof — INSUFFICIENT_CREDITS 402 shape", () => {
   it(
-    "returns HTTP 402 with PAYMENT_REQUIRED and all required agent-facing fields",
+    "returns HTTP 402 with INSUFFICIENT_CREDITS and all required agent-facing fields",
     async () => {
       const res = await fetch(`${BASE_URL}/api/proof`, {
         method: "POST",
@@ -345,7 +345,7 @@ describe("POST /api/proof — PAYMENT_REQUIRED 402 shape", () => {
       expect(res.status, "endpoint must return 402 for a non-trial user with zero credits").toBe(402);
 
       const body = await res.json() as Record<string, any>;
-      assertX402Shape(body, "PAYMENT_REQUIRED");
+      assertX402Shape(body, "INSUFFICIENT_CREDITS");
     },
     15_000,
   );

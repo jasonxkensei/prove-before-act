@@ -1,4 +1,4 @@
-"""CrewAI integration for automatic xProof certification."""
+"""CrewAI integration for automatic Prove Before Act certification."""
 
 import hashlib
 import json
@@ -124,7 +124,7 @@ class XProofCrewCertifyTool:
 
     name: str = "xproof_certify_decision"
     description: str = (
-        "Certify an agent decision on-chain via xProof using confidence metadata, "
+        "Certify an agent decision on-chain via Prove Before Act using confidence metadata, "
         "then run the compliance gate. "
         "Returns the transaction hash when the policy check passes. "
         "Raises PolicyViolationError if the decision violates the governance policy."
@@ -259,7 +259,7 @@ if CrewAIBaseTool is not None:
 
         name: str = "xproof_certify_decision"
         description: str = (
-            "Certify an agent decision on-chain via xProof with confidence metadata, "
+            "Certify an agent decision on-chain via Prove Before Act with confidence metadata, "
             "then run the compliance policy gate. "
             "Input: JSON string with fields: decision_text (str), confidence_level (float), "
             "decision_id (str), threshold_stage (str, default 'pre-commitment'), "
@@ -301,7 +301,7 @@ if CrewAIBaseTool is not None:
 if CrewAIBaseTool is not None:
 
     class XProofCrewTool(CrewAIBaseTool):  # type: ignore[misc]  # CrewAIBaseTool is Any when crewai is not installed
-        """Native CrewAI ``BaseTool`` for xProof certification.
+        """Native CrewAI ``BaseTool`` for Prove Before Act certification.
 
         Requires the ``crewai`` package. Wraps :class:`XProofCertifyTool`
         so it integrates natively with CrewAI's tool system.

@@ -10,3 +10,4 @@
 - [npm lockfile Replit registry proxy](npm-lockfile-replit-registry.md) — always regenerate package-lock.json with `--registry https://registry.npmjs.org`; Replit proxy URLs break CI
 - [xproof security audit fixes Aug 2026](xproof-security-audit-aug2026.md) — comprehensive map of 71 audit findings vs fixed/confirmed status
 - [MultiversX WASM builds on Replit](multiversx-wasm-toolchain-replit.md) — sc-meta needs rustup in /tmp (Nix rust lacks wasm stdlib); struct views return ONE nested-encoded buffer, decode sequentially
+- [Public pricing claims](public-pricing-claims.md) — public rates must be live-derived or link to /api/pricing, including crawler-rendered and published skill content

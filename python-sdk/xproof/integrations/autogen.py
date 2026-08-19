@@ -1,8 +1,8 @@
-"""AutoGen integration for automatic xProof certification.
+"""AutoGen integration for automatic Prove Before Act certification.
 
 Provides hook helpers and an optional ConversableAgent subclass that
 auto-certify messages exchanged between AutoGen agents on-chain using
-the xProof 4W framework (Who, What, When, Why).
+the Prove Before Act 4W framework (Who, What, When, Why).
 
 Targets AutoGen 0.2.x (pyautogen). AutoGen 0.4.x event-driven
 architecture is out of scope.
@@ -37,7 +37,7 @@ def _extract_text(message: Any) -> str:
 
 
 class XProofAutoGenHooks:
-    """Manages xProof certification hooks for an AutoGen agent.
+    """Manages Prove Before Act certification hooks for an AutoGen agent.
 
     Use :func:`register_xproof_hooks` for a one-liner setup, or
     instantiate this class directly for more control.
@@ -150,15 +150,15 @@ def register_xproof_hooks(
     certify_sent: bool = True,
     batch_mode: bool = False,
 ) -> "XProofAutoGenHooks":
-    """Register xProof certification hooks on an AutoGen agent.
+    """Register Prove Before Act certification hooks on an AutoGen agent.
 
-    This is the recommended one-liner for adding xProof certification to
+    This is the recommended one-liner for adding Prove Before Act certification to
     any ``ConversableAgent`` (or subclass such as ``AssistantAgent`` or
     ``UserProxyAgent``).
 
     Args:
         agent: An AutoGen ``ConversableAgent`` instance.
-        api_key: xProof API key (ignored if *client* is provided).
+        api_key: Prove Before Act API key (ignored if *client* is provided).
         client: Pre-configured :class:`~xproof.client.XProofClient`.
         agent_name: Name used in 4W metadata. Defaults to ``agent.name``.
         certify_received: Certify incoming messages (default ``True``).
@@ -250,7 +250,7 @@ def xproof_certify_decision(
         when: 4W — ISO-8601 timestamp (defaults to current UTC time).
         why: 4W — reason for the decision.
         metadata: Extra key-value pairs stored with the proof.
-        api_key: xProof API key (ignored if *client* is provided).
+        api_key: Prove Before Act API key (ignored if *client* is provided).
         client: Pre-configured :class:`~xproof.client.XProofClient`.
 
     Returns:
@@ -342,7 +342,7 @@ except ImportError:
 if _ConversableAgent is not None:
 
     class XProofConversableAgent(_ConversableAgent):  # type: ignore[misc]  # _ConversableAgent is Any when pyautogen is not installed
-        """AutoGen ``ConversableAgent`` with built-in xProof certification.
+        """AutoGen ``ConversableAgent`` with built-in Prove Before Act certification.
 
         Requires the ``pyautogen`` package. On init, automatically registers
         hooks that certify all incoming and outgoing messages on-chain.

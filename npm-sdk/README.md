@@ -1,11 +1,11 @@
 # Prove Before Act
 
-[![npm SDK CI](https://github.com/jasonxkensei/xProof/actions/workflows/npm-sdk.yml/badge.svg?branch=main)](https://github.com/jasonxkensei/xProof/actions/workflows/npm-sdk.yml) [![npm version](https://img.shields.io/npm/v/@proveprove-before-act)](https://www.npmjs.com/package/@proveprove-before-act) [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
+[![npm SDK CI](https://github.com/jasonxkensei/xProof/actions/workflows/npm-sdk.yml/badge.svg?branch=main)](https://github.com/jasonxkensei/xProof/actions/workflows/npm-sdk.yml) [![npm version](https://img.shields.io/npm/v/prove-before-act)](https://www.npmjs.com/package/prove-before-act) [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
 
 On-chain decision provenance for autonomous agents. **WHY before acting. WHAT after.** Timestamps written by the chain, not your agent.
 
 ```bash
-npm install @proveprove-before-act
+npm install prove-before-act
 ```
 
 ---
@@ -71,7 +71,7 @@ When something goes wrong, you don't guess. You verify.
 ## TypeScript SDK
 
 ```typescript
-import { XProofClient, hashString } from "@proveprove-before-act";
+import { XProofClient, hashString } from "prove-before-act";
 
 // Register — zero-friction, no wallet, no payment
 const client = await XProofClient.register("my-agent");
@@ -109,7 +109,7 @@ const client = new XProofClient({ apiKey: "pm_your_key" });
 Full accountability metadata on every certification:
 
 ```typescript
-import { XProofClient, hashString } from "@proveprove-before-act";
+import { XProofClient, hashString } from "prove-before-act";
 
 const client = new XProofClient({ apiKey: "pm_your_key" });
 
@@ -144,7 +144,7 @@ console.log(result.summary.created); // 2
 ## Hash Utilities
 
 ```typescript
-import { hashFile, hashBuffer, hashString } from "@proveprove-before-act";
+import { hashFile, hashBuffer, hashString } from "prove-before-act";
 
 const fileHash   = await hashFile("./document.pdf");
 const bufferHash = hashBuffer(Buffer.from("hello"));
@@ -168,8 +168,8 @@ console.log(proof.blockchainStatus); // "confirmed" | "pending"
 Check whether a decision meets governance requirements — without fetching the full confidence trail:
 
 ```typescript
-import { XProofClient } from "@proveprove-before-act";
-import type { PolicyCheckResult } from "@proveprove-before-act";
+import { XProofClient } from "prove-before-act";
+import type { PolicyCheckResult } from "prove-before-act";
 
 const client = new XProofClient({ apiKey: "pm_your_key" });
 
@@ -196,8 +196,8 @@ if (result.policyCompliant) {
 Anchor the full decision chronology on-chain alongside the confidence anchor. Three ISO8601 timestamps mark **when the instruction arrived**, **when reasoning began**, and **when the action fired**. A `jurisdictionType` field records who was accountable for the decision.
 
 ```typescript
-import { XProofClient, hashString, JURISDICTION_TYPES } from "@proveprove-before-act";
-import type { TimingBreakdown } from "@proveprove-before-act";
+import { XProofClient, hashString, JURISDICTION_TYPES } from "prove-before-act";
+import type { TimingBreakdown } from "prove-before-act";
 
 const client = new XProofClient({ apiKey: "pm_your_key" });
 
@@ -243,7 +243,7 @@ console.log(cert.timingBreakdown?.totalDurationMs);     // ms between instructio
 All valid values are exported as the `JURISDICTION_TYPES` constant for runtime validation:
 
 ```typescript
-import { JURISDICTION_TYPES } from "@proveprove-before-act";
+import { JURISDICTION_TYPES } from "prove-before-act";
 
 // ["instruction_following", "autonomous_inference", "human_approved"]
 console.log(JURISDICTION_TYPES);
@@ -280,7 +280,7 @@ Prove Before Act detects automatically when an agent acted with insufficient con
 Add `reversibilityClass` to any certified action. The server enforces a policy: **irreversible actions require `confidenceLevel >= 0.95`**. Anything below that threshold generates a policy violation anchored to the chain.
 
 ```typescript
-import { XProofClient, hashString } from "@proveprove-before-act";
+import { XProofClient, hashString } from "prove-before-act";
 
 const client = new XProofClient({ apiKey: "pm_..." });
 
@@ -305,7 +305,7 @@ const cert = await client.certifyWithConfidence(
 ### Check compliance — without fetching the full trail
 
 ```typescript
-import type { PolicyCheckResult } from "@proveprove-before-act";
+import type { PolicyCheckResult } from "prove-before-act";
 
 const check: PolicyCheckResult = await client.getPolicyCheck("trade-xyz-2026");
 
@@ -343,8 +343,8 @@ webhook, so Datadog / Grafana / CloudWatch log-based alerts can pick up
 violations without grepping free-form text.
 
 ```typescript
-import { XProofClient } from "@proveprove-before-act";
-import type { PolicyViolation } from "@proveprove-before-act";
+import { XProofClient } from "prove-before-act";
+import type { PolicyViolation } from "prove-before-act";
 
 const client = new XProofClient({ apiKey: "pm_..." });
 const decisionId = "trade-xyz-2026"; // the decision ID passed to certifyWithConfidence()
@@ -484,7 +484,7 @@ import {
   AuthenticationError,
   ConflictError,
   RateLimitError,
-} from "@proveprove-before-act";
+} from "prove-before-act";
 
 try {
   await client.certifyHash(hash, name, author);

@@ -74,11 +74,15 @@ let testUserId = "";
 
 beforeAll(async () => {
   // 1. Upsert the test user (idempotent — safe to re-run).
+  //    is_public_profile MUST be TRUE: GET /api/agent/calibration/:agentId is a
+  //    public endpoint that returns 404 AGENT_NOT_FOUND for private profiles
+  //    (server/routes/calibration.ts). These tests read pending_outcome_count
+  //    through that public GET, so the profile must be public to resolve.
   const userRow = await pool.query<{ id: string }>(
-    `INSERT INTO users (wallet_address)
-     VALUES ($1)
+    `INSERT INTO users (wallet_address, is_public_profile)
+     VALUES ($1, TRUE)
      ON CONFLICT (wallet_address)
-     DO UPDATE SET wallet_address = EXCLUDED.wallet_address
+     DO UPDATE SET is_public_profile = TRUE
      RETURNING id`,
     [TEST_WALLET],
   );
@@ -382,10 +386,10 @@ describe("pending_outcome_count — cache-invalidation path", () => {
 
     beforeAll(async () => {
       const otherUserRow = await pool.query<{ id: string }>(
-        `INSERT INTO users (wallet_address)
-         VALUES ($1)
+        `INSERT INTO users (wallet_address, is_public_profile)
+         VALUES ($1, TRUE)
          ON CONFLICT (wallet_address)
-         DO UPDATE SET wallet_address = EXCLUDED.wallet_address
+         DO UPDATE SET is_public_profile = TRUE
          RETURNING id`,
         [OTHER_WALLET],
       );

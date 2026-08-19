@@ -12,6 +12,7 @@ import { TRIAL_QUOTA, REGISTER_RATE_LIMIT_MAX, REGISTER_RATE_LIMIT_WINDOW_MS, ge
 import { pgCheckRateLimit } from "../pgRateLimit";
 import { recordOnBlockchain } from "../blockchain";
 import { CANONICAL_PUBLIC_ORIGIN } from "../publicOrigin";
+import { getCertificationPriceUsd } from "../pricing";
 
 // ============================================
 // Builds the machine-actionable quick_start guide
@@ -90,10 +91,10 @@ function buildQuickStart(apiKey: string, agentName: string, baseUrl: string) {
       {
         step: 4,
         name: "mcp_config",
-        description: "If you are an MCP-capable agent (Claude, Cursor, etc.), add xproof as an MCP server for native tool calls",
+        description: "If you are an MCP-capable agent (Claude, Cursor, etc.), add Prove Before Act as an MCP server for native tool calls",
         claude_desktop_config: {
           mcpServers: {
-            xproof: {
+            "prove-before-act": {
               url: `${baseUrl}/mcp`,
               headers: { Authorization: `Bearer ${apiKey}` },
             },
@@ -135,10 +136,14 @@ function buildQuickStart(apiKey: string, agentName: string, baseUrl: string) {
     },
     sdk: {
       python: {
+        product: "Prove Before Act",
+        compatibility_note: "The xproof package and XProofClient import are legacy compatibility identifiers; Prove Before Act is the current product name.",
         install: "pip install xproof",
         usage: `from xproof import XProofClient\nimport hashlib\nclient = XProofClient("${apiKey}")\ncontent = b"my decision"\nfile_hash = hashlib.sha256(content).hexdigest()\nproof = client.certify_hash(file_hash, "decision.json", "${agentName}",\n    who="${agentName}", why="task instruction")\nprint(proof.id, proof.transaction_url)`,
       },
       npm: {
+        product: "Prove Before Act",
+        compatibility_note: "The @xproof/xproof package and XProofClient export are legacy compatibility identifiers; Prove Before Act is the current product name.",
         install: "npm install @xproof/xproof",
         usage: `import { XProofClient } from "@xproof/xproof";\nimport { createHash } from "crypto";\nconst client = new XProofClient({ apiKey: "${apiKey}" });\nconst hash = createHash("sha256").update("my decision").digest("hex");\nconst proof = await client.certifyHash(hash, "decision.json", "${agentName}",\n  { why: "task instruction", who: "${agentName}" });\nconsole.log(proof.id, proof.transactionUrl);`,
       },
@@ -150,8 +155,9 @@ function buildQuickStart(apiKey: string, agentName: string, baseUrl: string) {
 }
 
 export function registerAgentsRoutes(app: Express) {
-  const trialInfoHandler = (_req: any, res: any) => {
+  const trialInfoHandler = async (_req: any, res: any) => {
     const baseUrl = CANONICAL_PUBLIC_ORIGIN;
+    const priceUsd = await getCertificationPriceUsd();
     res.json({
       protocol: "prove-before-act-agent-discovery/1.0",
       service: "prove-before-act",
@@ -236,11 +242,11 @@ export function registerAgentsRoutes(app: Express) {
           max_files: 50,
         },
         audit_log: {
-          description: "Certify a complete agent decision session. WHY proof before action + WHAT proof after. Standard compliance gate.",
+          description: "Certify a complete agent decision session. WHY proof before action + WHAT proof after. Operators may use the returned proof_id in their own compliance policy; Prove Before Act records certifications and leaves action handling to the operator.",
           endpoint: `POST ${baseUrl}/api/audit`,
           mcp_tool: "audit_agent_session",
           schema: `${baseUrl}/.well-known/agent-audit-schema.json`,
-          blocking_templates: `${baseUrl}/llms.txt#audit-guard`,
+          operator_policy_templates: `${baseUrl}/llms.txt#audit-guard`,
         },
         four_w_framework: {
           description: "Add provenance to any proof: who (agent identity), what (action hash), when (ISO timestamp), why (instruction/goal hash)",
@@ -286,14 +292,14 @@ export function registerAgentsRoutes(app: Express) {
 
       // ── MCP ───────────────────────────────────────────────────────────
       mcp: {
-        description: "If you support MCP (Claude Desktop, Cursor, etc.), add xproof as a native tool server",
+        description: "If you support MCP (Claude Desktop, Cursor, etc.), add Prove Before Act as a native tool server",
         endpoint: `${baseUrl}/mcp`,
         protocol: "JSON-RPC 2.0 over Streamable HTTP (MCP spec 2025-03-26)",
         auth: "Authorization: Bearer YOUR_API_KEY",
         tools: ["certify_file", "certify_with_confidence", "verify_proof", "get_proof", "discover_services", "audit_agent_session", "check_attestations", "investigate_proof", "submit_outcome", "get_calibration"],
         claude_desktop_config: {
           mcpServers: {
-            xproof: {
+            "prove-before-act": {
               url: `${baseUrl}/mcp`,
               headers: { Authorization: "Bearer YOUR_API_KEY" },
             },
@@ -308,17 +314,17 @@ export function registerAgentsRoutes(app: Express) {
           url: `${baseUrl}/llms.txt`,
         },
         x402_bazaar: {
-          description: "xproof is registered in the x402 Bazaar — the canonical discovery layer for x402-compatible API endpoints. AI agents with Bazaar MCP access can search for 'proof of existence', 'audit trail', or 'blockchain certification' and find xproof automatically with pricing, schemas, and ready-to-execute examples.",
+          description: "Prove Before Act is available through the x402 Bazaar discovery layer for x402-compatible API endpoints. AI agents with Bazaar MCP access can search for 'proof of existence', 'audit trail', or 'blockchain certification' and find the service with current pricing, schemas, and executable examples.",
           bazaar_mcp_endpoint: "GET https://api.cdp.coinbase.com/platform/v2/x402/discovery/mcp",
           search_terms: ["proof of existence", "blockchain certification", "audit trail", "decision provenance", "agent accountability"],
-          how_it_works: "Bazaar metadata (input/output schemas, pricing) is embedded in every x402 402 response from xproof. The CDP facilitator catalogs xproof automatically on first payment.",
+          how_it_works: "Bazaar metadata (input/output schemas and pricing) is embedded in x402 payment responses from Prove Before Act. Confirm availability and pricing from the live response before a purchase.",
           discoverable_endpoints: [
             `POST ${baseUrl}/api/proof — single file/decision certification`,
             `POST ${baseUrl}/api/batch — batch certification (up to 100 files)`,
           ],
         },
         mcp_direct: {
-          description: "Connect directly to xproof's MCP server for native tool calls (no HTTP required)",
+          description: "Connect directly to the Prove Before Act MCP server for native tool calls",
           url: `${baseUrl}/mcp`,
           auth: "Authorization: Bearer YOUR_API_KEY",
           tools: 8,
@@ -334,7 +340,7 @@ export function registerAgentsRoutes(app: Express) {
         trial: `${TRIAL_QUOTA} free certifications — start immediately after registration`,
         prepaid_credits: {
           endpoint: `POST ${baseUrl}/api/credits/purchase`,
-          price: "100 proofs for $1 USDC on Base",
+          price: `100 proofs for $${(priceUsd * 100).toFixed(2)} USDC on Base (calculated from the current live rate; see ${baseUrl}/api/pricing)`,
         },
         x402_pay_per_use: {
           description: "Pay per request with USDC on Base — no account needed",
@@ -723,6 +729,7 @@ export function registerAgentsRoutes(app: Express) {
   // ============================================
   app.get("/api/agent/status", async (req, res) => {
     try {
+      const priceUsd = await getCertificationPriceUsd();
       const authHeader = req.headers.authorization;
       if (!authHeader || !authHeader.startsWith("Bearer ")) {
         return res.status(401).json({
@@ -791,7 +798,7 @@ export function registerAgentsRoutes(app: Express) {
             credits: {
               method: "POST",
               url: `${baseUrl}/api/credits/purchase`,
-              note: "100 proofs / $1 USDC on Base",
+              note: `100 proofs / $${(priceUsd * 100).toFixed(2)} USDC on Base (current rate; see ${baseUrl}/api/pricing)`,
             },
             x402: {
               method: "POST",
@@ -986,10 +993,10 @@ export function registerAgentsRoutes(app: Express) {
           four_w: "Add metadata.who / metadata.what / metadata.when / metadata.why to any proof",
         },
         mcp_config: {
-          description: "If you support MCP (Claude Desktop, Cursor, etc.), add this to your config",
+          description: "If you support MCP (Claude Desktop, Cursor, etc.), add Prove Before Act to your config",
           claude_desktop_config: {
             mcpServers: {
-              xproof: {
+              "prove-before-act": {
                 url: `${baseUrl}/mcp`,
                 headers: { Authorization: `Bearer ${rawKey}` },
               },

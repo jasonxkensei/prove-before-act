@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -64,6 +65,16 @@ type Section = {
 };
 
 export default function AgentContextPage() {
+  const { data: pricing } = useQuery<{ current_price_usd: number }>({
+    queryKey: ["/api/pricing"],
+  });
+  const unitPrice = pricing?.current_price_usd;
+  const priceStr = unitPrice === undefined ? "loading…" : `$${unitPrice.toFixed(2)}`;
+  const per1k = unitPrice === undefined ? "loading…" : `$${(unitPrice * 1000).toFixed(0)}`;
+  const per10k = unitPrice === undefined ? "loading…" : `$${(unitPrice * 10000).toFixed(0)}`;
+  const per30k = unitPrice === undefined ? "loading…" : `$${(unitPrice * 30000).toFixed(0)}`;
+  const per30kPerAgent = unitPrice === undefined ? "loading…" : `$${(unitPrice * 600).toFixed(0)}`;
+
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     production: true,
     x402: true,
@@ -165,7 +176,7 @@ if count < EXPECTED_DAILY_MIN:
     if proof is None:
         raise PolicyError(
             "Proof anchoring failed after 3 retries. "
-            "Action blocked — no proof = no action."
+            "Operator policy paused this action — no proof = no action."
         )
     # Proof anchored — safe to proceed
     result = action_fn()
@@ -180,7 +191,7 @@ if count < EXPECTED_DAILY_MIN:
               <li>• <code className="font-mono bg-muted px-1 rounded">409</code> — already anchored, retrieve existing <code className="font-mono bg-muted px-1 rounded">proof_id</code></li>
               <li>• <code className="font-mono bg-muted px-1 rounded">429</code> — rate limited, wait <code className="font-mono bg-muted px-1 rounded">Retry-After</code> seconds</li>
               <li>• <code className="font-mono bg-muted px-1 rounded">5xx / timeout</code> — retry up to 3× with exponential backoff (1s → 2s → 4s)</li>
-              <li>• After 3 failures: log locally, block action (high-stakes) or proceed with local log (best-effort)</li>
+              <li>• After 3 failures: apply your operator policy — log locally and optionally block a high-stakes action, or proceed with a local log (best-effort)</li>
             </ul>
             <p className="text-xs text-muted-foreground mt-2">
               Full retry implementation: see the <strong className="text-foreground">retry policy</strong> section below.
@@ -202,7 +213,7 @@ if count < EXPECTED_DAILY_MIN:
           <div className="grid gap-3 sm:grid-cols-3">
             {[
               { step: "1", title: "Send request", desc: "POST /api/proof without any auth header" },
-              { step: "2", title: "Receive 402", desc: "Get price ($0.01 USDC) + payment payload to sign" },
+              { step: "2", title: "Receive 402", desc: `Get current price (${priceStr} USDC) + payment payload to sign` },
               { step: "3", title: "Pay & anchor", desc: "Resend with X-PAYMENT header — get proof instantly" },
             ].map((s) => (
               <div key={s.step} className="rounded-md border bg-muted/30 p-3">
@@ -291,12 +302,12 @@ print(f"Proof: https://provebeforeact.com{result['verify_url']}")`} />
       content: (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Based on real production measurements from <strong className="text-foreground">xproof_agent_verify</strong> — the Moltbook verification agent with 4,418 on-chain anchors:
+            Use the <strong className="text-foreground">xproof_agent_verify</strong> legacy agent identifier as a reference and query its public profile for current measurements:
           </p>
           <div className="grid gap-3 sm:grid-cols-3">
             {[
-              { label: "Single cert (API call → proof_id)", value: "~1.1s", detail: "1.075s measured end-to-end" },
-              { label: "Batch of 3 files", value: "~1.9s", detail: "1.876s measured" },
+              { label: "Single cert (API call → proof_id)", value: "~1–2s", detail: "typical; varies with load" },
+              { label: "Batch of 3 files", value: "~2s", detail: "typical; varies with load" },
               { label: "On-chain confirmation", value: "~6s", detail: "MultiversX avg block time" },
             ].map((m) => (
               <div key={m.label} className="rounded-md border bg-muted/30 p-3 text-center">
@@ -398,13 +409,13 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
       content: (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Prove Before Act uses a flat rate of <strong className="text-foreground">$0.01 per certification</strong> — no tiers, no promo, no volume discounts. The same price whether you anchor 1 or 10,000 proofs.
+            Prove Before Act uses a flat rate of <strong className="text-foreground">{priceStr} per certification</strong>. <strong className="text-foreground">This is the live rate from <code className="font-mono bg-muted px-1 rounded">/api/pricing</code>, not a fixed published price.</strong> There are no tiers or volume discounts; the same live rate applies whether you anchor 1 or 10,000 proofs.
           </p>
           <div className="grid gap-3 sm:grid-cols-3">
             {[
-              { label: "Current price", value: "$0.01", detail: "per certification — flat rate" },
-              { label: "Cost per 1,000 anchors", value: "$10", detail: "at $0.01 per cert" },
-              { label: "Cost per 10,000 anchors", value: "$100", detail: "prepaid pack — same flat rate" },
+              { label: "Current price", value: priceStr, detail: "per certification — live rate" },
+              { label: "Cost per 1,000 anchors", value: per1k, detail: `at ${priceStr} per cert` },
+              { label: "Cost per 10,000 anchors", value: per10k, detail: "same flat rate" },
             ].map((m) => (
               <div key={m.label} className="rounded-md border bg-muted/30 p-3 text-center">
                 <div className="text-2xl font-bold text-primary mb-1">{m.value}</div>
@@ -417,8 +428,8 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
             <p className="text-xs font-semibold">Cost comparison for a fleet of 50 agents, 20 actions/day each:</p>
             <ul className="text-xs text-muted-foreground space-y-0.5 ml-3">
               <li>• 50 agents × 20 actions × 30 days = <strong className="text-foreground">30,000 anchors/month</strong></li>
-              <li>• At $0.01 = <strong className="text-foreground">$300/month</strong></li>
-              <li>• Per agent: <strong className="text-foreground">$30/month</strong> — lower than most SaaS compliance tools</li>
+              <li>• At {priceStr}/anchor = <strong className="text-foreground">{per30k}/month</strong></li>
+              <li>• Per agent: <strong className="text-foreground">{per30kPerAgent}/month</strong> — lower than most SaaS compliance tools</li>
               <li>• Batch mode (up to 100 files per call): same price, reduced API overhead</li>
             </ul>
           </div>
@@ -515,7 +526,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
                   },
                   {
                     useCase: "Cost per 1,000 anchors",
-                    "Prove Before Act": "~$50",
+                    "Prove Before Act": per1k,
                     arweave: "~$5–50 (file size dep.)",
                     ceramic: "Node required †",
                     sign: "~$20–100 (gas)",
@@ -760,9 +771,9 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
             </div>
           </div>
           <div className="rounded-md border border-primary/20 bg-primary/5 p-3">
-            <p className="text-xs font-semibold text-primary mb-1">Production example: Moltbook fleet</p>
+            <p className="text-xs font-semibold text-primary mb-1">Reference agent profile</p>
             <p className="text-xs text-muted-foreground">
-              The <strong className="text-foreground">xproof_agent_verify</strong> agent (Moltbook's verification bot) has anchored <strong className="text-foreground">4,418 proofs</strong> over 16 consecutive weeks with a <strong className="text-foreground">100% confirmation rate</strong>. Its public profile at <code className="font-mono bg-muted px-1 rounded text-xs">/agent/erd1hlx4xann...gyu9</code> is queryable by any supervisor or partner system in real time.
+              <strong className="text-foreground">xproof_agent_verify</strong> is a legacy agent identifier. Query its public profile at <code className="font-mono bg-muted px-1 rounded text-xs">/agent/erd1hlx4xann...gyu9</code> for current proof counts, streaks, and confirmation status.
             </p>
           </div>
         </div>
@@ -892,7 +903,7 @@ print(f"Trade executed. Proof: https://provebeforeact.com{outcome['verify_url']}
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground leading-relaxed">
             The <strong className="text-foreground">Coherence Layer</strong> closes the 4W loop.
-            Prove Before Act already answers WHAT (certify_file) and WHEN (block timestamp). MX-8004 answers WHO.{" "}
+            Prove Before Act already answers WHAT (certify_file) and WHEN (block timestamp). MX-8004 can answer WHO when its integration is active; production currently reports <code className="font-mono text-xs bg-muted px-1 rounded">not_configured</code>.{" "}
             <code className="font-mono text-xs bg-muted px-1 rounded">check_coherence</code> answers WHY —
             anchoring your agent's intent, context, and decision on-chain <em>before</em> acting.
           </p>
@@ -900,7 +911,7 @@ print(f"Trade executed. Proof: https://provebeforeact.com{outcome['verify_url']}
           {/* Full 4W loop */}
           <div className="grid gap-2 sm:grid-cols-4 text-xs">
             {[
-              { w: "WHO", tool: "MX-8004", when: "Registration", role: "Identity", dim: true },
+              { w: "WHO", tool: "MX-8004 (optional)", when: "When active", role: "Identity", dim: true },
               { w: "WHY", tool: "check_coherence", when: "Before act", role: "Coherence", dim: false },
               { w: "WHAT", tool: "certify_file", when: "After act", role: "Proof", dim: true },
               { w: "WHEN", tool: "MultiversX block", when: "Automatic", role: "Timestamp", dim: true },
@@ -1032,9 +1043,9 @@ print(f"WHAT: {BASE}/proof/{what_resp['proof_id']}")`} />
           {/* Key stats grid */}
           <div className="grid gap-3 sm:grid-cols-3">
             {[
-              { value: "4,418", label: "Total proofs anchored", detail: "All confirmed on-chain" },
-              { value: "933 / mo", label: "Average anchoring rate", detail: "16-week rolling average" },
-              { value: "100%", label: "Confirmation rate", detail: "Zero failed transactions" },
+              { value: "Live", label: "Proof count", detail: "Query the public profile" },
+              { value: "Live", label: "Anchoring activity", detail: "Derived from current proof records" },
+              { value: "Live", label: "Confirmation status", detail: "Check each proof response" },
             ].map((s) => (
               <div key={s.label} className="rounded-md border bg-muted/30 p-3 text-center">
                 <div className="text-2xl font-bold text-primary mb-1">{s.value}</div>
@@ -1048,19 +1059,19 @@ print(f"WHAT: {BASE}/proof/{what_resp['proof_id']}")`} />
             <div className="rounded-md border bg-muted/30 p-3 space-y-2">
               <p className="text-xs font-semibold">Trust profile (public, real-time)</p>
               <div className="space-y-1 text-xs text-muted-foreground">
-                <div className="flex justify-between"><span>Trust score</span><span className="font-mono text-foreground">43,326</span></div>
-                <div className="flex justify-between"><span>Trust level</span><span className="font-mono text-emerald-500">Verified</span></div>
-                <div className="flex justify-between"><span>Active streak</span><span className="font-mono text-foreground">16 consecutive weeks</span></div>
-                <div className="flex justify-between"><span>Violations</span><span className="font-mono text-emerald-500">0</span></div>
+                <div className="flex justify-between"><span>Trust score</span><span className="font-mono text-foreground">Live value</span></div>
+                <div className="flex justify-between"><span>Trust level</span><span className="font-mono text-foreground">Live value</span></div>
+                <div className="flex justify-between"><span>Active streak</span><span className="font-mono text-foreground">Live value</span></div>
+                <div className="flex justify-between"><span>Violations</span><span className="font-mono text-foreground">Live value</span></div>
               </div>
             </div>
             <div className="rounded-md border bg-muted/30 p-3 space-y-2">
               <p className="text-xs font-semibold">Performance benchmarks</p>
               <div className="space-y-1 text-xs text-muted-foreground">
-                <div className="flex justify-between"><span>Single cert latency</span><span className="font-mono text-foreground">~1.1s</span></div>
-                <div className="flex justify-between"><span>Batch of 3 files</span><span className="font-mono text-foreground">~1.9s</span></div>
+                <div className="flex justify-between"><span>Single cert latency</span><span className="font-mono text-foreground">~1–2s typical</span></div>
+                <div className="flex justify-between"><span>Batch of 3 files</span><span className="font-mono text-foreground">~2s typical</span></div>
                 <div className="flex justify-between"><span>On-chain confirmation</span><span className="font-mono text-foreground">~6s</span></div>
-                <div className="flex justify-between"><span>Cost per proof</span><span className="font-mono text-foreground">$0.01 USDC</span></div>
+                <div className="flex justify-between"><span>Cost per proof</span><span className="font-mono text-foreground">{priceStr} USDC (live)</span></div>
               </div>
             </div>
           </div>
@@ -1071,10 +1082,10 @@ print(f"WHAT: {BASE}/proof/{what_resp['proof_id']}")`} />
           </div>
 
           <div className="rounded-md border bg-muted/30 p-3 space-y-2">
-            <p className="text-xs font-semibold">Total operational cost (16 weeks)</p>
+            <p className="text-xs font-semibold">Operational cost</p>
             <div className="text-xs text-muted-foreground space-y-1">
-              <p>4,418 proofs × $0.01 = <strong className="text-foreground">~$44 total</strong></p>
-              <p>~$2.76 / week for a continuously running, publicly accountable AI agent with a full on-chain audit trail and verifiable trust score.</p>
+              <p>Use the live pricing endpoint and public proof count to estimate total cost.</p>
+              <p>Estimate costs from the current price and the number of confirmed proof records you retrieve.</p>
             </div>
           </div>
 
@@ -1354,7 +1365,7 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
               {
                 limitation: "Prove Before Act is newer than alternatives",
                 honest: "Arweave has been running since 2018. Sign Protocol has larger EVM adoption. Prove Before Act launched in 2024. If 'battle-tested for 5+ years' is a hard requirement, be aware of this.",
-                mitigation: "xproof_agent_verify has 4,418 proofs and 16 consecutive weeks of zero failures. The underlying blockchain (MultiversX) is 4+ years old. Newness applies to the agent-specific feature set, not the chain.",
+                mitigation: "Review the reference agent's current public proof history and the live status of each proof. The underlying blockchain (MultiversX) has an independent operational history; this does not guarantee application-level behavior.",
                 severity: "medium",
               },
               {
@@ -1403,7 +1414,7 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
 
           <div className="rounded-md border border-primary/20 bg-primary/5 p-3">
             <p className="text-xs text-muted-foreground">
-              <strong className="text-foreground">Bottom line:</strong> Prove Before Act is the right choice for agents that need to prove their reasoning before acting — especially at low cost, with x402, and without a pre-existing account. It is not trying to replace Arweave or Sign Protocol. It's filling the gap they don't cover: agent decision accountability at $0.01/proof.
+              <strong className="text-foreground">Bottom line:</strong> Prove Before Act is the right choice for agents that need to prove their reasoning before acting — especially at low cost, with x402, and without a pre-existing account. It is not trying to replace Arweave or Sign Protocol. It's filling the gap they don't cover: agent decision accountability at {priceStr}/proof (live rate).
             </p>
           </div>
         </div>
@@ -1472,7 +1483,7 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
           </h1>
           <p className="text-muted-foreground text-base leading-relaxed max-w-2xl mb-4">
             <strong className="text-foreground">Anchor intent before execution.</strong>{" "}
-            Hash locally → certify on MultiversX → proceed with <code className="font-mono text-sm bg-muted px-1 rounded">proof_id</code>. Production-proven: <strong className="text-foreground">4,418 proofs</strong>, 16-week streak, 100% on-chain. <a href="/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9" className="text-primary underline">Moltbook case study</a>.
+            Hash locally → certify on MultiversX → proceed only after checking the returned <code className="font-mono text-sm bg-muted px-1 rounded">proof_id</code> status. <a href="/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9" className="text-primary underline">View the reference agent's live profile</a>.
           </p>
           {/* x402 — first thing agents see */}
           <div className="mt-2 rounded-md border border-primary/30 bg-primary/5 px-4 py-3 flex items-center gap-3" data-testid="badge-x402-top">
@@ -1720,7 +1731,7 @@ await sendToCustomer(ticketId, responseText, { audit_ref: proof_id });`,
             <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-amber-500" /><span><strong className="text-foreground">Batch anchoring</strong> — up to 100 files per call, 50× fewer requests</span></li>
             <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-amber-500" /><span><strong className="text-foreground">Retry policy</strong> — exponential backoff, 409 dedup, Retry-After support</span></li>
             <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-amber-500" /><span><strong className="text-foreground">Monitoring</strong> — alert if daily proof volume drops unexpectedly</span></li>
-            <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-amber-500" /><span><strong className="text-foreground">No proof = no action</strong> — hard gate for high-stakes decisions</span></li>
+            <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-amber-500" /><span><strong className="text-foreground">Operator policy: no proof = no action</strong> — an optional hard gate for high-stakes decisions</span></li>
           </ul>
         </div>
 

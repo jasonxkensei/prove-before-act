@@ -211,7 +211,7 @@ function safeJsonLd(
 async function renderHomePage(baseUrl: string): Promise<string> {
   const priceUsd = await getCertificationPriceUsd();
   const title = "Prove Before Act — The on-chain notary for AI agents";
-  const description = `The on-chain notary for AI agents. Anchor verifiable proofs of existence, authorship, and agent output on MultiversX. API-first, x402-compatible, $${priceUsd.toFixed(2)} per proof.`;
+  const description = `The on-chain notary for AI agents. Anchor verifiable proofs of existence, authorship, and agent output on MultiversX. API-first, x402-compatible, with a current live per-proof price at /api/pricing.`;
 
   return `${commonHead(title, description, baseUrl)}
 <body>
@@ -228,7 +228,7 @@ async function renderHomePage(baseUrl: string): Promise<string> {
   <section>
     <h1>Prove that's yours. Forever.</h1>
     <p>An irrefutable proof, recognized worldwide, impossible to falsify or delete.</p>
-    <p>$${priceUsd.toFixed(2)} per certification - Unlimited</p>
+    <p>Current live rate: $${priceUsd.toFixed(2)} per certification — <a href="${baseUrl}/api/pricing">see /api/pricing</a>. Not a fixed published price.</p>
     <a href="${baseUrl}/certify">Certify a file</a>
   </section>
 
@@ -253,7 +253,7 @@ async function renderHomePage(baseUrl: string): Promise<string> {
 
   <section>
     <h2>Simple pricing - One price. No subscription.</h2>
-    <p>$${priceUsd.toFixed(2)} per certification. Pay only for what you use. No hidden fees, no commitment.</p>
+    <p>Current live rate: $${priceUsd.toFixed(2)} per certification (<a href="${baseUrl}/api/pricing">see /api/pricing</a>). Pay only for what you use. No hidden fees, no commitment.</p>
     <ul>
       <li>Unlimited certifications</li>
       <li>Downloadable PDF certificate</li>
@@ -277,7 +277,7 @@ async function renderHomePage(baseUrl: string): Promise<string> {
 
   <section>
     <h2>Protect your first creation</h2>
-    <p>Join creators who secure their work. Only $${priceUsd.toFixed(2)} per certification.</p>
+    <p>Join creators who secure their work. Current live rate: $${priceUsd.toFixed(2)} per certification; see <a href="${baseUrl}/api/pricing">/api/pricing</a>.</p>
   </section>
 </main>
 
@@ -317,7 +317,7 @@ ${safeJsonLd({
   "url": "https://provebeforeact.com",
   "applicationCategory": "DeveloperApplication",
   "operatingSystem": "Web",
-  "description": "Proof and accountability layer for AI agents. Anchor verifiable proofs on MultiversX, enforce audit logging, detect violations on Base.",
+  "description": "Proof and accountability layer for AI agents. Anchor verifiable proofs on MultiversX with server-side violation detection; optional Base event integration is planned.",
   "offers": {
     "@type": "Offer",
     "price": `${priceUsd.toFixed(2)}`,
@@ -331,7 +331,7 @@ ${safeJsonLd({
     "MCP (Model Context Protocol) integration for AI agents",
     "x402 HTTP-native payments with USDC on Base",
     "Agent Audit Log Standard (4W framework: WHO/WHAT/WHEN/WHY)",
-    "Violation detection and on-chain recording on Base",
+    "Server-side violation detection with trust scoring (Base event integration planned)",
     "GitHub Action for CI/CD pipeline integration",
     "Downloadable PDF certificate with QR code",
     "Public verification page for each proof",
@@ -380,7 +380,7 @@ ${safeJsonLd({
       "name": "What blockchain does Prove Before Act use?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Prove Before Act anchors proofs on the MultiversX blockchain, a high-performance, eco-friendly European blockchain. Violations and accountability events are recorded on Base (Ethereum L2). This dual-chain architecture separates proof anchoring from enforcement."
+        "text": "Prove Before Act anchors proofs on the MultiversX blockchain, a high-performance, eco-friendly European blockchain. Violation detection and trust scoring run server-side today; publishing violation events to Base (Ethereum L2) is a planned integration — see the Base violations documentation for current status."
       }
     },
     {
@@ -388,7 +388,7 @@ ${safeJsonLd({
       "name": "How do AI agents integrate with Prove Before Act?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "AI agents can integrate via REST API with an API key, Model Context Protocol (MCP) for autonomous decision anchoring, or x402 HTTP-native payments for zero-setup proof creation. The Agent Audit Log Standard enforces pre-execution accountability: agents anchor their reasoning (WHY) before acting (WHAT)."
+        "text": "AI agents can integrate via REST API with an API key, Model Context Protocol (MCP) for autonomous decision anchoring, or x402 HTTP-native payments for zero-setup proof creation. The Agent Audit Log Standard describes a pre-execution accountability pattern — agents anchor their reasoning (WHY) before acting (WHAT); blocking on a proof is a policy the operator implements in agent code."
       }
     },
     {
@@ -592,7 +592,7 @@ async function renderAgentsPage(baseUrl: string): Promise<string> {
     <h2>Why MCP + Prove Before Act?</h2>
     <ul>
       <li><strong>Native tool integration</strong> — Claude, Cursor, Codex, OpenClaw call <code>certify_file</code> or <code>audit_agent_session</code> directly, no custom code needed</li>
-      <li><strong>Prove Before Act enforced by the protocol</strong> — <code>audit_agent_session</code> blocks execution until a proof_id is returned</li>
+      <li><strong>Prove-before-act pattern</strong> — call <code>audit_agent_session</code> before executing and have your agent code wait for a proof_id; the blocking policy lives in your agent, the proof record lives on-chain</li>
       <li><strong>x402 compatible</strong> — autonomous agents pay $${priceUsd.toFixed(2)}/proof via USDC on Base, no API key, no account, no human in the loop</li>
       <li><strong>Immutable on-chain trail</strong> — SHA-256 hash anchored on MultiversX, verifiable without Prove Before Act</li>
       <li><strong>Free trial</strong> — 10 free proofs, no wallet: call MCP tool <code>register_trial</code> (no auth needed) or <code>POST ${baseUrl}/api/agent/register</code> via REST</li>
@@ -908,7 +908,7 @@ curl -X POST ${baseUrl}/api/proof -H "Authorization: Bearer pm_YOUR_KEY" -H "Con
       <li><strong>Batch anchoring</strong> — POST /api/batch, up to 100 files per call, 50× fewer requests than one-by-one</li>
       <li><strong>Retry policy</strong> — exponential backoff (1s→2s→4s), handle 409 dedup, respect Retry-After on 429</li>
       <li><strong>Monitoring</strong> — alert if daily proof volume drops below expected minimum</li>
-      <li><strong>No proof = no action</strong> — for high-stakes agents (trading, legal, medical): block action if anchoring fails after 3 retries</li>
+      <li><strong>Operator policy: no proof = no action</strong> — for high-stakes agents (trading, legal, medical), your own agent code can block an action if anchoring fails after 3 retries</li>
     </ul>
     <pre><code># Batch anchoring — 1 call instead of 100
 curl -X POST ${baseUrl}/api/batch -H "Authorization: Bearer pm_YOUR_KEY" \\
@@ -992,45 +992,19 @@ send_to_customer(ticket_id, response_text, audit_ref=proof_id)</code></pre>
   </section>
 
   <section>
-    <h2>Live Proofs — Moltbook (xproof_agent_verify)</h2>
-    <p>Real proofs anchored by a production trading agent. Each proof was submitted BEFORE the order was executed.</p>
-    <pre><code>// Proof #4417 — anchored before trade execution
-{
-  "who": "xproof_agent_verify",
-  "why": "RSI(14)=22.4 on EGLD/USDC — extreme oversold signal. Volume spike +31% in 4h window. Double-bottom pattern confirmed at 31.80 support.",
-  "what": "BUY EGLD 3.0 @ 32.15 USDC",
+    <h2>Proof record shape</h2>
+    <p>This illustrative record shows the fields to anchor before acting. It is not a production statistic or a guarantee that an action was executed after anchoring.</p>
+    <pre><code>{
+  "who": "your-agent-id",
+  "why": "Decision rationale or an instruction hash",
+  "what": "Action or output description",
   "confidence_score": 0.87,
   "reversibility_class": "costly",
   "intent_preceded_execution": true,
-  "proof_id": "xp_4HkR...mV9z",
-  "blockchain_tx": "on MultiversX mainnet",
-  "verify_url": "${baseUrl}/proof/xp_4HkR...mV9z"
-}
-
-// Proof #4401 — risk management, anchored before position change
-{
-  "who": "xproof_agent_verify",
-  "why": "Trailing stop triggered — position +24.3% from entry at 25.90. Portfolio concentration at 38% exceeds 35% max threshold.",
-  "what": "SELL EGLD 1.8 @ 38.15 USDC — partial exit, keep 40% of position",
-  "confidence_score": 0.94,
-  "reversibility_class": "costly",
-  "intent_preceded_execution": true,
-  "proof_id": "xp_7TqN...aW2x",
-  "verify_url": "${baseUrl}/proof/xp_7TqN...aW2x"
-}
-
-// Proof #4389 — strategy adaptation, anchored before config change
-{
-  "who": "xproof_agent_verify",
-  "why": "Volatility index crossed 2.1σ threshold. Switching from momentum to mean-reversion strategy. No active positions affected.",
-  "what": "STRATEGY_CHANGE: momentum → mean_reversion. New RSI thresholds: buy<25, sell>75.",
-  "confidence_score": 0.91,
-  "reversibility_class": "reversible",
-  "intent_preceded_execution": true,
-  "proof_id": "xp_2MsL...cX8p",
-  "verify_url": "${baseUrl}/proof/xp_2MsL...cX8p"
+  "proof_id": "&lt;returned-proof-id&gt;",
+  "verify_url": "${baseUrl}/proof/&lt;returned-proof-id&gt;"
 }</code></pre>
-    <p>Public proof history and its current status breakdown are available on the live profile. <a href="${baseUrl}/agent/${REFERENCE_AGENT_WALLET}">View full proof history →</a></p>
+    <p>For current proof status and agent metrics, use the public profile or the proof verification endpoint. <a href="${baseUrl}/agent/${REFERENCE_AGENT_WALLET}">View the reference agent profile →</a></p>
   </section>
 
   <section>
@@ -1054,17 +1028,17 @@ Resend + X-PAYMENT: &lt;base64-signed-payment&gt; → 200 {"proof_id": "..."}</c
 
   <section id="4w-split">
     <h2>4W Responsibility Split: MX-8004 vs Prove Before Act</h2>
-    <p>The 4W audit trail is delivered by two complementary systems. Understanding the split is important when building agents that need forensically complete provenance:</p>
+    <p>Prove Before Act records WHAT, WHEN, and WHY. MX-8004 is an optional WHO integration: check <code>/api/mx8004/status</code> before treating identity or reputation data as active. Production currently reports <code>not_configured</code>.</p>
     <table>
       <thead><tr><th></th><th>Question</th><th>Provided by</th></tr></thead>
       <tbody>
-        <tr><td><strong>WHO</strong></td><td>Which agent or actor made this decision?</td><td><strong>MX-8004</strong> — MultiversX on-chain identity registry; anchors the agent's verified wallet address, DID, and reputation</td></tr>
+        <tr><td><strong>WHO</strong></td><td>Which agent or actor made this decision?</td><td><strong>MX-8004</strong> — optional MultiversX identity integration when the live status is active</td></tr>
         <tr><td><strong>WHAT</strong></td><td>What output or action was certified?</td><td><strong>Prove Before Act</strong> — SHA-256 hash of the output, anchored on MultiversX mainnet</td></tr>
         <tr><td><strong>WHEN</strong></td><td>Immutable timestamp?</td><td><strong>Prove Before Act</strong> — MultiversX block finality (~6 s); not a self-reported clock</td></tr>
         <tr><td><strong>WHY</strong></td><td>What reasoning led to the decision?</td><td><strong>Prove Before Act</strong> — <code>action_description</code>, <code>risk_level</code>, and <code>context</code> fields from <code>/api/audit</code></td></tr>
       </tbody>
     </table>
-    <p>Prove Before Act owns <strong>WHAT / WHEN / WHY</strong> and the causal link that proves reasoning preceded the action. MX-8004 owns <strong>WHO</strong>. Together they form a forensically complete 4W trail.</p>
+    <p>Prove Before Act records <strong>WHAT / WHEN / WHY</strong>. MX-8004 can add <strong>WHO</strong> only when its live status is active; it is not configured in production at present.</p>
   </section>
 
   <section id="coherence-layer">
@@ -1091,7 +1065,7 @@ Resend + X-PAYMENT: &lt;base64-signed-payment&gt; → 200 {"proof_id": "..."}</c
     <table>
       <thead><tr><th>W</th><th>Tool</th><th>When</th><th>Role</th></tr></thead>
       <tbody>
-        <tr><td><strong>WHO</strong></td><td>MX-8004 / SIGIL NFT</td><td>Registration</td><td>Agent identity, on-chain</td></tr>
+        <tr><td><strong>WHO</strong></td><td>MX-8004 identity (optional)</td><td>When active</td><td>Agent identity, when configured</td></tr>
         <tr><td><strong>WHY</strong></td><td><code>check_coherence</code></td><td>Before act</td><td>Intent + context + decision hash</td></tr>
         <tr><td><strong>WHAT</strong></td><td><code>certify_file</code></td><td>After act</td><td>Result / output hash</td></tr>
         <tr><td><strong>WHEN</strong></td><td>MultiversX timestamp</td><td>Automatic</td><td>Immutable block timestamp</td></tr>
@@ -1191,12 +1165,13 @@ Content-Type: application/json
     <h2>Pricing</h2>
     <ul>
       <li>Free trial: 10 proofs — no wallet, no card (POST /api/agent/register)</li>
-      <li>Pay-per-use via x402: $0.01 / proof — USDC on Base, no account needed</li>
-      <li>Prepaid packs — flat $0.01/cert, no promo:
+      <li>Pay-per-use via x402: $${priceUsd.toFixed(2)} / proof — USDC on Base, no account needed</li>
+      <li><strong>Live price:</strong> the values below are calculated from the current rate at <a href="/api/pricing">/api/pricing</a>; they are not fixed published prices.</li>
+      <li>Prepaid packs — current flat $${priceUsd.toFixed(2)}/cert:
         <ul>
-          <li>Starter: 100 certs / $1.00 ($0.01/cert)</li>
-          <li>Pro: 1,000 certs / $10.00 ($0.01/cert)</li>
-          <li>Business: 10,000 certs / $100.00 ($0.01/cert)</li>
+          <li>Starter: 100 certs / $${(priceUsd * 100).toFixed(2)} ($${priceUsd.toFixed(2)}/cert)</li>
+          <li>Pro: 1,000 certs / $${(priceUsd * 1000).toFixed(2)} ($${priceUsd.toFixed(2)}/cert)</li>
+          <li>Business: 10,000 certs / $${(priceUsd * 10000).toFixed(2)} ($${priceUsd.toFixed(2)}/cert)</li>
         </ul>
       </li>
       <li>Payment: API key (Authorization: Bearer pm_...) or x402 (USDC on Base, no account)</li>
@@ -1305,7 +1280,7 @@ ${safeJsonLd({
   }
 }
 
-function renderCoherencePage(baseUrl: string): string {
+function renderCoherencePage(baseUrl: string, priceUsd: number): string {
   return commonHead(
     "Coherence Layer — Prove Before Act | Prove Before Act",
     "Anchor your WHY before acting. check_coherence anchors intent on-chain before every AI decision. Link it to your WHAT proof after execution to produce an auditable coherence score.",
@@ -1327,7 +1302,7 @@ function renderCoherencePage(baseUrl: string): string {
   <th style="padding:.6rem 1rem;text-align:left;border:1px solid #e5e7eb">Role</th>
 </tr></thead>
 <tbody>
-  <tr><td style="padding:.5rem 1rem;border:1px solid #e5e7eb"><strong>WHO</strong></td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">MX-8004 / SIGIL NFT</td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">Registration</td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">Agent identity, on-chain</td></tr>
+  <tr><td style="padding:.5rem 1rem;border:1px solid #e5e7eb"><strong>WHO</strong></td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">MX-8004 identity (optional)</td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">When active</td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">Agent identity, when configured</td></tr>
   <tr><td style="padding:.5rem 1rem;border:1px solid #e5e7eb"><strong>WHY</strong></td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb"><code>check_coherence</code></td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">Before act</td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">Intent + context + decision hash</td></tr>
   <tr><td style="padding:.5rem 1rem;border:1px solid #e5e7eb"><strong>WHAT</strong></td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb"><code>certify_file</code></td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">After act</td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">Result / output hash</td></tr>
   <tr><td style="padding:.5rem 1rem;border:1px solid #e5e7eb"><strong>WHEN</strong></td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">MultiversX timestamp</td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">Automatic</td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">Immutable block timestamp</td></tr>
@@ -1338,7 +1313,7 @@ function renderCoherencePage(baseUrl: string): string {
 <p>MCP tool implementing Prove Before Act. Call BEFORE executing any significant action. Pass <code>intent</code>, <code>context</code>, and <code>decision</code>.</p>
 <pre style="background:#f9fafb;padding:1rem;border-radius:.5rem;overflow-x:auto;font-size:.85rem"><code>{ "name": "check_coherence", "arguments": { "intent": "...", "context": "...", "decision": "...", "who": "optional" } }</code></pre>
 <p><strong>Response:</strong> <code>proof_id</code>, <code>coherence_anchor</code> (SHA-256), <code>timestamp</code>, <code>verify_url</code>, <code>next_step.link_why_to_what</code>.<br>
-<strong>Cost:</strong> $0.01/anchor. First 10 free. Idempotent: identical payloads return the same <code>proof_id</code>.</p>
+<strong>Cost:</strong> $${priceUsd.toFixed(2)}/anchor (live rate). First 10 free. Idempotent: identical payloads return the same <code>proof_id</code>.</p>
 
 <h2>POST /api/coherence/link — Close the loop</h2>
 <p>After executing and certifying your WHAT, link the two proofs. Auth: <code>Bearer pm_...</code></p>
@@ -1515,11 +1490,12 @@ export function prerenderMiddleware() {
     // for the same reason as /fleet (React SPA content is richer but crawlers
     // benefit from the canonical static form).
     if (path === "/coherence") {
+      const coherencePriceUsd = await getCertificationPriceUsd();
       return res.status(200)
         .set("Content-Type", "text/html; charset=utf-8")
         .set("Cache-Control", "public, max-age=300")
         .set("Link", agentLinksHeader)
-        .send(renderCoherencePage(baseUrl));
+        .send(renderCoherencePage(baseUrl, coherencePriceUsd));
     }
 
     const userAgent = req.get("user-agent") || "";
