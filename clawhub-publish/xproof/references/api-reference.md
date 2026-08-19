@@ -121,4 +121,4 @@ Available tools: `certify_file`, `verify_proof`, `get_proof`, `discover_services
 
 ## Pricing
 
-$0.01 per certification.
+The current flat per-certification price (served live at `/api/pricing`).
