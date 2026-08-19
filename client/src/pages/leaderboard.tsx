@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { formatDistanceToNow } from "date-fns";
 import { SHORTLIST_KEY, SHORTLIST_MAX, readShortlist, writeShortlist, clearShortlist, toggleWallet, shouldShowCompareBar, isCompareEnabled } from "@/lib/compare-shortlist";
+import { trackAgentCta, useAgentCtaExposure } from "@/lib/conversionTracking";
 
 interface LeaderboardEntry {
   walletAddress: string;
@@ -154,6 +155,7 @@ export default function Leaderboard() {
   const [regDesc, setRegDesc] = useState("");
   const [regResult, setRegResult] = useState<{ api_key: string; agent_name: string; trial: { quota: number } } | null>(null);
   const [copied, setCopied] = useState(false);
+  const leaderboardRegisterCtaRef = useAgentCtaExposure<HTMLButtonElement>("leaderboard", "leaderboard_register");
 
   const registerMutation = useMutation({
     mutationFn: async () => {
@@ -302,7 +304,15 @@ export default function Leaderboard() {
               </p>
             )}
           </div>
-          <Button size="sm" data-testid="button-join-leaderboard" onClick={() => setShowRegister(true)}>
+          <Button
+            ref={leaderboardRegisterCtaRef}
+            size="sm"
+            data-testid="button-join-leaderboard"
+            onClick={() => {
+              trackAgentCta("cta_clicked", "leaderboard", "leaderboard_register");
+              setShowRegister(true);
+            }}
+          >
             <UserPlus className="mr-2 h-4 w-4" />
             Register your agent
           </Button>

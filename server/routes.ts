@@ -27,6 +27,7 @@ import { registerStandardRoutes } from "./routes/standard";
 import { registerCalibrationRoutes } from "./routes/calibration";
 import { registerCoherenceRoutes } from "./routes/coherence";
 import { registerFleetsRoutes } from "./routes/fleets";
+import { registerConversionRoutes } from "./routes/conversion";
 
 const recentVisits = new Map<string, number>();
 setInterval(() => {
@@ -117,6 +118,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerMx8004Routes(app);
   registerMcpRoutesRoutes(app);
   registerAdminRoutes(app);
+  registerConversionRoutes(app);
   registerTrustRoutes(app);
   registerAttestationsRoutes(app);
   registerStandardRoutes(app);

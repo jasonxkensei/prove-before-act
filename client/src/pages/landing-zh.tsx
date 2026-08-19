@@ -29,6 +29,7 @@ import {
   Users,
 } from "lucide-react";
 import { WalletLoginModal } from "@/components/wallet-login-modal";
+import { trackAgentCta, useAgentCtaExposure } from "@/lib/conversionTracking";
 import {
   Accordion,
   AccordionContent,
@@ -49,6 +50,7 @@ export default function LandingZh() {
   const [trialAgentName, setTrialAgentName] = useState<string>("");
   const [copied, setCopied] = useState(false);
   const [trialError, setTrialError] = useState<string | null>(null);
+  const heroTrialCtaRef = useAgentCtaExposure<HTMLButtonElement>("landing_zh", "trial_register");
 
   const registerMutation = useMutation({
     mutationFn: async (name: string) => {
@@ -607,7 +609,11 @@ GET /api/agents/{wallet}/incident-report
                     className="flex-1"
                   />
                   <Button
-                    onClick={() => registerMutation.mutate(agentName.trim())}
+                    ref={heroTrialCtaRef}
+                    onClick={() => {
+                      trackAgentCta("cta_clicked", "landing_zh", "trial_register");
+                      registerMutation.mutate(agentName.trim());
+                    }}
                     disabled={agentName.trim().length < 2 || registerMutation.isPending}
                     data-testid="button-register-trial-zh"
                   >

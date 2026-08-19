@@ -24,6 +24,11 @@ When adding a new raw-SQL-managed object (table, column, index, constraint):
 4. For CHECK constraints, use `check('name', sql`expression`)` (import `check` from drizzle-orm/pg-core).
 5. Run `npx drizzle-kit push --force` locally — the second run should show "No changes detected".
 
+**Caution:** an additive schema change can still make `drizzle-kit push` stop on an unrelated
+historical constraint drift and offer a destructive table truncation. Do not accept that prompt
+just to add the new object; apply only the matching idempotent additive DDL in development, keep
+the object fully declared in the Drizzle schema, and resolve the unrelated drift separately.
+
 ## Objects that were missing and caused a production deployment scare
 - `rate_limit_counters` table (PgRateLimitStore — bucket/count/reset_at)
 - `leaderboard_snapshot` table (single-row JSONB leaderboard cache)

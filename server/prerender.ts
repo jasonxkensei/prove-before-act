@@ -25,6 +25,81 @@ const CRAWLER_USER_AGENTS = [
 
 const SKIP_EXTENSIONS = /\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|map|json|xml|txt|pdf|zip|webp|avif|mp4|webm)$/i;
 const SKIP_PATHS = ["/api/", "/.well-known/", "/mcp", "/llms.txt", "/llms-full.txt", "/robots.txt", "/sitemap.xml", "/learn/", "/dashboard", "/settings", "/agent-tools/", "/genesis.proof.json"];
+const REFERENCE_AGENT_WALLET = "erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9";
+
+type ReferenceAgentSnapshot = {
+  confirmed: number;
+  finalized: number;
+  failed: number;
+  confirmationRate: number | null;
+  streakWeeks: number | null;
+  trustScore: number | null;
+  trustLevel: string | null;
+  generatedAt: string;
+};
+
+async function getReferenceAgentSnapshot(): Promise<ReferenceAgentSnapshot | null> {
+  try {
+    const [trust, result] = await Promise.all([
+      computeTrustScoreByWallet(REFERENCE_AGENT_WALLET),
+      db.execute(sql`
+        SELECT
+          COUNT(*) FILTER (
+            WHERE c.blockchain_status = 'confirmed'
+              AND c.is_public = true
+              AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')
+          )::int AS confirmed,
+          COUNT(*) FILTER (
+            WHERE c.blockchain_status IN ('confirmed', 'failed')
+              AND c.is_public = true
+              AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')
+          )::int AS finalized,
+          COUNT(*) FILTER (
+            WHERE c.blockchain_status = 'failed'
+              AND c.is_public = true
+              AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')
+          )::int AS failed
+        FROM certifications c
+        INNER JOIN users u ON u.id = c.user_id
+        WHERE u.wallet_address = ${REFERENCE_AGENT_WALLET}
+      `),
+    ]);
+    const row = result.rows[0] as { confirmed?: number; finalized?: number; failed?: number } | undefined;
+    const confirmed = Number(row?.confirmed ?? 0);
+    const finalized = Number(row?.finalized ?? 0);
+    const failed = Number(row?.failed ?? 0);
+    return {
+      confirmed,
+      finalized,
+      failed,
+      confirmationRate: finalized > 0 ? Math.round((confirmed / finalized) * 10_000) / 100 : null,
+      streakWeeks: trust?.streakWeeks ?? null,
+      trustScore: trust?.score ?? null,
+      trustLevel: trust?.level ?? null,
+      generatedAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    logger.warn("Unable to load reference-agent live metrics for prerender", {
+      component: "prerender",
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  }
+}
+
+function renderReferenceAgentMetrics(snapshot: ReferenceAgentSnapshot | null): string {
+  if (!snapshot) {
+    return `Live metrics are temporarily unavailable. <a href="/agent/${REFERENCE_AGENT_WALLET}">View the public agent profile</a>.`;
+  }
+  const confirmation = snapshot.confirmationRate === null
+    ? "not available (no finalized proofs)"
+    : `${snapshot.confirmationRate.toFixed(2)}% across ${snapshot.finalized.toLocaleString("en-US")} finalized public proofs (${snapshot.failed.toLocaleString("en-US")} failed)`;
+  const streak = snapshot.streakWeeks === null ? "not available" : `${snapshot.streakWeeks} weeks`;
+  const score = snapshot.trustScore === null
+    ? "not available"
+    : `${snapshot.trustScore.toLocaleString("en-US")} (${snapshot.trustLevel ?? "unclassified"})`;
+  return `${snapshot.confirmed.toLocaleString("en-US")} confirmed public proofs; confirmation rate ${confirmation}; current streak ${streak}; trust score ${score}. Data generated ${snapshot.generatedAt}.`;
+}
 
 function isCrawler(userAgent: string, req?: Request): boolean {
   if (!userAgent) return true; // No UA at all = definitely a bot
@@ -795,7 +870,11 @@ resp = requests.post("${baseUrl}/api/batch",
 }
 
 async function renderAgentContextPage(baseUrl: string): Promise<string> {
-  const priceUsd = await getCertificationPriceUsd();
+  const [priceUsd, referenceAgent] = await Promise.all([
+    getCertificationPriceUsd(),
+    getReferenceAgentSnapshot(),
+  ]);
+  const referenceMetrics = renderReferenceAgentMetrics(referenceAgent);
   const title = "Prove Before Act Agent Context — On-chain accountability layer for autonomous agents";
   const description = "Prove Before Act anchors your agent's intent before execution on MultiversX. Prove Before Act: no API key needed via x402, 4W audit trail, MCP native. Free trial: 10 proofs, no wallet.";
 
@@ -804,7 +883,7 @@ async function renderAgentContextPage(baseUrl: string): Promise<string> {
 <header><nav><a href="${baseUrl}"><strong>Prove Before Act</strong></a> | <a href="${baseUrl}/agent-context.md">Machine-readable (.md)</a></nav></header>
 <main>
   <h1>Prove Before Act Agent Context</h1>
-  <p><strong>Anchor intent before execution.</strong> Hash locally → certify on MultiversX → proceed with <code>proof_id</code>. Production-proven: 4,418 proofs, 16-week streak, 100% on-chain. <a href="${baseUrl}/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9">Moltbook case study</a>.</p>
+  <p><strong>Anchor intent before execution.</strong> Hash locally → certify on MultiversX → proceed with <code>proof_id</code>. Production reference: ${referenceMetrics} <a href="${baseUrl}/agent/${REFERENCE_AGENT_WALLET}">Moltbook public profile</a>.</p>
   <p>No API key needed. Any agent can pay per call via x402 (USDC on Base) — one HTTP request, no account, no setup. Discoverable via <a href="${baseUrl}/llms.txt">llms.txt</a> and <a href="${baseUrl}/.well-known/xproof.json">/.well-known/xproof.json</a>.</p>
 
   <section>
@@ -950,7 +1029,7 @@ send_to_customer(ticket_id, response_text, audit_ref=proof_id)</code></pre>
   "proof_id": "xp_2MsL...cX8p",
   "verify_url": "${baseUrl}/proof/xp_2MsL...cX8p"
 }</code></pre>
-    <p>All 4,418 proofs publicly verifiable on-chain. <a href="${baseUrl}/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9">View full proof history →</a></p>
+    <p>Public proof history and its current status breakdown are available on the live profile. <a href="${baseUrl}/agent/${REFERENCE_AGENT_WALLET}">View full proof history →</a></p>
   </section>
 
   <section>
@@ -1132,15 +1211,9 @@ Content-Type: application/json
   </section>
 
   <section>
-    <h2>Live production: Moltbook (xproof_agent_verify)</h2>
-    <ul>
-      <li>4,418 proofs anchored on-chain</li>
-      <li>100% confirmation rate — zero failed transactions</li>
-      <li>16-week consecutive streak</li>
-      <li>Trust score: 43,326 — Verified level</li>
-      <li>Cost: ~$2.76/week for a continuously accountable AI agent</li>
-    </ul>
-    <p>Public profile: <a href="${baseUrl}/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9">View live agent profile</a></p>
+    <h2>Live production reference: Moltbook (xproof_agent_verify)</h2>
+    <p>${referenceMetrics}</p>
+    <p>Public profile: <a href="${baseUrl}/agent/${REFERENCE_AGENT_WALLET}">View live agent profile</a></p>
   </section>
 
   <section>
@@ -1150,7 +1223,7 @@ Content-Type: application/json
       <li><a href="${baseUrl}/docs">REST API docs</a></li>
       <li><a href="${baseUrl}/agent-context.md">Machine-readable (.md) — optimized for LLM context windows</a></li>
       <li><a href="${baseUrl}/mcp">MCP endpoint — certify_file, audit_agent_session, register_trial</a></li>
-      <li><a href="${baseUrl}/leaderboard">Agent trust leaderboard — 4,418+ proofs, ranked agents</a></li>
+      <li><a href="${baseUrl}/leaderboard">Agent trust leaderboard — live ranked agents</a></li>
       <li><a href="${baseUrl}/skill.md">skill.md — one-file integration guide for AI frameworks</a></li>
     </ul>
   </section>

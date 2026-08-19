@@ -178,6 +178,34 @@ interface AdminStats {
   };
 }
 
+interface ConversionFunnelData {
+  timezone: string;
+  window_days: number;
+  rows: Array<{
+    date: string;
+    stage: "cta" | "registration" | "proof";
+    outcome: "seen" | "clicked" | "started" | "success" | "failure";
+    http_class: "0xx" | "2xx" | "3xx" | "4xx" | "5xx";
+    traffic_segment: "human_browser" | "declared_agent" | "crawler_scanner" | "api_client";
+    events: number;
+    visitors: number;
+  }>;
+  totals: {
+    events: number;
+    visitors: number;
+    cta_views: number;
+    cta_clicks: number;
+    registrations: number;
+    successful_proofs: number;
+  };
+  last_7_complete_days: {
+    registrations: number;
+    successful_proofs: number;
+  };
+  alerts: Array<{ severity: "warning"; condition: string; message: string }>;
+  generated_at: string;
+}
+
 interface ProposedViolation {
   id: string;
   wallet_address: string;
@@ -622,6 +650,111 @@ function OnboardingFunnelCard({ data }: { data: PublicStats["onboarding_funnel"]
   );
 }
 
+function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined }) {
+  if (!data) {
+    return (
+      <Card data-testid="card-conversion-funnel">
+        <CardHeader>
+          <CardTitle className="text-sm font-medium">First Proof Funnel</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">Loading privacy-safe conversion events…</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const daily = new Map<string, { views: number; clicks: number; registrations: number; proofs: number; failures: number }>();
+  for (const row of data.rows) {
+    const day = daily.get(row.date) ?? { views: 0, clicks: 0, registrations: 0, proofs: 0, failures: 0 };
+    if (row.stage === "cta" && row.outcome === "seen") day.views += row.visitors;
+    if (row.stage === "cta" && row.outcome === "clicked") day.clicks += row.visitors;
+    if (row.stage === "registration" && row.outcome === "success" && row.http_class === "2xx") day.registrations += row.visitors;
+    if (row.stage === "proof" && row.outcome === "success" && row.http_class === "2xx") day.proofs += row.visitors;
+    if ((row.stage === "registration" || row.stage === "proof") && row.outcome === "failure") day.failures += row.events;
+    daily.set(row.date, day);
+  }
+  const lastSevenDays = [...daily.entries()].slice(0, 7);
+
+  const maxVolume = Math.max(
+    1,
+    ...lastSevenDays.map(([, day]) => Math.max(day.views, day.clicks, day.registrations, day.proofs)),
+  );
+
+  return (
+    <Card data-testid="card-conversion-funnel">
+      <CardHeader className="space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <CardTitle className="text-sm font-medium">First Proof Funnel</CardTitle>
+            <Badge variant="secondary">last {data.window_days}d</Badge>
+          </div>
+          <span className="text-xs text-muted-foreground">Server-derived, no request data retained</span>
+        </div>
+        {data.alerts.length > 0 && (
+          <div className="space-y-1">
+            {data.alerts.map((alert) => (
+              <div key={alert.condition} className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400" data-testid={`alert-${alert.condition}`}>
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                {alert.message}
+              </div>
+            ))}
+          </div>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            ["CTA seen", data.totals.cta_views],
+            ["CTA clicked", data.totals.cta_clicks],
+            ["Registered", data.totals.registrations],
+            ["New proofs", data.totals.successful_proofs],
+          ].map(([label, value]) => (
+            <div key={label as string} className="rounded-md border p-3">
+              <p className="text-xs text-muted-foreground">{label}</p>
+              <p className="mt-1 text-lg font-semibold tabular-nums">{(value as number).toLocaleString()}</p>
+            </div>
+          ))}
+        </div>
+
+        {lastSevenDays.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No conversion events recorded yet.</p>
+        ) : (
+          <div className="space-y-3">
+            {lastSevenDays.map(([date, day]) => (
+              <div key={date} className="grid grid-cols-[5.5rem_1fr_auto] items-center gap-3 text-xs">
+                <span className="text-muted-foreground">{date}</span>
+                <div className="space-y-1">
+                  {[
+                    ["Seen", day.views, "bg-muted-foreground/50"],
+                    ["Clicked", day.clicks, "bg-primary"],
+                    ["Registered", day.registrations, "bg-chart-4"],
+                    ["Proved", day.proofs, "bg-chart-2"],
+                  ].map(([label, value, color]) => (
+                    <div key={label as string} className="flex items-center gap-2">
+                      <span className="w-14 text-muted-foreground">{label}</span>
+                      <div className="h-1.5 flex-1 rounded-full bg-muted">
+                        <div className={`h-1.5 rounded-full ${color as string}`} style={{ width: `${Math.max(0, ((value as number) / maxVolume) * 100)}%` }} />
+                      </div>
+                      <span className="w-6 text-right tabular-nums">{value as number}</span>
+                    </div>
+                  ))}
+                </div>
+                <span className={day.failures > 0 ? "text-destructive tabular-nums" : "text-muted-foreground tabular-nums"}>
+                  {day.failures > 0 ? `${day.failures} failed` : "—"}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="text-xs text-muted-foreground">
+          API outcomes include 2xx, 4xx, 429 and 5xx responses; “New proofs” counts HTTP 201 only.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 function ProposedViolationsCard({ data, isAdmin }: { data: ProposedViolationsData | undefined; isAdmin: boolean }) {
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState(true);
@@ -897,6 +1030,13 @@ export default function AdminDashboard() {
 
   const { data: adminStats } = useQuery<AdminStats>({
     queryKey: ["/api/admin/stats"],
+    refetchInterval: 30000,
+    retry: false,
+    enabled: isAdmin,
+  });
+
+  const { data: conversionFunnel, refetch: refetchConversionFunnel } = useQuery<ConversionFunnelData>({
+    queryKey: ["/api/admin/conversion-funnel"],
     refetchInterval: 30000,
     retry: false,
     enabled: isAdmin,
@@ -1237,6 +1377,7 @@ export default function AdminDashboard() {
               <div className="mb-6 space-y-6">
                 <ProposedViolationsCard data={proposedViolations} isAdmin={isAdmin} />
                 <OnboardingFunnelCard data={stats.onboarding_funnel} />
+                <ConversionFunnelCard data={conversionFunnel} />
                 <TrafficSourcesCard data={trafficSources} />
                 <UtmCampaignCard data={utmStats} />
                 <RateLimitActivityCard data={rateLimitStats} isError={rateLimitError} />
@@ -1244,7 +1385,14 @@ export default function AdminDashboard() {
             )}
 
             <div className="flex flex-col items-center gap-2">
-              <Button variant="outline" onClick={() => refetchStats()} data-testid="button-refresh-stats">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  refetchStats();
+                  refetchConversionFunnel();
+                }}
+                data-testid="button-refresh-stats"
+              >
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Refresh
               </Button>

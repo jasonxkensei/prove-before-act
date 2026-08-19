@@ -366,6 +366,34 @@ export const creditPurchases = pgTable("credit_purchases", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Privacy-safe, append-only conversion telemetry. This deliberately stores no
+// request body, credential, wallet address, cookie, raw IP, or full referrer.
+// The application only ever inserts these rows; no update/delete routes exist.
+export const conversionEvents = pgTable("conversion_events", {
+  id: serial("id").primaryKey(),
+  eventType: varchar("event_type", { length: 96 }).notNull(),
+  stage: varchar("stage", { length: 32 }).notNull(),
+  outcome: varchar("outcome", { length: 32 }).notNull(),
+  httpStatus: integer("http_status"),
+  httpClass: varchar("http_class", { length: 3 }).notNull(),
+  trafficSegment: varchar("traffic_segment", { length: 32 }).notNull(),
+  ipHash: varchar("ip_hash", { length: 64 }).notNull(),
+  referrerHost: varchar("referrer_host", { length: 128 }),
+  utmSource: varchar("utm_source", { length: 128 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("idx_conversion_events_day_funnel").on(table.createdAt, table.stage, table.outcome),
+  index("idx_conversion_events_day_segment").on(table.createdAt, table.trafficSegment),
+  index("idx_conversion_events_day_http").on(table.createdAt, table.httpClass),
+  index("idx_conversion_events_ip_time").on(table.ipHash, table.createdAt),
+  check("conversion_events_stage_check", sql`stage IN ('cta', 'registration', 'proof')`),
+  check("conversion_events_outcome_check", sql`outcome IN ('seen', 'clicked', 'started', 'success', 'failure')`),
+  check("conversion_events_http_class_check", sql`http_class IN ('0xx', '2xx', '3xx', '4xx', '5xx')`),
+  check("conversion_events_http_status_check", sql`http_status IS NULL OR http_status BETWEEN 100 AND 599`),
+]);
+
+export type ConversionEvent = typeof conversionEvents.$inferSelect;
+
 export type CreditPurchase = typeof creditPurchases.$inferSelect;
 
 // Credit purchase intents — binds a /credits/purchase call to the initiating user

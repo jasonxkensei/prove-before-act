@@ -17,6 +17,7 @@ import { warmCachesFromSnapshots, startTrustRefreshScheduler } from "./trust";
 import { startCoherenceDivergenceScheduler } from "./coherence-divergence";
 import { requestIdMiddleware, logger } from "./logger";
 import { x402PriceConfigWarning, x402NetworkConfigWarning } from "./routes/helpers";
+import { conversionOutcomeMiddleware } from "./conversion-telemetry";
 import {
   runDailyMaintenance,
   migrateSystemUserCertifications,
@@ -27,6 +28,7 @@ import {
   purgeStaleSnapshotAttestationCounts,
   purgeOnboardingCertifications,
   sweepExpiredAcpReservations,
+  migrateConversionEventsTable,
 } from "./maintenance";
 
 setupProcessErrorHandlers();
@@ -109,6 +111,10 @@ app.use("/mcp", (req: Request, res: Response, next: NextFunction) => {
   }
   next();
 });
+
+// Capture the two conversion-critical API request outcomes before parsing,
+// global rate limiting, and timeouts can send an early response.
+app.use(conversionOutcomeMiddleware);
 
 // Skip JSON parsing for webhooks to preserve raw body for signature verification
 app.use((req, res, next) => {
@@ -213,6 +219,10 @@ app.use((req, res, next) => {
   // logged and the server continues (pgCheckRateLimit fails open on DB errors,
   // so availability is preserved but enforcement is temporarily bypassed).
   await ensureRateLimitTable();
+  // Conversion instrumentation must not start until its append-only storage is
+  // present. This idempotent migration is non-destructive and is mirrored in
+  // shared/schema.ts for publish-time schema reconciliation.
+  await migrateConversionEventsTable();
 
   server.listen({
     port,

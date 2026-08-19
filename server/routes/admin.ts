@@ -340,6 +340,112 @@ export function registerAdminRoutes(app: Express) {
   });
 
   // ============================================
+  // Conversion Funnel (admin-only, privacy-safe)
+  // ============================================
+  app.get("/api/admin/conversion-funnel", isWalletAuthenticated, requireAdmin, async (req: any, res) => {
+    try {
+      const rowsResult = await db.execute(sql`
+        SELECT
+          DATE(created_at AT TIME ZONE 'UTC') AS day,
+          stage,
+          outcome,
+          http_class,
+          traffic_segment,
+          COUNT(*)::int AS events,
+          COUNT(DISTINCT ip_hash)::int AS visitors
+        FROM conversion_events
+        WHERE created_at >= NOW() - INTERVAL '30 days'
+        GROUP BY 1, 2, 3, 4, 5
+        ORDER BY day DESC, stage, outcome, http_class, traffic_segment
+      `);
+      const totalsResult = await db.execute(sql`
+        SELECT
+          COUNT(*)::int AS events,
+          COUNT(DISTINCT ip_hash)::int AS visitors,
+          COUNT(DISTINCT ip_hash) FILTER (
+            WHERE stage = 'cta' AND outcome = 'seen'
+          )::int AS cta_views,
+          COUNT(DISTINCT ip_hash) FILTER (
+            WHERE stage = 'cta' AND outcome = 'clicked'
+          )::int AS cta_clicks,
+          COUNT(DISTINCT ip_hash) FILTER (
+            WHERE stage = 'registration' AND outcome = 'success' AND http_class = '2xx'
+          )::int AS registrations,
+          COUNT(DISTINCT ip_hash) FILTER (
+            WHERE stage = 'proof' AND outcome = 'success' AND http_status = 201
+          )::int AS successful_proofs
+        FROM conversion_events
+        WHERE created_at >= NOW() - INTERVAL '30 days'
+      `);
+      const lastSevenDaysResult = await db.execute(sql`
+        SELECT
+          COUNT(DISTINCT ip_hash) FILTER (
+            WHERE stage = 'registration' AND outcome = 'success' AND http_class = '2xx'
+          )::int AS registrations,
+          COUNT(DISTINCT ip_hash) FILTER (
+            WHERE stage = 'proof' AND outcome = 'success' AND http_status = 201
+          )::int AS successful_proofs
+        FROM conversion_events
+        WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+          AND created_at < CURRENT_DATE
+      `);
+
+      const parseCount = (row: Record<string, string | number> | undefined, key: string) =>
+        Number(row?.[key] || 0);
+      const totalsRow = totalsResult.rows[0] as Record<string, string | number> | undefined;
+      const lastSevenDays = lastSevenDaysResult.rows[0] as Record<string, string | number> | undefined;
+      const registrations7d = parseCount(lastSevenDays, "registrations");
+      const successfulProofs7d = parseCount(lastSevenDays, "successful_proofs");
+      const alerts = [];
+      if (registrations7d === 0) {
+        alerts.push({
+          severity: "warning",
+          condition: "no_registration_7d",
+          message: "No successful agent registration in the last 7 complete days.",
+        });
+      }
+      if (successfulProofs7d === 0) {
+        alerts.push({
+          severity: "warning",
+          condition: "no_successful_proof_7d",
+          message: "No new proof (HTTP 201) in the last 7 complete days.",
+        });
+      }
+
+      res.json({
+        timezone: "UTC",
+        window_days: 30,
+        rows: (rowsResult.rows as Array<Record<string, string | number>>).map((row) => ({
+          date: row.day,
+          stage: row.stage,
+          outcome: row.outcome,
+          http_class: row.http_class,
+          traffic_segment: row.traffic_segment,
+          events: parseCount(row, "events"),
+          visitors: parseCount(row, "visitors"),
+        })),
+        totals: {
+          events: parseCount(totalsRow, "events"),
+          visitors: parseCount(totalsRow, "visitors"),
+          cta_views: parseCount(totalsRow, "cta_views"),
+          cta_clicks: parseCount(totalsRow, "cta_clicks"),
+          registrations: parseCount(totalsRow, "registrations"),
+          successful_proofs: parseCount(totalsRow, "successful_proofs"),
+        },
+        last_7_complete_days: {
+          registrations: registrations7d,
+          successful_proofs: successfulProofs7d,
+        },
+        alerts,
+        generated_at: new Date().toISOString(),
+      });
+    } catch (error) {
+      logger.withRequest(req).error("Conversion funnel analytics error");
+      res.status(500).json({ error: "Failed to generate conversion funnel" });
+    }
+  });
+
+  // ============================================
   // Admin Analytics Endpoint
   // ============================================
 

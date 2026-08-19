@@ -31,6 +31,7 @@ import {
   Network,
 } from "lucide-react";
 import { WalletLoginModal } from "@/components/wallet-login-modal";
+import { trackAgentCta, useAgentCtaExposure } from "@/lib/conversionTracking";
 import {
   Accordion,
   AccordionContent,
@@ -154,6 +155,7 @@ export default function Landing() {
   const [trialAgentName, setTrialAgentName] = useState<string>("");
   const [copied, setCopied] = useState(false);
   const [trialError, setTrialError] = useState<string | null>(null);
+  const heroTrialCtaRef = useAgentCtaExposure<HTMLAnchorElement>("landing", "hero_free_trial");
 
   const registerMutation = useMutation({
     mutationFn: async (name: string) => {
@@ -331,7 +333,11 @@ export default function Landing() {
               className="text-base h-12 px-8"
               data-testid="button-free-trial-hero"
             >
-              <a href="/agents">
+              <a
+                href="/agents"
+                ref={heroTrialCtaRef}
+                onClick={() => trackAgentCta("cta_clicked", "landing", "hero_free_trial")}
+              >
                 <Bot className="mr-2 h-4 w-4" />
                 Get started — agents
               </a>
@@ -395,7 +401,10 @@ export default function Landing() {
                     className="flex-1"
                   />
                   <Button
-                    onClick={() => registerMutation.mutate(agentName.trim())}
+                    onClick={() => {
+                      trackAgentCta("cta_clicked", "landing", "trial_register");
+                      registerMutation.mutate(agentName.trim());
+                    }}
                     disabled={agentName.trim().length < 2 || registerMutation.isPending}
                     data-testid="button-register-trial"
                   >

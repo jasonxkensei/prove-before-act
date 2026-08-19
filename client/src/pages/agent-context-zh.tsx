@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -62,7 +63,32 @@ type Section = {
   content: React.ReactNode;
 };
 
+const REFERENCE_AGENT_WALLET = "erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9";
+type ReferenceAgentProfile = {
+  certTotal: number;
+  streakWeeks: number;
+  score: number;
+  level: string;
+  lastCertAt: string | null;
+};
+
 export default function AgentContextZhPage() {
+  const { data: referenceAgent } = useQuery<ReferenceAgentProfile>({
+    queryKey: ["reference-agent-profile", REFERENCE_AGENT_WALLET],
+    queryFn: async () => {
+      const response = await fetch(`/api/agents/${REFERENCE_AGENT_WALLET}`);
+      if (!response.ok) throw new Error("Unable to load the public agent profile");
+      return response.json();
+    },
+    staleTime: 60_000,
+  });
+  const referenceProofs = referenceAgent
+    ? new Intl.NumberFormat("zh-CN").format(referenceAgent.certTotal)
+    : "实时载入中";
+  const referenceStreak = referenceAgent ? `${referenceAgent.streakWeeks}周` : "实时载入中";
+  const referenceScore = referenceAgent
+    ? new Intl.NumberFormat("zh-CN").format(referenceAgent.score)
+    : "实时载入中";
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     x402: true,
     latency: true,
@@ -189,7 +215,7 @@ print(f"存证链接: https://provebeforeact.com{result['verify_url']}")`} />
       content: (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            以下数据来自真实生产环境测量，数据源为 <strong className="text-foreground">xproof_agent_verify</strong> — Moltbook验证智能体，累计4,418次链上锚定：
+            以下延迟数据来自历史生产测量；证明总量、信任评分和活跃状态请以 <strong className="text-foreground">xproof_agent_verify</strong> 的公开实时档案为准：
           </p>
           <div className="grid gap-3 sm:grid-cols-3">
             {[
@@ -598,7 +624,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
           <div className="rounded-md border border-primary/20 bg-primary/5 p-3">
             <p className="text-xs font-semibold text-primary mb-1">生产案例：Moltbook集群</p>
             <p className="text-xs text-muted-foreground">
-              <strong className="text-foreground">xproof_agent_verify</strong>（Moltbook的验证机器人）已连续16周锚定 <strong className="text-foreground">4,418次存证</strong>，链上确认率 <strong className="text-foreground">100%</strong>。其公开档案位于 <code className="font-mono bg-muted px-1 rounded text-xs">/agent/erd1hlx4xann...gyu9</code>，任何管理员或合作伙伴系统均可实时查询。
+              <strong className="text-foreground">xproof_agent_verify</strong>（Moltbook的验证机器人）的证明总量、确认状态、连续周数和信任评分均以公开实时档案为准。其公开档案位于 <code className="font-mono bg-muted px-1 rounded text-xs">/agent/erd1hlx4xann...gyu9</code>，任何管理员或合作伙伴系统均可实时查询。
             </p>
           </div>
         </div>
@@ -931,9 +957,9 @@ print(f"交易已执行。存证链接: https://provebeforeact.com{outcome['veri
           </p>
           <div className="grid gap-3 sm:grid-cols-3">
             {[
-              { value: "4,418", label: "累计存证锚定次数", detail: "全部已链上确认" },
-              { value: "933次/月", label: "平均锚定频率", detail: "16周滚动平均值" },
-              { value: "100%", label: "链上确认率", detail: "零交易失败" },
+              { value: referenceProofs, label: "累计确认存证", detail: "公开档案实时数据" },
+              { value: referenceStreak, label: "当前连续周数", detail: "公开档案实时数据" },
+              { value: referenceAgent?.level ?? "实时载入中", label: "当前信任等级", detail: "公开档案实时数据" },
             ].map((s) => (
               <div key={s.label} className="rounded-md border bg-muted/30 p-3 text-center">
                 <div className="text-2xl font-bold text-primary mb-1">{s.value}</div>
@@ -946,9 +972,9 @@ print(f"交易已执行。存证链接: https://provebeforeact.com{outcome['veri
             <div className="rounded-md border bg-muted/30 p-3 space-y-2">
               <p className="text-xs font-semibold">信任档案（公开，实时）</p>
               <div className="space-y-1 text-xs text-muted-foreground">
-                <div className="flex justify-between"><span>信任评分</span><span className="font-mono text-foreground">43,326</span></div>
+                <div className="flex justify-between"><span>信任评分</span><span className="font-mono text-foreground">{referenceScore}</span></div>
                 <div className="flex justify-between"><span>信任等级</span><span className="font-mono text-emerald-500">Verified（已验证）</span></div>
-                <div className="flex justify-between"><span>活跃连续周数</span><span className="font-mono text-foreground">连续16周</span></div>
+                <div className="flex justify-between"><span>活跃连续周数</span><span className="font-mono text-foreground">{referenceStreak}</span></div>
                 <div className="flex justify-between"><span>违规记录</span><span className="font-mono text-emerald-500">0</span></div>
               </div>
             </div>
@@ -967,9 +993,9 @@ print(f"交易已执行。存证链接: https://provebeforeact.com{outcome['veri
             <p className="text-xs text-muted-foreground">在每篇AI生成内容发布到Moltbook之前，<code className="font-mono bg-muted px-1 rounded">xproof_agent_verify</code> 会对完整内容+生成元数据（模型、提示词哈希、时间戳）进行哈希，将SHA-256指纹锚定到MultiversX，并将 <code className="font-mono bg-muted px-1 rounded">proof_id</code> 附加到已发布文章。读者可独立验证内容自认证以来未被修改。</p>
           </div>
           <div className="rounded-md border bg-muted/30 p-3 space-y-2">
-            <p className="text-xs font-semibold">16周总运营成本</p>
+            <p className="text-xs font-semibold">运营成本</p>
             <div className="text-xs text-muted-foreground space-y-1">
-              <p>4,418次存证 × $0.01 = <strong className="text-foreground">约$44总计</strong></p>
+              <p>请结合公开实时证明总量与当前价格计算成本；不使用静态估算。</p>
               <p>一个持续运行、公开可问责的AI智能体，拥有完整链上审计轨迹和可验证信任评分，每周运营成本约 <strong className="text-foreground">$2.76</strong>。</p>
             </div>
           </div>
@@ -1200,7 +1226,7 @@ const anchorTool = tool({
               {
                 limitation: "Prove Before Act比替代方案更新",
                 honest: "Arweave自2018年运行。Sign Protocol在EVM生态有更大的采用量。Prove Before Act于2024年推出。如果'5年以上经过实战验证'是硬性要求，请注意这一点。",
-                mitigation: "xproof_agent_verify已有4,418次存证和16周连续零故障。底层区块链（MultiversX）已运行4年以上。'新'仅适用于智能体特定功能集，不适用于底层链。",
+                mitigation: "xproof_agent_verify 的当前证明总量、确认状态和连续运行数据均可在公开档案中实时核验。底层区块链（MultiversX）已运行4年以上。'新'仅适用于智能体特定功能集，不适用于底层链。",
                 severity: "medium",
               },
               {
@@ -1318,7 +1344,7 @@ const anchorTool = tool({
             在MultiversX上证明 <code className="font-mono text-sm bg-muted px-1 rounded">intent_preceded_execution: true</code>——拥有公开的4W审计轨迹和零账号的x402支付。
           </p>
           <p className="text-xs text-muted-foreground max-w-2xl mb-4">
-            生产验证：<strong className="text-foreground">4,418次存证</strong>，100%链上确认率，连续16周稳定运行 — <a href="/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9" className="text-primary underline">Moltbook案例研究</a>。无营销内容——只有集成所需的核心信息。
+            生产验证：证明总量、确认状态、信任评分与连续运行数据均由 <a href="/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9" className="text-primary underline">Moltbook公开档案</a> 实时提供。无营销内容——只有集成所需的核心信息。
           </p>
           {/* x402 callout */}
           <div className="mt-2 rounded-md border border-primary/30 bg-primary/5 px-4 py-3 flex items-center gap-3" data-testid="badge-x402-top-zh">

@@ -88,6 +88,22 @@ export async function runDailyMaintenance() {
       });
     }
 
+    let purgedConversionEvents = 0;
+    try {
+      // Visitor keys are HMAC-derived and are never retained beyond the
+      // 90-day reporting window. A SESSION_SECRET rotation deliberately
+      // starts a new anonymous cohort rather than linking identities.
+      const result = await pool.query(
+        `DELETE FROM conversion_events WHERE created_at < NOW() - INTERVAL '90 days'`
+      );
+      purgedConversionEvents = result.rowCount || 0;
+    } catch (purgeErr: any) {
+      logger.debug("Conversion telemetry purge skipped during maintenance", {
+        component: "maintenance",
+        error: purgeErr?.message ?? String(purgeErr),
+      });
+    }
+
     // Alert if the proposed-violation review queue has grown beyond the
     // configured threshold without admin attention.  checkAndAlertViolationQueue
     // is a no-op when VIOLATION_QUEUE_ALERT_WEBHOOK_URL is not set.
@@ -99,12 +115,13 @@ export async function runDailyMaintenance() {
       });
     });
 
-    if (snapshots > 0 || expiring.rows.length > 0 || purgedRateLimitRows > 0) {
+    if (snapshots > 0 || expiring.rows.length > 0 || purgedRateLimitRows > 0 || purgedConversionEvents > 0) {
       logger.info("Daily maintenance complete", {
         component: "maintenance",
         snapshots,
         expiryNotifications: expiring.rows.length,
         purgedRateLimitRows,
+        purgedConversionEvents,
       });
     }
   } catch (err: any) {
@@ -360,6 +377,40 @@ export async function migrateAgentOutcomesTable() {
     logger.info("agent_outcomes table ready", { component: "migration" });
   } catch (err: any) {
     logger.error("agent_outcomes migration error", { component: "migration", error: err.message });
+  }
+}
+
+// Must complete before the server accepts conversion events. The schema is
+// also declared in shared/schema.ts so publish-time reconciliation preserves it.
+export async function migrateConversionEventsTable() {
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS conversion_events (
+        id SERIAL PRIMARY KEY,
+        event_type VARCHAR(96) NOT NULL,
+        stage VARCHAR(32) NOT NULL,
+        outcome VARCHAR(32) NOT NULL,
+        http_status INTEGER,
+        http_class VARCHAR(3) NOT NULL,
+        traffic_segment VARCHAR(32) NOT NULL,
+        ip_hash VARCHAR(64) NOT NULL,
+        referrer_host VARCHAR(128),
+        utm_source VARCHAR(128),
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+        CONSTRAINT conversion_events_stage_check CHECK (stage IN ('cta', 'registration', 'proof')),
+        CONSTRAINT conversion_events_outcome_check CHECK (outcome IN ('seen', 'clicked', 'started', 'success', 'failure')),
+        CONSTRAINT conversion_events_http_class_check CHECK (http_class IN ('0xx', '2xx', '3xx', '4xx', '5xx')),
+        CONSTRAINT conversion_events_http_status_check CHECK (http_status IS NULL OR http_status BETWEEN 100 AND 599)
+      )
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_conversion_events_day_funnel ON conversion_events (created_at, stage, outcome)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_conversion_events_day_segment ON conversion_events (created_at, traffic_segment)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_conversion_events_day_http ON conversion_events (created_at, http_class)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_conversion_events_ip_time ON conversion_events (ip_hash, created_at)`);
+    logger.info("conversion_events table ready", { component: "migration" });
+  } catch (err: any) {
+    logger.error("conversion_events migration error", { component: "migration", error: err.message });
+    throw err;
   }
 }
 
