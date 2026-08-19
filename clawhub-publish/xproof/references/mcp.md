@@ -1,11 +1,13 @@
 # MCP Server
 
-xProof exposes a Model Context Protocol (MCP) JSON-RPC 2.0 endpoint for AI agent integration.
+> Prove Before Act is the current product name. `xproof` API/package labels are legacy compatibility identifiers. MX-8004 features are optional and available only when `/api/mx8004/status` reports `active`; production currently reports `not_configured`.
+
+Prove Before Act exposes a Model Context Protocol (MCP) JSON-RPC 2.0 endpoint for AI agent integration.
 
 ## Endpoint
 
 ```
-POST https://xproof.app/mcp
+POST https://provebeforeact.com/mcp
 ```
 
 **Authentication:** API Key (`Authorization: Bearer pm_...`)
@@ -54,7 +56,7 @@ Create a blockchain certification for a file.
   "result": {
     "content": [{
       "type": "text",
-      "text": "{\"proof_id\":\"uuid-v4\",\"status\":\"certified\",\"file_hash\":\"a1b2c3...\",\"filename\":\"report.pdf\",\"verify_url\":\"https://xproof.app/proof/uuid-v4\",\"certificate_url\":\"https://xproof.app/api/certificates/uuid-v4.pdf\",\"blockchain\":{\"network\":\"MultiversX\",\"transaction_hash\":\"abc123...\",\"explorer_url\":\"https://explorer.multiversx.com/transactions/abc123...\"},\"timestamp\":\"2026-02-19T12:00:00.000Z\"}"
+      "text": "{\"proof_id\":\"uuid-v4\",\"status\":\"certified\",\"file_hash\":\"a1b2c3...\",\"filename\":\"report.pdf\",\"verify_url\":\"https://provebeforeact.com/proof/uuid-v4\",\"certificate_url\":\"https://provebeforeact.com/api/certificates/uuid-v4.pdf\",\"blockchain\":{\"network\":\"MultiversX\",\"transaction_hash\":\"abc123...\",\"explorer_url\":\"https://explorer.multiversx.com/transactions/abc123...\"},\"timestamp\":\"2026-02-19T12:00:00.000Z\"}"
     }]
   }
 }
@@ -107,7 +109,7 @@ Use `md` format for LLM consumption -- produces human-readable Markdown with all
 
 ### `discover_services`
 
-List xProof capabilities, pricing, and usage guidance. No parameters required.
+List Prove Before Act capabilities, pricing, and usage guidance. No parameters required.
 
 **Returns:** Service description, pricing ($0.01/cert in EGLD), list of tools, certification triggers, batch API details, and supported protocols.
 
@@ -120,7 +122,7 @@ List xProof capabilities, pricing, and usage guidance. No parameters required.
 
 ## LLM Prompt Engineering
 
-When exposing xProof to an LLM, use:
+When exposing Prove Before Act to an LLM, use:
 
 > **Skill: Certify**
 > "Use this to create an immutable blockchain proof for a file. Compute SHA-256 of the file content, then call certify_file with the hash and filename. Cost: $0.01."
