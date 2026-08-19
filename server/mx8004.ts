@@ -243,12 +243,8 @@ export async function getAgentDetails(agentNonce: number): Promise<{ name: strin
 
   try {
     const returnData = await vmQuery(IDENTITY_REGISTRY!, "get_agent", [numberToHex(agentNonce)]);
-    if (!returnData || returnData.length < 2) return null;
-
-    const name = Buffer.from(returnData[0], "base64").toString("utf-8");
-    const publicKey = Buffer.from(returnData[1], "base64").toString("hex");
-
-    return { name, publicKey };
+    if (!returnData || returnData.length === 0 || !returnData[0]) return null;
+    return decodeAgentDetails(returnData[0]);
   } catch {
     return null;
   }
@@ -300,21 +296,95 @@ export async function getJobData(jobId: string): Promise<{
 
   try {
     const returnData = await vmQuery(VALIDATION_REGISTRY!, "get_job_data", [toHex(jobId)]);
-    if (!returnData || returnData.length === 0) return null;
-
-    const statusHex = Buffer.from(returnData[0] || "", "base64").toString("hex");
-    const statusMap: Record<string, string> = { "00": "New", "01": "Pending", "02": "Verified", "03": "ValidationRequested" };
-    const status = statusMap[statusHex] || "Unknown";
-
-    const proof = returnData[1] ? Buffer.from(returnData[1], "base64").toString("utf-8") : "";
-    const employer = returnData[2] ? Address.newFromHex(Buffer.from(returnData[2], "base64").toString("hex")).toBech32() : "";
-    const creationTimestamp = returnData[3] ? parseInt(Buffer.from(returnData[3], "base64").toString("hex") || "0", 16) : 0;
-    const agentNonce = returnData[4] ? parseInt(Buffer.from(returnData[4], "base64").toString("hex") || "0", 16) : 0;
-
-    return { status, proof, employer, agentNonce, creationTimestamp };
+    if (!returnData || returnData.length === 0 || !returnData[0]) return null;
+    return decodeJobData(returnData[0]);
   } catch {
     return null;
   }
+}
+
+/** Minimal reader for MultiversX nested-encoded structs returned by VM queries. */
+class StructReader {
+  private offset = 0;
+  constructor(private buf: Buffer) {}
+  readU8(): number {
+    const v = this.buf.readUInt8(this.offset);
+    this.offset += 1;
+    return v;
+  }
+  readU64(): number {
+    const v = this.buf.readBigUInt64BE(this.offset);
+    this.offset += 8;
+    return Number(v);
+  }
+  readBytes(): Buffer {
+    const len = this.buf.readUInt32BE(this.offset);
+    this.offset += 4;
+    const v = this.buf.subarray(this.offset, this.offset + len);
+    this.offset += len;
+    return v;
+  }
+  readFixed(len: number): Buffer {
+    const v = this.buf.subarray(this.offset, this.offset + len);
+    this.offset += len;
+    return v;
+  }
+}
+
+/**
+ * Decode the optional<JobData> VM return — a single nested-encoded struct buffer:
+ * status: u8 (1 byte) | proof: bytes (u32 len + data) | employer: Address (32 bytes)
+ * | creation_timestamp: u64 (8 bytes) | agent_nonce: u64 (8 bytes)
+ * Exported for fixture-based tests against real Mainnet responses.
+ */
+export function decodeJobData(base64Payload: string): {
+  status: string;
+  proof: string;
+  employer: string;
+  agentNonce: number;
+  creationTimestamp: number;
+} {
+  const reader = new StructReader(Buffer.from(base64Payload, "base64"));
+  const statusByte = reader.readU8();
+  const statusMap: Record<number, string> = { 0: "New", 1: "Pending", 2: "Verified", 3: "ValidationRequested" };
+  const status = statusMap[statusByte] || "Unknown";
+  const proof = reader.readBytes().toString("utf-8");
+  const employer = Address.newFromHex(reader.readFixed(32).toString("hex")).toBech32();
+  const creationTimestamp = reader.readU64();
+  const agentNonce = reader.readU64();
+  return { status, proof, employer, agentNonce, creationTimestamp };
+}
+
+/**
+ * Decode the optional<ValidationRequestData> VM return — nested-encoded struct:
+ * validator_address: Address (32) | agent_nonce: u64 | job_id: bytes |
+ * response: u8 | response_hash: bytes | tag: bytes | last_update: u64
+ * Exported for fixture-based tests against real Mainnet responses.
+ */
+export function decodeValidationStatus(base64Payload: string): {
+  response: number;
+  responseHash: string;
+  tag: string;
+} {
+  const reader = new StructReader(Buffer.from(base64Payload, "base64"));
+  reader.readFixed(32); // validator_address
+  reader.readU64(); // agent_nonce
+  reader.readBytes(); // job_id
+  const response = reader.readU8();
+  const responseHash = reader.readBytes().toString("utf-8");
+  const tag = reader.readBytes().toString("utf-8");
+  return { response, responseHash, tag };
+}
+
+/**
+ * Decode the AgentDetails VM return — nested-encoded struct: name: bytes | public_key: bytes.
+ * Exported for fixture-based tests against real Mainnet responses.
+ */
+export function decodeAgentDetails(base64Payload: string): { name: string; publicKey: string } {
+  const reader = new StructReader(Buffer.from(base64Payload, "base64"));
+  const name = reader.readBytes().toString("utf-8");
+  const publicKey = reader.readBytes().toString("hex");
+  return { name, publicKey };
 }
 
 export async function getValidationStatus(requestHash: string): Promise<{
@@ -326,13 +396,8 @@ export async function getValidationStatus(requestHash: string): Promise<{
 
   try {
     const returnData = await vmQuery(VALIDATION_REGISTRY!, "get_validation_status", [toHex(requestHash)]);
-    if (!returnData || returnData.length === 0) return null;
-
-    const response = returnData[0] ? parseInt(Buffer.from(returnData[0], "base64").toString("hex") || "0", 16) : 0;
-    const responseHash = returnData[1] ? Buffer.from(returnData[1], "base64").toString("hex") : "";
-    const tag = returnData[2] ? Buffer.from(returnData[2], "base64").toString("utf-8") : "";
-
-    return { response, responseHash, tag };
+    if (!returnData || returnData.length === 0 || !returnData[0]) return null;
+    return decodeValidationStatus(returnData[0]);
   } catch {
     return null;
   }

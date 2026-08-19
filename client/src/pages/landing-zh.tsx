@@ -52,6 +52,15 @@ export default function LandingZh() {
   const [trialError, setTrialError] = useState<string | null>(null);
   const heroTrialCtaRef = useAgentCtaExposure<HTMLButtonElement>("landing_zh", "trial_register");
 
+  // Single entry point for trial registration so the button click and the
+  // Enter key record the same conversion telemetry before submitting.
+  const submitTrialRegistration = () => {
+    const name = agentName.trim();
+    if (name.length < 2 || registerMutation.isPending) return;
+    trackAgentCta("cta_clicked", "landing_zh", "trial_register");
+    registerMutation.mutate(name);
+  };
+
   const registerMutation = useMutation({
     mutationFn: async (name: string) => {
       const res = await fetch("/api/agent/register", {
@@ -601,8 +610,8 @@ GET /api/agents/{wallet}/incident-report
                     value={agentName}
                     onChange={(e) => setAgentName(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" && agentName.trim().length >= 2) {
-                        registerMutation.mutate(agentName.trim());
+                      if (e.key === "Enter") {
+                        submitTrialRegistration();
                       }
                     }}
                     data-testid="input-trial-agent-name-zh"
@@ -610,10 +619,7 @@ GET /api/agents/{wallet}/incident-report
                   />
                   <Button
                     ref={heroTrialCtaRef}
-                    onClick={() => {
-                      trackAgentCta("cta_clicked", "landing_zh", "trial_register");
-                      registerMutation.mutate(agentName.trim());
-                    }}
+                    onClick={submitTrialRegistration}
                     disabled={agentName.trim().length < 2 || registerMutation.isPending}
                     data-testid="button-register-trial-zh"
                   >

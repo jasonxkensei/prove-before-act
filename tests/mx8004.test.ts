@@ -6,19 +6,34 @@ import { isValidWebhookUrl } from "../server/webhook";
 
 describe("MX-8004 Module", () => {
   describe("isMX8004Configured", () => {
-    it("should return false when environment variables are not set", () => {
-      expect(isMX8004Configured()).toBe(false);
+    it("should return a boolean consistent with the environment", () => {
+      const fullyConfigured = !!(
+        process.env.MULTIVERSX_PRIVATE_KEY &&
+        process.env.MULTIVERSX_SENDER_ADDRESS &&
+        process.env.MX8004_IDENTITY_REGISTRY &&
+        process.env.MX8004_VALIDATION_REGISTRY &&
+        process.env.MX8004_REPUTATION_REGISTRY &&
+        process.env.MX8004_XPROOF_AGENT_NONCE
+      );
+      expect(isMX8004Configured()).toBe(fullyConfigured);
     });
   });
 
   describe("getContractAddresses", () => {
-    it("should return null values when not configured", () => {
+    it("should mirror the configured registry addresses (or null when unset)", () => {
       const addresses = getContractAddresses();
-      expect(addresses.identityRegistry).toBeNull();
-      expect(addresses.validationRegistry).toBeNull();
-      expect(addresses.reputationRegistry).toBeNull();
-      expect(addresses.xproofAgentNonce).toBeNull();
-      expect(addresses.xproofAgentExplorer).toBeNull();
+      expect(addresses.identityRegistry).toBe(process.env.MX8004_IDENTITY_REGISTRY ?? null);
+      expect(addresses.validationRegistry).toBe(process.env.MX8004_VALIDATION_REGISTRY ?? null);
+      expect(addresses.reputationRegistry).toBe(process.env.MX8004_REPUTATION_REGISTRY ?? null);
+      if (process.env.MX8004_XPROOF_AGENT_NONCE) {
+        expect(addresses.xproofAgentNonce).toBe(parseInt(process.env.MX8004_XPROOF_AGENT_NONCE));
+        expect(addresses.xproofAgentExplorer).toBe(
+          `https://agents.multiversx.com/agents/${addresses.xproofAgentNonce}`,
+        );
+      } else {
+        expect(addresses.xproofAgentNonce).toBeNull();
+        expect(addresses.xproofAgentExplorer).toBeNull();
+      }
     });
 
     it("should return an object with the expected keys", () => {

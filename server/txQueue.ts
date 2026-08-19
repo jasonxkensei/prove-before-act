@@ -288,8 +288,11 @@ export async function getTxQueueStats(): Promise<{
     })
     .from(txQueue);
 
-  const lastActivity = lastActivityRow.latest && lastActivityRow.latest.getTime() > 0
-    ? lastActivityRow.latest.toISOString()
+  // Raw SQL aggregates come back as strings, not Date objects — normalize first.
+  const latestRaw = lastActivityRow.latest as Date | string | null;
+  const latestDate = latestRaw instanceof Date ? latestRaw : latestRaw ? new Date(latestRaw) : null;
+  const lastActivity = latestDate && !isNaN(latestDate.getTime()) && latestDate.getTime() > 0
+    ? latestDate.toISOString()
     : null;
 
   return {

@@ -156,6 +156,7 @@ export default function Landing() {
   const [copied, setCopied] = useState(false);
   const [trialError, setTrialError] = useState<string | null>(null);
   const heroTrialCtaRef = useAgentCtaExposure<HTMLAnchorElement>("landing", "hero_free_trial");
+  const trialRegisterCtaRef = useAgentCtaExposure<HTMLButtonElement>("landing", "trial_register");
 
   const registerMutation = useMutation({
     mutationFn: async (name: string) => {
@@ -177,6 +178,15 @@ export default function Landing() {
       setTrialError(err.message);
     },
   });
+
+  // Single entry point for trial registration so the button click and the
+  // Enter key record the same conversion telemetry before submitting.
+  const submitTrialRegistration = () => {
+    const name = agentName.trim();
+    if (name.length < 2 || registerMutation.isPending) return;
+    trackAgentCta("cta_clicked", "landing", "trial_register");
+    registerMutation.mutate(name);
+  };
 
   const handleCopyKey = () => {
     if (!trialKey) return;
@@ -393,18 +403,16 @@ export default function Landing() {
                     value={agentName}
                     onChange={(e) => setAgentName(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" && agentName.trim().length >= 2) {
-                        registerMutation.mutate(agentName.trim());
+                      if (e.key === "Enter") {
+                        submitTrialRegistration();
                       }
                     }}
                     data-testid="input-trial-agent-name"
                     className="flex-1"
                   />
                   <Button
-                    onClick={() => {
-                      trackAgentCta("cta_clicked", "landing", "trial_register");
-                      registerMutation.mutate(agentName.trim());
-                    }}
+                    ref={trialRegisterCtaRef}
+                    onClick={submitTrialRegistration}
                     disabled={agentName.trim().length < 2 || registerMutation.isPending}
                     data-testid="button-register-trial"
                   >
