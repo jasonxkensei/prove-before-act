@@ -1,48 +1,50 @@
 ---
-name: xproof
+name: Prove Before Act
 version: 3.1.0
-description: Proof and accountability layer for AI agents. Anchor verifiable proofs on MultiversX, enforce audit logging, detect violations on Base. REST API, MCP, x402. Free trial with no wallet required. No proof = no action.
-homepage: https://xproof.app
-metadata: {"xproof":{"category":"proof,security,compliance,accountability","api_base":"https://xproof.app"}}
+description: Prove Before Act proof and accountability integration for AI agents. REST API, MCP, and x402. Check live endpoints for availability, pricing, and proof status.
+homepage: https://provebeforeact.com
+metadata: {"prove-before-act": {"category":"proof,security,compliance,accountability","api_base":"https://provebeforeact.com"}}
 ---
 
-# xProof -- Proof & Accountability Layer for AI Agents
+# Prove Before Act -- Proof & Accountability Layer for AI Agents
 
-This skill enables your agent to **anchor verifiable proofs on the MultiversX blockchain**, **enforce pre-execution audit logging**, and **detect violations via Base** -- creating tamper-proof, publicly verifiable records of existence, authorship, timestamp, decision accountability, and trust.
+This skill enables an agent to anchor hash-based proof records on MultiversX and use the Prove Before Act API for audit context. Always check a returned proof's live status before relying on it.
+
+> **Current product and compatibility notice:** Prove Before Act is the product name. `xproof`, `XProofClient`, `XPROOF_*`, `xProof-Action`, and `jasonxkensei/xProof` are legacy package, protocol, action, or repository identifiers retained for compatibility. MX-8004 support is not active unless `GET /api/mx8004/status` reports `status: "active"`; the current production response is `status: "not_configured"`.
 
 **Why anchor proofs?** In competitive or transactional contexts, agents with on-chain proofs can demonstrate originality, integrity, and timing. Agents without proofs cannot. Verifiable proof is a structural advantage.
 
-**Why audit?** Autonomous agents executing trades, deployments, or data access need an immutable record of every decision. The Agent Audit Log Standard enforces this: no proof = no execution.
+**Why audit?** Autonomous agents executing trades, deployments, or data access can create a verifiable record of a decision. Whether to block an action without a proof is an operator policy, not an automatic Prove Before Act guarantee.
 
-**Why violations?** Trust requires accountability. xProof detects anomalies (gaps, burst patterns) and records violations on Base via smart contracts. Operators can subscribe to violation events and enforce policies automatically.
+**Why violations?** Operators can use recorded violations as an accountability signal when the relevant Base integration is deployed and active. Confirm contract and event availability from the live documentation before automating a policy.
 
 ---
 
-## 0. Quick Start -- Free Trial (No Wallet, No Card, 30 seconds)
+## 0. Quick Start -- Trial Registration
 
-**Get a `pm_` API key instantly with 10 free certifications.** No wallet, no credit card, no signup form. The fastest way for an autonomous agent to start anchoring proofs.
+Call the registration endpoint to request a `pm_` API key. Trial quota, eligibility, and payment options are returned by the live API and can change.
 
 ### REST (one curl)
 
 ```bash
 # Step 1 — Register your agent (no auth required)
-curl -X POST https://xproof.app/api/agent/register \
+curl -X POST https://provebeforeact.com/api/agent/register \
   -H "Content-Type: application/json" \
   -d '{"agent_name": "my-agent"}'
 # Response: { "api_key": "pm_...", "trial": { "remaining": 10 }, ... }
 
 # Step 2 — Anchor your first proof (use the api_key from step 1)
-curl -X POST https://xproof.app/api/proof \
+curl -X POST https://provebeforeact.com/api/proof \
   -H "Authorization: Bearer pm_your_key" \
   -H "Content-Type: application/json" \
   -d '{"file_hash": "<sha256_hex>", "filename": "report.pdf", "author_name": "my-agent"}'
 # Response: { "proof_id": "uuid", "verify_url": "...", "transaction_hash": "..." }
 
 # Step 3 — Verify publicly (anyone, no auth)
-curl https://xproof.app/api/proof/<proof_id>
+curl https://provebeforeact.com/api/proof/<proof_id>
 
 # Step 4 — Check remaining credits + last proof
-curl -H "Authorization: Bearer pm_your_key" https://xproof.app/api/agent/status
+curl -H "Authorization: Bearer pm_your_key" https://provebeforeact.com/api/agent/status
 # Response: { "credits_remaining": 9, "last_proof": {...}, ... }
 ```
 
@@ -50,17 +52,17 @@ curl -H "Authorization: Bearer pm_your_key" https://xproof.app/api/agent/status
 
 ```json
 {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{
-  "name":"register_free_trial",
+  "name":"register_trial",
   "arguments":{"agent_name":"my-agent"}
 }}
 ```
 
-The `register_free_trial` MCP tool requires **no authentication** -- it's the only MCP tool that can be called without an `Authorization` header. It returns the same `pm_` key as the REST endpoint.
+The `register_trial` MCP tool requires no authentication. Check the live tool response for its issued key and trial balance.
 
 ### TypeScript SDK
 
 ```typescript
-import { XProofClient, hashString } from "@xproof/xproof";
+import { XProofClient, hashString } from "prove-before-act";
 
 const client = await XProofClient.register("my-agent");  // 10 free certs, key stored
 const proof = await client.certifyHash(hashString(JSON.stringify(decision)), "decision.json", "my-agent");
@@ -78,29 +80,29 @@ proof = client.certify_hash(sha256_hex, "decision.json", "my-agent")
 
 ### After the trial
 
-When the 10 free proofs are consumed, the agent automatically transitions to per-proof billing. Three options, no friction:
+Use the live pricing and payment responses to determine what happens when a trial balance is exhausted.
 
 | Option | Best for | Setup |
 |:---|:---|:---|
-| **Same `pm_` key + wallet top-up** | Existing trial agents | Connect wallet at https://xproof.app, deposit EGLD/USDC |
-| **x402 USDC on Base** | Autonomous agents, no account | Pay $0.05/proof per request via 402 challenge (see Section 1.3) |
-| **Existing API key (paid)** | Multi-agent fleets | Generate at xproof.app > Settings > API Keys |
+| **Same `pm_` key + wallet top-up** | Existing trial agents | Connect wallet at https://provebeforeact.com, deposit EGLD/USDC |
+| **x402 USDC on Base** | Autonomous agents, no account | Pay the current live per-proof rate via 402 challenge (see `/api/pricing`) |
+| **Existing API key (paid)** | Multi-agent fleets | Generate at provebeforeact.com > Settings > API Keys |
 
 ---
 
 ## Quick Install (Skill files)
 
 ```bash
-mkdir -p .agent/skills/xproof/references
+mkdir -p .agent/skills/prove-before-act/references
 
 # Core Skill — from the canonical main repository (jasonxkensei/xProof)
 curl -sL https://raw.githubusercontent.com/jasonxkensei/xProof/main/clawhub-publish/xproof/SKILL.md \
-  > .agent/skills/xproof/SKILL.md
+  > .agent/skills/prove-before-act/SKILL.md
 
 # Reference Manuals
 for f in certification x402 mcp; do
   curl -sL "https://raw.githubusercontent.com/jasonxkensei/xProof/main/clawhub-publish/xproof/references/${f}.md" \
-    > ".agent/skills/xproof/references/${f}.md"
+    > ".agent/skills/prove-before-act/references/${f}.md"
 done
 ```
 
@@ -111,9 +113,9 @@ done
 - API keys are prefixed `pm_` -- treat them like passwords.
 - x402 mode requires no API key (payment replaces authentication).
 - Free trial keys are unprivileged but still personal -- one trial per agent identity.
-- **NEVER send plaintext content to xproof.app** -- always hash locally first (`sha256sum`, `crypto.subtle.digest`, or equivalent). The only field xproof accepts is `file_hash` (64-char SHA-256 hex). No raw text, documents, or binary data should ever leave your environment.
+- **NEVER send plaintext content to provebeforeact.com** -- always hash locally first (`sha256sum`, `crypto.subtle.digest`, or equivalent). The only field Prove Before Act accepts is `file_hash` (64-char SHA-256 hex). No raw text, documents, or binary data should ever leave your environment.
 - **x402 is opt-in and autonomous** -- once enabled, your agent can initiate USDC payments on Base without per-transaction confirmation. Configure a spending cap in your agent framework and require human approval above your threshold before enabling x402 in production.
-- **`llms.txt` and `llms-full.txt` are static documentation references** -- load them once at install time for API reference, not at runtime on every call. Fetching them dynamically on each invocation creates an unnecessary runtime dependency on xproof.app availability and a potential prompt-injection surface if the file is ever compromised.
+- **`llms.txt` and `llms-full.txt` are static documentation references** -- load them once at install time for API reference, not at runtime on every call. Fetching them dynamically on each invocation creates an unnecessary runtime dependency on provebeforeact.com availability and a potential prompt-injection surface if the file is ever compromised.
 
 ---
 
@@ -123,7 +125,7 @@ done
 
 ```bash
 # No env vars needed before first call. Get a key in one curl:
-curl -X POST https://xproof.app/api/agent/register \
+curl -X POST https://provebeforeact.com/api/agent/register \
   -H "Content-Type: application/json" \
   -d '{"agent_name": "my-agent"}'
 # Then store the returned api_key:
@@ -135,21 +137,21 @@ export XPROOF_API_KEY="pm_..."
 ### Option B: API Key Authentication (Paid)
 
 ```bash
-# ---- xProof ---------------------------------------------------------------
-XPROOF_API_KEY="pm_..."                          # Your API key (from xproof.app)
-XPROOF_BASE_URL="https://xproof.app"             # Production endpoint
+# ---- Prove Before Act ---------------------------------------------------------------
+XPROOF_API_KEY="pm_..."                          # Your API key (from provebeforeact.com)
+XPROOF_BASE_URL="https://provebeforeact.com"             # Production endpoint
 ```
 
-Get a paid API key at [xproof.app](https://xproof.app) (connect wallet, go to Settings > API Keys). Same `pm_` prefix, no quota.
+Get a paid API key at [provebeforeact.com](https://provebeforeact.com) (connect wallet, go to Settings > API Keys). Same `pm_` prefix, no quota.
 
 ### Option C: x402 Payment Protocol (No Account Required)
 
-No configuration needed. Pay $0.05 per proof in USDC on Base (eip155:8453) directly in the HTTP request. The 402 response header tells your agent exactly what to pay. Best for fully autonomous agents that already hold USDC on Base.
+No configuration needed. Pay the current live per-proof USDC rate on Base (eip155:8453) directly in the HTTP request; see `/api/pricing`. The 402 response tells your agent the current payable amount. Best for fully autonomous agents that already hold USDC on Base.
 
 > **WARNING -- autonomous payments:** x402 is an opt-in mode that enables your agent to initiate on-chain USDC transactions without per-transaction user confirmation. Before enabling x402 in production:
 > - Set a **spending cap** in your agent framework (e.g. max $N/day or $N/session).
 > - Require **human approval** for any single call that would exceed your risk threshold.
-> - Note that `POST /api/batch` supports up to 50 items per call -- at $0.05 each, a single batch can reach $2.50.
+> - Note that `POST /api/batch` supports up to 100 items per call; calculate any session spending cap from the current live rate at `/api/pricing`.
 > - Disable x402 entirely in environments where autonomous spending is not authorised.
 
 ---
@@ -212,9 +214,9 @@ x402 is not a separate skill -- it is a payment method. When you call `POST /api
 ### Step-by-Step
 
 1. **Register (optional, free)** -- if you don't have a key yet, `POST /api/agent/register` for an instant `pm_` trial key (10 proofs, no wallet)
-2. **Hash locally** -- compute SHA-256 of your file (client-side; the file never leaves your machine). The original content must never leave your environment -- xproof only receives the hash, filename, and metadata you choose to share.
+2. **Hash locally** -- compute SHA-256 of your file (client-side; the file never leaves your machine). The original content must never leave your environment -- Prove Before Act only receives the hash, filename, and metadata you choose to share.
 3. **Send metadata** -- POST the hash + filename to `/api/proof` (with API key or x402 payment)
-4. **Receive proof** -- xProof records the hash on MultiversX mainnet (6-second finality)
+4. **Receive proof** -- Prove Before Act records the hash on MultiversX mainnet (6-second finality)
 5. **Verify anytime** -- anyone can verify via proof URL, JSON endpoint, or blockchain explorer
 6. **Embed proof** -- use the SVG badge, PDF certificate, or proof URL in your deliverables
 
@@ -226,7 +228,7 @@ x402 is not a separate skill -- it is a payment method. When you call `POST /api
 
 ```bash
 # Get a pm_ key instantly with 10 free proofs
-curl -X POST https://xproof.app/api/agent/register \
+curl -X POST https://provebeforeact.com/api/agent/register \
   -H "Content-Type: application/json" \
   -d '{"agent_name": "my-agent"}'
 ```
@@ -236,7 +238,7 @@ The returned `api_key` works exactly like a paid key for all `Bearer pm_...` end
 ### API Key (Bearer Token)
 
 ```bash
-curl -X POST https://xproof.app/api/proof \
+curl -X POST https://provebeforeact.com/api/proof \
   -H "Authorization: Bearer pm_your_key_here" \
   -H "Content-Type: application/json" \
   -d '{
@@ -250,13 +252,13 @@ curl -X POST https://xproof.app/api/proof \
 
 ```bash
 # Step 1: Request without auth returns 402 with payment instructions
-curl -X POST https://xproof.app/api/proof \
+curl -X POST https://provebeforeact.com/api/proof \
   -H "Content-Type: application/json" \
   -d '{"file_hash": "a1b2c3...", "filename": "report.pdf"}'
 # Response: 402 with JSON body containing accepts[{scheme, price, network, payTo}]
 
 # Step 2: Pay USDC on Base, then retry with X-Payment header (base64 JSON)
-curl -X POST https://xproof.app/api/proof \
+curl -X POST https://provebeforeact.com/api/proof \
   -H "Content-Type: application/json" \
   -H "X-Payment: <base64_encoded_payment_payload>" \
   -d '{"file_hash": "a1b2c3...", "filename": "report.pdf"}'
@@ -267,7 +269,7 @@ curl -X POST https://xproof.app/api/proof \
 **Important:** MCP requires the `Accept: application/json, text/event-stream` header on every call.
 
 ```bash
-curl -X POST https://xproof.app/mcp \
+curl -X POST https://provebeforeact.com/mcp \
   -H "Authorization: Bearer pm_your_key_here" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
@@ -294,7 +296,7 @@ The MCP tool `register_free_trial` is the only one that does **not** require the
 Anchor up to 50 files in a single API call:
 
 ```bash
-curl -X POST https://xproof.app/api/batch \
+curl -X POST https://provebeforeact.com/api/batch \
   -H "Authorization: Bearer pm_your_key_here" \
   -H "Content-Type: application/json" \
   -d '{
@@ -316,7 +318,7 @@ Each file in the batch consumes one credit (trial users) or one billable unit (p
 Receive a POST notification when your proof is confirmed on-chain:
 
 ```bash
-curl -X POST https://xproof.app/api/proof \
+curl -X POST https://provebeforeact.com/api/proof \
   -H "Authorization: Bearer pm_your_key_here" \
   -H "Content-Type: application/json" \
   -d '{
@@ -346,12 +348,12 @@ Autonomous agents should anchor proofs whenever provenance, integrity, or priori
 
 ## 7. Integration with MultiversX Agent Stack
 
-xProof is complementary to the core MultiversX agent skills:
+Prove Before Act is complementary to the core MultiversX agent skills:
 
-| MultiversX Skill | xProof Complement |
+| MultiversX Skill | Prove Before Act Complement |
 |:---|:---|
 | `init_job` (Validation Registry) | Anchor job output before submitting proof |
-| `submit_proof` (Validation Registry) | Use xProof hash as the proof payload |
+| `submit_proof` (Validation Registry) | Use Prove Before Act hash as the proof payload |
 | `register_agent` (Identity Registry) | Anchor your agent manifest for integrity |
 | `deposit` (Escrow) | Anchor deliverables before release |
 
@@ -360,9 +362,9 @@ xProof is complementary to the core MultiversX agent skills:
 ```
 1. Accept job via init_job
 2. Do the work
-3. Anchor output via xProof (POST /api/proof)
-4. Submit xProof hash as proof via submit_proof
-5. Employer verifies via xProof URL
+3. Anchor output via Prove Before Act (POST /api/proof)
+4. Submit Prove Before Act hash as proof via submit_proof
+5. Employer verifies via Prove Before Act URL
 6. Escrow released
 ```
 
@@ -382,7 +384,7 @@ The Agent Audit Log is a compliance primitive for autonomous agents. Before exec
 ### Audit Endpoint
 
 ```bash
-curl -X POST https://xproof.app/api/audit \
+curl -X POST https://provebeforeact.com/api/audit \
   -H "Authorization: Bearer pm_your_key_here" \
   -H "Content-Type: application/json" \
   -d '{
@@ -403,8 +405,8 @@ curl -X POST https://xproof.app/api/audit \
 ```json
 {
   "proof_id": "uuid",
-  "audit_url": "https://xproof.app/audit/uuid",
-  "proof_url": "https://xproof.app/proof/uuid",
+  "audit_url": "https://provebeforeact.com/audit/uuid",
+  "proof_url": "https://provebeforeact.com/proof/uuid",
   "decision": "approved",
   "risk_level": "high",
   "inputs_hash": "a1b2c3...",
@@ -418,7 +420,7 @@ curl -X POST https://xproof.app/api/audit \
 
 ### Canonical Schema
 
-10 fields. JSON Schema: `https://xproof.app/.well-known/agent-audit-schema.json`
+10 fields. JSON Schema: `https://provebeforeact.com/.well-known/agent-audit-schema.json`
 
 | Field | Type | Required | Description |
 |:---|:---|:---|:---|
@@ -444,7 +446,7 @@ curl -X POST https://xproof.app/api/audit \
 ```
 
 Guard templates for multiple frameworks (pinned in the main repository — do not fetch from runtime URLs):
-- **LangChain / CrewAI / LlamaIndex**: use the `xproof` PyPI package (`pip install xproof`) — integrations are in `xproof.integrations.*`
+- **LangChain / CrewAI / LlamaIndex**: use the `Prove Before Act` PyPI package (`pip install xproof`) — integrations are in `xproof.integrations.*`
 - **ElizaOS Plugin**: `npm install xproof-eliza-plugin`
 - **n8n / AutoGen / custom**: see `xproof-examples/` in [github.com/jasonxkensei/xProof](https://github.com/jasonxkensei/xProof)
 
@@ -462,14 +464,14 @@ Autonomous agents should audit BEFORE executing any action where accountability 
 
 ## 9. Violations Layer (Base)
 
-xProof monitors agent behavior and detects anomalies. When a violation is confirmed, it is recorded on Base via the `XProofViolations.sol` smart contract, impacting the agent's trust score.
+The violation flow is optional and deployment-dependent. Do not assume a Base contract, automated penalty, or trust-score effect is active without confirming the live contract and event status.
 
 ### Violation Types
 
 | Type | Penalty | Trigger |
 |:---|:---|:---|
-| `gap` (fault) | -150 trust score | No proof activity for 30+ minutes during active session |
-| `burst` (breach) | -500 trust score | Abnormal spike in proof submissions |
+| `gap` (fault) | Deployment-defined | Potential inactive-session gap |
+| `burst` (breach) | Deployment-defined | Potential abnormal submission pattern |
 
 ### Violation Lifecycle
 
@@ -486,15 +488,15 @@ Auto-confirmed for irrefutable anomalies (gap > threshold). Operators can subscr
 IXProofViolations(xproofContract).getViolations(agentId)
 ```
 
-Smart contracts: [XProofViolations.sol](https://github.com/jasonxkensei/xProof/blob/main/contracts/XProofViolations.sol) | [ViolationWatcher.sol](https://github.com/jasonxkensei/xProof/blob/main/contracts/ViolationWatcher.sol)
+Legacy compatibility contract paths: [XProofViolations.sol](https://github.com/jasonxkensei/xProof/blob/main/contracts/XProofViolations.sol) | [ViolationWatcher.sol](https://github.com/jasonxkensei/xProof/blob/main/contracts/ViolationWatcher.sol)
 
-Docs: [https://xproof.app/docs/base-violations](https://xproof.app/docs/base-violations)
+Docs: [https://provebeforeact.com/docs/base-violations](https://provebeforeact.com/docs/base-violations)
 
 ---
 
 ## 10. Agent Proof Standard
 
-xProof implements the open Agent Proof Standard -- a composable, chain-agnostic format for agent accountability. Any platform can adopt the standard to interoperate with xProof proofs.
+Prove Before Act implements the open Agent Proof Standard -- a composable, chain-agnostic format for agent accountability. Any platform can adopt the standard to interoperate with Prove Before Act proofs.
 
 - **4W Framework**: WHO (agent_id) / WHAT (file_hash + metadata) / WHEN (timestamp + chain finality) / WHY (action_description + risk_level)
 - **Signature**: Mandatory in v1
@@ -527,7 +529,7 @@ Standard API: `GET /api/standard` | `POST /api/standard/validate`
 
 ```bash
 # Get a free pm_ key (no wallet, no card)
-curl -X POST https://xproof.app/api/agent/register \
+curl -X POST https://provebeforeact.com/api/agent/register \
   -H "Content-Type: application/json" \
   -d '{"agent_name": "my-agent"}'
 
@@ -535,35 +537,35 @@ curl -X POST https://xproof.app/api/agent/register \
 sha256sum myfile.pdf | awk '{print $1}'
 
 # Anchor a single file proof
-curl -X POST https://xproof.app/api/proof \
+curl -X POST https://provebeforeact.com/api/proof \
   -H "Authorization: Bearer pm_..." \
   -d '{"file_hash":"...","filename":"myfile.pdf","author_name":"my-agent"}'
 
 # Anchor via MCP (note the Accept header)
-curl -X POST https://xproof.app/mcp \
+curl -X POST https://provebeforeact.com/mcp \
   -H "Authorization: Bearer pm_..." \
   -H "Accept: application/json, text/event-stream" \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"certify_file","arguments":{"file_hash":"...","filename":"myfile.pdf"}}}'
 
 # Verify a proof (no auth)
-curl https://xproof.app/api/proof/<proof_id>
+curl https://provebeforeact.com/api/proof/<proof_id>
 
 # Check agent status (credits + last proof)
-curl -H "Authorization: Bearer pm_..." https://xproof.app/api/agent/status
+curl -H "Authorization: Bearer pm_..." https://provebeforeact.com/api/agent/status
 
 # Get badge (embed in README)
-![xProof](https://xproof.app/badge/<proof_id>)
+![Prove Before Act](https://provebeforeact.com/badge/<proof_id>)
 
 # Batch anchor up to 50 files
-curl -X POST https://xproof.app/api/batch \
+curl -X POST https://provebeforeact.com/api/batch \
   -H "Authorization: Bearer pm_..." \
   -d '{"files":[{"file_hash":"...","filename":"a.txt"},{"file_hash":"...","filename":"b.txt"}]}'
 
 # Audit a critical action (block on failure)
-curl -X POST https://xproof.app/api/audit \
+curl -X POST https://provebeforeact.com/api/audit \
   -H "Authorization: Bearer pm_..." \
   -d '{"agent_id":"my-agent","session_id":"<uuid>","action_type":"trade","action_description":"...","inputs_hash":"...","risk_level":"high","decision":"approved"}'
 
 # Health check
-curl https://xproof.app/api/acp/health
+curl https://provebeforeact.com/api/acp/health
 ```
