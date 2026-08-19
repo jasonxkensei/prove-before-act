@@ -1,0 +1,95 @@
+name: App CI
+
+# Application-level CI gate. Provisions a disposable Postgres, pushes the
+# Drizzle schema, boots the real server, waits for readiness, then runs:
+#   1. typecheck (tsc)
+#   2. partner contract tests — live pba_*/xproof_* alias parity across the
+#      SIGIL/BNB/ElizaOS/xAI/MPP endpoints plus OpenAPI spec-vs-response
+#      contract checks. These are the release gates for partner field changes.
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'npm-sdk/**'
+      - 'python-sdk/**'
+      - '**/*.md'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'npm-sdk/**'
+      - 'python-sdk/**'
+      - '**/*.md'
+
+jobs:
+  partner-contract:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: app_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://ci:ci@localhost:5432/app_ci
+      SESSION_SECRET: ci-only-session-secret-not-a-real-credential
+      NODE_ENV: development
+      PORT: 5000
+      TEST_BASE_URL: http://127.0.0.1:5000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run check
+
+      - name: Push database schema
+        run: npx drizzle-kit push --force
+
+      - name: Start server
+        run: |
+          nohup npx tsx server/index.ts > server.log 2>&1 &
+          echo $! > server.pid
+
+      - name: Wait for server readiness
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sf "$TEST_BASE_URL/api/health" > /dev/null; then
+              echo "Server is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Server failed to become ready in 120s" >&2
+          tail -100 server.log >&2
+          exit 1
+
+      - name: Run partner contract tests
+        run: npx vitest run tests/partner-pba-alias-parity.test.ts tests/openapi-partner-contract.test.ts
+
+      - name: Show server log on failure
+        if: failure()
+        run: tail -200 server.log || true
+
+      - name: Stop server
+        if: always()
+        run: kill "$(cat server.pid)" 2>/dev/null || true
