@@ -170,7 +170,7 @@ List Prove Before Act capabilities, pricing, and usage guidance. No parameters r
 
 ### `audit_agent_session`
 
-Anchor an agent's decision on-chain before a critical action. The returned `proof_id` can be used in an operator-owned policy; Prove Before Act does not automatically block execution if a call fails.
+Anchor an agent's decision on-chain before a critical action. The returned `proof_id` can be used in an operator-owned policy; Prove Before Act records the result and leaves action handling to the operator.
 
 **Parameters:**
 
@@ -186,7 +186,7 @@ Anchor an agent's decision on-chain before a critical action. The returned `proo
 | `risk_summary` | string | No | Explanation of risk factors |
 | `context` | object | No | Free-form metadata (model, env, etc.) |
 
-See [SKILL.md Section 8](../SKILL.md#8-agent-audit-log-standard) for the complete enforcement pattern.
+See [SKILL.md Section 8](../SKILL.md#8-agent-audit-log-standard) for an operator policy template; the service does not enforce execution blocking.
 
 ---
 
@@ -238,7 +238,7 @@ When exposing Prove Before Act to an LLM, use:
 > "Use this to create an immutable blockchain proof for a file. Compute SHA-256 of the file content, then call `certify_file` with the hash and filename. Cost: trial-free or the current live rate at `/api/pricing`."
 
 > **Skill: Audit before action**
-> "Before any high-risk action (trade, deploy, transfer), call `audit_agent_session` with the action details. If no `proof_id` is returned, BLOCK the action."
+> "For a high-risk action (trade, deploy, transfer), call `audit_agent_session` when your operator policy requires an audit record. If no `proof_id` is returned, apply that policy's chosen response, such as retry, review, human approval, or a stop."
 
 > **Skill: Verify**
 > "Use this to check if a file has been certified. Pass the proof UUID to `verify_proof`. Returns blockchain transaction, timestamp, and verification status."
