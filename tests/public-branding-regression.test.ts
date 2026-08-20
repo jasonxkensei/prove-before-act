@@ -8,7 +8,25 @@
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import express from "express";
+import request from "supertest";
+import { describe, expect, it, vi } from "vitest";
+
+const { isMX8004ConfiguredMock, getContractAddressesMock } = vi.hoisted(() => ({
+  isMX8004ConfiguredMock: vi.fn(),
+  getContractAddressesMock: vi.fn(),
+}));
+
+vi.mock("../server/mx8004", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../server/mx8004")>();
+  return {
+    ...actual,
+    isMX8004Configured: isMX8004ConfiguredMock,
+    getContractAddresses: getContractAddressesMock,
+  };
+});
+
+const { registerMx8004Routes } = await import("../server/routes/mx8004");
 
 const BASE = "http://127.0.0.1:5000";
 const AGENT_HEADERS = {
@@ -115,17 +133,79 @@ describe("public branding and capability claims", () => {
   );
 
   it("reports supported-but-inactive MX-8004 truthfully when unconfigured", async () => {
-    const response = await fetch(`${BASE}/api/mx8004/status`);
+    isMX8004ConfiguredMock.mockReturnValue(false);
+    const app = express();
+    registerMx8004Routes(app);
+
+    const response = await request(app)
+      .get("/api/mx8004/status")
+      .set("Host", "capabilities.example.test");
     expect(response.status).toBe(503);
 
-    const status = await response.json();
-    expect(status).toMatchObject({
+    expect(response.body).toMatchObject({
       standard: "MX-8004",
+      version: "1.0",
       supported: true,
       active: false,
       status: "not_configured",
     });
-    expect(status).not.toHaveProperty("erc8004_compliant");
+    expect(response.body).not.toHaveProperty("erc8004_compliant");
+    expect(response.body).not.toHaveProperty("contracts");
+    expect(response.body).not.toHaveProperty("capabilities");
+  });
+
+  it("reports the complete active MX-8004 capability contract when configured", async () => {
+    isMX8004ConfiguredMock.mockReturnValue(true);
+    getContractAddressesMock.mockReturnValue({
+      identityRegistry: "erd1identity-registry",
+      validationRegistry: "erd1validation-registry",
+      reputationRegistry: "erd1reputation-registry",
+      agentsExplorer: "https://agents.multiversx.com",
+      xproofAgentNonce: 1,
+      xproofAgentExplorer: "https://agents.multiversx.com/agents/1",
+    });
+    const app = express();
+    registerMx8004Routes(app);
+
+    const response = await request(app)
+      .get("/api/mx8004/status")
+      .set("Host", "capabilities.example.test");
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      standard: "MX-8004",
+      version: "1.0",
+      supported: true,
+      active: true,
+      status: "active",
+      role: "validation_oracle",
+      contracts: {
+        identityRegistry: "erd1identity-registry",
+        validationRegistry: "erd1validation-registry",
+        reputationRegistry: "erd1reputation-registry",
+      },
+      capabilities: {
+        identity: expect.arrayContaining(["register_agent", "get_agent"]),
+        validation: expect.arrayContaining(["init_job", "submit_proof", "get_job_data"]),
+        reputation: expect.arrayContaining(["get_reputation_score", "readFeedback"]),
+      },
+      validation_flow: {
+        steps: [
+          "1. init_job — create job in Validation Registry",
+          "2. submit_proof — attach file hash + blockchain tx as proof",
+          "3. validation_request — Prove Before Act nominates itself as validator",
+          "4. validation_response — Prove Before Act submits the configured validation response",
+          "5. append_response — attach certificate URL to job",
+        ],
+        final_status: "Verified",
+      },
+    });
+    expect(response.body.endpoints).toEqual({
+      status: "https://capabilities.example.test/api/mx8004/status",
+      agent_reputation: "https://capabilities.example.test/api/agent/{nonce}/reputation",
+      job_data: "https://capabilities.example.test/api/mx8004/job/{jobId}",
+      feedback: "https://capabilities.example.test/api/mx8004/feedback/{agentNonce}/{clientAddress}/{index}",
+    });
+    expect(response.body).not.toHaveProperty("erc8004_compliant");
   });
 
   it.each([
