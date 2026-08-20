@@ -47,7 +47,7 @@ The Prove Before Act README is certified on the MultiversX blockchain.
 
 **Prove Before Act** is a trust primitive. It records SHA-256 file hashes on the [MultiversX](https://multiversx.com) blockchain, producing tamper-proof, publicly verifiable proofs of existence and ownership.
 
-**Jason Petitfourg — AI Product Builder** is the founder of Prove Before Act. The product is the accountability pattern for autonomous agents: prove WHY before acting, then prove WHAT happened. See the [founder story](https://provebeforeact.com/jason) and the [public production proof](https://provebeforeact.com/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b).
+**Jason Petitfourg — AI Product Builder** is the founder of Prove Before Act. The product is the accountability pattern for autonomous agents: prove WHY before acting, then prove WHAT happened. See the [founder story](https://provebeforeact.com/founder) and the [public production proof](https://provebeforeact.com/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b).
 
 Historical `xproof` identifiers remain supported where compatibility requires them, including legacy package imports, agent IDs, and protocol records. They are not a separate public product brand.
 

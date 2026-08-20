@@ -40,7 +40,7 @@ export default function JasonPage() {
       canonical.setAttribute("rel", "canonical");
       document.head.appendChild(canonical);
     }
-    canonical.setAttribute("href", "https://provebeforeact.com/jason");
+    canonical.setAttribute("href", "https://provebeforeact.com/founder");
   }, []);
 
   return (

@@ -431,7 +431,7 @@ function renderJasonPage(baseUrl: string): string {
   const proofUrl = `${baseUrl}/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b`;
   const referenceAgentUrl = `${baseUrl}/agent/${REFERENCE_AGENT_WALLET}`;
 
-  return `${commonHead(title, description, `${baseUrl}/jason`, "profile")}
+  return `${commonHead(title, description, `${baseUrl}/founder`, "profile")}
 <body>
 <header>
   <nav>
@@ -484,7 +484,7 @@ ${safeJsonLd({
   "@type": "Person",
   "name": "Jason Petitfourg",
   "jobTitle": "AI Product Builder",
-  "url": `${baseUrl}/jason`,
+  "url": `${baseUrl}/founder`,
   "sameAs": ["https://github.com/jasonxkensei"],
   "worksFor": {
     "@type": "Organization",
@@ -1634,7 +1634,7 @@ export function prerenderMiddleware() {
           .send(await renderAgentsPage(baseUrl));
       }
 
-      if (path === "/jason") {
+      if (path === "/founder") {
         return res.status(200)
           .set("Content-Type", "text/html")
           .set("Link", agentLinks)

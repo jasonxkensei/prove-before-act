@@ -14,7 +14,7 @@ const CRAWLER_HEADERS = {
 
 describe("founder and product brand bridge", () => {
   it("serves a crawler-readable founder page with the canonical relationship", async () => {
-    const response = await fetch(`${BASE}/jason`, { headers: CRAWLER_HEADERS });
+    const response = await fetch(`${BASE}/founder`, { headers: CRAWLER_HEADERS });
     expect(response.status).toBe(200);
 
     const body = await response.text();

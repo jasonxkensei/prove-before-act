@@ -93,7 +93,7 @@ function Router() {
           <Route path="/agent-context" component={AgentContextPage} />
           <Route path="/agent-context/zh" component={AgentContextZhPage} />
           <Route path="/coherence" component={CoherencePage} />
-           <Route path="/jason" component={JasonPage} />
+           <Route path="/founder" component={JasonPage} />
           <Route path="/fleet" component={FleetPage} />
           <Route path="/fleets" component={FleetManagePage} />
           {/* /stats shows public platform metrics (unauthenticated /api/stats endpoint).
@@ -141,7 +141,7 @@ function Router() {
         <Route path="/agent-context" component={AgentContextPage} />
         <Route path="/agent-context/zh" component={AgentContextZhPage} />
         <Route path="/coherence" component={CoherencePage} />
-         <Route path="/jason" component={JasonPage} />
+         <Route path="/founder" component={JasonPage} />
         <Route path="/fleet" component={FleetPage} />
         <Route path="/fleets" component={FleetManagePage} />
         <Route path="/zh" component={LandingZh} />
