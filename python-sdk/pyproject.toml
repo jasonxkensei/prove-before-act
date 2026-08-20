@@ -53,9 +53,6 @@ openai-agents = [
     "openai-agents>=0.0.3",
 ]
 deerflow = []
-fetchai = [
-    "uagents>=0.9.0",
-]
 
 [project.urls]
 Homepage = "https://provebeforeact.com"
