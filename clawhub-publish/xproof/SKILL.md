@@ -1,16 +1,16 @@
 ---
 name: Prove Before Act
-version: 3.3.8
-description: Prove Before Act accountability integration for AI agents. REST API, MCP, and x402. Check live endpoints for available capabilities, pricing, and proof status.
+version: 3.3.9
+description: Prove Before Act accountability integration for AI agents. REST API, MCP, and x402. The @jasonxkensei/xproof ClawHub slug is a legacy compatibility identifier.
 homepage: https://provebeforeact.com
 metadata: {"prove-before-act": {"category":"proof,security,compliance,accountability,prove-before-act","api_base":"https://provebeforeact.com"}}
 ---
 
-# Prove Before Act -- Prove Before & After Act — Accountability Layer for AI Agents
+# Prove Before Act — Accountability Layer for AI Agents
 
 This skill describes how to anchor reasoning (WHY) before an action and its result (WHAT) afterwards with Prove Before Act. It provides an auditable record when the returned proof is confirmed; it does not itself enforce an execution policy.
 
-> **Current product and compatibility notice:** Prove Before Act is the product name. `xproof`, `XProofClient`, `XPROOF_*`, `xProof-Action`, and `jasonxkensei/xProof` are legacy package, protocol, action, or repository identifiers retained for compatibility. MX-8004 support is not active unless `GET /api/mx8004/status` reports `status: "active"`; the current production response is `status: "not_configured"`.
+> **Current product and compatibility notice:** Prove Before Act is the product name. The ClawHub install slug `@jasonxkensei/xproof` is retained as a legacy compatibility identifier for existing OpenClaw installations. `xproof`, `XProofClient`, `XPROOF_*`, `xProof-Action`, and `jasonxkensei/xProof` are legacy package, protocol, action, or repository identifiers retained for compatibility. MX-8004 support is not active unless `GET /api/mx8004/status` reports `status: "active"`; the current production response is `status: "not_configured"`.
 
 ## The Core Pattern: Prove Before & After Act
 
@@ -54,23 +54,30 @@ Payment: USDC on Base (x402, no account) or EGLD on MultiversX (ACP/wallet) or p
 
 ## Quick Install
 
-The source repository uses the legacy compatibility name `jasonxkensei/xProof`; it is a distribution identifier, not the current product name.
-
 ```bash
 mkdir -p .agent/skills/prove-before-act/references
 
 # Core Skill — from the canonical main repository
-curl -sL https://raw.githubusercontent.com/jasonxkensei/xProof/main/clawhub-publish/xproof/SKILL.md \
+curl -sL https://raw.githubusercontent.com/jasonxkensei/prove-before-act/main/clawhub-publish/xproof/SKILL.md \
   > .agent/skills/prove-before-act/SKILL.md
 
 # Reference Manuals
 for f in certification x402 mcp; do
-  curl -sL "https://raw.githubusercontent.com/jasonxkensei/xProof/main/clawhub-publish/xproof/references/${f}.md" \
+  curl -sL "https://raw.githubusercontent.com/jasonxkensei/prove-before-act/main/clawhub-publish/xproof/references/${f}.md" \
     > ".agent/skills/prove-before-act/references/${f}.md"
 done
 ```
 
-> **Source verification:** All files above are served from `github.com/jasonxkensei/xProof` — the same repository that contains the server code, contracts, and SDKs. You can audit the full source at that URL before installing.
+> **Source verification:** All files above are served from `github.com/jasonxkensei/prove-before-act` — the canonical repository for the server code, contracts, and SDKs.
+
+## First successful integration
+
+Use this four-step path to create a verified record without exposing the original content:
+
+1. **Install** — use the ClawHub command shown on this page. Its `@jasonxkensei/xproof` slug is legacy; the installed skill and product are **Prove Before Act**.
+2. **Hash locally** — compute a SHA-256 hash of the decision or output. Do not send raw text, files, prompts, or credentials.
+3. **Anchor** — call `certify_file` through MCP or `POST /api/proof` with the hash and a filename.
+4. **Verify before relying on it** — retain the returned `proof_id` and use `verify_proof` or `GET /api/proof/<proof_id>` until the status is confirmed. Your own operator policy decides whether to continue, retry, request review, or block an action.
 
 ## Data & Privacy
 
@@ -227,7 +234,7 @@ curl -X POST https://provebeforeact.com/api/proof \
   -d '{
     "file_hash": "a1b2c3...",
     "filename": "output.json",
-    "webhook_url": "https://your-agent.example.com/hooks/xproof"
+    "webhook_url": "https://your-agent.example.com/webhooks/prove-before-act"
   }'
 ```
 
@@ -244,7 +251,7 @@ The violation flow is optional and deployment-dependent. Confirm the live contra
 | `gap` (fault) | Deployment-defined | Potential inactive-session gap |
 | `burst` (breach) | Deployment-defined | Potential abnormal submission pattern |
 
-Legacy compatibility contract paths: [XProofViolations.sol](https://github.com/jasonxkensei/xProof/blob/main/contracts/XProofViolations.sol) | [ViolationWatcher.sol](https://github.com/jasonxkensei/xProof/blob/main/contracts/ViolationWatcher.sol)
+Deployed Base contract sources retain their legacy Solidity names and cannot be renamed on-chain: [XProofViolations.sol](https://github.com/jasonxkensei/prove-before-act/blob/main/contracts/XProofViolations.sol) | [ViolationWatcher.sol](https://github.com/jasonxkensei/prove-before-act/blob/main/contracts/ViolationWatcher.sol)
 
 Docs: [https://provebeforeact.com/docs/base-violations](https://provebeforeact.com/docs/base-violations)
 
@@ -254,7 +261,7 @@ Docs: [https://provebeforeact.com/docs/base-violations](https://provebeforeact.c
 
 Prove Before Act implements the open Agent Proof Standard -- a composable, chain-agnostic format for agent accountability.
 
-Full specification: [AGENT_PROOF_STANDARD.md](https://github.com/jasonxkensei/xProof/blob/main/AGENT_PROOF_STANDARD.md)
+Full specification: [AGENT_PROOF_STANDARD.md](https://github.com/jasonxkensei/prove-before-act/blob/main/AGENT_PROOF_STANDARD.md)
 
 Standard API: `GET /api/standard` | `GET /api/standard/validate` (POST)
 
