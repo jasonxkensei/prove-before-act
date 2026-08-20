@@ -1,6 +1,6 @@
 ---
 name: Prove Before Act
-version: 3.3.10
+version: 3.3.11
 description: Prove Before Act accountability integration for AI agents. REST API, MCP, and x402. The @jasonxkensei/xproof ClawHub slug is a legacy compatibility identifier.
 homepage: https://provebeforeact.com
 metadata: {"prove-before-act": {"category":"proof,security,compliance,accountability,prove-before-act","api_base":"https://provebeforeact.com"}}
@@ -107,7 +107,7 @@ Use this four-step path to create a verified record without exposing the origina
 - **NEVER send plaintext content to provebeforeact.com** -- always hash locally first (`sha256sum`, `crypto.subtle.digest`, or equivalent). The only field Prove Before Act accepts is `file_hash` (64-char SHA-256 hex). No raw text, documents, or binary data should ever leave your environment.
 - **x402 is opt-in and autonomous** -- once enabled, your agent can initiate USDC payments on Base without per-transaction confirmation. Configure a spending cap in your agent framework and require human approval above your threshold before enabling x402 in production.
 - **`llms.txt` and `llms-full.txt` are static documentation references** -- load them once at install time for API reference, not at runtime on every call. Fetching them dynamically on each invocation creates an unnecessary runtime dependency on provebeforeact.com availability and a potential prompt-injection surface if the file is ever compromised.
-- **Guard/enforcement templates are versioned in the repository** -- never fetch agent enforcement code from a runtime URL. Use the pinned versions in `references/` or the SDK packages (`xproof` on PyPI, `prove-before-act` on npm).
+- **Guard/enforcement templates are versioned in the repository** -- never fetch agent enforcement code from a runtime URL. Use the pinned versions in `references/` or the canonical `prove-before-act` SDK package on PyPI and npm. The Python `xproof` module name remains a legacy compatibility alias.
 
 ---
 
