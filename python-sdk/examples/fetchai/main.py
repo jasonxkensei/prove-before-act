@@ -9,8 +9,12 @@ Demonstrates four common patterns for the XProofuAgentMiddleware:
 Run: python main.py
 
 Requirements:
-    pip install prove-before-act[fetchai]
+    pip install prove-before-act
     # The xproof module name below is a legacy compatibility alias.
+
+Note:
+    The SDK does not bundle the upstream Fetch.ai uAgents dependency because
+    its current dependency graph includes the unfixed ecdsa CVE-2024-23342.
 """
 
 from unittest.mock import MagicMock

@@ -38,7 +38,3 @@ try:
 except ImportError:
     pass
 
-try:
-    from .fetchai import XProofuAgentMiddleware, wrap_agent, xproof_handler  # noqa: F401
-except ImportError:
-    pass
