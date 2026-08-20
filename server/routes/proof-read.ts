@@ -34,6 +34,7 @@ export function registerProofReadRoutes(app: Express) {
   // hashes to map certified content or perform timing-based oracle attacks at no cost.
   app.get("/api/proof/check", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const hash = req.query.hash as string;
       if (!hash || !/^[a-f0-9]{64}$/i.test(hash)) {
         return res.status(400).json({ error: "Valid SHA-256 hash required" });
@@ -137,6 +138,9 @@ export function registerProofReadRoutes(app: Express) {
 
   app.get("/api/proof/hash/:hash", publicReadRateLimiter, async (req, res) => {
     try {
+      // A profile can become private after this response is generated; never
+      // let a shared intermediary replay its visibility-gated proof metadata.
+      res.setHeader("Cache-Control", "private, no-store");
       const { hash } = req.params;
       if (!hash || !/^[a-f0-9]{64}$/i.test(hash)) {
         return res.status(400).json({ error: "Valid 64-char SHA-256 hash required" });
@@ -188,6 +192,7 @@ export function registerProofReadRoutes(app: Express) {
 
   app.get("/api/confidence-trail/:decisionId", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { decisionId } = req.params;
       if (!decisionId || !DECISION_ID_REGEX.test(decisionId)) {
         return res.status(400).json({ error: "decision_id must match [A-Za-z0-9._:-]{1,128}" });
@@ -291,6 +296,7 @@ export function registerProofReadRoutes(app: Express) {
   // useful for agents that only care about compliance without fetching full trail.
   app.get("/api/proofs/policy-check", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const decisionId = req.query.decision_id as string | undefined;
       if (!decisionId || !DECISION_ID_REGEX.test(decisionId)) {
         return res.status(400).json({ error: "decision_id must match [A-Za-z0-9._:-]{1,128}" });
@@ -356,6 +362,7 @@ export function registerProofReadRoutes(app: Express) {
   // ── Context Drift Detection ──────────────────────────────────────────────
   app.get("/api/context-drift/:decisionId", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { decisionId } = req.params;
       if (!decisionId || !DECISION_ID_REGEX.test(decisionId)) {
         return res.status(400).json({ error: "decision_id must match [A-Za-z0-9._:-]{1,128}" });
@@ -430,6 +437,7 @@ export function registerProofReadRoutes(app: Express) {
 
   app.get("/api/artifact/trust/:hash", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { hash } = req.params;
       if (!hash || !/^[a-f0-9]{64}$/i.test(hash)) {
         return res.status(400).json({ error: "Valid 64-char SHA-256 hash required" });
@@ -495,6 +503,7 @@ export function registerProofReadRoutes(app: Express) {
   // Returns the full proof layer data for a given agent wallet, formatted for leaderboard enrichment
   app.get("/api/agentproof/:wallet", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { wallet } = req.params;
       if (!wallet || wallet.length < 10) {
         return res.status(400).json({ error: "Valid wallet address required" });
@@ -573,6 +582,7 @@ export function registerProofReadRoutes(app: Express) {
   // CapAuth maps: persistent PGP key → wallet; xProof maps: wallet → proof history + architectural transitions
   app.get("/api/skworld/:wallet", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { wallet } = req.params;
       if (!wallet || !MX_WALLET_REGEX.test(wallet)) {
         return res.status(400).json({ error: "Valid MultiversX wallet address required (erd1...)" });
@@ -747,6 +757,7 @@ export function registerProofReadRoutes(app: Express) {
   // Convergence response makes the 4W stack explicit: WHO (SIGIL) + WHAT/WHEN/WHY (xProof)
   app.get("/api/sigil/:public_key", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { public_key } = req.params;
       if (!public_key || !SIGIL_PUBKEY_REGEX.test(public_key)) {
         return res.status(400).json({ error: "Valid SIGIL public key required (10-128 chars, alphanumeric/_-)" });
@@ -908,6 +919,7 @@ export function registerProofReadRoutes(app: Express) {
   // Link identities: certify with metadata.bnb_wallet = <0x_address> on MultiversX side.
   app.get("/api/bnb/:address", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { address } = req.params;
       const bnbAddressRegex = /^0x[0-9a-fA-F]{40}$/;
       if (!address || !bnbAddressRegex.test(address)) {
@@ -1030,6 +1042,7 @@ export function registerProofReadRoutes(app: Express) {
   // Returns onboarding status, activity tiers, and quick-action links useful at bot startup.
   app.get("/api/moltbot/:wallet", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { wallet } = req.params;
       if (!wallet || wallet.length < 10) {
         return res.status(400).json({ error: "Valid MultiversX wallet address required" });
@@ -1145,6 +1158,7 @@ export function registerProofReadRoutes(app: Express) {
   //   metadata.eliza_character_name, metadata.eliza_session_id, metadata.eliza_runtime.
   app.get("/api/eliza/:identifier", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { identifier } = req.params;
       if (!identifier || identifier.length > 128) {
         return res.status(400).json({
@@ -1377,6 +1391,7 @@ export function registerProofReadRoutes(app: Express) {
   //   metadata.xai_model, metadata.xai_session_id, metadata.action_type.
   app.get("/api/xai/:identifier", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { identifier } = req.params;
       const isWallet = MX_WALLET_REGEX.test(identifier);
       const isAgentId = PARTNER_AGENT_ID_REGEX.test(identifier);
@@ -1582,6 +1597,7 @@ export function registerProofReadRoutes(app: Express) {
   // Link: certify with metadata.mpp_payment_intent_id = <pi_xxx> before or after payment.
   app.get("/api/mpp/:payment_intent_id", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { payment_intent_id } = req.params;
       if (!payment_intent_id || !PAYMENT_INTENT_REGEX.test(payment_intent_id)) {
         return res.status(400).json({
@@ -1710,6 +1726,7 @@ export function registerProofReadRoutes(app: Express) {
 
   app.get("/api/proofs/status", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const idsParam = req.query.ids;
       if (!idsParam || typeof idsParam !== "string") {
         return res.status(400).json({ error: "Missing required query parameter: ids (comma-separated proof UUIDs)" });

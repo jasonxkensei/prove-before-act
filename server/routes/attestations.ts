@@ -146,6 +146,7 @@ export function registerAttestationsRoutes(app: Express) {
   // has accumulated.
   app.get("/api/attestations/:wallet", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { wallet } = req.params;
 
       const subjectCheck = await db.execute(sql`
@@ -192,6 +193,7 @@ export function registerAttestationsRoutes(app: Express) {
   // GET /api/attestation/:id — public, returns a single attestation by ID
   app.get("/api/attestation/:id", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { id } = req.params;
       const result = await db.execute(sql`
         SELECT id, subject_wallet, issuer_wallet, issuer_name, domain, standard, title, description, expires_at, status, revoked_at, created_at
@@ -316,6 +318,7 @@ export function registerAttestationsRoutes(app: Express) {
   // GET /api/issuer/:wallet — public issuer directory profile with all issued attestations
   app.get("/api/issuer/:wallet", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { wallet } = req.params;
 
       const issuerCheck = await db.execute(sql`
@@ -469,6 +472,7 @@ export function registerAttestationsRoutes(app: Express) {
   // GET /api/trust/:wallet/history — trust score history (last 90 days snapshots)
   app.get("/api/trust/:wallet/history", publicSearchRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { wallet } = req.params;
       const days = Math.min(parseInt(req.query.days as string || "90"), 90);
 

@@ -17,6 +17,7 @@ export function registerTrustRoutes(app: Express) {
   // GET /api/leaderboard — public, paginated + server-side filters
   app.get("/api/leaderboard", publicSearchRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const VALID_CAL_FILTERS = ["calibrated", "overconfident", "underconfident"] as const;
       type CalFilter = typeof VALID_CAL_FILTERS[number];
       const rawCalibration = req.query.calibration as string | undefined;
@@ -64,6 +65,7 @@ export function registerTrustRoutes(app: Express) {
   // GET /api/agents/compare — compare 2-5 agents side by side
   app.get("/api/agents/compare", publicCompareRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const walletsParam = req.query.wallets as string;
       if (!walletsParam) return res.status(400).json({ message: "wallets query param required (comma-separated)" });
       const wallets = walletsParam.split(",").map((w) => w.trim()).filter(Boolean).slice(0, 5);
@@ -97,6 +99,7 @@ export function registerTrustRoutes(app: Express) {
   // GET /api/agents/search — search agents by attestation domain and/or standard (must be before :wallet)
   app.get("/api/agents/search", publicSearchRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const domain = req.query.domain as string | undefined;
       const standard = req.query.standard as string | undefined;
 
@@ -135,6 +138,7 @@ export function registerTrustRoutes(app: Express) {
 
   app.get("/api/agents/:wallet/timeline", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { wallet } = req.params;
       // When limit is explicitly supplied, it must be a positive integer.
       // `Number("0") || 50` would silently return 50 for limit=0, hiding the
@@ -331,6 +335,7 @@ export function registerTrustRoutes(app: Express) {
   // GET /api/agents/:wallet/violations — public, returns all violations for an agent
   app.get("/api/agents/:wallet/violations", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { wallet } = req.params;
 
       const [userCheck] = await db
@@ -409,6 +414,9 @@ export function registerTrustRoutes(app: Express) {
   // GET /api/agents/:wallet — public, returns a single agent profile
   app.get("/api/agents/:wallet", publicReadRateLimiter, async (req, res) => {
     try {
+      // Public profile visibility is revocable. Prevent a cache from serving
+      // this profile after the owner opts out.
+      res.setHeader("Cache-Control", "private, no-store");
       const { wallet } = req.params;
       const [user] = await db
         .select()
@@ -590,6 +598,7 @@ export function registerTrustRoutes(app: Express) {
   // GET /api/trust/:wallet — public trust lookup (score only, no profile data)
   app.get("/api/trust/:wallet", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { wallet } = req.params;
 
       const [userCheck] = await db
