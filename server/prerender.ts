@@ -226,22 +226,23 @@ async function renderHomePage(baseUrl: string): Promise<string> {
 
 <main>
   <section>
-    <h1>Prove that's yours. Forever.</h1>
-    <p>An irrefutable proof, recognized worldwide, impossible to falsify or delete.</p>
+    <h1>Prove before your agent acts.</h1>
+    <p>Give agents and operators a durable, independently verifiable record of a decision, output, or critical action.</p>
     <p>Current live rate: $${priceUsd.toFixed(2)} per certification — <a href="${baseUrl}/api/pricing">see /api/pricing</a>. Not a fixed published price.</p>
-    <a href="${baseUrl}/certify">Certify a file</a>
+    <a href="${baseUrl}/agents">Integrate an agent</a>
+    <a href="${baseUrl}/certify">Verify a local file</a>
   </section>
 
   <section>
-    <h2>How it works - 3 simple steps</h2>
-    <p>No technical knowledge required. If you can send an email, you can use Prove Before Act.</p>
+    <h2>How an accountable agent works</h2>
+    <p>Build a verifiable trail around the decisions and outputs that matter.</p>
     <ol>
       <li>
-        <h3>Upload your file</h3>
-        <p>Drag any file: photo, document, music, code... Your file stays private, it is never uploaded.</p>
+        <h3>Record an action or output</h3>
+        <p>Your agent hashes a decision record, model output, data snapshot, or build artifact locally. The source material stays private.</p>
       </li>
       <li>
-        <h3>We compute the fingerprint</h3>
+        <h3>Anchor the fingerprint</h3>
         <p>A unique fingerprint (SHA-256 hash) is computed locally. It's like the DNA of your file.</p>
       </li>
       <li>
@@ -276,8 +277,8 @@ async function renderHomePage(baseUrl: string): Promise<string> {
   </section>
 
   <section>
-    <h2>Protect your first creation</h2>
-    <p>Join creators who secure their work. Current live rate: $${priceUsd.toFixed(2)} per certification; see <a href="${baseUrl}/api/pricing">/api/pricing</a>.</p>
+    <h2>Make critical actions accountable</h2>
+    <p>Operators can require an independently verifiable proof before deployment, handoff, payment, or external action. Current live rate: $${priceUsd.toFixed(2)} per certification; see <a href="${baseUrl}/api/pricing">/api/pricing</a>.</p>
   </section>
 </main>
 
@@ -301,7 +302,7 @@ ${safeJsonLd({
   "logo": "https://provebeforeact.com/icon-512.png",
   "description": description,
   "sameAs": [
-    "https://github.com/jasonxkensei/xProof",
+    "https://github.com/jasonxkensei/prove-before-act",
     "https://clawhub.ai/jasonxkensei/prove-before-act"
   ],
   "foundingDate": "2025",
@@ -1149,7 +1150,7 @@ Content-Type: application/json
       <li><strong>OpenAI Agents SDK</strong> — function_tool decorator, Prove Before Act in run loop</li>
       <li><strong>Vercel AI SDK</strong> — tool() wrapper, anchor in execute() before action</li>
       <li><strong>MCP</strong> — POST ${baseUrl}/mcp · tools: certify_file, audit_agent_session, register_trial</li>
-      <li><strong>Fetch.ai / uAgents</strong> — XProofuAgentMiddleware(agent, api_key="pm_...") — one-line integration, anchors WHY proof before and WHAT proof after every message handler. Full example: github.com/jasonxkensei/xproof-examples/tree/main/fetchai</li>
+      <li><strong>Fetch.ai / uAgents</strong> — XProofuAgentMiddleware(agent, api_key="pm_...") — one-line integration, anchors WHY proof before and WHAT proof after every message handler. Full example: github.com/jasonxkensei/prove-before-act-examples/tree/main/fetchai</li>
     </ul>
   </section>
 

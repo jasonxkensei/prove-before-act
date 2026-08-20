@@ -84,4 +84,4 @@ The demo uses mock objects — no real API key or LLM backend needed.
 
 ## Links
 
-- [Prove Before Act](https://provebeforeact.com) · [API docs](https://provebeforeact.com/docs) · [PyPI](https://pypi.org/project/xproof/) · [GitHub](https://github.com/jasonxkensei/xProof)
+- [Prove Before Act](https://provebeforeact.com) · [API docs](https://provebeforeact.com/docs) · [PyPI](https://pypi.org/project/prove-before-act/) · [GitHub](https://github.com/jasonxkensei/prove-before-act)

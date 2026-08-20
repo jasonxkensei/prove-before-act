@@ -87,7 +87,7 @@ Below is a ready-to-paste PR description for submitting this skill to the DeerFl
 
 **Links:**
 - [Prove Before Act website](https://provebeforeact.com)
-- [Prove Before Act Python SDK](https://github.com/jasonxkensei/xProof)
+- [Prove Before Act Python SDK](https://github.com/jasonxkensei/prove-before-act)
 - [MultiversX blockchain](https://multiversx.com)
 
 ---

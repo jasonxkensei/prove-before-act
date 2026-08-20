@@ -1,15 +1,15 @@
 # Prove Before Act
 
-[![Python SDK CI](https://github.com/jasonxkensei/xProof/actions/workflows/python-sdk.yml/badge.svg?branch=main)](https://github.com/jasonxkensei/xProof/actions/workflows/python-sdk.yml) [![PyPI version](https://img.shields.io/pypi/v/Prove Before Act)](https://pypi.org/project/xproof/) [![Python versions](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-blue)](https://pypi.org/project/xproof/)
+[![Python SDK CI](https://github.com/jasonxkensei/prove-before-act/actions/workflows/python-sdk.yml/badge.svg?branch=main)](https://github.com/jasonxkensei/prove-before-act/actions/workflows/python-sdk.yml) [![PyPI version](https://img.shields.io/pypi/v/prove--before--act)](https://pypi.org/project/prove-before-act/) [![Python versions](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-blue)](https://pypi.org/project/prove-before-act/)
 
 On-chain decision provenance for autonomous agents. **WHY before acting. WHAT after.** Timestamps written by the chain, not your agent.
 
 ```bash
-pip install xproof
+pip install prove-before-act
 ```
 
-`xproof` and `XProofClient` are legacy package and API identifiers retained for
-compatibility. **Prove Before Act** is the current product name.
+`xproof` and `XProofClient` are legacy import and API identifiers retained for
+compatibility. **Prove Before Act** is the current distribution and product name.
 
 ---
 
@@ -68,6 +68,12 @@ curl -X POST https://provebeforeact.com/api/proof \
 ```
 
 When something goes wrong, you don't guess. You verify.
+
+### Environment variables
+
+When constructor options are omitted, the SDK reads
+`PROVEBEFOREACT_API_KEY` and `PROVEBEFOREACT_BASE_URL`. The legacy
+`XPROOF_API_KEY` and `XPROOF_BASE_URL` variables remain supported as fallbacks.
 
 ---
 
@@ -902,7 +908,7 @@ code --install-extension charliermarsh.ruff
 
 - [provebeforeact.com](https://provebeforeact.com) — dashboard & docs
 - [npm SDK](https://www.npmjs.com/package/prove-before-act) — `npm install prove-before-act`
-- [Examples](https://github.com/jasonxkensei/xproof-examples) — LangChain, CrewAI, AutoGen, LlamaIndex
+- [Examples](https://github.com/jasonxkensei/prove-before-act-examples) — LangChain, CrewAI, AutoGen, LlamaIndex
 
 ## License
 

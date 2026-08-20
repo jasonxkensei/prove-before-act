@@ -84,7 +84,7 @@ const protocols = [
     name: "OpenClaw",
     subtitle: "Agent Skill Marketplace",
     description: "Install Prove Before Act as a skill in OpenClaw-compatible agents. One command certification.",
-    link: "https://github.com/jasonxkensei/xproof-openclaw-skill",
+    link: "https://github.com/jasonxkensei/prove-before-act-openclaw-skill",
     icon: Cog,
     badge: "Marketplace",
   },

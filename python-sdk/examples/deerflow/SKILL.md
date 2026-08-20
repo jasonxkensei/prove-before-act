@@ -40,7 +40,7 @@ curl -s -X POST https://provebeforeact.com/api/agent/register \
 Save the `api_key` from the response. Set it as an environment variable:
 
 ```bash
-export XPROOF_API_KEY="pm_..."
+export PROVEBEFOREACT_API_KEY="pm_..."
 ```
 
 ## Certify an Output
@@ -55,7 +55,7 @@ HASH=$(echo -n "$CONTENT" | sha256sum | cut -d' ' -f1)
 # 2. Certify on-chain
 curl -s -X POST https://provebeforeact.com/api/proof \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $XPROOF_API_KEY" \
+  -H "Authorization: Bearer $PROVEBEFOREACT_API_KEY" \
   -d "{
     \"file_hash\": \"$HASH\",
     \"file_name\": \"q3-analysis.json\",
@@ -115,7 +115,7 @@ Certify up to 50 outputs in a single API call:
 ```bash
 curl -s -X POST https://provebeforeact.com/api/batch \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $XPROOF_API_KEY" \
+  -H "Authorization: Bearer $PROVEBEFOREACT_API_KEY" \
   -d '{
     "files": [
       {"file_hash": "abc123...", "file_name": "report-1.json"},
@@ -155,6 +155,6 @@ Every certification answers four questions:
 - [Prove Before Act website](https://provebeforeact.com)
 - [API documentation](https://provebeforeact.com/docs)
 - [MCP endpoint](https://provebeforeact.com/mcp)
-- [Python SDK on PyPI](https://pypi.org/project/xproof/)
+- [Python SDK on PyPI](https://pypi.org/project/prove-before-act/)
 - [npm SDK](https://www.npmjs.com/package/prove-before-act)
-- [GitHub](https://github.com/jasonxkensei/xProof)
+- [GitHub](https://github.com/jasonxkensei/prove-before-act)

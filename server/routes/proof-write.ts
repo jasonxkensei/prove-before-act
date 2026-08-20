@@ -837,7 +837,8 @@ export function registerProofWriteRoutes(app: Express) {
         timestamp: certification.createdAt?.toISOString() || new Date().toISOString(),
         webhook_status: webhookStatus,
         // webhook_secret is returned only for per-proof webhooks (when webhook_url is supplied in
-        // this request). Store it securely — use it to verify X-xProof-Signature on callbacks.
+        // this request). Store it securely — use it to verify X-ProveBeforeAct-Signature on callbacks.
+        // X-xProof-Signature remains an identical legacy header during migration.
         // Account-level webhooks use the secret set at registration (/api/agents/register).
         ...(isPerProofWebhook && generatedWebhookSecret ? { webhook_secret: generatedWebhookSecret } : {}),
         ...(trialInfo ? {
@@ -977,10 +978,10 @@ export function registerProofWriteRoutes(app: Express) {
                     note: "Certify every build artifact automatically in CI/CD.",
                     github_action: {
                       marketplace: "https://github.com/marketplace/actions/xproof-certify",
-                      repo: "https://github.com/jasonxkensei/xProof-Action",
+                      repo: "https://github.com/jasonxkensei/prove-before-act-action",
                       example_workflow: [
                         "- name: Certify build artifact",
-                        "  uses: jasonxkensei/xProof-Action@v1",
+                        "  uses: jasonxkensei/prove-before-act-action@v1",
                         "  with:",
                         "    api-key: ${{ secrets.PROVE_BEFORE_ACT_API_KEY }}",
                         "    file: ./dist/contract.wasm",
@@ -998,7 +999,7 @@ export function registerProofWriteRoutes(app: Express) {
                     note: "Get notified when each proof is confirmed on-chain — essential for production flows that gate on confirmation.",
                     configure: `PATCH ${baseUrl}/api/agent`,
                     body: { webhook_url: "https://your-server/callback" },
-                    verification: "Validate X-xProof-Signature header: HMAC-SHA256(webhook_secret, timestamp + '.' + raw_body)",
+                    verification: "Validate X-ProveBeforeAct-Signature header: HMAC-SHA256(webhook_secret, timestamp + '.' + raw_body). X-xProof-Signature is a legacy alias.",
                   },
                 },
               },
@@ -1901,7 +1902,7 @@ export function registerProofWriteRoutes(app: Express) {
         existing: existingCount,
         results,
         // webhook_secret is present only when a per-batch webhook_url was provided in this request.
-        // Store it securely — use it to verify X-xProof-Signature on webhook callbacks for this batch.
+        // Store it securely — use it to verify X-ProveBeforeAct-Signature on webhook callbacks for this batch.
         // Account-level webhooks use the secret configured at registration (/api/agents/register).
         ...(data.webhook_url && batchGeneratedWebhookSecret ? { webhook_secret: batchGeneratedWebhookSecret } : {}),
         ...(trialInfo ? { trial: { remaining: Math.max(0, trialInfo.remaining - createdCount) } } : {}),

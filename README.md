@@ -178,8 +178,8 @@ Go to [provebeforeact.com](https://provebeforeact.com), connect your MultiversX 
 ### Self-Host
 
 ```bash
-git clone https://github.com/jasonxkensei/xProof.git  # legacy repository name retained for compatibility
-cd xProof
+git clone https://github.com/jasonxkensei/prove-before-act.git
+cd prove-before-act
 npm install
 cp .env.example .env   # configure your environment
 npm run db:push         # initialize database
@@ -348,7 +348,7 @@ rather than relying on historic benchmark values.
 
 ClawHub-standard skill for the OpenClaw ecosystem:
 
-- Repository: [`github.com/jasonxkensei/xproof-openclaw-skill`](https://github.com/jasonxkensei/xproof-openclaw-skill) *(legacy repository name retained for compatibility)*
+- Repository: [`github.com/jasonxkensei/prove-before-act-openclaw-skill`](https://github.com/jasonxkensei/prove-before-act-openclaw-skill)
 - Includes `SKILL.md`, `certify.sh`, and full API reference
 
 ### GitHub Action
@@ -356,9 +356,9 @@ ClawHub-standard skill for the OpenClaw ecosystem:
 Integrate Prove Before Act into your CI/CD pipeline:
 
 ```yaml
-- uses: jasonxkensei/xProof-Action@v1 # legacy action identifier retained for compatibility
+- uses: jasonxkensei/prove-before-act-action@v1
   with:
-    api_key: ${{ secrets.XPROOF_API_KEY }}
+    api_key: ${{ secrets.PROVEBEFOREACT_API_KEY }} # XPROOF_API_KEY remains accepted for existing setups
     files: dist/**
 ```
 

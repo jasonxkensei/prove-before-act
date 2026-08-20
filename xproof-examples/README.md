@@ -35,7 +35,7 @@ AI agents: read **[provebeforeact.com/llms.txt](https://provebeforeact.com/llms.
 
 ## Links
 
-- PyPI: [pypi.org/project/xproof](https://pypi.org/project/xproof)
+- PyPI: [pypi.org/project/prove-before-act](https://pypi.org/project/prove-before-act)
 - npm: [npmjs.com/package/@prove-before-act/sdk](https://www.npmjs.com/package/@prove-before-act/sdk)
 - Docs (LLM-readable): [provebeforeact.com/llms.txt](https://provebeforeact.com/llms.txt)
-- GitHub (SDK): [github.com/jasonxkensei/xProof](https://github.com/jasonxkensei/xProof)
+- GitHub (SDK): [github.com/jasonxkensei/prove-before-act](https://github.com/jasonxkensei/prove-before-act)

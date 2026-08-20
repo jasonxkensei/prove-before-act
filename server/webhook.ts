@@ -5,20 +5,23 @@ import { db } from "./db";
 import { certifications } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
+import { proofWebhookHeaders } from "./webhookHeaders";
 
 /**
- * xProof Webhook Signature Contract
+ * Prove Before Act Webhook Signature Contract
  *
  * Signature = HMAC-SHA256(secret, timestamp + "." + JSON.stringify(payload))
  *
  * Headers sent with each webhook:
- *   X-xProof-Signature  — hex-encoded HMAC-SHA256
- *   X-xProof-Timestamp  — unix epoch seconds (string)
- *   X-xProof-Event      — event type (e.g. "proof.certified")
- *   X-xProof-Delivery   — unique delivery ID (certification ID)
+ *   X-ProveBeforeAct-Signature  — hex-encoded HMAC-SHA256
+ *   X-ProveBeforeAct-Timestamp  — unix epoch seconds (string)
+ *   X-ProveBeforeAct-Event      — event type (e.g. "proof.certified")
+ *   X-ProveBeforeAct-Delivery   — unique delivery ID (certification ID)
+ *
+ * The historical X-xProof-* names are sent as identical legacy aliases.
  *
  * Verification steps (in order):
- *   1. Check X-xProof-Timestamp is present and valid integer
+ *   1. Check X-ProveBeforeAct-Timestamp is present and valid integer
  *   2. Reject if timestamp > now + 60s (clock skew)
  *   3. Reject if timestamp < now - 300s (replay window)
  *   4. Compute expected = HMAC-SHA256(secret, timestamp + "." + rawBody)
@@ -71,8 +74,8 @@ function signPayload(payload: string, secret: string): string {
  * Verify webhook signature and timestamp validity
  * 
  * @param body - Raw request body string
- * @param signature - Hex-encoded signature from X-xProof-Signature header
- * @param timestamp - Unix epoch seconds from X-xProof-Timestamp header
+ * @param signature - Hex-encoded signature from X-ProveBeforeAct-Signature header
+ * @param timestamp - Unix epoch seconds from X-ProveBeforeAct-Timestamp header
  * @param secret - Signing secret for HMAC verification
  * @returns Object with valid boolean and optional error message
  */
@@ -202,11 +205,8 @@ export async function deliverWebhook(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-xProof-Signature": signature,
-          "X-xProof-Timestamp": timestamp,
-          "X-xProof-Event": "proof.certified",
-          "X-xProof-Delivery": certificationId,
-          "User-Agent": "xProof-Webhook/1.0",
+          ...proofWebhookHeaders(signature, timestamp, "proof.certified", certificationId),
+          "User-Agent": "ProveBeforeAct-Webhook/1.0",
         },
         body: payloadStr,
         timeoutMs: WEBHOOK_TIMEOUT_MS,

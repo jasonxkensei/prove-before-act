@@ -269,7 +269,7 @@ Prove Before Act 提供的链上存证记录可作为合规审计的技术支撑
 - 智能体集成：[provebeforeact.com/agent-context](https://provebeforeact.com/agent-context)
 - 4W框架说明：[provebeforeact.com/docs/4w](https://provebeforeact.com/docs/4w)
 - 信任排行榜：[provebeforeact.com/leaderboard](https://provebeforeact.com/leaderboard)
-- GitHub：[github.com/jasonxkensei/xProof](https://github.com/jasonxkensei/xProof)
+- GitHub：[github.com/jasonxkensei/prove-before-act](https://github.com/jasonxkensei/prove-before-act)
 
 ---
 

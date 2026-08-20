@@ -44,5 +44,5 @@ No API key or LLM required — the demo uses simulated agents and a mock Prove B
 
 - [provebeforeact.com](https://provebeforeact.com)
 - Docs (LLM-readable): [provebeforeact.com/llms.txt](https://provebeforeact.com/llms.txt)
-- [PyPI: Prove Before Act](https://pypi.org/project/xproof)
+- [PyPI: Prove Before Act](https://pypi.org/project/prove-before-act)
 - [AutoGen](https://github.com/microsoft/autogen)

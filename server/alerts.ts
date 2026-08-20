@@ -3,6 +3,7 @@ import { db } from "./db";
 import { txQueue } from "@shared/schema";
 import { eq, and, gte, sql } from "drizzle-orm";
 import { checkAndAlert as checkAndAlertRateLimitImpl } from "./rateLimitAlerts";
+import { alertWebhookHeaders } from "./webhookHeaders";
 
 // Rate-limit fail-open alerting now lives in its own module (server/
 // rateLimitAlerts.ts) so it carries no DB/drizzle import. Re-exported here
@@ -36,8 +37,8 @@ async function sendAlertWebhook(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-xProof-Alert": alertType,
-        "User-Agent": "xProof-Alert/1.0",
+        ...alertWebhookHeaders(alertType),
+        "User-Agent": "ProveBeforeAct-Alert/1.0",
       },
       body: JSON.stringify(payload),
       signal: controller.signal,

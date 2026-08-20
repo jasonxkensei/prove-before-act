@@ -41,6 +41,15 @@ const VERSION = "0.1.11";
 const DEFAULT_BASE_URL = "https://provebeforeact.com";
 const DEFAULT_TIMEOUT = 30_000;
 
+function readSdkEnvironment(): { apiKey: string; baseUrl?: string } {
+  // Keep this SDK browser-safe while allowing zero-config server-side use.
+  const env = typeof process === "undefined" ? undefined : process.env;
+  return {
+    apiKey: env?.PROVEBEFOREACT_API_KEY ?? env?.XPROOF_API_KEY ?? "",
+    baseUrl: env?.PROVEBEFOREACT_BASE_URL ?? env?.XPROOF_BASE_URL,
+  };
+}
+
 export class XProofClient {
   private apiKey: string;
   private baseUrl: string;
@@ -49,8 +58,9 @@ export class XProofClient {
   registration: RegistrationResult | null = null;
 
   constructor(options: XProofClientOptions = {}) {
-    this.apiKey = options.apiKey ?? "";
-    this.baseUrl = (options.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
+    const environment = readSdkEnvironment();
+    this.apiKey = options.apiKey ?? environment.apiKey;
+    this.baseUrl = (options.baseUrl ?? environment.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
     this.timeout = options.timeout ?? DEFAULT_TIMEOUT;
   }
 

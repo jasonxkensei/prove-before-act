@@ -356,7 +356,7 @@ export function registerAgentsRoutes(app: Express) {
       status_endpoint: `GET ${baseUrl}/api/agent/status`,
       docs: `${baseUrl}/llms.txt`,
       openapi: `${baseUrl}/api/acp/openapi.json`,
-      examples: "https://github.com/jasonxkensei/xproof-examples",
+      examples: "https://github.com/jasonxkensei/prove-before-act-examples",
     });
   };
   app.get("/api/trial", trialInfoHandler);
@@ -514,7 +514,7 @@ export function registerAgentsRoutes(app: Express) {
               url: data.webhook_url,
               secret: webhookSecretSeed,
               status: "registered",
-              note: "All your proofs will POST to this URL automatically. Verify signature with X-xProof-Signature header.",
+              note: "All your proofs will POST to this URL automatically. Verify the signature with X-ProveBeforeAct-Signature. X-xProof-Signature remains a legacy alias.",
               verify_signature: `HMAC-SHA256(secret="${webhookSecretSeed}", message=timestamp + "." + raw_body)`,
             }
           : {
@@ -930,7 +930,7 @@ export function registerAgentsRoutes(app: Express) {
           docs: `${baseUrl}/llms.txt`,
           openapi: `${baseUrl}/api/acp/openapi.json`,
           claim_trial: user.isTrial ? `POST ${baseUrl}/api/trial/claim` : null,
-          examples: "https://github.com/jasonxkensei/xproof-examples",
+          examples: "https://github.com/jasonxkensei/prove-before-act-examples",
         },
       });
     } catch (error) {

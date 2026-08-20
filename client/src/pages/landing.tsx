@@ -270,6 +270,9 @@ export default function Landing() {
             <a href="/docs" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-docs">
               Docs
             </a>
+            <a href="/mcp" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-mcp">
+              MCP
+            </a>
             <a href="/agent-context" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1" data-testid="link-nav-agent-context">
               <Bot className="h-3.5 w-3.5" />
               For Agents
@@ -349,7 +352,7 @@ export default function Landing() {
                 onClick={() => trackAgentCta("cta_clicked", "landing", "hero_free_trial")}
               >
                 <Bot className="mr-2 h-4 w-4" />
-                Get started — agents
+                I run an agent or service
               </a>
             </Button>
             <Button
@@ -361,7 +364,7 @@ export default function Landing() {
             >
               <a href="/certify">
                 <Upload className="mr-2 h-5 w-5" />
-                Certify a file
+                I need to verify a file
               </a>
             </Button>
           </div>
@@ -485,8 +488,8 @@ export default function Landing() {
                       {!proofFile ? (
                         <>
                           <Upload className="h-7 w-7 text-muted-foreground/50 mx-auto mb-3" />
-                          <p className="text-sm font-medium text-muted-foreground">Drag any file here, or click to select</p>
-                          <p className="text-xs text-muted-foreground/60 mt-1">Your file never leaves your device — only its fingerprint is sent</p>
+                          <p className="text-sm font-medium text-muted-foreground">Select an output, decision log, data snapshot, or build artifact</p>
+                          <p className="text-xs text-muted-foreground/60 mt-1">Any local file works — only its fingerprint is sent</p>
                         </>
                       ) : (
                         <div className="flex items-center gap-3 justify-center">
@@ -1422,6 +1425,7 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
                   <li><a href="#how-it-works" className="hover:text-foreground transition-colors">How it works</a></li>
                   <li><a href="#faq" className="hover:text-foreground transition-colors">FAQ</a></li>
                   <li><a href="/docs" className="hover:text-foreground transition-colors" data-testid="link-footer-docs">API Docs</a></li>
+                  <li><a href="/mcp" className="hover:text-foreground transition-colors" data-testid="link-footer-mcp">MCP Server</a></li>
                   <li><a href="/agents" className="hover:text-foreground transition-colors" data-testid="link-footer-agents">For AI Agents</a></li>
                   <li><a href="/leaderboard" className="hover:text-foreground transition-colors" data-testid="link-footer-leaderboard">Trust Leaderboard</a></li>
                   <li><a href="/stats" className="hover:text-foreground transition-colors" data-testid="link-footer-stats">Metrics</a></li>

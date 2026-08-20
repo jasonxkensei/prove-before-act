@@ -5,6 +5,7 @@ compatibility identifiers.
 """
 
 import math
+import os
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Optional, Union, cast
@@ -41,9 +42,12 @@ from .utils import hash_file
 try:
     from importlib.metadata import version as _pkg_version
 
-    __version__ = _pkg_version("xproof")
+    __version__ = _pkg_version("prove-before-act")
 except Exception:
-    __version__ = "0.2.11"  # fallback when running from uninstalled source
+    try:
+        __version__ = _pkg_version("xproof")  # legacy distribution name
+    except Exception:
+        __version__ = "0.2.11"  # fallback when running from uninstalled source
 
 DEFAULT_BASE_URL = "https://provebeforeact.com"
 DEFAULT_TIMEOUT = 30
@@ -71,22 +75,24 @@ class XProofClient:
     def __init__(
         self,
         api_key: str = "",
-        base_url: str = DEFAULT_BASE_URL,
+        base_url: str = "",
         timeout: int = DEFAULT_TIMEOUT,
     ) -> None:
-        self.api_key = api_key
-        self.base_url = base_url.rstrip("/")
+        # Prefer canonical variables. XPROOF_* is deliberately retained for
+        # existing deployments that have not migrated their environment yet.
+        self.api_key = api_key or os.getenv("PROVEBEFOREACT_API_KEY", "") or os.getenv("XPROOF_API_KEY", "")
+        self.base_url = (base_url or os.getenv("PROVEBEFOREACT_BASE_URL", "") or os.getenv("XPROOF_BASE_URL", "") or DEFAULT_BASE_URL).rstrip("/")
         self.timeout = timeout
 
         self._session = requests.Session()
         self._session.headers.update(
             {
                 "Content-Type": "application/json",
-                "User-Agent": f"xproof-python/{__version__}",
+                "User-Agent": f"prove-before-act-python/{__version__}",
             }
         )
-        if api_key:
-            self._session.headers["Authorization"] = f"Bearer {api_key}"
+        if self.api_key:
+            self._session.headers["Authorization"] = f"Bearer {self.api_key}"
 
     def _request(
         self,

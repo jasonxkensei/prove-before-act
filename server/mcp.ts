@@ -1012,7 +1012,7 @@ export async function createMcpServer(ctx: McpContext) {
               mcp: `${baseUrl}/mcp`,
               acp: `${baseUrl}/api/acp/products`,
               openclaw_skill: {
-                url: "https://github.com/jasonxkensei/xproof-openclaw-skill",
+                url: "https://github.com/jasonxkensei/prove-before-act-openclaw-skill",
                 compatibility_note: "The repository name is retained as a legacy distribution identifier.",
               },
               github_action: {

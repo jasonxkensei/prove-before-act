@@ -59,10 +59,10 @@ fetchai = [
 
 [project.urls]
 Homepage = "https://provebeforeact.com"
-Repository = "https://github.com/jasonxkensei/xProof"
+Repository = "https://github.com/jasonxkensei/prove-before-act"
 Documentation = "https://provebeforeact.com/docs"
-Issues = "https://github.com/jasonxkensei/xProof/issues"
-Changelog = "https://github.com/jasonxkensei/xProof/releases"
+Issues = "https://github.com/jasonxkensei/prove-before-act/issues"
+Changelog = "https://github.com/jasonxkensei/prove-before-act/releases"
 
 [tool.setuptools.packages.find]
 include = ["xproof*"]

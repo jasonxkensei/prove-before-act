@@ -9,6 +9,7 @@ import { attestationIssuanceRateLimiter, publicSearchRateLimiter, publicPdfRateL
 import { pgCheckRateLimitBatch } from "../pgRateLimit";
 import { computeTrustScoreByWallet, getCalibrationSummaryByWallet } from "../trust";
 import { isValidWebhookUrl, safeWebhookFetch } from "../webhook";
+import { proofWebhookHeaders } from "../webhookHeaders";
 import { safeErrMsg } from "./helpers";
 
 // Short-lived cache for the per-wallet public-profile visibility flag used by
@@ -275,11 +276,8 @@ export function registerAttestationsRoutes(app: Express) {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                "X-xProof-Signature": signature,
-                "X-xProof-Timestamp": timestamp,
-                "X-xProof-Event": "attestation.revoked",
-                "X-xProof-Delivery": id,
-                "User-Agent": "xProof-Webhook/1.0",
+                ...proofWebhookHeaders(signature, timestamp, "attestation.revoked", id),
+                "User-Agent": "ProveBeforeAct-Webhook/1.0",
               },
               body: payload,
               timeoutMs: 10000,

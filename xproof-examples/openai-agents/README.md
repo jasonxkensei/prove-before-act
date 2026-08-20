@@ -57,5 +57,5 @@ No API key or OpenAI key needed for the demo — runs entirely with simulated ob
 
 - [provebeforeact.com](https://provebeforeact.com)
 - Docs (LLM-readable): [provebeforeact.com/llms.txt](https://provebeforeact.com/llms.txt)
-- [PyPI: Prove Before Act](https://pypi.org/project/xproof)
+- [PyPI: Prove Before Act](https://pypi.org/project/prove-before-act)
 - [OpenAI Agents SDK](https://github.com/openai/openai-agents-python)

@@ -403,7 +403,7 @@ const ENDPOINT_GROUPS: EndpointGroup[] = [
         path: "/api/acp/products",
         auth: "Bearer pm_xxx",
         description: "List available ACP (Agent Commerce Protocol) products for proof purchase with EGLD.",
-        response: `{ "products": [{ "id": "proof-1", "name": "Single Proof", "price_egld": "0.001" }] }`,
+        response: `{ "products": [{ "id": "pba-certification", "name": "Prove Before Act Certification", "pricing": { ... }, "legacy_product_ids": ["xproof-certification"] }] }`,
         curl: `curl ${BASE}/api/acp/products \\
   -H "Authorization: Bearer pm_xxx"`,
       },
@@ -411,13 +411,18 @@ const ENDPOINT_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/acp/checkout",
         auth: "Bearer pm_xxx",
-        description: "Create an ACP checkout session for EGLD payment.",
-        body: { product_id: "string (required)", quantity: "number (optional, default 1)" },
+        description: "Create an ACP checkout session for EGLD payment. Non-admin callers must prove control of the wallet that will pay.",
+        body: {
+          product_id: "pba-certification (required)",
+          inputs: "{ file_hash, filename, author_name? } (required)",
+          payer_wallet: "erd1... wallet that will send EGLD (required)",
+          payer_wallet_signature: "128-char hex Ed25519 signature of pba-acp-checkout:pba-certification:<file_hash>:<payer_wallet> (required)",
+        },
         response: `{ "checkout_id": "uuid", "payment": { "receiver": "erd1...", "amount": "1000000000000000", "data": "..." } }`,
         curl: `curl -X POST ${BASE}/api/acp/checkout \\
   -H "Authorization: Bearer pm_xxx" \\
   -H "Content-Type: application/json" \\
-  -d '{"product_id": "cert-1"}'`,
+  -d '{"product_id":"pba-certification","inputs":{"file_hash":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","filename":"document.pdf"},"payer_wallet":"erd1YOUR_WALLET","payer_wallet_signature":"YOUR_128_CHAR_HEX_ED25519_SIGNATURE"}'`,
       },
       {
         method: "POST",
@@ -526,7 +531,7 @@ const ENDPOINT_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "(your webhook URL)",
         auth: "HMAC-SHA256 signature",
-        description: `When you provide a webhook_url in POST /api/proof or /api/batch, Prove Before Act sends a POST request to your URL when the proof is confirmed on-chain. The request includes an X-xProof-Signature header containing an HMAC-SHA256 signature of the body. For per-proof and per-batch webhooks the signing secret is returned as webhook_secret in the API response — store it securely and use it to verify the signature. For account-level webhooks (set at /api/agents/register) the secret you configured at registration is used instead.`,
+        description: `When you provide a webhook_url in POST /api/proof or /api/batch, Prove Before Act sends a POST request to your URL when the proof is confirmed on-chain. The request includes an X-ProveBeforeAct-Signature header containing an HMAC-SHA256 signature of the body. X-xProof-Signature remains an identical legacy alias while existing integrations migrate. For per-proof and per-batch webhooks the signing secret is returned as webhook_secret in the API response — store it securely and use it to verify the signature. For account-level webhooks (set at /api/agents/register) the secret you configured at registration is used instead.`,
         response: `{
   "event": "proof.confirmed",
   "proof_id": "uuid",
@@ -546,19 +551,19 @@ const ENDPOINT_GROUPS: EndpointGroup[] = [
 # The signing secret is returned as webhook_secret in the /api/proof (or /api/batch) response.
 # Signed message = timestamp + "." + raw_request_body
 # signature = HMAC-SHA256(webhook_secret, signed_message)
-# Compare with X-xProof-Signature header; also validate X-xProof-Timestamp (unix seconds)
+# Compare with X-ProveBeforeAct-Signature; also validate X-ProveBeforeAct-Timestamp (unix seconds)
 # to guard against replay attacks (reject if > 5 minutes old).
 
 # Python example:
 import hmac, hashlib, time
 webhook_secret = b"<your webhook_secret from API response>"
-timestamp = request.headers["X-xProof-Timestamp"]
+timestamp = request.headers["X-ProveBeforeAct-Timestamp"]
 raw_body = request.body  # raw bytes before JSON parsing
 if abs(time.time() - int(timestamp)) > 300:
     raise ValueError("Timestamp too old — possible replay attack")
 signed_message = (timestamp + "." + raw_body.decode()).encode()
 expected = hmac.new(webhook_secret, signed_message, hashlib.sha256).hexdigest()
-assert hmac.compare_digest(expected, request.headers["X-xProof-Signature"])`,
+assert hmac.compare_digest(expected, request.headers["X-ProveBeforeAct-Signature"])`,
       },
     ],
   },

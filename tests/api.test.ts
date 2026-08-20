@@ -25,7 +25,8 @@ describe("Prove Before Act API", () => {
       expect(Array.isArray(body.products)).toBe(true);
       expect(body.products.length).toBeGreaterThan(0);
       const product = body.products[0];
-      expect(product.id).toBe("xproof-certification");
+      expect(product.id).toBe("pba-certification");
+      expect(product.legacy_product_ids).toContain("xproof-certification");
       expect(product.pricing).toBeDefined();
       expect(product.inputs).toBeDefined();
       expect(product.outputs).toBeDefined();
@@ -366,13 +367,11 @@ describe("Prove Before Act API", () => {
   });
 
   describe("MCP Endpoint", () => {
-    it("GET /mcp should return 405 Method Not Allowed", async () => {
+    it("GET /mcp should return indexable MCP connection documentation", async () => {
       const res = await fetch(`${BASE_URL}/mcp`);
-      expect(res.status).toBe(405);
-      const body = await res.json();
-      expect(body.jsonrpc).toBe("2.0");
-      expect(body.error).toBeDefined();
-      expect(body.error.message).toContain("Method not allowed");
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("text/html");
+      expect(await res.text()).toContain("Prove Before Act for AI agents");
     });
   });
 

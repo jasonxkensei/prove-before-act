@@ -1317,7 +1317,7 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
     # Proof is already anchored before this line executes
     await ctx.send(sender, MyResponse(result="processed"))
 
-# Full example: github.com/jasonxkensei/xproof-examples/tree/main/fetchai`} />
+# Full example: github.com/jasonxkensei/prove-before-act-examples/tree/main/fetchai`} />
           </div>
 
           <div className="rounded-md border border-primary/20 bg-primary/5 p-3">

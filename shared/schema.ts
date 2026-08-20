@@ -168,6 +168,8 @@ export interface ACPProduct {
   id: string;
   name: string;
   description: string;
+  /** Historical product IDs still accepted by checkout for migration safety. */
+  legacy_product_ids?: string[];
   pricing: {
     type: "fixed" | "variable";
     amount: string;

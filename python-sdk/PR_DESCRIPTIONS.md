@@ -50,7 +50,7 @@ Prove Before Act's 4W framework solves this:
 
 #### Links
 
-- [Prove Before Act](https://provebeforeact.com) · [API docs](https://provebeforeact.com/docs) · [Python SDK](https://pypi.org/project/xproof/) · [GitHub](https://github.com/jasonxkensei/xProof) · [MCP endpoint](https://provebeforeact.com/mcp)
+- [Prove Before Act](https://provebeforeact.com) · [API docs](https://provebeforeact.com/docs) · [Python SDK](https://pypi.org/project/prove-before-act/) · [GitHub](https://github.com/jasonxkensei/prove-before-act) · [MCP endpoint](https://provebeforeact.com/mcp)
 
 ---
 
@@ -115,7 +115,7 @@ result = await Runner.run(agent, input="Analyze Q3 metrics", hooks=hooks)
 
 #### Links
 
-- [Prove Before Act](https://provebeforeact.com) · [API docs](https://provebeforeact.com/docs) · [Python SDK](https://pypi.org/project/xproof/) · [GitHub](https://github.com/jasonxkensei/xProof) · [MCP endpoint](https://provebeforeact.com/mcp)
+- [Prove Before Act](https://provebeforeact.com) · [API docs](https://provebeforeact.com/docs) · [Python SDK](https://pypi.org/project/prove-before-act/) · [GitHub](https://github.com/jasonxkensei/prove-before-act) · [MCP endpoint](https://provebeforeact.com/mcp)
 
 ---
 
@@ -186,7 +186,7 @@ user_proxy.initiate_chat(assistant, message="Summarize the Q3 earnings report.")
 
 #### Links
 
-- [Prove Before Act](https://provebeforeact.com) · [API docs](https://provebeforeact.com/docs) · [Python SDK](https://pypi.org/project/xproof/) · [GitHub](https://github.com/jasonxkensei/xProof) · [MCP endpoint](https://provebeforeact.com/mcp)
+- [Prove Before Act](https://provebeforeact.com) · [API docs](https://provebeforeact.com/docs) · [Python SDK](https://pypi.org/project/prove-before-act/) · [GitHub](https://github.com/jasonxkensei/prove-before-act) · [MCP endpoint](https://provebeforeact.com/mcp)
 
 ---
 
@@ -260,6 +260,6 @@ response = query_engine.query("What is AI?")
 
 #### Links
 
-- [Prove Before Act](https://provebeforeact.com) · [API docs](https://provebeforeact.com/docs) · [Python SDK](https://pypi.org/project/xproof/) · [GitHub](https://github.com/jasonxkensei/xProof) · [MCP endpoint](https://provebeforeact.com/mcp)
+- [Prove Before Act](https://provebeforeact.com) · [API docs](https://provebeforeact.com/docs) · [Python SDK](https://pypi.org/project/prove-before-act/) · [GitHub](https://github.com/jasonxkensei/prove-before-act) · [MCP endpoint](https://provebeforeact.com/mcp)
 
 ---

@@ -57,13 +57,13 @@ runs:
     - name: Certify files with Prove Before Act
       shell: bash
       env:
-        XPROOF_API_KEY: ${{ inputs.api_key }}
-        XPROOF_FILES: ${{ inputs.files }}
-        XPROOF_AUTHOR: ${{ inputs.author_name }}
-        XPROOF_METADATA: ${{ inputs.metadata }}
-        XPROOF_FAIL_ON_ERROR: ${{ inputs.fail_on_error }}
-        XPROOF_MAX_RETRIES: ${{ inputs.max_retries }}
-        XPROOF_API_URL: ${{ inputs.api_url }}
+        PROVEBEFOREACT_API_KEY: ${{ inputs.api_key }}
+        PROVEBEFOREACT_FILES: ${{ inputs.files }}
+        PROVEBEFOREACT_AUTHOR: ${{ inputs.author_name }}
+        PROVEBEFOREACT_METADATA: ${{ inputs.metadata }}
+        PROVEBEFOREACT_FAIL_ON_ERROR: ${{ inputs.fail_on_error }}
+        PROVEBEFOREACT_MAX_RETRIES: ${{ inputs.max_retries }}
+        PROVEBEFOREACT_API_URL: ${{ inputs.api_url }}
       run: |
         set -uo pipefail
 
@@ -75,18 +75,18 @@ runs:
         COUNT=0
         FAILED=0
         JSON_ARTIFACTS="[]"
-        ATTESTATION_FILE="${RUNNER_TEMP:-/tmp}/xproof-attestation.json"
+        ATTESTATION_FILE="${RUNNER_TEMP:-/tmp}/prove-before-act-attestation.json"
 
         # Validate optional metadata is well-formed JSON before we touch any file.
-        if [ -n "$XPROOF_METADATA" ]; then
-          if ! echo "$XPROOF_METADATA" | jq empty 2>/dev/null; then
-            echo "::error::'metadata' input is not valid JSON: $XPROOF_METADATA"
+        if [ -n "$PROVEBEFOREACT_METADATA" ]; then
+          if ! echo "$PROVEBEFOREACT_METADATA" | jq empty 2>/dev/null; then
+            echo "::error::'metadata' input is not valid JSON: $PROVEBEFOREACT_METADATA"
             exit 1
           fi
         fi
 
         # Expand glob patterns
-        FILES=$(eval echo $XPROOF_FILES)
+        FILES=$(eval echo $PROVEBEFOREACT_FILES)
 
         for file in $FILES; do
           if [ ! -f "$file" ]; then
@@ -105,8 +105,8 @@ runs:
           PAYLOAD=$(jq -n \
             --arg fh "$FILE_HASH" \
             --arg fn "$FILE_NAME" \
-            --arg author "$XPROOF_AUTHOR" \
-            --argjson metadata "${XPROOF_METADATA:-null}" \
+            --arg author "$PROVEBEFOREACT_AUTHOR" \
+            --argjson metadata "${PROVEBEFOREACT_METADATA:-null}" \
             '{file_hash: $fh, filename: $fn}
              + (if $author != "" then {author_name: $author} else {} end)
              + (if $metadata != null then {metadata: $metadata} else {} end)')
@@ -120,8 +120,8 @@ runs:
           while :; do
             ATTEMPT=$((ATTEMPT + 1))
             RESPONSE=$(curl -s --max-time 30 -w "\n%{http_code}" \
-              -X POST "${XPROOF_API_URL}/api/proof" \
-              -H "Authorization: Bearer $XPROOF_API_KEY" \
+              -X POST "${PROVEBEFOREACT_API_URL}/api/proof" \
+              -H "Authorization: Bearer $PROVEBEFOREACT_API_KEY" \
               -H "Content-Type: application/json" \
               -d "$PAYLOAD")
             HTTP_CODE=$(echo "$RESPONSE" | tail -1)
@@ -132,12 +132,12 @@ runs:
             fi
 
             if [ "$HTTP_CODE" = "429" ] || [ "$HTTP_CODE" -ge 500 ]; then
-              if [ "$ATTEMPT" -ge "$XPROOF_MAX_RETRIES" ]; then
+                if [ "$ATTEMPT" -ge "$PROVEBEFOREACT_MAX_RETRIES" ]; then
                 echo "::warning::Giving up on ${FILE_NAME} after ${ATTEMPT} attempts (HTTP ${HTTP_CODE})"
                 break
               fi
               WAIT=$((ATTEMPT * 2))
-              echo "::warning::Transient error certifying ${FILE_NAME} (HTTP ${HTTP_CODE}), retrying in ${WAIT}s (attempt ${ATTEMPT}/${XPROOF_MAX_RETRIES})"
+                echo "::warning::Transient error certifying ${FILE_NAME} (HTTP ${HTTP_CODE}), retrying in ${WAIT}s (attempt ${ATTEMPT}/${PROVEBEFOREACT_MAX_RETRIES})"
               sleep "$WAIT"
               continue
             fi
@@ -152,7 +152,7 @@ runs:
 
             if [ -n "$PROOF_ID" ]; then
               COUNT=$((COUNT + 1))
-              BADGE_URL="${XPROOF_API_URL}/badge/${PROOF_ID}"
+              BADGE_URL="${PROVEBEFOREACT_API_URL}/badge/${PROOF_ID}"
               TX_HASH=$(echo "$BODY" | jq -r '.blockchain.transaction_hash // .tx_hash // empty')
               EXPLORER_URL=$(echo "$BODY" | jq -r '.blockchain.explorer_url // empty')
 
@@ -215,6 +215,7 @@ runs:
             --arg run_id "${GITHUB_RUN_ID:-unknown}" \
             --argjson artifacts "$JSON_ARTIFACTS" \
             '{
+              "prove_before_act_attestation": $version,
               "xproof_attestation": $version,
               "timestamp": $timestamp,
               "blockchain": $blockchain,
@@ -250,7 +251,7 @@ runs:
           echo "::warning::No files were certified"
         fi
 
-        if [ "$FAILED" -gt 0 ] && [ "$XPROOF_FAIL_ON_ERROR" = "true" ]; then
+        if [ "$FAILED" -gt 0 ] && [ "$PROVEBEFOREACT_FAIL_ON_ERROR" = "true" ]; then
           echo "::error::${FAILED} file(s) failed to certify and fail_on_error is 'true'"
           exit 1
         fi

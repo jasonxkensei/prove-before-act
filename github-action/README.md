@@ -1,8 +1,8 @@
 # Prove Before Act Certify — GitHub Action
 
-[![Marketplace](https://img.shields.io/badge/Marketplace-xProof%20Certify-blue?logo=github)](https://github.com/marketplace/actions/xproof-certify)
+[![Marketplace](https://img.shields.io/badge/Marketplace-Prove%20Before%20Act%20Certify-blue?logo=github)](https://github.com/marketplace/actions/xproof-certify)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
-[![Release](https://img.shields.io/github/v/release/jasonxkensei/xProof-Action)](https://github.com/jasonxkensei/xProof-Action/releases)
+[![Release](https://img.shields.io/github/v/release/jasonxkensei/prove-before-act-action)](https://github.com/jasonxkensei/prove-before-act-action/releases)
 
 > Anchor a verifiable, on-chain proof of your build artifacts and AI agent outputs — in 3 lines of YAML.
 
@@ -11,7 +11,7 @@ Certify build artifacts (or anything hashable) on the MultiversX blockchain dire
 ## Get started in 2 minutes
 
 1. Grab an API key: sign in at [provebeforeact.com](https://provebeforeact.com), connect a wallet, and create a key under **Settings → API Keys** ([direct link](https://provebeforeact.com/settings)).
-2. Add it to your repo as a secret named `XPROOF_API_KEY` (**Settings → Secrets and variables → Actions**).
+2. Add it to your repo as a secret named `PROVEBEFOREACT_API_KEY` (**Settings → Secrets and variables → Actions**). `XPROOF_API_KEY` remains a legacy name for existing repositories.
 3. Drop this into any workflow:
 
 ```yaml
@@ -30,15 +30,15 @@ jobs:
         run: npm run build && zip -r build.zip dist/
 
       - name: Certify with Prove Before Act
-        uses: jasonxkensei/xProof-Action@v1
+        uses: jasonxkensei/prove-before-act-action@v1
         with:
-          api_key: ${{ secrets.XPROOF_API_KEY }}
+          api_key: ${{ secrets.PROVEBEFOREACT_API_KEY }}
           files: 'build.zip'
 ```
 
 That's it — every push to `main` now anchors a tamper-evident proof of your build artifact on-chain.
 
-> **No API key yet, or building an autonomous agent instead of a CI pipeline?** Prove Before Act also supports pay-per-call certification with no account via the **x402** protocol (USDC on Base), through the [`prove-before-act` npm SDK](https://www.npmjs.com/package/prove-before-act) or [`Prove Before Act` PyPI SDK](https://pypi.org/project/xproof/). This GitHub Action always uses an API key because CI runners need a stable, revocable credential rather than a per-call wallet signature.
+> **No API key yet, or building an autonomous agent instead of a CI pipeline?** Prove Before Act also supports pay-per-call certification with no account via the **x402** protocol (USDC on Base), through the [`prove-before-act` npm SDK](https://www.npmjs.com/package/prove-before-act) or [`prove-before-act` PyPI SDK](https://pypi.org/project/prove-before-act/). This GitHub Action always uses an API key because CI runners need a stable, revocable credential rather than a per-call wallet signature.
 
 ## Inputs
 
@@ -71,9 +71,9 @@ That's it — every push to `main` now anchors a tamper-evident proof of your bu
 
 ```yaml
 - name: Certify
-  uses: jasonxkensei/xProof-Action@v1
+  uses: jasonxkensei/prove-before-act-action@v1
   with:
-    api_key: ${{ secrets.XPROOF_API_KEY }}
+    api_key: ${{ secrets.PROVEBEFOREACT_API_KEY }}
     files: 'release.tar.gz'
 ```
 
@@ -82,9 +82,9 @@ That's it — every push to `main` now anchors a tamper-evident proof of your bu
 ```yaml
 - name: Certify
   id: certify
-  uses: jasonxkensei/xProof-Action@v1
+  uses: jasonxkensei/prove-before-act-action@v1
   with:
-    api_key: ${{ secrets.XPROOF_API_KEY }}
+    api_key: ${{ secrets.PROVEBEFOREACT_API_KEY }}
     files: 'build.zip package.json contracts/main.sol'
     author_name: 'CI Bot'
 
@@ -101,9 +101,9 @@ Any file can be certified — including a JSON dump of an agent's reasoning trac
   run: node ./scripts/export-agent-output.js > agent-output.json
 
 - name: Certify agent output
-  uses: jasonxkensei/xProof-Action@v1
+  uses: jasonxkensei/prove-before-act-action@v1
   with:
-    api_key: ${{ secrets.XPROOF_API_KEY }}
+    api_key: ${{ secrets.PROVEBEFOREACT_API_KEY }}
     files: 'agent-output.json'
     author_name: 'trading-agent-v3'
     metadata: '{"model_hash":"sha256:abc123...","strategy_hash":"sha256:def456...","confidence_level":0.92,"decision_id":"trade-2026-07-08-001","threshold_stage":"final"}'
@@ -125,9 +125,9 @@ jobs:
 
       - name: Certify with Prove Before Act
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: jasonxkensei/xProof-Action@v1
+        uses: jasonxkensei/prove-before-act-action@v1
         with:
-          api_key: ${{ secrets.XPROOF_API_KEY }}
+          api_key: ${{ secrets.PROVEBEFOREACT_API_KEY }}
           files: 'build.zip'
 ```
 
@@ -136,9 +136,9 @@ jobs:
 ```yaml
 - name: Certify
   id: certify
-  uses: jasonxkensei/xProof-Action@v1
+  uses: jasonxkensei/prove-before-act-action@v1
   with:
-    api_key: ${{ secrets.XPROOF_API_KEY }}
+    api_key: ${{ secrets.PROVEBEFOREACT_API_KEY }}
     files: 'build.zip'
 
 - name: Upload attestation to Release
@@ -151,6 +151,7 @@ The attestation JSON contains full provenance data:
 
 ```json
 {
+  "prove_before_act_attestation": "1.0",
   "xproof_attestation": "1.0",
   "timestamp": "2026-02-12T10:30:00Z",
   "blockchain": "MultiversX",
@@ -188,9 +189,9 @@ By default the step fails the job if any file couldn't be certified (`fail_on_er
 
 ```yaml
 - name: Certify with Prove Before Act
-  uses: jasonxkensei/xProof-Action@v1
+  uses: jasonxkensei/prove-before-act-action@v1
   with:
-    api_key: ${{ secrets.XPROOF_API_KEY }}
+    api_key: ${{ secrets.PROVEBEFOREACT_API_KEY }}
     files: 'build.zip'
     fail_on_error: 'false'
 ```

@@ -48,9 +48,10 @@ export function registerAcpRoutes(app: Express) {
     
     const products: ACPProduct[] = [
       {
-        id: "xproof-certification",
+        id: "pba-certification",
         name: "Prove Before Act Certification",
-        description: "Prove Before Act creates cryptographic proof of existence and integrity for digital files on the MultiversX blockchain. It records a SHA-256 hash with a timestamp, providing immutable evidence at a specific point in time. The product ID xproof-certification is a legacy compatibility identifier.",
+        description: "Prove Before Act creates cryptographic proof of existence and integrity for digital files on the MultiversX blockchain. It records a SHA-256 hash with a timestamp, providing immutable evidence at a specific point in time. The historical product ID xproof-certification remains accepted as a legacy compatibility alias.",
+        legacy_product_ids: ["xproof-certification"],
         pricing: {
           type: "fixed",
           amount: priceUsd.toString(),
@@ -73,9 +74,9 @@ export function registerAcpRoutes(app: Express) {
         checkout_requirements: {
           payer_wallet: "Required (non-admin). The MultiversX wallet address (erd1...) that will send the EGLD payment.",
           payer_wallet_signature: "Required (non-admin). Hex-encoded Ed25519 signature proving you control payer_wallet. Must be 64 bytes (128 hex chars).",
-          message_format: "xproof-acp-checkout:<product_id>:<file_hash>:<payer_wallet>",
-          message_format_example: "xproof-acp-checkout:xproof-certification:<sha256_file_hash>:<erd1...>",
-          signing_algorithm: "Ed25519 raw signature (no MultiversX prefix) over UTF-8 message bytes using the private key corresponding to payer_wallet's public key. Sign then hex-encode the 64-byte signature.",
+          message_format: "pba-acp-checkout:<product_id>:<file_hash>:<payer_wallet>",
+          message_format_example: "pba-acp-checkout:pba-certification:<sha256_file_hash>:<erd1...>",
+          signing_algorithm: "Ed25519 raw signature (no MultiversX prefix) over UTF-8 message bytes using the private key corresponding to payer_wallet's public key. Sign then hex-encode the 64-byte signature. Legacy xproof-certification requests continue to use xproof-acp-checkout:<product_id>:<file_hash>:<payer_wallet>.",
         },
       },
     ];
@@ -95,7 +96,8 @@ export function registerAcpRoutes(app: Express) {
       const data = acpCheckoutRequestSchema.parse(req.body);
 
       // Validate product exists
-      if (data.product_id !== "xproof-certification") {
+      const isLegacyProductId = data.product_id === "xproof-certification";
+      if (data.product_id !== "pba-certification" && !isLegacyProductId) {
         return res.status(404).json({ 
           error: "PRODUCT_NOT_FOUND",
           message: "Unknown product ID" 
@@ -227,19 +229,22 @@ export function registerAcpRoutes(app: Express) {
       // This prevents a third party from observing a pending checkout for a file they control
       // and then using the legitimate payer's tx_hash to confirm it.
       // Ownership proof: caller must also supply a valid Ed25519 signature over the deterministic
-      // message "xproof-acp-checkout:<product_id>:<file_hash>:<payer_wallet>" signed by the
+      // message "pba-acp-checkout:<product_id>:<file_hash>:<payer_wallet>" signed by the
+      // payer's key. Legacy xproof-certification callers continue to use their
+      // historical xproof-acp-checkout message prefix.
       // private key corresponding to payer_wallet's public key. This mirrors the EIP-191 ownership
       // proof used by the Base credit-purchase flow (server/routes/credits.ts:73-103).
       let payerWallet: string | null = null;
       if (!acpAdminExempt) {
         const raw = (data.payer_wallet || "").trim();
         if (!raw.startsWith("erd1") || raw.length < 60) {
-          const ownershipMessage = `xproof-acp-checkout:${data.product_id}:${data.inputs.file_hash}:<payer_wallet>`;
+          const checkoutMessagePrefix = isLegacyProductId ? "xproof-acp-checkout" : "pba-acp-checkout";
+          const ownershipMessage = `${checkoutMessagePrefix}:${data.product_id}:${data.inputs.file_hash}:<payer_wallet>`;
           return res.status(400).json({
             error: "PAYER_WALLET_REQUIRED",
             message: "Provide the MultiversX wallet address (erd1...) that will send the EGLD payment as payer_wallet, along with payer_wallet_signature proving you control it.",
             message_to_sign: ownershipMessage.replace("<payer_wallet>", "<your_erd1_address>"),
-            message_format: "xproof-acp-checkout:<product_id>:<file_hash>:<payer_wallet>",
+            message_format: `${checkoutMessagePrefix}:<product_id>:<file_hash>:<payer_wallet>`,
           });
         }
 
@@ -247,7 +252,8 @@ export function registerAcpRoutes(app: Express) {
         // Without this, any API-key holder could claim any victim's wallet address and either
         // block them from creating their own checkout (DoS) or pre-populate the expectedSender
         // binding so a victim's future payment gets attributed to the attacker's checkout.
-        const ownershipMessage = `xproof-acp-checkout:${data.product_id}:${data.inputs.file_hash}:${raw}`;
+        const checkoutMessagePrefix = isLegacyProductId ? "xproof-acp-checkout" : "pba-acp-checkout";
+        const ownershipMessage = `${checkoutMessagePrefix}:${data.product_id}:${data.inputs.file_hash}:${raw}`;
         if (!data.payer_wallet_signature) {
           return res.status(400).json({
             error: "SIGNATURE_REQUIRED",
@@ -1118,7 +1124,7 @@ export function registerAcpRoutes(app: Express) {
           Product: {
             type: "object",
             properties: {
-              id: { type: "string", example: "xproof-certification" },
+              id: { type: "string", example: "pba-certification", description: "Canonical product ID. The legacy xproof-certification alias is also accepted." },
               name: { type: "string", example: "Prove Before Act Certification" },
               description: { type: "string" },
               pricing: {
@@ -1137,7 +1143,7 @@ export function registerAcpRoutes(app: Express) {
             type: "object",
             required: ["product_id", "inputs"],
             properties: {
-              product_id: { type: "string", example: "xproof-certification" },
+              product_id: { type: "string", example: "pba-certification", description: "Use pba-certification. The legacy xproof-certification alias remains accepted." },
               inputs: {
                 type: "object",
                 required: ["file_hash", "filename"],
@@ -1148,6 +1154,8 @@ export function registerAcpRoutes(app: Express) {
                   metadata: { type: "object", description: "Optional JSON metadata. Supports model_hash, strategy_hash, version_number, and any custom fields. Searchable via GET /api/proofs/search.", properties: { model_hash: { type: "string" }, strategy_hash: { type: "string" }, version_number: { type: "string" } }, additionalProperties: true },
                 },
               },
+              payer_wallet: { type: "string", example: "erd1...", description: "Required for non-admin checkout: the MultiversX wallet that will send payment." },
+              payer_wallet_signature: { type: "string", example: "128-char-hex-Ed25519-signature", description: "Required for non-admin checkout. Sign pba-acp-checkout:<product_id>:<file_hash>:<payer_wallet> with payer_wallet's private key." },
               buyer: {
                 type: "object",
                 properties: {
@@ -1409,7 +1417,7 @@ export function registerAcpRoutes(app: Express) {
                       file_hash: { type: "string", description: "SHA-256 hash of the file (64 hex chars)", example: "a1b2c3d4e5f678901234567890123456789012345678901234567890123456ab" },
                       filename: { type: "string", example: "document.pdf" },
                       author_name: { type: "string", example: "AI Agent", description: "Optional author name" },
-                      webhook_url: { type: "string", format: "uri", description: "Optional HTTPS URL to receive a POST notification when the proof is confirmed on-chain. Payload includes proof_id, file_hash, verify_url, blockchain details. Signed with X-xProof-Signature (HMAC-SHA256).", example: "https://your-agent.example.com/webhooks/xproof" },
+                      webhook_url: { type: "string", format: "uri", description: "Optional HTTPS URL to receive a POST notification when the proof is confirmed on-chain. Payload includes proof_id, file_hash, verify_url, blockchain details. Signed with X-ProveBeforeAct-Signature (HMAC-SHA256); X-xProof-Signature is a legacy alias.", example: "https://your-agent.example.com/webhooks/prove-before-act" },
                     },
                   },
                 },

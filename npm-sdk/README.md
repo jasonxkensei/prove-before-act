@@ -1,6 +1,6 @@
 # Prove Before Act
 
-[![npm SDK CI](https://github.com/jasonxkensei/xProof/actions/workflows/npm-sdk.yml/badge.svg?branch=main)](https://github.com/jasonxkensei/xProof/actions/workflows/npm-sdk.yml) [![npm version](https://img.shields.io/npm/v/prove-before-act)](https://www.npmjs.com/package/prove-before-act) [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
+[![npm SDK CI](https://github.com/jasonxkensei/prove-before-act/actions/workflows/npm-sdk.yml/badge.svg?branch=main)](https://github.com/jasonxkensei/prove-before-act/actions/workflows/npm-sdk.yml) [![npm version](https://img.shields.io/npm/v/prove-before-act)](https://www.npmjs.com/package/prove-before-act) [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
 
 On-chain decision provenance for autonomous agents. **WHY before acting. WHAT after.** Timestamps written by the chain, not your agent.
 
@@ -65,6 +65,15 @@ curl -X POST https://provebeforeact.com/api/proof \
 ```
 
 When something goes wrong, you don't guess. You verify.
+
+---
+
+### Environment variables
+
+For server-side integrations, `XProofClient` automatically reads
+`PROVEBEFOREACT_API_KEY` and `PROVEBEFOREACT_BASE_URL` when options are omitted.
+The historical `XPROOF_API_KEY` and `XPROOF_BASE_URL` names remain supported as
+legacy fallbacks.
 
 ---
 
@@ -531,8 +540,8 @@ If you use VS Code, install the [ESLint extension](https://marketplace.visualstu
 ## Links
 
 - [provebeforeact.com](https://provebeforeact.com) — dashboard & docs
-- [Python SDK](https://pypi.org/project/xproof/) — `pip install xproof`
-- [Examples](https://github.com/jasonxkensei/xproof-examples) — LangChain, CrewAI, AutoGen, LlamaIndex
+- [Python SDK](https://pypi.org/project/prove-before-act/) — `pip install prove-before-act`
+- [Examples](https://github.com/jasonxkensei/prove-before-act-examples) — LangChain, CrewAI, AutoGen, LlamaIndex
 
 ## License
 

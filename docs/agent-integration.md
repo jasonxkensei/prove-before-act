@@ -23,6 +23,7 @@ AI agents can automatically discover Prove Before Act through several standardiz
 |-----|----------|-------------|
 | `/.well-known/ai-plugin.json` | OpenAI Plugin | ChatGPT Plugin manifest with auth and API info |
 | `/.well-known/mcp.json` | MCP | Model Context Protocol manifest |
+| `/mcp` | MCP | Indexable connection guide on GET; JSON-RPC Streamable HTTP transport on POST |
 | `/.well-known/agent.json` | Agent Protocol | General-purpose agent discovery |
 | `/.well-known/provebeforeact.md` | Custom | Full service specification in Markdown |
 
@@ -97,12 +98,12 @@ import hashlib
 import requests
 from langchain.tools import tool
 
-XPROOF_BASE_URL = "https://provebeforeact.com"
-XPROOF_API_KEY = "pm_your_api_key_here"
+PROVEBEFOREACT_BASE_URL = "https://provebeforeact.com"
+PROVEBEFOREACT_API_KEY = "pm_your_api_key_here"
 
 HEADERS = {
     "Content-Type": "application/json",
-    "Authorization": f"Bearer {XPROOF_API_KEY}",
+    "Authorization": f"Bearer {PROVEBEFOREACT_API_KEY}",
 }
 
 
@@ -131,15 +132,26 @@ def certify_file(file_path: str, author_name: str = "") -> str:
     with open(file_path, "rb") as f:
         file_hash = compute_sha256(f.read())
 
-    # Step 1: Start checkout
+    # Step 1: Prove control of the wallet that will pay. Sign this exact
+    # pba-acp-checkout message with the payer wallet's Ed25519 private key.
+    payer_wallet = "erd1_your_payer_wallet"
+    payer_wallet_signature = sign_checkout_message(
+        f"pba-acp-checkout:pba-certification:{file_hash}:{payer_wallet}"
+    )
+
+    # Step 2: Start checkout
     checkout_resp = requests.post(
-        f"{XPROOF_BASE_URL}/api/acp/checkout",
+        f"{PROVEBEFOREACT_BASE_URL}/api/acp/checkout",
         headers=HEADERS,
         json={
-            "product_id": "blockchain-certification",
-            "file_hash": file_hash,
-            "file_name": file_name,
-            "author_name": author_name,
+            "product_id": "pba-certification",
+            "inputs": {
+                "file_hash": file_hash,
+                "filename": file_name,
+                "author_name": author_name,
+            },
+            "payer_wallet": payer_wallet,
+            "payer_wallet_signature": payer_wallet_signature,
         },
     )
     checkout_resp.raise_for_status()
@@ -155,7 +167,7 @@ def certify_file(file_path: str, author_name: str = "") -> str:
 
     # Step 3: Confirm the checkout
     confirm_resp = requests.post(
-        f"{XPROOF_BASE_URL}/api/acp/confirm",
+        f"{PROVEBEFOREACT_BASE_URL}/api/acp/confirm",
         headers=HEADERS,
         json={
             "checkout_id": checkout_id,
@@ -178,6 +190,11 @@ def send_egld_payment(address: str, amount: str) -> str:
     raise NotImplementedError(
         "Implement EGLD payment using your wallet provider."
     )
+
+
+def sign_checkout_message(message: str) -> str:
+    """Sign with the payment wallet's Ed25519 private key; return 128-char hex."""
+    raise NotImplementedError("Implement with your MultiversX wallet SDK.")
 ```
 
 ### Step 3: Register with Your Agent
@@ -219,12 +236,12 @@ import requests
 from crewai import Agent, Task, Crew
 from crewai.tools import tool
 
-XPROOF_BASE_URL = "https://provebeforeact.com"
-XPROOF_API_KEY = "pm_your_api_key_here"
+PROVEBEFOREACT_BASE_URL = "https://provebeforeact.com"
+PROVEBEFOREACT_API_KEY = "pm_your_api_key_here"
 
 HEADERS = {
     "Content-Type": "application/json",
-    "Authorization": f"Bearer {XPROOF_API_KEY}",
+    "Authorization": f"Bearer {PROVEBEFOREACT_API_KEY}",
 }
 
 
@@ -245,15 +262,24 @@ def certify_file_tool(file_path: str, author_name: str = "") -> str:
     with open(file_path, "rb") as f:
         file_hash = hashlib.sha256(f.read()).hexdigest()
 
+    payer_wallet = "erd1_your_payer_wallet"
+    payer_wallet_signature = sign_checkout_message(
+        f"pba-acp-checkout:pba-certification:{file_hash}:{payer_wallet}"
+    )
+
     # Start checkout
     checkout = requests.post(
-        f"{XPROOF_BASE_URL}/api/acp/checkout",
+        f"{PROVEBEFOREACT_BASE_URL}/api/acp/checkout",
         headers=HEADERS,
         json={
-            "product_id": "blockchain-certification",
-            "file_hash": file_hash,
-            "file_name": file_name,
-            "author_name": author_name,
+            "product_id": "pba-certification",
+            "inputs": {
+                "file_hash": file_hash,
+                "filename": file_name,
+                "author_name": author_name,
+            },
+            "payer_wallet": payer_wallet,
+            "payer_wallet_signature": payer_wallet_signature,
         },
     ).json()
 
@@ -265,7 +291,7 @@ def certify_file_tool(file_path: str, author_name: str = "") -> str:
 
     # Confirm
     result = requests.post(
-        f"{XPROOF_BASE_URL}/api/acp/confirm",
+        f"{PROVEBEFOREACT_BASE_URL}/api/acp/confirm",
         headers=HEADERS,
         json={"checkout_id": checkout["checkout_id"], "tx_hash": tx_hash},
     ).json()
@@ -276,6 +302,11 @@ def certify_file_tool(file_path: str, author_name: str = "") -> str:
 def send_egld_payment(address: str, amount: str) -> str:
     """Implement EGLD payment with your wallet provider."""
     raise NotImplementedError("Implement EGLD payment.")
+
+
+def sign_checkout_message(message: str) -> str:
+    """Sign with the payment wallet's Ed25519 private key; return 128-char hex."""
+    raise NotImplementedError("Implement with your MultiversX wallet SDK.")
 
 
 # Define agent and task
@@ -374,8 +405,8 @@ Response:
 {
   "products": [
     {
-      "id": "blockchain-certification",
-      "name": "Blockchain File Certification",
+      "id": "pba-certification",
+      "name": "Prove Before Act Certification",
       "pricing": {
         "amount": "0.01",
         "currency": "USD",
@@ -395,15 +426,29 @@ sha256sum report.pdf
 
 **Step 3: Create a checkout**
 
+Before calling checkout, sign this exact UTF-8 message with the Ed25519 private
+key of the wallet that will send the EGLD payment:
+
+```text
+pba-acp-checkout:pba-certification:<file_hash>:<payer_wallet>
+```
+
+Send the resulting 64-byte signature as a 128-character hexadecimal
+`payer_wallet_signature`.
+
 ```bash
 curl -X POST https://provebeforeact.com/api/acp/checkout \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer pm_your_api_key" \
   -d '{
-    "product_id": "blockchain-certification",
-    "file_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "file_name": "report.pdf",
-    "author_name": "Alice"
+    "product_id": "pba-certification",
+    "inputs": {
+      "file_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "filename": "report.pdf",
+      "author_name": "Alice"
+    },
+    "payer_wallet": "erd1YOUR_PAYER_WALLET",
+    "payer_wallet_signature": "YOUR_128_CHAR_HEX_ED25519_SIGNATURE"
   }'
 ```
 
@@ -542,7 +587,7 @@ After certification, proofs are publicly accessible in multiple formats:
 |-----------|-------|------------|
 | 401 | Missing or invalid API key | Verify the `Authorization` header contains `Bearer pm_<key>` |
 | 400 | Invalid file hash format | Ensure the hash is a 64-character lowercase hexadecimal string |
-| 400 | Invalid product_id | Use `blockchain-certification` as the product ID |
+| 400 | Invalid product_id or checkout ownership proof | Use `pba-certification`; provide the payer wallet and its valid Ed25519 signature over the documented `pba-acp-checkout` message |
 | 409 | File hash already certified | The same file content has been certified before; retrieve the existing proof |
 | 410 | Checkout expired | Checkouts expire after 30 minutes; create a new one |
 | 500 | Server error | Retry after a short delay; check `/api/acp/health` for service status |

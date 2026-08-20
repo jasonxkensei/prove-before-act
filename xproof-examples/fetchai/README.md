@@ -96,4 +96,4 @@ No API key needed — the demo uses mocked responses. To certify on-chain for re
 
 - SDK: `pip install xproof`
 - Docs (LLM-readable): [provebeforeact.com/llms.txt](https://provebeforeact.com/llms.txt)
-- GitHub: [github.com/jasonxkensei/xProof](https://github.com/jasonxkensei/xProof)
+- GitHub: [github.com/jasonxkensei/prove-before-act](https://github.com/jasonxkensei/prove-before-act)
