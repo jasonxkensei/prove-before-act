@@ -1,6 +1,6 @@
 ---
 name: Prove Before Act
-version: 3.3.12
+version: 3.3.14
 description: Prove Before Act accountability integration for AI agents. REST API, MCP, and x402. The @jasonxkensei/xproof ClawHub slug is a legacy compatibility identifier.
 homepage: https://provebeforeact.com
 metadata: {"prove-before-act": {"category":"proof,security,compliance,accountability,prove-before-act","api_base":"https://provebeforeact.com"}}
@@ -78,6 +78,31 @@ Use this four-step path to create a verified record without exposing the origina
 2. **Hash locally** — compute a SHA-256 hash of the decision or output. Do not send raw text, files, prompts, or credentials.
 3. **Anchor** — call `certify_file` through MCP or `POST /api/proof` with the hash and a filename.
 4. **Verify before relying on it** — retain the returned `proof_id` and use `verify_proof` or `GET /api/proof/<proof_id>` until the status is confirmed. Your own operator policy decides whether to continue, retry, request review, or block an action.
+
+## Python SDK quick start
+
+Install the canonical package:
+
+```bash
+pip install prove-before-act
+```
+
+Then import its supported `xproof` module namespace and hash the content locally:
+
+```python
+import hashlib
+import json
+
+from xproof import XProofClient
+
+decision = {"action": "publish report", "reason": "approved by operator"}
+sha256_hex = hashlib.sha256(
+    json.dumps(decision, sort_keys=True).encode("utf-8"),
+).hexdigest()
+
+client = XProofClient.register("my-agent")
+proof = client.certify_hash(sha256_hex, "decision.json", "my-agent")
+```
 
 ## Data & Privacy
 
