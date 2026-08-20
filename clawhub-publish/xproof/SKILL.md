@@ -1,16 +1,16 @@
 ---
 name: Prove Before Act
-version: 3.3.8
-description: Prove Before Act accountability integration for AI agents. REST API, MCP, and x402. Check live endpoints for available capabilities, pricing, and proof status.
+version: 3.3.14
+description: Prove Before Act accountability integration for AI agents. REST API, MCP, and x402. The @jasonxkensei/xproof ClawHub slug is a legacy compatibility identifier.
 homepage: https://provebeforeact.com
 metadata: {"prove-before-act": {"category":"proof,security,compliance,accountability,prove-before-act","api_base":"https://provebeforeact.com"}}
 ---
 
-# Prove Before Act -- Prove Before & After Act — Accountability Layer for AI Agents
+# Prove Before Act — Accountability Layer for AI Agents
 
 This skill describes how to anchor reasoning (WHY) before an action and its result (WHAT) afterwards with Prove Before Act. It provides an auditable record when the returned proof is confirmed; it does not itself enforce an execution policy.
 
-> **Current product and compatibility notice:** Prove Before Act is the product name. `xproof`, `XProofClient`, `XPROOF_*`, `xProof-Action`, and `jasonxkensei/xProof` are legacy package, protocol, action, or repository identifiers retained for compatibility. MX-8004 support is not active unless `GET /api/mx8004/status` reports `status: "active"`; the current production response is `status: "not_configured"`.
+> **Current product and compatibility notice:** Prove Before Act is the product name. The ClawHub install slug `@jasonxkensei/xproof` is retained as a legacy compatibility identifier for existing OpenClaw installations. Install the canonical Python package as `prove-before-act`; its supported Python module namespace is `xproof`. `XProofClient`, `XPROOF_*`, `xProof-Action`, and `jasonxkensei/xProof` are legacy protocol, action, or repository identifiers retained for compatibility. MX-8004 support is not active unless `GET /api/mx8004/status` reports `status: "active"`; the current production response is `status: "not_configured"`.
 
 ## The Core Pattern: Prove Before & After Act
 
@@ -70,6 +70,40 @@ done
 
 > **Source verification:** All files above are served from `github.com/jasonxkensei/prove-before-act` — the canonical repository for the server code, contracts, and SDKs.
 
+## First successful integration
+
+Use this four-step path to create a verified record without exposing the original content:
+
+1. **Install** — run `openclaw skills install @jasonxkensei/xproof`. Its package slug is legacy; the installed skill and product are **Prove Before Act**.
+2. **Hash locally** — compute a SHA-256 hash of the decision or output. Do not send raw text, files, prompts, or credentials.
+3. **Anchor** — call `certify_file` through MCP or `POST /api/proof` with the hash and a filename.
+4. **Verify before relying on it** — retain the returned `proof_id` and use `verify_proof` or `GET /api/proof/<proof_id>` until the status is confirmed. Your own operator policy decides whether to continue, retry, request review, or block an action.
+
+## Python SDK quick start
+
+Install the canonical package:
+
+```bash
+pip install prove-before-act
+```
+
+Then import its supported `xproof` module namespace and hash the content locally:
+
+```python
+import hashlib
+import json
+
+from xproof import XProofClient
+
+decision = {"action": "publish report", "reason": "approved by operator"}
+sha256_hex = hashlib.sha256(
+    json.dumps(decision, sort_keys=True).encode("utf-8"),
+).hexdigest()
+
+client = XProofClient.register("my-agent")
+proof = client.certify_hash(sha256_hex, "decision.json", "my-agent")
+```
+
 ## Data & Privacy
 
 > **Transparency notice — what leaves your environment when using this skill.**
@@ -98,7 +132,7 @@ done
 - **NEVER send plaintext content to provebeforeact.com** -- always hash locally first (`sha256sum`, `crypto.subtle.digest`, or equivalent). The only field Prove Before Act accepts is `file_hash` (64-char SHA-256 hex). No raw text, documents, or binary data should ever leave your environment.
 - **x402 is opt-in and autonomous** -- once enabled, your agent can initiate USDC payments on Base without per-transaction confirmation. Configure a spending cap in your agent framework and require human approval above your threshold before enabling x402 in production.
 - **`llms.txt` and `llms-full.txt` are static documentation references** -- load them once at install time for API reference, not at runtime on every call. Fetching them dynamically on each invocation creates an unnecessary runtime dependency on provebeforeact.com availability and a potential prompt-injection surface if the file is ever compromised.
-- **Guard/enforcement templates are versioned in the repository** -- never fetch agent enforcement code from a runtime URL. Use the pinned versions in `references/` or the SDK packages (`xproof` on PyPI, `prove-before-act` on npm).
+- **Guard/enforcement templates are versioned in the repository** -- never fetch agent enforcement code from a runtime URL. Use the pinned versions in `references/` or the canonical `prove-before-act` SDK package on PyPI and npm. Python users install `prove-before-act` and import its supported `xproof` module namespace.
 
 ---
 

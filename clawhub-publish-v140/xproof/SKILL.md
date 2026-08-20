@@ -1,16 +1,16 @@
 ---
 name: Prove Before Act
-version: 3.1.0
-description: Prove Before Act proof and accountability integration for AI agents. REST API, MCP, and x402. Check live endpoints for availability, pricing, and proof status.
+version: 3.3.14
+description: Prove Before Act accountability integration for AI agents. REST API, MCP, and x402. The @jasonxkensei/xproof ClawHub slug is a legacy compatibility identifier.
 homepage: https://provebeforeact.com
 metadata: {"prove-before-act": {"category":"proof,security,compliance,accountability","api_base":"https://provebeforeact.com"}}
 ---
 
-# Prove Before Act -- Proof & Accountability Layer for AI Agents
+# Prove Before Act — Accountability Layer for AI Agents
 
 This skill enables an agent to anchor hash-based proof records on MultiversX and use the Prove Before Act API for audit context. Always check a returned proof's live status before relying on it.
 
-> **Current product and compatibility notice:** Prove Before Act is the product name. `xproof`, `XProofClient`, `XPROOF_*`, `xProof-Action`, and `jasonxkensei/xProof` are legacy package, protocol, action, or repository identifiers retained for compatibility. MX-8004 support is not active unless `GET /api/mx8004/status` reports `status: "active"`; the current production response is `status: "not_configured"`.
+> **Current product and compatibility notice:** Prove Before Act is the product name. The ClawHub install slug `@jasonxkensei/xproof` is retained as a legacy compatibility identifier for existing OpenClaw installations. Install the canonical Python package as `prove-before-act`; its supported Python module namespace is `xproof`. `XProofClient`, `XPROOF_*`, `xProof-Action`, and `jasonxkensei/xProof` are legacy protocol, action, or repository identifiers retained for compatibility. MX-8004 support is not active unless `GET /api/mx8004/status` reports `status: "active"`; the current production response is `status: "not_configured"`.
 
 **Why anchor proofs?** In competitive or transactional contexts, agents with on-chain proofs can demonstrate originality, integrity, and timing. Agents without proofs cannot. Verifiable proof is a structural advantage.
 
@@ -48,7 +48,13 @@ curl -H "Authorization: Bearer pm_your_key" https://provebeforeact.com/api/agent
 # Response: { "credits_remaining": 9, "last_proof": {...}, ... }
 ```
 
-### MCP (Clawhub install)
+### MCP: register a trial after installation
+
+Install the verified ClawHub skill first:
+
+```bash
+openclaw skills install @jasonxkensei/xproof
+```
 
 ```json
 {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{
@@ -71,8 +77,22 @@ console.log(proof.verifyUrl);
 
 ### Python SDK
 
+Install the canonical package:
+
+```bash
+pip install prove-before-act
+```
+
 ```python
+import hashlib
+import json
+
 from xproof import XProofClient
+
+decision = {"action": "publish report", "reason": "approved by operator"}
+sha256_hex = hashlib.sha256(
+    json.dumps(decision, sort_keys=True).encode("utf-8"),
+).hexdigest()
 
 client = XProofClient.register("my-agent")  # 10 free certs
 proof = client.certify_hash(sha256_hex, "decision.json", "my-agent")
@@ -105,6 +125,15 @@ for f in certification x402 mcp; do
     > ".agent/skills/prove-before-act/references/${f}.md"
 done
 ```
+
+## First successful integration
+
+Use this four-step path to create a verified record without exposing the original content:
+
+1. **Install** — run `openclaw skills install @jasonxkensei/xproof`. Its package slug is legacy; the installed skill and product are **Prove Before Act**.
+2. **Hash locally** — compute a SHA-256 hash of the decision or output. Do not send raw text, files, prompts, or credentials.
+3. **Anchor** — call `certify_file` through MCP or `POST /api/proof` with the hash and a filename.
+4. **Verify before relying on it** — retain the returned `proof_id` and use `verify_proof` or `GET /api/proof/<proof_id>` until the status is confirmed. Your own operator policy decides whether to continue, retry, request review, or block an action.
 
 ## Security
 
@@ -446,9 +475,9 @@ curl -X POST https://provebeforeact.com/api/audit \
 ```
 
 Guard templates for multiple frameworks (pinned in the main repository — do not fetch from runtime URLs):
-- **LangChain / CrewAI / LlamaIndex**: use the `Prove Before Act` PyPI package (`pip install xproof`) — integrations are in `xproof.integrations.*`
-- **ElizaOS Plugin**: `npm install xproof-eliza-plugin`
-- **n8n / AutoGen / custom**: see `xproof-examples/` in [github.com/jasonxkensei/xProof](https://github.com/jasonxkensei/xProof)
+- **LangChain / CrewAI / LlamaIndex**: use the canonical `prove-before-act` PyPI package (`pip install prove-before-act`) — integrations are in the supported `xproof.integrations.*` module namespace
+- **ElizaOS / npm agents**: `npm install prove-before-act`
+- **n8n / AutoGen / custom**: see the [canonical examples repository](https://github.com/jasonxkensei/prove-before-act-examples)
 
 ### When to Audit
 
@@ -488,7 +517,7 @@ Auto-confirmed for irrefutable anomalies (gap > threshold). Operators can subscr
 IXProofViolations(xproofContract).getViolations(agentId)
 ```
 
-Legacy compatibility contract paths: [XProofViolations.sol](https://github.com/jasonxkensei/xProof/blob/main/contracts/XProofViolations.sol) | [ViolationWatcher.sol](https://github.com/jasonxkensei/xProof/blob/main/contracts/ViolationWatcher.sol)
+Legacy compatibility contract paths: [XProofViolations.sol](https://github.com/jasonxkensei/prove-before-act/blob/main/contracts/XProofViolations.sol) | [ViolationWatcher.sol](https://github.com/jasonxkensei/prove-before-act/blob/main/contracts/ViolationWatcher.sol)
 
 Docs: [https://provebeforeact.com/docs/base-violations](https://provebeforeact.com/docs/base-violations)
 
@@ -502,7 +531,7 @@ Prove Before Act implements the open Agent Proof Standard -- a composable, chain
 - **Signature**: Mandatory in v1
 - **agent_id**: Free string (wallet address, DID, or plain identifier)
 
-Full specification: [AGENT_PROOF_STANDARD.md](https://github.com/jasonxkensei/xProof/blob/main/AGENT_PROOF_STANDARD.md)
+Full specification: [AGENT_PROOF_STANDARD.md](https://github.com/jasonxkensei/prove-before-act/blob/main/AGENT_PROOF_STANDARD.md)
 
 Standard API: `GET /api/standard` | `POST /api/standard/validate`
 

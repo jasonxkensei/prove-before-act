@@ -115,6 +115,77 @@ const HARDCODED_COST_PATTERNS = [
 ];
 
 describe("public branding and capability claims", () => {
+  it("keeps ClawHub installation messaging canonical and actionable", () => {
+    const clawHubPage = "https://clawhub.ai/jasonxkensei/skills/xproof";
+    const obsoleteClawHubPage = "https://clawhub.ai/jasonxkensei/prove-before-act";
+    const skillSources = [
+      "clawhub-publish/xproof/SKILL.md",
+      "clawhub-publish-v140/xproof/SKILL.md",
+    ];
+    for (const sourcePath of skillSources) {
+      const skill = readFileSync(path.resolve(process.cwd(), sourcePath), "utf8");
+
+      expect(skill, sourcePath).toContain(
+        "The @jasonxkensei/xproof ClawHub slug is a legacy compatibility identifier.",
+      );
+      expect(skill, sourcePath).toContain(
+        "# Prove Before Act — Accountability Layer for AI Agents",
+      );
+      expect(skill, sourcePath).toContain("## First successful integration");
+      expect(skill, sourcePath).toContain(
+        "call `certify_file` through MCP or `POST /api/proof`",
+      );
+      expect(skill, sourcePath).toContain(
+        "use `verify_proof` or `GET /api/proof/<proof_id>`",
+      );
+      expect(skill, sourcePath).toContain(
+        "openclaw skills install @jasonxkensei/xproof",
+      );
+      expect(skill, sourcePath).not.toContain("clawhub/prove-before-act");
+      expect(skill, sourcePath).toContain("github.com/jasonxkensei/prove-before-act");
+      expect(skill, sourcePath).not.toContain("github.com/jasonxkensei/xProof");
+      expect(skill, sourcePath).toContain("pip install prove-before-act");
+      expect(skill, sourcePath).not.toContain("pip install xproof");
+      expect(skill, sourcePath).toContain("```bash\npip install prove-before-act\n```");
+      expect(skill, sourcePath).not.toContain("```python\npip install prove-before-act");
+      expect(skill, sourcePath).toContain("from xproof import XProofClient");
+      expect(skill, sourcePath).toContain('import hashlib');
+      expect(skill, sourcePath).toContain('sha256_hex = hashlib.sha256(');
+    }
+    const versionedSkill = readFileSync(
+      path.resolve(process.cwd(), "clawhub-publish-v140/xproof/SKILL.md"),
+      "utf8",
+    );
+    const pythonPackage = readFileSync(
+      path.resolve(process.cwd(), "python-sdk/pyproject.toml"),
+      "utf8",
+    );
+    expect(pythonPackage).toContain('name = "prove-before-act"');
+    expect(pythonPackage).toContain('include = ["xproof*"]');
+    expect(versionedSkill).toContain("xproof.integrations.*");
+    expect(versionedSkill).not.toContain("from prove_before_act import");
+    expect(versionedSkill).not.toContain("prove_before_act.integrations");
+
+    for (const sourcePath of [
+      ...skillSources,
+      "client/src/pages/agent-context.tsx",
+      "client/src/pages/agent-context-zh.tsx",
+      "server/prerender.ts",
+    ]) {
+      const source = readFileSync(path.resolve(process.cwd(), sourcePath), "utf8");
+      expect(source, sourcePath).toContain(
+        "openclaw skills install @jasonxkensei/xproof",
+      );
+      expect(source, sourcePath).not.toMatch(/hermes skills install|clawhub\/prove-before-act/i);
+    }
+
+    for (const sourcePath of ["client/index.html", "server/prerender.ts"]) {
+      const source = readFileSync(path.resolve(process.cwd(), sourcePath), "utf8");
+      expect(source, sourcePath).toContain(clawHubPage);
+      expect(source, sourcePath).not.toContain(obsoleteClawHubPage);
+    }
+  });
+
   it.each(["/agents", "/agent-context", "/llms.txt", "/llms-full.txt"])(
     "GET %s presents Prove Before Act without retired fixed metrics",
     async (path) => {

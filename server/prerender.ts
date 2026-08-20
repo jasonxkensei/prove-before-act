@@ -305,7 +305,7 @@ ${safeJsonLd({
   "description": description,
   "sameAs": [
     "https://github.com/jasonxkensei/prove-before-act",
-    "https://clawhub.ai/jasonxkensei/prove-before-act"
+    "https://clawhub.ai/jasonxkensei/skills/xproof"
   ],
   "foundingDate": "2025",
   "knowsAbout": ["blockchain certification", "proof of existence", "AI agent trust", "MultiversX", "x402 protocol"]
@@ -1164,7 +1164,7 @@ Content-Type: application/json
     <p>POST ${baseUrl}/mcp — JSON-RPC 2.0, Streamable HTTP transport.</p>
     <p>Tools: certify_file, audit_agent_session, verify_proof, investigate_proof, register_trial (no auth).</p>
     <p>Add to Claude/Cursor: {"mcpServers": {"prove-before-act": {"url": "${baseUrl}/mcp", "headers": {"Authorization": "Bearer pm_YOUR_KEY"}}}}</p>
-    <p><strong>Hermes Skills Hub compatible:</strong> Prove Before Act is published as an OpenClaw skill on ClawHub. Hermes-compatible agents can install it in one command: <code>hermes skills install clawhub/prove-before-act</code></p>
+    <p><strong>OpenClaw / ClawHub installation:</strong> Prove Before Act is published on ClawHub. Install the verified skill with <code>openclaw skills install @jasonxkensei/xproof</code>.</p>
   </section>
 
   <section>

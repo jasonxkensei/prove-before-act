@@ -297,7 +297,8 @@ export function registerAcpRoutes(app: Express) {
         } catch (sigErr: any) {
           return res.status(400).json({
             error: "INVALID_SIGNATURE",
-            message: `Could not verify payer_wallet signature: ${sigErr?.message}. Sign "${`xproof-acp-checkout:${data.product_id}:${data.inputs.file_hash}:${raw}`}" with the Ed25519 private key of payer_wallet and provide the hex-encoded 64-byte result as payer_wallet_signature.`,
+            message: `Could not verify payer_wallet signature: ${sigErr?.message}. Sign "${ownershipMessage}" with the Ed25519 private key of payer_wallet and provide the hex-encoded 64-byte result as payer_wallet_signature.`,
+            message_to_sign: ownershipMessage,
           });
         }
 

@@ -2,6 +2,112 @@
 
 ---
 
+## ClawHub v4.0.18 — 2026-08-20
+
+**Registry skill:** `xproof` (displayed as **Prove Before Act**)
+**Publisher:** `@jasonxkensei`
+**Tag:** `latest` → `4.0.18`
+
+| Item | Value |
+|---|---|
+| Registry publication ID | `k978h2phnjkmt6h9dcxzbtxj1n8ct400` |
+| Source skill version | `3.3.14` |
+| ClawHub source commit | [`83a3bb0df3d780e3bc3f694109bae8c1d84938ca`](https://github.com/jasonxkensei/prove-before-act-openclaw-skill/commit/83a3bb0df3d780e3bc3f694109bae8c1d84938ca) |
+| Quick Install source commit | [`2ebdc098821c17f94921295a1b1fbccdb16a883b`](https://github.com/jasonxkensei/prove-before-act/commit/2ebdc098821c17f94921295a1b1fbccdb16a883b) |
+| Public page | https://clawhub.ai/jasonxkensei/skills/xproof |
+
+### Changes in v4.0.18
+
+- Adds a copy-paste-safe Python SDK quick start: Bash installation, local SHA-256 computation, and the supported `xproof` import namespace.
+- Keeps ACP signature guidance aligned to the canonical `pba-acp-checkout` message prefix.
+
+---
+
+## ClawHub v4.0.17 — 2026-08-20
+
+**Registry skill:** `xproof` (displayed as **Prove Before Act**)
+**Publisher:** `@jasonxkensei`
+**Tag:** `latest` → `4.0.17`
+
+| Item | Value |
+|---|---|
+| Registry publication ID | `k97dd77823m5epnw62emwnp4118ct0d5` |
+| Source skill version | `3.3.12` |
+| ClawHub source commit | [`19860d26055987d273b123fd107d3a87fdc6af54`](https://github.com/jasonxkensei/prove-before-act-openclaw-skill/commit/19860d26055987d273b123fd107d3a87fdc6af54) |
+| Quick Install source commit | [`1daa78b7f4e52d2ba13bfc09711584d732c28ef2`](https://github.com/jasonxkensei/prove-before-act/commit/1daa78b7f4e52d2ba13bfc09711584d732c28ef2) |
+| Public page | https://clawhub.ai/jasonxkensei/skills/xproof |
+
+### Changes in v4.0.17
+
+- Retains the canonical Python package name, `prove-before-act`, while documenting the supported `xproof` import namespace.
+- Prevents a broken `prove_before_act` import path in the published skill onboarding.
+
+---
+
+## ClawHub v4.0.16 — 2026-08-20
+
+**Registry skill:** `xproof` (displayed as **Prove Before Act**)
+**Publisher:** `@jasonxkensei`
+**Tag:** `latest` → `4.0.16`
+
+| Item | Value |
+|---|---|
+| Registry publication ID | `k970m8rqc5s7p076z8m3tz2g2s8cvfj6` |
+| Source skill version | `3.3.11` |
+| ClawHub source commit | [`68705705902c60a3bd221ef6e8c5ee1138a2e56a`](https://github.com/jasonxkensei/prove-before-act-openclaw-skill/commit/68705705902c60a3bd221ef6e8c5ee1138a2e56a) |
+| Quick Install source commit | [`66dc52e6abe758c811187022655d9aafc082408f`](https://github.com/jasonxkensei/prove-before-act/commit/66dc52e6abe758c811187022655d9aafc082408f) |
+| Public page | https://clawhub.ai/jasonxkensei/skills/xproof |
+
+### Changes in v4.0.16
+
+- Uses the canonical `prove-before-act` Python and npm SDK package names in the maintained skill guidance.
+- Points examples, contract sources, and the standard specification to canonical `prove-before-act` repositories.
+
+---
+
+## ClawHub v4.0.15 — 2026-08-20
+
+**Registry skill:** `xproof` (displayed as **Prove Before Act**)
+**Publisher:** `@jasonxkensei`
+**Tag:** `latest` → `4.0.15`
+
+| Item | Value |
+|---|---|
+| Registry publication ID | `k9794xber7g5y4frf67mtn6da98ctjvz` |
+| Source skill version | `3.3.10` |
+| ClawHub source commit | [`99127ad93be8209ddc1f787b774fc25088482cb4`](https://github.com/jasonxkensei/prove-before-act-openclaw-skill/commit/99127ad93be8209ddc1f787b774fc25088482cb4) |
+| Quick Install source commit | [`7b9dc96f3fb455b205c640c966df9340d1539094`](https://github.com/jasonxkensei/prove-before-act/commit/7b9dc96f3fb455b205c640c966df9340d1539094) |
+| Public page | https://clawhub.ai/jasonxkensei/skills/xproof |
+
+### Changes in v4.0.15
+
+- Replaces the unsupported Hermes instruction with the verified OpenClaw command: `openclaw skills install @jasonxkensei/xproof`.
+- Aligns the ClawHub page, the Quick Install source, and English/Chinese agent-context documentation on the same published identifier.
+
+---
+
+## ClawHub v4.0.14 — 2026-08-20
+
+**Registry skill:** `xproof` (displayed as **Prove Before Act**)
+**Publisher:** `@jasonxkensei`
+**Tag:** `latest` → `4.0.14`
+
+| Item | Value |
+|---|---|
+| Registry publication ID | `k975n8d72f5sh86t1gx17a6n1x8ctz5y` |
+| Source skill version | `3.3.9` |
+| Canonical source commit | [`e4e50f17b4c93218e1965a6e27f01774eac435d2`](https://github.com/jasonxkensei/prove-before-act-openclaw-skill/commit/e4e50f17b4c93218e1965a6e27f01774eac435d2) |
+| Quick Install source commit | [`b41713a61547b713cc8fa0c4eaccdafb13295894`](https://github.com/jasonxkensei/prove-before-act/commit/b41713a61547b713cc8fa0c4eaccdafb13295894) |
+| Public page | https://clawhub.ai/jasonxkensei/skills/xproof |
+
+### Changes in v4.0.14
+
+- Makes the historical `@jasonxkensei/xproof` ClawHub slug visibly explicit as a legacy compatibility identifier.
+- Simplifies the main heading to **Prove Before Act — Accountability Layer for AI Agents**.
+- Adds a concise four-step first-integration path: install, hash locally, anchor, then verify the `proof_id` before relying on the result.
+
+---
+
 ## v3.3.8 — 2026-08-19
 
 **Target repo:** https://github.com/jasonxkensei/xproof-openclaw-skill  

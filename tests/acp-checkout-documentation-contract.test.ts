@@ -46,4 +46,11 @@ describe("canonical ACP checkout documentation contract", () => {
     expect(agentDiscovery).toContain('import { XProofClient } from "prove-before-act"');
     expect(agentDiscovery).not.toContain('install: "npm install @xproof/xproof"');
   });
+
+  it("uses the product-specific checkout prefix in signature verification errors", () => {
+    const acpRoutes = readFileSync("server/routes/acp.ts", "utf8");
+
+    expect(acpRoutes).toContain('Sign "${ownershipMessage}"');
+    expect(acpRoutes).not.toContain('Sign "${`xproof-acp-checkout:');
+  });
 });

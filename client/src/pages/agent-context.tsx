@@ -564,11 +564,11 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
           <div className="rounded-md border border-primary/20 bg-primary/5 p-3 flex items-start gap-3">
             <Cpu className="h-4 w-4 text-primary shrink-0 mt-0.5" />
             <div>
-              <p className="text-xs font-semibold text-primary mb-1">Hermes Skills Hub compatible</p>
+              <p className="text-xs font-semibold text-primary mb-1">OpenClaw / ClawHub installation</p>
               <p className="text-xs text-muted-foreground mb-2">
-                Prove Before Act is published as an OpenClaw skill on ClawHub. Hermes-compatible agents can install it in one command:
+                Prove Before Act is published on ClawHub. Install the verified OpenClaw skill in one command:
               </p>
-              <code className="text-xs bg-muted px-2 py-1 rounded block font-mono">hermes skills install clawhub/prove-before-act</code>
+              <code className="text-xs bg-muted px-2 py-1 rounded block font-mono">openclaw skills install @jasonxkensei/xproof</code>
             </div>
           </div>
           <div>

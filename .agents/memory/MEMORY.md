@@ -14,3 +14,4 @@
 - [Public pricing claims](public-pricing-claims.md) — public rates must be live-derived or link to /api/pricing, including crawler-rendered and published skill content
 - [GitHub connector Git-data writes](github-connector-git-data-writes.md) — OAuth connector may read repos but reject Git tree/commit writes; use a securely stored Git transport credential for repository synchronization
 - [GitHub Actions PostgreSQL CI](github-actions-postgres-ci.md) — service PostgreSQL needs a TCP driver, and lockfile tarballs must resolve through the public npm registry
+- [Immutable release sources](github-raw-cache-after-api-writes.md) — build release bundles from immutable source revisions, not mutable branch references

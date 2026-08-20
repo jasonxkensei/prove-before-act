@@ -434,11 +434,11 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
           <div className="rounded-md border border-primary/20 bg-primary/5 p-3 flex items-start gap-3">
             <Cpu className="h-4 w-4 text-primary shrink-0 mt-0.5" />
             <div>
-              <p className="text-xs font-semibold text-primary mb-1">兼容Hermes Skills Hub</p>
+              <p className="text-xs font-semibold text-primary mb-1">OpenClaw / ClawHub 安装</p>
               <p className="text-xs text-muted-foreground mb-2">
-                Prove Before Act已作为OpenClaw技能发布在ClawHub上。Hermes兼容的智能体可一键安装：
+                Prove Before Act已发布到ClawHub。使用已验证的OpenClaw命令即可安装：
               </p>
-              <code className="text-xs bg-muted px-2 py-1 rounded block font-mono">hermes skills install clawhub/prove-before-act</code>
+              <code className="text-xs bg-muted px-2 py-1 rounded block font-mono">openclaw skills install @jasonxkensei/xproof</code>
             </div>
           </div>
           <div>
