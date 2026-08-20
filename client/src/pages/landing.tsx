@@ -280,6 +280,9 @@ export default function Landing() {
             <a href="/coherence" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-coherence">
               Coherence
             </a>
+            <a href="/jason" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-jason">
+              About Jason
+            </a>
             <a href="#faq" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-faq">
               FAQ
             </a>
@@ -1427,6 +1430,7 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
                   <li><a href="/agents" className="hover:text-foreground transition-colors" data-testid="link-footer-agents">For AI Agents</a></li>
                   <li><a href="/leaderboard" className="hover:text-foreground transition-colors" data-testid="link-footer-leaderboard">Trust Leaderboard</a></li>
                   <li><a href="/stats" className="hover:text-foreground transition-colors" data-testid="link-footer-stats">Metrics</a></li>
+                  <li><a href="/jason" className="hover:text-foreground transition-colors" data-testid="link-footer-jason">About Jason</a></li>
                 </ul>
               </div>
               

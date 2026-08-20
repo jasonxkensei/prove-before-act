@@ -62,6 +62,15 @@ Prove Before Act provides cryptographic proof of existence, authorship, and time
 - **Price**: $${priceUsd} per certification — flat rate (paid in EGLD or USDC via x402)
 - **Website**: ${baseUrl}
 
+## Founder and product identity
+
+- **Founder**: Jason Petitfourg — AI Product Builder
+- **Canonical product**: Prove Before Act
+- **Product role**: Accountability pattern for autonomous agents — prove WHY before acting, then prove WHAT happened
+- **Founder page**: ${baseUrl}/jason
+- **Public evidence**: ${baseUrl}/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b
+- **Compatibility note**: Historical \`xproof\` identifiers remain supported in packages, agent IDs, and protocol records where required for compatibility. They are not a separate public product brand.
+
 ## Guarantees
 
 - **Immutability**: Blockchain anchored, cannot be modified or deleted

@@ -229,7 +229,7 @@ async function renderHomePage(baseUrl: string): Promise<string> {
   <section>
     <h1>Prove before your agent acts.</h1>
     <p>Give agents and operators a durable, independently verifiable record of a decision, output, or critical action.</p>
-    <p>Current live rate: $${priceUsd.toFixed(2)} per certification — <a href="${baseUrl}/api/pricing">see /api/pricing</a>. Not a fixed published price.</p>
+  <p>Current live rate: $${priceUsd.toFixed(2)} per certification — <a href="${baseUrl}/api/pricing">see /api/pricing</a>. Not a fixed published price.</p>
     <a href="${baseUrl}/agents">Integrate an agent</a>
     <a href="${baseUrl}/certify">Verify a local file</a>
   </section>
@@ -419,6 +419,78 @@ ${safeJsonLd({
       }
     }
   ]
+}, null, 2)}
+</script>
+</body>
+</html>`;
+}
+
+function renderJasonPage(baseUrl: string): string {
+  const title = "Jason Petitfourg — AI Product Builder | Prove Before Act";
+  const description = "Jason Petitfourg is an AI Product Builder and founder of Prove Before Act, the accountability pattern for autonomous agents.";
+  const proofUrl = `${baseUrl}/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b`;
+  const referenceAgentUrl = `${baseUrl}/agent/${REFERENCE_AGENT_WALLET}`;
+
+  return `${commonHead(title, description, `${baseUrl}/jason`, "profile")}
+<body>
+<header>
+  <nav>
+    <a href="${baseUrl}"><strong>Prove Before Act</strong></a> |
+    <a href="${baseUrl}/agents">For AI Agents</a> |
+    <a href="${baseUrl}/agent-context">Agent Context</a> |
+    <a href="${baseUrl}/docs">API Docs</a>
+  </nav>
+</header>
+<main>
+  <h1>Jason Petitfourg — AI Product Builder</h1>
+  <p>I turn emerging AI infrastructure opportunities into working products, integrations, and verifiable proof systems.</p>
+  <p>Jason is the founder of <strong>Prove Before Act</strong>, the accountability pattern for autonomous agents: prove WHY before acting, then prove WHAT happened.</p>
+
+  <section>
+    <h2>One coherent story</h2>
+    <ul>
+      <li><strong>The founder:</strong> Jason builds and ships AI products and agent workflows.</li>
+      <li><strong>The product:</strong> Prove Before Act creates an accountable, independently verifiable record around consequential agent actions.</li>
+      <li><strong>The evidence:</strong> public proof IDs and blockchain transaction URLs let people and agents verify the result.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Built in production</h2>
+    <p>The public reference agent uses the same proof workflow available to other builders. The historical <code>xproof_agent_verify</code> name is a legacy compatibility identifier, not a separate product brand.</p>
+    <ul>
+      <li><a href="${referenceAgentUrl}">View the live reference agent profile</a></li>
+      <li><a href="${proofUrl}">View a public proof</a></li>
+      <li><a href="${baseUrl}/agent-context">Read the agent integration context</a></li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Implementation trail</h2>
+    <ul>
+      <li><a href="https://github.com/jasonxkensei/prove-before-act">GitHub source and documentation</a></li>
+      <li><a href="https://pypi.org/project/prove-before-act/">Canonical Python SDK</a></li>
+      <li><a href="https://www.npmjs.com/package/prove-before-act">Canonical npm SDK</a></li>
+      <li><a href="https://clawhub.ai/jasonxkensei/skills/xproof">ClawHub skill (legacy compatibility slug)</a></li>
+    </ul>
+  </section>
+
+  <p><a href="${baseUrl}/agents">Integrate an agent</a> · <a href="${baseUrl}/coherence">Explore the accountability loop</a></p>
+</main>
+<footer><p>&copy; ${new Date().getFullYear()} Prove Before Act. Built on <a href="https://multiversx.com">MultiversX</a></p></footer>
+<script type="application/ld+json">
+${safeJsonLd({
+  "@context": "https://schema.org",
+  "@type": "Person",
+  "name": "Jason Petitfourg",
+  "jobTitle": "AI Product Builder",
+  "url": `${baseUrl}/jason`,
+  "sameAs": ["https://github.com/jasonxkensei"],
+  "worksFor": {
+    "@type": "Organization",
+    "name": "Prove Before Act",
+    "url": "https://provebeforeact.com"
+  }
 }, null, 2)}
 </script>
 </body>
@@ -1560,6 +1632,13 @@ export function prerenderMiddleware() {
           .set("Content-Type", "text/html")
           .set("Link", agentLinks)
           .send(await renderAgentsPage(baseUrl));
+      }
+
+      if (path === "/jason") {
+        return res.status(200)
+          .set("Content-Type", "text/html")
+          .set("Link", agentLinks)
+          .send(renderJasonPage(baseUrl));
       }
 
       if (path === "/leaderboard") {
