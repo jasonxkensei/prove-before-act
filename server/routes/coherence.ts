@@ -44,6 +44,22 @@ const linkRequestSchema = z.object({
   what_proof_id: z.string().uuid("what_proof_id must be a UUID"),
 });
 
+function linkResponse(check: typeof coherenceChecks.$inferSelect, alreadyLinked = false) {
+  const score = check.coherenceScore ?? 0;
+  return {
+    // Canonical agent-facing response contract. Scores in persistence remain
+    // 0–100 for existing fleet/history calculations, while this endpoint
+    // returns a portable 0–1 ratio.
+    coherence_id: check.id,
+    coherence_score: score / 100,
+    linked: true,
+    success: true,
+    ...(alreadyLinked ? { already_linked: true } : {}),
+    // Preserve the detailed legacy response for callers already using it.
+    coherence_check: serializeCheck(check),
+  };
+}
+
 export function registerCoherenceRoutes(app: Express) {
   // ── POST /api/coherence/link — agent links a WHY anchor to its WHAT proof ──
   // Auth: API key (Bearer pm_...). Both proofs must belong to the caller.
@@ -130,7 +146,7 @@ export function registerCoherenceRoutes(app: Express) {
       // Already linked?
       if (checkRow.linkedProofId) {
         if (checkRow.linkedProofId === what_proof_id) {
-          return res.json({ success: true, already_linked: true, coherence_check: serializeCheck(checkRow) });
+          return res.json(linkResponse(checkRow, true));
         }
         return res.status(409).json({
           error: "ALREADY_LINKED",
@@ -157,7 +173,7 @@ export function registerCoherenceRoutes(app: Express) {
       if (!updated) {
         const [current] = await db.select().from(coherenceChecks).where(eq(coherenceChecks.id, checkRow.id));
         if (current?.linkedProofId === what_proof_id) {
-          return res.json({ success: true, already_linked: true, coherence_check: serializeCheck(current) });
+          return res.json(linkResponse(current, true));
         }
         return res.status(409).json({
           error: "ALREADY_LINKED",
@@ -169,8 +185,7 @@ export function registerCoherenceRoutes(app: Express) {
       logger.info("Coherence WHY→WHAT linked", { coherenceCheckId: updated.id, whyProofId: why_proof_id, whatProofId: what_proof_id, score, userId });
 
       return res.json({
-        success: true,
-        coherence_check: serializeCheck(updated),
+        ...linkResponse(updated),
         score_breakdown: {
           linked: true,
           what_within_1h: whatAt - anchorAt >= 0 && whatAt - anchorAt <= COHERENCE_LINK_WINDOW_MS,
