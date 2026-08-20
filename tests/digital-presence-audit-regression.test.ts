@@ -85,6 +85,7 @@ describe("digital presence audit regression", () => {
   it("keeps active Python example onboarding on the canonical distribution", () => {
     const publicExampleFiles = [
       "README.zh.md",
+      "python-sdk/PR_DESCRIPTIONS.md",
       ...filesRecursively("xproof-examples"),
       ...filesRecursively("python-sdk/examples"),
     ];
