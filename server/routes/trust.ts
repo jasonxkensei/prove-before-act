@@ -275,9 +275,10 @@ export function registerTrustRoutes(app: Express) {
   );
 
   // POST /api/incident/:wallet/:proofId/re-evaluate
-  // Public, rate-limited. Re-runs the audit trail with the heartbeat fallback.
-  // If the proof now resolves with a WHY found, any existing "no WHY" breach
-  // violation for that proof is rejected (voided) and the trust snapshot is invalidated.
+  // Authenticated owner/admin mutation. Re-runs the audit trail with the
+  // heartbeat fallback. If the proof now resolves with a WHY found, any
+  // existing "no WHY" breach violation for that proof is rejected (voided)
+  // and the trust snapshot is invalidated.
   const NO_WHY_REASON =
     "WHAT certified without any WHY — action executed without prior intent declaration (potential deliberate omission)";
 
@@ -285,9 +286,23 @@ export function registerTrustRoutes(app: Express) {
     "/api/incident/:wallet/:proofId/re-evaluate",
     publicReadRateLimiter,
     incidentReevaluationRateLimiter,
-    async (req, res) => {
+    isWalletAuthenticated,
+    async (req: any, res) => {
     try {
       const { wallet, proofId } = req.params;
+      const sessionWallet = req.walletAddress as string | undefined;
+
+      // Re-evaluation can reject governance violations and invalidate trust
+      // snapshots, so the authenticated subject must own the target wallet or
+      // be a configured platform administrator. Perform this check before
+      // reconstructing the audit trail to keep unauthorized requests
+      // side-effect free.
+      if (
+        !sessionWallet ||
+        (!isAdminWallet(sessionWallet) && sessionWallet.toLowerCase() !== wallet.toLowerCase())
+      ) {
+        return res.status(403).json({ error: "Owner or admin access required" });
+      }
 
       const result = await reconstructAuditTrail(wallet, proofId);
 
