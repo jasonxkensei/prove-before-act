@@ -11,6 +11,7 @@
 - [npm lockfile Replit registry proxy](npm-lockfile-replit-registry.md) — always regenerate package-lock.json with `--registry https://registry.npmjs.org`; Replit proxy URLs break CI
 - [xproof security audit fixes Aug 2026](xproof-security-audit-aug2026.md) — comprehensive map of 71 audit findings vs fixed/confirmed status
 - [MultiversX WASM builds on Replit](multiversx-wasm-toolchain-replit.md) — sc-meta needs rustup in /tmp (Nix rust lacks wasm stdlib); struct views return ONE nested-encoded buffer, decode sequentially
+- [MultiversX nonce recovery](multiversx-nonce-recovery-after-rejection.md) — rejected broadcasts can advance the local wallet nonce; funding recovery needs a nonce resync and job replay
 - [Public pricing claims](public-pricing-claims.md) — public rates must be live-derived or link to /api/pricing, including crawler-rendered and published skill content
 - [GitHub connector Git-data writes](github-connector-git-data-writes.md) — OAuth connector may read repos but reject Git tree/commit writes; use a securely stored Git transport credential for repository synchronization
 - [GitHub Actions PostgreSQL CI](github-actions-postgres-ci.md) — service PostgreSQL needs a TCP driver, and lockfile tarballs must resolve through the public npm registry
