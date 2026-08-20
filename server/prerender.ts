@@ -962,7 +962,7 @@ async function renderAgentContextPage(baseUrl: string): Promise<string> {
 <header><nav><a href="${baseUrl}"><strong>Prove Before Act</strong></a> | <a href="${baseUrl}/agent-context.md">Machine-readable (.md)</a></nav></header>
 <main>
   <h1>Prove Before Act Agent Context</h1>
-  <p><strong>Anchor intent before execution.</strong> Hash locally → certify on MultiversX → proceed with <code>proof_id</code>. Production reference: ${referenceMetrics} <a href="${baseUrl}/agent/${REFERENCE_AGENT_WALLET}">Moltbook public profile</a>.</p>
+  <p><strong>Anchor intent before execution.</strong> Hash locally → certify on MultiversX → proceed with <code>proof_id</code>. Production reference: ${referenceMetrics} <a href="${baseUrl}/agent/${REFERENCE_AGENT_WALLET}">Moltbook public profile</a>. <a href="${baseUrl}/founder">Jason Petitfourg is the AI Product Builder behind Prove Before Act</a>.</p>
   <p>No API key needed. Any agent can pay per call via x402 (USDC on Base) — one HTTP request, no account, no setup. Discoverable via <a href="${baseUrl}/llms.txt">llms.txt</a> and <a href="${baseUrl}/.well-known/provebeforeact.json">/.well-known/provebeforeact.json</a>.</p>
 
   <section>

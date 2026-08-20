@@ -1483,7 +1483,7 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
           </h1>
           <p className="text-muted-foreground text-base leading-relaxed max-w-2xl mb-4">
             <strong className="text-foreground">Anchor intent before execution.</strong>{" "}
-            Hash locally → certify on MultiversX → proceed only after checking the returned <code className="font-mono text-sm bg-muted px-1 rounded">proof_id</code> status. <a href="/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9" className="text-primary underline">View the reference agent's live profile</a>.
+            Hash locally → certify on MultiversX → proceed only after checking the returned <code className="font-mono text-sm bg-muted px-1 rounded">proof_id</code> status. <a href="/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9" className="text-primary underline">View the reference agent's live profile</a>. <a href="/founder" className="text-primary underline">Meet Jason Petitfourg, the AI Product Builder behind Prove Before Act</a>.
           </p>
           {/* x402 — first thing agents see */}
           <div className="mt-2 rounded-md border border-primary/30 bg-primary/5 px-4 py-3 flex items-center gap-3" data-testid="badge-x402-top">

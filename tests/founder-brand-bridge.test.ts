@@ -44,4 +44,15 @@ describe("founder and product brand bridge", () => {
     expect(body).toContain("Historical `xproof` identifiers remain supported");
     expect(body).toContain("They are not a separate public product brand.");
   });
+
+  it("keeps the agent context connected to the founder and canonical product", async () => {
+    const response = await fetch(`${BASE}/agent-context`, {
+      headers: CRAWLER_HEADERS,
+    });
+    expect(response.status).toBe(200);
+
+    const body = await response.text();
+    expect(body).toContain("Jason Petitfourg is the AI Product Builder behind Prove Before Act");
+    expect(body).toContain("href=\"https://provebeforeact.com/founder\"");
+  });
 });
