@@ -4,7 +4,7 @@ import pytest
 import responses
 from xproof import ContextDrift, ContextDriftStage, NotFoundError, XProofClient
 
-BASE = "https://xproof.app"
+BASE = "https://provebeforeact.com"
 
 
 def _drift_url(decision_id: str) -> str:

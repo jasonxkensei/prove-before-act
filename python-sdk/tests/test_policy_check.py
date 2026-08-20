@@ -5,7 +5,7 @@ import responses
 from xproof import NotFoundError, XProofClient
 from xproof.models import PolicyCheckResult, PolicyViolation
 
-BASE = "https://xproof.app"
+BASE = "https://provebeforeact.com"
 POLICY_CHECK_URL = f"{BASE}/api/proofs/policy-check"
 
 

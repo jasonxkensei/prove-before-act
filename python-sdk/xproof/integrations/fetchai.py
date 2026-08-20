@@ -219,7 +219,7 @@ class XProofuAgentMiddleware:
             "proof_id": cert.id,
             "file_hash": cert.file_hash,
             "transaction_hash": cert.transaction_hash,
-            "verify_url": f"https://xproof.app/proof/{cert.id}",
+            "verify_url": f"https://provebeforeact.com/proof/{cert.id}",
         }
 
     def _certify_incoming_impl(

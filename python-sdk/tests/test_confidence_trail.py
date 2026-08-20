@@ -5,7 +5,7 @@ import responses
 from xproof import NotFoundError, XProofClient
 from xproof.models import ConfidenceTrail, ConfidenceTrailStage, PolicyViolation
 
-BASE = "https://xproof.app"
+BASE = "https://provebeforeact.com"
 
 
 def _trail_url(decision_id: str) -> str:

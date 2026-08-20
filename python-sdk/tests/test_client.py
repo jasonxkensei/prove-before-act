@@ -20,7 +20,7 @@ from xproof import (
 )
 from xproof.utils import hash_bytes
 
-BASE = "https://xproof.app"
+BASE = "https://provebeforeact.com"
 
 
 @responses.activate
