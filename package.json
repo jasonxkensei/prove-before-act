@@ -130,7 +130,7 @@
     "autoprefixer": "^10.4.23",
     "drizzle-kit": "^0.31.4",
     "esbuild": "^0.28.1",
-    "postcss": "^8.5.13",
+    "postcss": "^8.5.26",
     "tailwindcss": "^3.4.19",
     "tsx": "^4.23.0",
     "typescript": "5.6.3",
@@ -154,6 +154,11 @@
       "esbuild": "^0.28.1"
     },
     "socket.io-client": "^4.8.1",
-    "@ledgerhq/devices": "8.8.0"
+    "@ledgerhq/devices": "8.8.0",
+    "@ts-morph/common": {
+      "minimatch": {
+        "brace-expansion": "2.1.4"
+      }
+    }
   }
 }
