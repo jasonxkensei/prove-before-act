@@ -8,9 +8,8 @@ import { z } from "zod";
 import { isWalletAuthenticated } from "../walletAuth";
 import { paymentRateLimiter } from "../reliability";
 import { computeTrustScoreByWallet } from "../trust";
-import { TRIAL_QUOTA, REGISTER_RATE_LIMIT_MAX, REGISTER_RATE_LIMIT_WINDOW_MS, getClientIp, buildX402Block, buildPrepaidCreditsBlock, buildTrialExhaustedMessage, buildPaymentRequiredMessage, atomicConsumeTrialCredit, refundTrialCredit } from "./helpers";
+import { TRIAL_QUOTA, REGISTER_RATE_LIMIT_MAX, REGISTER_RATE_LIMIT_WINDOW_MS, getClientIp, buildX402Block, buildPrepaidCreditsBlock, buildTrialExhaustedMessage, buildPaymentRequiredMessage } from "./helpers";
 import { pgCheckRateLimit } from "../pgRateLimit";
-import { recordOnBlockchain } from "../blockchain";
 import { CANONICAL_PUBLIC_ORIGIN } from "../publicOrigin";
 import { getCertificationPriceUsd } from "../pricing";
 
@@ -482,90 +481,13 @@ export function registerAgentsRoutes(app: Express) {
 
       const baseUrl = CANONICAL_PUBLIC_ORIGIN;
 
-      // ── Onboarding proof — same logic as MCP register_trial ───────────────
-      // Anchor a real "proof_of_registration" so the agent sees a complete
-      // example response and understands that Authorization: Bearer <api_key>
-      // is what made it work. Without this, agents get the quick_start guide
-      // but stall because they never try the curl or misconfigure the header.
-      const onboardingHash = crypto
-        .createHash("sha256")
-        .update(`xproof:onboarding:${trialWallet}:${data.agent_name}`)
-        .digest("hex");
-
-      let onboardingProof: Record<string, any> | null = null;
-      const creditConsumed = await atomicConsumeTrialCredit(trialUser.id, 1);
-      if (creditConsumed) {
-        try {
-          const [pending] = await db.insert(certifications).values({
-            userId: trialUser.id,
-            fileName: `onboarding-${data.agent_name}.json`,
-            fileHash: onboardingHash,
-            fileType: "json",
-            authorName: data.agent_name,
-            blockchainStatus: "pending",
-            isPublic: true,
-            authMethod: "onboarding",
-            metadata: {
-              action_type: "proof_of_registration",
-              who: data.agent_name,
-              what: "onboarding_certification",
-              why: "Automatically created during registration to demonstrate the complete certification flow and Bearer token usage.",
-            },
-          }).returning();
-
-          // Fire blockchain async — do NOT await. Registration returns in <200ms
-          // with blockchain_status: "pending". The cert upgrades to "confirmed"
-          // in ~5s in the background. The agent can check verify_url for the tx hash.
-          recordOnBlockchain(onboardingHash, `onboarding-${data.agent_name}.json`, data.agent_name)
-            .then(async (txResult) => {
-              await db.update(certifications)
-                .set({
-                  transactionHash: txResult.transactionHash,
-                  transactionUrl: txResult.transactionUrl,
-                  blockchainStatus: "confirmed",
-                  ...(txResult.latencyMs != null ? { blockchainLatencyMs: txResult.latencyMs } : {}),
-                })
-                .where(eq(certifications.id, pending.id))
-                .catch(() => {});
-              logger.info("Onboarding proof confirmed (async) via REST register", {
-                agentName: data.agent_name, userId: trialUser.id, proofId: pending.id,
-                txHash: txResult.transactionHash,
-              });
-            })
-            .catch(async () => {
-              await db.delete(certifications).where(eq(certifications.id, pending.id)).catch(() => {});
-              await refundTrialCredit(trialUser.id).catch(() => {});
-              logger.warn("Onboarding proof blockchain failed (async) — credit refunded", {
-                agentName: data.agent_name,
-              });
-            });
-
-          onboardingProof = {
-            proof_id: pending.id,
-            file_hash: pending.fileHash,
-            filename: pending.fileName,
-            blockchain_status: "pending",
-            verify_url: `${baseUrl}/proof/${pending.id}`,
-            certificate_url: `${baseUrl}/api/certificates/${pending.id}.pdf`,
-            note: "Your first on-chain proof is being anchored — blockchain_status will update to 'confirmed' in ~5 seconds. Call verify_url to see the transaction hash once confirmed.",
-          };
-        } catch (proofErr) {
-          // DB insert failed — refund the trial credit silently.
-          await refundTrialCredit(trialUser.id).catch(() => {});
-          logger.withRequest(req).warn("Onboarding proof DB insert failed during REST register — credit refunded", {
-            agentName: data.agent_name,
-            error: String(proofErr),
-          });
-        }
-      }
-
-      const trialUsed = onboardingProof ? 1 : 0;
-      const trialRemaining = TRIAL_QUOTA - trialUsed;
+      // Registration only issues credentials. Like MCP register_trial, it does
+      // not create an automatic certification or consume a trial credit.
+      const trialRemaining = TRIAL_QUOTA;
 
       return res.status(201).json({
         api_key: rawKey,
         agent_name: data.agent_name,
-        onboarding_proof: onboardingProof,
         authorization_guide: {
           problem: "POST /api/agent/register requires NO Authorization header — it is the only endpoint that works without a key. Every other endpoint (POST /api/proof, GET /api/agent/status, etc.) requires Authorization: Bearer <api_key>.",
           solution: `Add this header to every subsequent request: Authorization: Bearer ${rawKey}`,
@@ -581,7 +503,7 @@ export function registerAgentsRoutes(app: Express) {
         },
         trial: {
           quota: TRIAL_QUOTA,
-          used: trialUsed,
+          used: 0,
           remaining: trialRemaining,
         },
         // Machine-actionable guide: every request pre-filled, ready to execute
@@ -627,9 +549,7 @@ export function registerAgentsRoutes(app: Express) {
           profile_url: `${baseUrl}/agent/{your_wallet_address}`,
           note: "After activation, your profile appears on the leaderboard within 60 seconds. Trust score updates in real time with every confirmed proof.",
         },
-        message: onboardingProof
-          ? `api_key ready. Your first proof is already anchoring on-chain (see onboarding_proof). You have ${trialRemaining} certifications remaining — run the step 2 curl in quick_start to certify your own content.`
-          : `api_key ready. You have ${trialRemaining} free on-chain certifications — run the step 2 curl in quick_start to create your first proof. No wallet or payment needed.`,
+        message: `api_key ready. You have ${trialRemaining} free on-chain certifications — run the step 2 curl in quick_start to create your first proof. No wallet or payment needed.`,
         note: `Your proofs are fully on-chain and publicly verifiable immediately. They are anchored to a trial wallet — to link them to your real MultiversX identity, connect your wallet at ${baseUrl} and call POST ${baseUrl}/api/trial/claim.`,
       });
     } catch (error) {

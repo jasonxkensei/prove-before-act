@@ -30,7 +30,9 @@ import {
   REGISTER_RATE_LIMIT_WINDOW_MS,
 } from "../server/routes/helpers";
 
-const BASE_URL = "http://localhost:5000";
+// Allow a temporary server with X402_PAY_TO unset to exercise the documented
+// insufficient-credit fallback without changing the normal development server.
+const BASE_URL = process.env.TEST_BASE_URL ?? "http://localhost:5000";
 
 // ─── Part 1 — Unit tests for the 4 builder helpers ───────────────────────────
 
@@ -151,20 +153,23 @@ describe("buildPaymentRequiredMessage — exact shape", () => {
 //
 // We assert the full 402 body fields that agents depend on.
 
-const X402_TRIAL_WALLET = "erd1x402shapetest_trial00000000000000000000000000000000000000000";
-const X402_PAID_WALLET  = "erd1x402shapetest_paid000000000000000000000000000000000000000000";
+const FIXTURE_ID = crypto.randomBytes(10).toString("hex");
+const X402_TRIAL_WALLET = `erd1x402shapetesttrial${FIXTURE_ID}`;
+const X402_PAID_WALLET  = `erd1x402shapetestpaid${FIXTURE_ID}`;
 
-const TRIAL_RAW_KEY = "pm_x402shapetest_trial_key_00000000000000000000";
-const PAID_RAW_KEY  = "pm_x402shapetest_paid_key_000000000000000000000";
+const TRIAL_RAW_KEY = `pm_x402shapetest_trial_${FIXTURE_ID}`;
+const PAID_RAW_KEY  = `pm_x402shapetest_paid_${FIXTURE_ID}`;
 
 const TRIAL_KEY_HASH = crypto.createHash("sha256").update(TRIAL_RAW_KEY).digest("hex");
 const PAID_KEY_HASH  = crypto.createHash("sha256").update(PAID_RAW_KEY).digest("hex");
 const TRIAL_KEY_PREFIX = TRIAL_RAW_KEY.slice(0, 8);
 const PAID_KEY_PREFIX  = PAID_RAW_KEY.slice(0, 8);
 
-const PROOF_FILE_HASH = crypto.createHash("sha256").update("x402-shape-test-file-v1").digest("hex");
+const PROOF_FILE_HASH = crypto.createHash("sha256").update(`x402-shape-test-file:${FIXTURE_ID}`).digest("hex");
 
 beforeAll(async () => {
+  // Per-run fixture identifiers prevent stale users or API keys in a shared
+  // development database from changing the branch under test.
   // Seed trial user with exhausted quota (trial_used = trial_quota).
   await pool.query(
     `INSERT INTO users (wallet_address, is_trial, trial_quota, trial_used, credit_balance)
@@ -217,7 +222,12 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  // Cascade delete removes api_keys rows when the user row is removed.
+  // Delete the exact per-run fixtures so a local integration run leaves no
+  // billing state behind for a later run.
+  await pool.query(
+    `DELETE FROM api_keys WHERE key_hash = ANY($1::text[])`,
+    [[TRIAL_KEY_HASH, PAID_KEY_HASH]],
+  );
   await pool.query(
     `DELETE FROM users WHERE wallet_address = ANY($1::text[])`,
     [[X402_TRIAL_WALLET, X402_PAID_WALLET]],
@@ -272,6 +282,20 @@ function assertX402Shape(body: Record<string, any>, expectedError: string) {
     body.prepaid_credits.endpoint.length,
     "prepaid_credits.endpoint must not be empty",
   ).toBeGreaterThan(0);
+
+  // The full x402 protocol payload is available only when a payment recipient
+  // is configured. Without one, the compatibility x402/prepaid guidance above
+  // is still returned and the caller receives the documented credit error.
+  if (body.x402Version === undefined) {
+    expect(body.accepts, "disabled x402 must not advertise payment requirements").toBeUndefined();
+    return;
+  }
+
+  expect(body.x402Version, "x402Version must be 1 when x402 is configured").toBe(1);
+  expect(Array.isArray(body.accepts), "x402 accepts must be an array").toBe(true);
+  expect(body.accepts.length, "x402 accepts must have at least one entry").toBeGreaterThan(0);
+  expect(typeof body.accepts[0].payTo, "x402 accepts[0].payTo must be a string").toBe("string");
+  expect(body.accepts[0].payTo.length, "x402 accepts[0].payTo must not be empty").toBeGreaterThan(0);
 }
 
 describe("POST /api/proof — TRIAL_EXHAUSTED 402 shape", () => {
