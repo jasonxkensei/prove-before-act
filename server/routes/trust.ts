@@ -5,7 +5,7 @@ import { logger } from "../logger";
 import { certifications, users, attestations, agentViolations } from "@shared/schema";
 import { eq, desc, sql, and, gte, count } from "drizzle-orm";
 import { isWalletAuthenticated } from "../walletAuth";
-import { publicReadRateLimiter, publicSearchRateLimiter, publicCompareRateLimiter } from "../reliability";
+import { publicReadRateLimiter, publicSearchRateLimiter, publicCompareRateLimiter, incidentReevaluationRateLimiter } from "../reliability";
 import { computeTrustScore, computeTrustScoreByWallet, getLeaderboard, generateTrustBadgeSvg, getCalibrationSummaryByWallet } from "../trust";
 import { reconstructAuditTrail } from "../audit-trail";
 import { safeHttpUrlSchema } from "@shared/url";
@@ -230,7 +230,11 @@ export function registerTrustRoutes(app: Express) {
   });
 
   // GET /api/agents/:wallet/incident-report?proof_id=<uuid> — reconstruct 4W audit trail for a contested action
-  app.get("/api/agents/:wallet/incident-report", publicReadRateLimiter, async (req: any, res) => {
+  app.get(
+    "/api/agents/:wallet/incident-report",
+    publicReadRateLimiter,
+    incidentReevaluationRateLimiter,
+    async (req: any, res) => {
     try {
       const { wallet } = req.params;
       const proofId = req.query.proof_id as string;
@@ -263,7 +267,8 @@ export function registerTrustRoutes(app: Express) {
       logger.error("Incident report error", { error: err.message });
       res.status(500).json({ error: err.message });
     }
-  });
+    },
+  );
 
   // POST /api/incident/:wallet/:proofId/re-evaluate
   // Public, rate-limited. Re-runs the audit trail with the heartbeat fallback.
@@ -272,7 +277,11 @@ export function registerTrustRoutes(app: Express) {
   const NO_WHY_REASON =
     "WHAT certified without any WHY — action executed without prior intent declaration (potential deliberate omission)";
 
-  app.post("/api/incident/:wallet/:proofId/re-evaluate", publicReadRateLimiter, async (req, res) => {
+  app.post(
+    "/api/incident/:wallet/:proofId/re-evaluate",
+    publicReadRateLimiter,
+    incidentReevaluationRateLimiter,
+    async (req, res) => {
     try {
       const { wallet, proofId } = req.params;
 
@@ -316,7 +325,8 @@ export function registerTrustRoutes(app: Express) {
       logger.error("Re-evaluate error", { error: err.message });
       res.status(500).json({ error: err.message });
     }
-  });
+    },
+  );
 
   // GET /api/agents/:wallet/violations — public, returns all violations for an agent
   app.get("/api/agents/:wallet/violations", publicReadRateLimiter, async (req, res) => {

@@ -190,7 +190,7 @@ export function registerAttestationsRoutes(app: Express) {
   });
 
   // GET /api/attestation/:id — public, returns a single attestation by ID
-  app.get("/api/attestation/:id", async (req, res) => {
+  app.get("/api/attestation/:id", publicReadRateLimiter, async (req, res) => {
     try {
       const { id } = req.params;
       const result = await db.execute(sql`
@@ -314,7 +314,7 @@ export function registerAttestationsRoutes(app: Express) {
   });
 
   // GET /api/issuer/:wallet — public issuer directory profile with all issued attestations
-  app.get("/api/issuer/:wallet", async (req, res) => {
+  app.get("/api/issuer/:wallet", publicReadRateLimiter, async (req, res) => {
     try {
       const { wallet } = req.params;
 

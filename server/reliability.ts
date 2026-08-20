@@ -167,6 +167,26 @@ export const publicReadRateLimiter = rateLimit({
   skip: skipForTestSuite,
 });
 
+/**
+ * Incident re-evaluation rebuilds an audit trail, verifies every timeline
+ * transaction against MultiversX, and recomputes trust. Key this budget by
+ * the target wallet rather than caller IP so a distributed caller cannot
+ * repeatedly force expensive work for one public agent.
+ */
+export const incidentReevaluationRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: any) => String(req.params?.wallet || "unknown").trim().toLowerCase(),
+  store: new PgRateLimitStore("incident_reevaluate"),
+  message: {
+    error: "TOO_MANY_REQUESTS",
+    message: "Incident re-evaluation limit reached for this agent. Please try again later.",
+  },
+  skip: skipForTestSuite,
+});
+
 export const publicSearchRateLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 30,
