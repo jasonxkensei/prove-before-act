@@ -552,6 +552,16 @@ export default function Certify() {
           </p>
         </div>
 
+        <Alert className="mb-6 border-primary/30 bg-primary/5" data-testid="notice-individual-certification">
+          <AlertTitle>For individuals</AlertTitle>
+          <AlertDescription>
+            This upload and wallet-signing flow is for individual file certification. Integrating an agent?{" "}
+            <Link href="/agents" className="font-medium text-primary underline-offset-4 hover:underline">
+              See For AI Agents.
+            </Link>
+          </AlertDescription>
+        </Alert>
+
         {!isWalletConnected && (
           <Alert variant="destructive" className="mb-6">
             <AlertTriangle className="h-4 w-4" />

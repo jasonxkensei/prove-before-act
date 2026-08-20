@@ -245,6 +245,12 @@ export default function AgentsPage() {
           <p className="mx-auto mb-8 max-w-2xl text-lg md:text-xl text-muted-foreground leading-relaxed" data-testid="text-hero-subtitle">
             Prove Before Act integrates with every major agent protocol. One proof layer, every platform.
           </p>
+          <p className="text-sm text-muted-foreground">
+            Certifying a file as an individual?{" "}
+            <a href="/certify" className="font-medium text-primary underline-offset-4 hover:underline">
+              Use Certify a file.
+            </a>
+          </p>
         </div>
       </section>
       <section className="border-y bg-muted/30 py-20 md:py-28">

@@ -30,21 +30,30 @@ describe("digital presence audit regression", () => {
   });
 
   it("keeps MCP discovery and LLM documentation canonical while labelling compatibility aliases", async () => {
-    const [mcpResponse, llms, fullLlms] = await Promise.all([
+    const [mcpResponse, llms, fullLlms, openApiResponse, pluginResponse] = await Promise.all([
       fetch(`${BASE_URL}/.well-known/mcp.json`),
       getText("/llms.txt"),
       getText("/llms-full.txt"),
+      fetch(`${BASE_URL}/api/acp/openapi.json`),
+      fetch(`${BASE_URL}/.well-known/ai-plugin.json`),
     ]);
     expect(mcpResponse.status).toBe(200);
+    expect(openApiResponse.status).toBe(200);
+    expect(pluginResponse.status).toBe(200);
     const mcp = await mcpResponse.json();
+    const openApi = await openApiResponse.json();
+    const plugin = await pluginResponse.json();
 
     expect(mcp.integrations.github_action).toContain("xproof-certify");
     expect(mcp.integrations.github_action_note).toMatch(/Legacy GitHub Marketplace slug/i);
     expect(llms).toContain("pip install prove-before-act");
     expect(llms).toContain("pip install xproof");
     expect(llms).toMatch(/xproof.*legacy compatibility aliases/i);
+    expect(llms).toMatch(/xproof_agent_verify \(legacy agent identifier, Moltbook\)/i);
     expect(fullLlms).toContain("pip install prove-before-act");
     expect(fullLlms).toContain("legacy module name retained by the canonical package");
+    expect(openApi.paths["/mcp"].post.description).toMatch(/xproof:\/\/specification \(legacy namespace alias\)/);
+    expect(plugin.description_for_model).toMatch(/xproof_agent_verify \(legacy agent identifier, Moltbook\)/i);
   });
 
   it("links the MCP server from both agent-facing navigation surfaces", () => {
@@ -55,6 +64,22 @@ describe("digital presence audit regression", () => {
       expect(source).toContain('href="/mcp"');
       expect(source).toContain("MCP Server");
     }
+  });
+
+  it("keeps human certification clearly separate from agent integration for crawlers and browser users", async () => {
+    const [certify, agents] = await Promise.all([getText("/certify"), getText("/agents")]);
+    const certifyClient = readFileSync("client/src/pages/certify.tsx", "utf8");
+    const agentsClient = readFileSync("client/src/pages/agents.tsx", "utf8");
+
+    expect(certify).toContain("This tool is for individuals.");
+    expect(certify).toContain("/agents");
+    expect(agents).toContain("<h1>Prove Before Act for AI Agents</h1>");
+    expect(agents).not.toContain("Prove Before Act for AI Agents — Prove Before Act");
+    expect(agents).toContain("MCP Server");
+    expect(agents).toContain("Certifying a file as an individual?");
+    expect(certifyClient).toContain("For individuals");
+    expect(certifyClient).toContain('href="/agents"');
+    expect(agentsClient).toContain('href="/certify"');
   });
 
   it("keeps active Python example onboarding on the canonical distribution", () => {

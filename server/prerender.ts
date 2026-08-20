@@ -219,7 +219,8 @@ async function renderHomePage(baseUrl: string): Promise<string> {
   <nav>
     <a href="${baseUrl}"><strong>Prove Before Act</strong></a> |
     <a href="${baseUrl}/agents">For AI Agents</a> |
-    <a href="${baseUrl}/certify">Certify</a> |
+    <a href="${baseUrl}/certify">Certify a file (for individuals)</a> |
+    <a href="${baseUrl}/mcp">MCP Server</a> |
     <a href="${baseUrl}/docs">API Docs</a>
   </nav>
 </header>
@@ -437,9 +438,10 @@ function renderCertifyPage(baseUrl: string): string {
 </header>
 
 <main>
-  <h1>Certify your file</h1>
+  <h1>Certify a file</h1>
+  <p><strong>This tool is for individuals.</strong> Integrating an agent? See <a href="${baseUrl}/agents">For AI Agents</a>.</p>
   <p>Drop any file to create an immutable proof on the blockchain.</p>
-  <p>Your file stays private - only its SHA-256 fingerprint is recorded on MultiversX.</p>
+  <p>Your file stays private - only its SHA-256 hash is recorded on MultiversX.</p>
 
   <section>
     <h2>How certification works</h2>
@@ -569,12 +571,14 @@ async function renderAgentsPage(baseUrl: string): Promise<string> {
     <a href="${baseUrl}"><strong>Prove Before Act</strong></a> |
     <a href="${baseUrl}/agent-context">Agent Context</a> |
     <a href="${baseUrl}/leaderboard">Leaderboard</a>
+    | <a href="${baseUrl}/mcp">MCP Server</a>
   </nav>
 </header>
 
 <main>
-  <h1>Prove Before Act for AI Agents — Prove Before Act</h1>
+  <h1>Prove Before Act for AI Agents</h1>
   <p><strong>Prove Before Act is the accountability layer for autonomous agents.</strong> Instead of being a black box, your agent becomes transparent, auditable, and verifiable. Anchor your reasoning (WHY) on-chain <em>before</em> executing — then anchor the actual result (WHAT) after. Full 4W audit trail on MultiversX. $${priceUsd.toFixed(2)}/proof. No API key needed via x402.</p>
+  <p>Certifying a file as an individual? Use <a href="${baseUrl}/certify">Certify a file</a>.</p>
   <p><a href="${baseUrl}/agents/zh">中文版 →</a></p>
 
   <section>
