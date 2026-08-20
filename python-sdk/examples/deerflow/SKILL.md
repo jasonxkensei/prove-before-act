@@ -84,7 +84,8 @@ Response:
 ### Using the Python SDK
 
 ```bash
-pip install xproof
+# Canonical distribution; `xproof` imports below are legacy module aliases.
+pip install prove-before-act[deerflow]
 ```
 
 ```python

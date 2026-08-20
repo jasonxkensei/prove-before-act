@@ -209,6 +209,9 @@ export default function AgentsPage() {
             <a href="/stats" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-metrics">
               Metrics
             </a>
+            <a href="/mcp" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-mcp">
+              MCP Server
+            </a>
             <a href="/#faq" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-faq">
               FAQ
             </a>

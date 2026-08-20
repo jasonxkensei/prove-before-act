@@ -9,6 +9,7 @@ Each agent's task output is certified with 4W metadata:
 Run: python main.py
 """
 
+# `xproof` is the legacy module name retained by the canonical prove-before-act distribution.
 from xproof import XProofClient
 from xproof.integrations.crewai import XProofCertifyTool, XProofCrewCallback
 

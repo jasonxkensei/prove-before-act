@@ -1187,7 +1187,7 @@ print(f"WHAT: {BASE}/proof/{what_resp['proof_id']}")`} />
           <div>
             <p className="text-xs font-semibold mb-2">LangChain (Python)</p>
             <CodeBlock lang="python" code={`from langchain.tools import tool
-from xproof import xproof  # pip install prove-before-act
+from xproof import xproof  # legacy module name; install: pip install prove-before-act
 
 @tool
 def prove_before_act(reasoning: str, action: str) -> str:
@@ -1205,7 +1205,7 @@ tools = [prove_before_act, ...]`} />
           <div>
             <p className="text-xs font-semibold mb-2">CrewAI (Python)</p>
             <CodeBlock lang="python" code={`from crewai import Agent, Task
-from xproof import xproof
+from xproof import xproof  # legacy module name; install: pip install prove-before-act
 
 def anchor_before_kickoff(crew_inputs: dict) -> str:
     reasoning = str(crew_inputs)
@@ -1222,7 +1222,7 @@ crew = Crew(agents=[...], tasks=[...], step_callback=anchor_before_kickoff)`} />
           <div>
             <p className="text-xs font-semibold mb-2">OpenAI Agents SDK (Python)</p>
             <CodeBlock lang="python" code={`from agents import Agent, function_tool
-from xproof import xproof
+from xproof import xproof  # legacy module name; install: pip install prove-before-act
 
 @function_tool
 def anchor_reasoning(reasoning: str, action_description: str) -> str:
@@ -1243,7 +1243,7 @@ agent = Agent(
           <div>
             <p className="text-xs font-semibold mb-2">AutoGen (Python)</p>
             <CodeBlock lang="python" code={`from autogen import ConversableAgent
-from xproof import xproof
+from xproof import xproof  # legacy module name; install: pip install prove-before-act
 
 def pre_action_hook(sender, message, recipient, request_reply):
     """Hook: anchor every outbound action before it is processed."""
@@ -1260,7 +1260,7 @@ agent.register_hook("process_message_before_send", pre_action_hook)`} />
           <div>
             <p className="text-xs font-semibold mb-2">LlamaIndex (Python)</p>
             <CodeBlock lang="python" code={`from llama_index.core.tools import FunctionTool
-from xproof import xproof
+from xproof import xproof  # legacy module name; install: pip install prove-before-act
 
 def anchor_proof(reasoning: str, action: str) -> str:
     proof = xproof.anchor(

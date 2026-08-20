@@ -18,6 +18,7 @@ Production wiring
 -----------------
 Replace the mock pieces with real ones:
 
+    # `xproof` is the legacy module name retained by the canonical prove-before-act distribution.
     from xproof import XProofClient
     from xproof.integrations.crewai import XProofCertifyTool
 

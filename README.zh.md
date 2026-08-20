@@ -46,7 +46,8 @@ Prove Before Act 通过**行动前证明**（Prove Before Act）机制，为每�
 ### 方式一：Python SDK
 
 ```bash
-pip install xproof
+# 安装规范发行版；`xproof` 模块名仅保留为旧版兼容别名。
+pip install prove-before-act
 ```
 
 ```python

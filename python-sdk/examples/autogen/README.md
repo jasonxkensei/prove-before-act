@@ -5,8 +5,9 @@ Certify every message exchanged between AutoGen agents on-chain with 4W metadata
 ## Installation
 
 ```bash
-pip install xproof[autogen]
-# or: pip install xproof pyautogen
+# Canonical distribution; `xproof` imports below are legacy module aliases.
+pip install prove-before-act[autogen]
+# or: pip install prove-before-act pyautogen
 ```
 
 ## Quick Start

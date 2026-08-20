@@ -7,7 +7,8 @@ Each LLM response is certified with 4W metadata:
   WHY  = "llm_response"
 
 Install:
-    pip install xproof langchain-core
+    pip install prove-before-act langchain-core
+    # The xproof module name below is a legacy compatibility alias.
 
 Run:
     python main.py

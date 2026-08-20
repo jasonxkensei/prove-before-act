@@ -978,6 +978,7 @@ export function registerProofWriteRoutes(app: Express) {
                     note: "Certify every build artifact automatically in CI/CD.",
                     github_action: {
                       marketplace: "https://github.com/marketplace/actions/xproof-certify",
+                        marketplace_note: "Legacy Marketplace slug maintained for existing CI pipelines; new integrations use the canonical repository below.",
                       repo: "https://github.com/jasonxkensei/prove-before-act-action",
                       example_workflow: [
                         "- name: Certify build artifact",
@@ -990,8 +991,8 @@ export function registerProofWriteRoutes(app: Express) {
                       ].join("\n"),
                     },
                     sdk: {
-                      python: { install: "pip install xproof", import: "from xproof import XProofClient" },
-                      npm: { install: "npm install @xproof/xproof", import: "import { XProofClient } from '@xproof/xproof'" },
+                      python: { install: "pip install prove-before-act", import: "from xproof import XProofClient  # legacy module name retained by canonical package" },
+                      npm: { install: "npm install prove-before-act", import: "import { XProofClient } from 'prove-before-act'" },
                     },
                   },
 

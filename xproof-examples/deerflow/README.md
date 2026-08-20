@@ -13,7 +13,8 @@ Any content the agent passes to the skill — plain text or structured JSON — 
 ## Install
 
 ```bash
-pip install xproof
+# Canonical distribution; `xproof` imports below are legacy module aliases.
+pip install prove-before-act
 ```
 
 ## Usage

@@ -54,23 +54,21 @@ Payment: USDC on Base (x402, no account) or EGLD on MultiversX (ACP/wallet) or p
 
 ## Quick Install
 
-The source repository uses the legacy compatibility name `jasonxkensei/xProof`; it is a distribution identifier, not the current product name.
-
 ```bash
 mkdir -p .agent/skills/prove-before-act/references
 
 # Core Skill — from the canonical main repository
-curl -sL https://raw.githubusercontent.com/jasonxkensei/xProof/main/clawhub-publish/xproof/SKILL.md \
+curl -sL https://raw.githubusercontent.com/jasonxkensei/prove-before-act/main/clawhub-publish/xproof/SKILL.md \
   > .agent/skills/prove-before-act/SKILL.md
 
 # Reference Manuals
 for f in certification x402 mcp; do
-  curl -sL "https://raw.githubusercontent.com/jasonxkensei/xProof/main/clawhub-publish/xproof/references/${f}.md" \
+  curl -sL "https://raw.githubusercontent.com/jasonxkensei/prove-before-act/main/clawhub-publish/xproof/references/${f}.md" \
     > ".agent/skills/prove-before-act/references/${f}.md"
 done
 ```
 
-> **Source verification:** All files above are served from `github.com/jasonxkensei/xProof` — the same repository that contains the server code, contracts, and SDKs. You can audit the full source at that URL before installing.
+> **Source verification:** All files above are served from `github.com/jasonxkensei/prove-before-act` — the canonical repository for the server code, contracts, and SDKs.
 
 ## Data & Privacy
 
@@ -227,7 +225,7 @@ curl -X POST https://provebeforeact.com/api/proof \
   -d '{
     "file_hash": "a1b2c3...",
     "filename": "output.json",
-    "webhook_url": "https://your-agent.example.com/hooks/xproof"
+    "webhook_url": "https://your-agent.example.com/webhooks/prove-before-act"
   }'
 ```
 
@@ -244,7 +242,7 @@ The violation flow is optional and deployment-dependent. Confirm the live contra
 | `gap` (fault) | Deployment-defined | Potential inactive-session gap |
 | `burst` (breach) | Deployment-defined | Potential abnormal submission pattern |
 
-Legacy compatibility contract paths: [XProofViolations.sol](https://github.com/jasonxkensei/xProof/blob/main/contracts/XProofViolations.sol) | [ViolationWatcher.sol](https://github.com/jasonxkensei/xProof/blob/main/contracts/ViolationWatcher.sol)
+Deployed Base contract sources retain their legacy Solidity names and cannot be renamed on-chain: [XProofViolations.sol](https://github.com/jasonxkensei/prove-before-act/blob/main/contracts/XProofViolations.sol) | [ViolationWatcher.sol](https://github.com/jasonxkensei/prove-before-act/blob/main/contracts/ViolationWatcher.sol)
 
 Docs: [https://provebeforeact.com/docs/base-violations](https://provebeforeact.com/docs/base-violations)
 
@@ -254,7 +252,7 @@ Docs: [https://provebeforeact.com/docs/base-violations](https://provebeforeact.c
 
 Prove Before Act implements the open Agent Proof Standard -- a composable, chain-agnostic format for agent accountability.
 
-Full specification: [AGENT_PROOF_STANDARD.md](https://github.com/jasonxkensei/xProof/blob/main/AGENT_PROOF_STANDARD.md)
+Full specification: [AGENT_PROOF_STANDARD.md](https://github.com/jasonxkensei/prove-before-act/blob/main/AGENT_PROOF_STANDARD.md)
 
 Standard API: `GET /api/standard` | `GET /api/standard/validate` (POST)
 

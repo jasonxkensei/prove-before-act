@@ -10,7 +10,8 @@ Certify every agent's task output in a CrewAI crew with an on-chain audit trail.
 ## Install
 
 ```bash
-pip install xproof crewai
+# Canonical distribution; `xproof` imports below are legacy module aliases.
+pip install prove-before-act crewai
 ```
 
 ## Usage

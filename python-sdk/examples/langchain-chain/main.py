@@ -12,6 +12,7 @@ chain's callbacks parameter.
 
 import uuid
 
+# `xproof` is the legacy module name retained by the canonical prove-before-act distribution.
 from xproof import XProofClient
 from xproof.integrations.langchain import XProofCallbackHandler
 

@@ -7,7 +7,8 @@ Each agent's task output is certified with 4W metadata:
   WHY  = task description
 
 Install:
-    pip install xproof crewai
+    pip install prove-before-act crewai
+    # The xproof module name below is a legacy compatibility alias.
 
 Run:
     python main.py

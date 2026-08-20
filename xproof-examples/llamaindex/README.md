@@ -12,7 +12,8 @@ Each certification records WHO (your agent name), WHAT (SHA-256 of the response)
 ## Install
 
 ```bash
-pip install xproof llama-index-core
+# Canonical distribution; `xproof` imports below are legacy module aliases.
+pip install prove-before-act llama-index-core
 ```
 
 ## Usage

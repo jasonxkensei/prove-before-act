@@ -8,7 +8,8 @@ a tamper-proof on-chain record of its output with 4W metadata:
   WHY  = configurable reason
 
 Install:
-    pip install xproof
+    pip install prove-before-act
+    # The xproof module name below is a legacy compatibility alias.
 
 Run:
     python main.py

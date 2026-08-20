@@ -32,6 +32,7 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock
 
+# `xproof` is the legacy module name retained by the canonical prove-before-act distribution.
 from xproof.exceptions import PolicyViolationError
 from xproof.langchain_tool import XProofCertifyTool
 from xproof.models import PolicyCheckResult

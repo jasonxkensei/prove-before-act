@@ -6,7 +6,8 @@ to certify its outputs on-chain with 4W metadata.
 Run: python main.py
 
 Requirements:
-    pip install xproof
+    pip install prove-before-act[deerflow]
+    # The xproof module name below is a legacy compatibility alias.
 """
 
 import json

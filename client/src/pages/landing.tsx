@@ -270,8 +270,8 @@ export default function Landing() {
             <a href="/docs" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-docs">
               Docs
             </a>
-            <a href="/mcp" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-mcp">
-              MCP
+              <a href="/mcp" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-mcp">
+                MCP Server
             </a>
             <a href="/agent-context" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1" data-testid="link-nav-agent-context">
               <Bot className="h-3.5 w-3.5" />
@@ -489,7 +489,7 @@ export default function Landing() {
                         <>
                           <Upload className="h-7 w-7 text-muted-foreground/50 mx-auto mb-3" />
                           <p className="text-sm font-medium text-muted-foreground">Select an output, decision log, data snapshot, or build artifact</p>
-                          <p className="text-xs text-muted-foreground/60 mt-1">Any local file works — only its fingerprint is sent</p>
+                          <p className="text-xs text-muted-foreground/60 mt-1">Only the SHA-256 hash is transmitted — source data stays in this runtime</p>
                         </>
                       ) : (
                         <div className="flex items-center gap-3 justify-center">
@@ -499,7 +499,7 @@ export default function Landing() {
                             {isHashing ? (
                               <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                                 <Loader2 className="h-3 w-3 animate-spin" />
-                                Computing fingerprint…
+                                Computing SHA-256 hash…
                               </p>
                             ) : (
                               <p className="text-xs text-muted-foreground font-mono mt-0.5">{proofHash.slice(0, 20)}…</p>
@@ -1016,7 +1016,7 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
                 <div className="mb-6 mx-auto md:mx-0 flex h-16 w-16 items-center justify-center rounded-full bg-primary text-2xl font-bold text-primary-foreground">
                   2
                 </div>
-                <h3 className="mb-3 text-xl font-semibold">POST the fingerprint</h3>
+                <h3 className="mb-3 text-xl font-semibold">POST the SHA-256 hash</h3>
                 <p className="text-muted-foreground">
                   One API call with a SHA-256 hash and optional metadata — model version, strategy, 
                   confidence level, session ID. Your API key handles authentication. No overhead.
@@ -1032,7 +1032,7 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
                 </div>
                 <h3 className="mb-3 text-xl font-semibold">Proof anchored on-chain</h3>
                 <p className="text-muted-foreground">
-                  Prove Before Act anchors the fingerprint on MultiversX and returns a <code className="text-xs bg-muted px-1 py-0.5 rounded font-mono">proof_id</code> and a public verification URL.
+                  Prove Before Act anchors the hash on MultiversX and returns a <code className="text-xs bg-muted px-1 py-0.5 rounded font-mono">proof_id</code> and blockchain transaction URL.
                   Your entire fleet now has a tamper-proof audit trail.
                 </p>
               </div>
@@ -1085,7 +1085,7 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle className="h-4 w-4 text-primary shrink-0" />
-                    <span>Downloadable PDF proof</span>
+                    <span>Public proof_id and blockchain transaction URL</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle className="h-4 w-4 text-primary shrink-0" />
@@ -1093,7 +1093,7 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle className="h-4 w-4 text-primary shrink-0" />
-                    <span>Verification QR code</span>
+                    <span>Optional PDF export with QR shortcut</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle className="h-4 w-4 text-primary shrink-0" />
@@ -1305,9 +1305,7 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
                   Is my file uploaded to your servers?
                 </AccordionTrigger>
                 <AccordionContent className="text-muted-foreground">
-                  No, never. Your file stays on your device. Only its "fingerprint" 
-                  (a unique 64-character code) is computed locally and recorded on the blockchain. 
-                  Your file remains 100% private.
+                  No. Only the SHA-256 hash is transmitted. Source data never leaves the agent&apos;s runtime environment.
                 </AccordionContent>
               </AccordionItem>
 
@@ -1338,7 +1336,7 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
                   What happens if I modify my file?
                 </AccordionTrigger>
                 <AccordionContent className="text-muted-foreground">
-                  The slightest change (even a single pixel) generates a completely different fingerprint. 
+                  The slightest change (even a single pixel) generates a completely different SHA-256 hash.
                   This is what guarantees integrity: if someone modifies your file, 
                   it will no longer match the original proof.
                 </AccordionContent>
@@ -1349,9 +1347,9 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
                   How can someone verify my proof?
                 </AccordionTrigger>
                 <AccordionContent className="text-muted-foreground">
-                  Each proof contains a QR code and a link to a public verification page. 
-                  Anyone can scan the QR or visit the link to see the proof details 
-                  and verify directly on the blockchain.
+                  Each proof has a public <code className="text-xs">proof_id</code> and blockchain transaction URL.
+                  An optional PDF export can include a QR shortcut to that verification URL,
+                  so anyone can inspect the proof details and verify directly on-chain.
                 </AccordionContent>
               </AccordionItem>
 

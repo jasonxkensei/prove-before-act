@@ -1118,7 +1118,7 @@ print(f"交易已执行。存证链接: https://provebeforeact.com{outcome['veri
           <div>
             <p className="text-xs font-semibold mb-2">LangChain（Python）</p>
             <CodeBlock code={`from langchain.tools import tool
-from xproof import xproof  # pip install xproof
+from xproof import xproof  # 旧版兼容模块；pip install prove-before-act
 
 @tool
 def prove_before_act(reasoning: str, action: str) -> str:
@@ -1210,7 +1210,7 @@ const anchorTool = tool({
             <div className="grid gap-2 sm:grid-cols-2">
               <div>
                 <p className="text-xs text-muted-foreground font-mono mb-1"># Python</p>
-                <code className="text-xs bg-muted px-2 py-1 rounded block">pip install xproof</code>
+                <code className="text-xs bg-muted px-2 py-1 rounded block">pip install prove-before-act</code>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground font-mono mb-1">// JavaScript / TypeScript</p>

@@ -23,7 +23,8 @@ Prove Before Act gives every agent action a tamper-proof audit trail anchored on
 
 ```bash
 # Python frameworks
-pip install xproof
+# Canonical distribution; Python's `xproof` module name is a legacy compatibility alias.
+pip install prove-before-act
 
 # TypeScript / Vercel
 npm install @prove-before-act/sdk

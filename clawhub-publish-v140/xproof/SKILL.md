@@ -95,13 +95,13 @@ Use the live pricing and payment responses to determine what happens when a tria
 ```bash
 mkdir -p .agent/skills/prove-before-act/references
 
-# Core Skill — from the canonical main repository (jasonxkensei/xProof)
-curl -sL https://raw.githubusercontent.com/jasonxkensei/xProof/main/clawhub-publish/xproof/SKILL.md \
+# Core Skill — from the canonical main repository
+curl -sL https://raw.githubusercontent.com/jasonxkensei/prove-before-act/main/clawhub-publish/xproof/SKILL.md \
   > .agent/skills/prove-before-act/SKILL.md
 
 # Reference Manuals
 for f in certification x402 mcp; do
-  curl -sL "https://raw.githubusercontent.com/jasonxkensei/xProof/main/clawhub-publish/xproof/references/${f}.md" \
+  curl -sL "https://raw.githubusercontent.com/jasonxkensei/prove-before-act/main/clawhub-publish/xproof/references/${f}.md" \
     > ".agent/skills/prove-before-act/references/${f}.md"
 done
 ```

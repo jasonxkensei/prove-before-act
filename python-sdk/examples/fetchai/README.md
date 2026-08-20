@@ -15,7 +15,8 @@ Demonstrates on-chain proof anchoring for Fetch.ai uAgent messages using
 ## Run
 
 ```bash
-pip install xproof
+# Canonical distribution; `xproof` imports below are legacy module aliases.
+pip install prove-before-act[fetchai]
 python main.py
 ```
 

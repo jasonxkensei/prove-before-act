@@ -45,6 +45,7 @@ def simulate_crew_task(
 
     output_hash = _hash({"role": agent_role, "output": output})
 
+    # `xproof` is the legacy module name retained by the canonical prove-before-act distribution.
     from xproof.models import TimingBreakdown
 
     timing: TimingBreakdown = {

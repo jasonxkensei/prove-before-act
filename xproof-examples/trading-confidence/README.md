@@ -26,7 +26,8 @@ Without confidence anchoring, an agent could claim it "predicted" a move after t
 ## Install
 
 ```bash
-pip install xproof>=0.2.2
+# Canonical distribution; `xproof` imports below are legacy module aliases.
+pip install prove-before-act>=0.2.2
 ```
 
 ## Run the demo

@@ -12,7 +12,8 @@ The TracingProcessor supports both span types used by the OpenAI Agents SDK:
   - "agent"    — AgentSpanData (agent lifecycle)
 
 Install:
-    pip install xproof openai-agents
+    pip install prove-before-act openai-agents
+    # The xproof module name below is a legacy compatibility alias.
 
 Run:
     python main.py

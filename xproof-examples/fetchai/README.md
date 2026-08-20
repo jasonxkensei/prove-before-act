@@ -11,7 +11,8 @@ Prove Before Act anchors the **WHY** (trigger + reasoning) on-chain *before* the
 ## Quickstart
 
 ```bash
-pip install xproof uagents
+# Canonical distribution; `xproof` imports below are legacy module aliases.
+pip install prove-before-act uagents
 ```
 
 ```python
@@ -94,6 +95,6 @@ No API key needed — the demo uses mocked responses. To certify on-chain for re
 
 ## Links
 
-- SDK: `pip install xproof`
+- SDK: `pip install prove-before-act` (the `xproof` module name is a legacy compatibility alias)
 - Docs (LLM-readable): [provebeforeact.com/llms.txt](https://provebeforeact.com/llms.txt)
 - GitHub: [github.com/jasonxkensei/prove-before-act](https://github.com/jasonxkensei/prove-before-act)

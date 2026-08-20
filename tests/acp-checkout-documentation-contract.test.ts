@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { acpCheckoutRequestSchema } from "../shared/schema";
 
@@ -16,19 +17,33 @@ describe("canonical ACP checkout documentation contract", () => {
     expect(acpCheckoutRequestSchema.safeParse(sample).success).toBe(true);
   });
 
-  it("keeps public and LLM-facing checkout samples on the canonical signed flow", () => {
-    const docs = readFileSync("docs/agent-integration.md", "utf8");
-    const generatedGuides = readFileSync("server/routes/content.ts", "utf8");
-    const browserDocs = readFileSync("client/src/pages/docs.tsx", "utf8");
+  it("keeps repository documentation and generated guides on the canonical signed flow", () => {
+    const documentationFiles = readdirSync("docs", { recursive: true })
+      .filter((entry) => entry.endsWith(".md"))
+      .map((entry) => join("docs", entry));
+    const generatedGuideFiles = [
+      "server/routes/content.ts",
+      "server/routes/agents.ts",
+      "client/src/pages/docs.tsx",
+    ];
+    const sources = [...documentationFiles, ...generatedGuideFiles]
+      .map((file) => readFileSync(file, "utf8"));
     const message = "pba-acp-checkout:pba-certification:<file_hash>:<payer_wallet>";
 
-    for (const source of [docs, generatedGuides, browserDocs]) {
-      expect(source).toContain("pba-certification");
-      expect(source).toContain("payer_wallet");
-      expect(source).toContain("payer_wallet_signature");
-    }
-    expect(docs).toContain(message);
-    expect(generatedGuides).toContain(message);
-    expect(docs).not.toContain("blockchain-certification");
+    const combinedSources = sources.join("\n");
+    expect(combinedSources).toContain("pba-certification");
+    expect(combinedSources).toContain("payer_wallet");
+    expect(combinedSources).toContain("payer_wallet_signature");
+    expect(combinedSources).toContain(message);
+    expect(combinedSources).not.toContain("blockchain-certification");
+  });
+
+  it("keeps generated SDK quick-start guidance canonical and names legacy npm support separately", () => {
+    const agentDiscovery = readFileSync("server/routes/agents.ts", "utf8");
+
+    expect(agentDiscovery).toContain('install: "npm install prove-before-act"');
+    expect(agentDiscovery).toContain('legacy_install: "npm install @xproof/xproof (legacy compatibility only)"');
+    expect(agentDiscovery).toContain('import { XProofClient } from "prove-before-act"');
+    expect(agentDiscovery).not.toContain('install: "npm install @xproof/xproof"');
   });
 });

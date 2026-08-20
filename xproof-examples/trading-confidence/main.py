@@ -12,7 +12,8 @@ All three anchors share the same decision_id, so anyone can retrieve the
 full chain and verify the agent's reasoning progression.
 
 Install:
-    pip install xproof>=0.2.2
+    pip install prove-before-act>=0.2.2
+    # The xproof module name below is a legacy compatibility alias.
 
 Run:
     python main.py

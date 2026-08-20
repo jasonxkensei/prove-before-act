@@ -20,7 +20,8 @@ Prove Before Act solves this by anchoring a SHA-256 hash of the agent's output o
 ## Installation
 
 ```bash
-pip install xproof
+# Canonical distribution; `xproof` imports below are legacy module aliases.
+pip install prove-before-act[deerflow]
 ```
 
 ## Usage in DeerFlow
@@ -82,7 +83,7 @@ Below is a ready-to-paste PR description for submitting this skill to the DeerFl
 
 **Integration surface:**
 - Skill definition: `skills/xproof.yaml`
-- Python implementation: `pip install xproof` (the `XProofDeerFlowSkill` class)
+- Python implementation: `pip install prove-before-act[deerflow]` (the `xproof` module name used by `XProofDeerFlowSkill` is a legacy compatibility alias)
 - Zero DeerFlow core changes required — uses the standard skill interface
 
 **Links:**

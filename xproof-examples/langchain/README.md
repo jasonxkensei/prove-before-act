@@ -13,7 +13,8 @@ Each `on_llm_end` event produces one certification with:
 ## Install
 
 ```bash
-pip install xproof langchain-core
+# Canonical distribution; `xproof` imports below are legacy module aliases.
+pip install prove-before-act langchain-core
 ```
 
 ## Usage

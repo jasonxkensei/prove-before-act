@@ -37,6 +37,7 @@ def certify_agent_reply(
     jurisdiction_type: str = "instruction_following",
 ) -> dict:
     """Certify one AutoGen message exchange with timing breakdown."""
+    # `xproof` is the legacy module name retained by the canonical prove-before-act distribution.
     from xproof.models import TimingBreakdown
 
     reasoning_started_at = _now()

@@ -7,7 +7,8 @@ This example is self-contained and works with the base `Prove Before Act>=0.1.0`
 ## Installation
 
 ```bash
-pip install openai-agents Prove Before Act
+# Canonical distribution; `xproof` imports below are legacy module aliases.
+pip install prove-before-act[openai-agents]
 ```
 
 ## Quick Start — RunHooks

@@ -509,7 +509,7 @@ Discover available products for AI agent purchase.
 {
   "products": [
     {
-      "id": "blockchain-certification",
+      "id": "pba-certification",
       "name": "Blockchain File Certification",
       "description": "Anchor a SHA-256 file hash on MultiversX blockchain for proof of existence",
       "pricing": {
@@ -519,9 +519,13 @@ Discover available products for AI agent purchase.
         "model": "per_unit"
       },
       "schema": {
-        "file_hash": { "type": "string", "description": "SHA-256 hash of the file (64-char hex)", "required": true },
-        "file_name": { "type": "string", "description": "Original file name", "required": true },
-        "author_name": { "type": "string", "description": "Author or owner name", "required": false }
+        "inputs": {
+          "file_hash": { "type": "string", "description": "SHA-256 hash of the file (64-char hex)", "required": true },
+          "filename": { "type": "string", "description": "Original file name", "required": true },
+          "author_name": { "type": "string", "description": "Author or owner name", "required": false }
+        },
+        "payer_wallet": { "type": "string", "description": "MultiversX payer wallet", "required": true },
+        "payer_wallet_signature": { "type": "string", "description": "Ed25519 signature proving payer wallet control", "required": true }
       }
     }
   ]
@@ -540,19 +544,28 @@ Start an ACP checkout session. Creates a payment request with a 30-minute expiry
 
 ```json
 {
-  "product_id": "blockchain-certification",
-  "file_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-  "file_name": "report.pdf",
-  "author_name": "Alice"
+  "product_id": "pba-certification",
+  "inputs": {
+    "file_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "filename": "report.pdf",
+    "author_name": "Alice"
+  },
+  "payer_wallet": "erd1yourpayerwallet",
+  "payer_wallet_signature": "<128-character hex Ed25519 signature>"
 }
 ```
 
+Sign this exact UTF-8 message with the payer wallet's Ed25519 key before making
+the request: `pba-acp-checkout:pba-certification:<file_hash>:<payer_wallet>`.
+
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| product_id | string | Yes | Must be "blockchain-certification" |
-| file_hash | string | Yes | SHA-256 hash (64-character hexadecimal) |
-| file_name | string | Yes | Original file name |
-| author_name | string | No | Author name for the certificate |
+| product_id | string | Yes | Must be `pba-certification` (`xproof-certification` remains a legacy alias) |
+| inputs.file_hash | string | Yes | SHA-256 hash (64-character hexadecimal) |
+| inputs.filename | string | Yes | Original file name |
+| inputs.author_name | string | No | Author name for the certificate |
+| payer_wallet | string | Yes | MultiversX wallet that will send the payment |
+| payer_wallet_signature | string | Yes | 128-character hexadecimal signature over the checkout message |
 
 **Response (200):**
 
@@ -586,10 +599,14 @@ curl -X POST https://provebeforeact.com/api/acp/checkout \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer pm_a1b2c3d4e5f6..." \
   -d '{
-    "product_id": "blockchain-certification",
-    "file_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "file_name": "report.pdf",
-    "author_name": "Alice"
+    "product_id": "pba-certification",
+    "inputs": {
+      "file_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "filename": "report.pdf",
+      "author_name": "Alice"
+    },
+    "payer_wallet": "erd1yourpayerwallet",
+    "payer_wallet_signature": "<128-character hex Ed25519 signature>"
   }'
 ```
 
@@ -671,7 +688,7 @@ Check the status of an ACP checkout session.
 {
   "id": "uuid",
   "status": "pending",
-  "product_id": "blockchain-certification",
+  "product_id": "pba-certification",
   "file_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
   "expires_at": "2026-02-01T12:30:00.000Z",
   "certification_id": null

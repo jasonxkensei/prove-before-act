@@ -26,6 +26,7 @@ def _hash(data: object) -> str:
 
 
 def main() -> None:
+    # `xproof` is the legacy module name retained by the canonical prove-before-act distribution.
     from xproof import XProofClient
     from xproof.models import TimingBreakdown
 

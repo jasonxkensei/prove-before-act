@@ -242,12 +242,12 @@ async function renderHomePage(baseUrl: string): Promise<string> {
         <p>Your agent hashes a decision record, model output, data snapshot, or build artifact locally. The source material stays private.</p>
       </li>
       <li>
-        <h3>Anchor the fingerprint</h3>
-        <p>A unique fingerprint (SHA-256 hash) is computed locally. It's like the DNA of your file.</p>
+        <h3>Hash the agent output</h3>
+        <p>A SHA-256 hash is computed locally from the agent's output. Only the hash is transmitted — source material stays private.</p>
       </li>
       <li>
         <h3>Engraved on the blockchain</h3>
-        <p>The fingerprint is permanently recorded on the blockchain. You receive a PDF certificate with a QR code.</p>
+        <p>The hash is anchored on MultiversX. The agent receives a proof_id and blockchain transaction URL — independently verifiable by any third party.</p>
       </li>
     </ol>
   </section>
@@ -257,9 +257,9 @@ async function renderHomePage(baseUrl: string): Promise<string> {
     <p>Current live rate: $${priceUsd.toFixed(2)} per certification (<a href="${baseUrl}/api/pricing">see /api/pricing</a>). Pay only for what you use. No hidden fees, no commitment.</p>
     <ul>
       <li>Unlimited certifications</li>
-      <li>Downloadable PDF certificate</li>
+      <li>Public proof_id and blockchain transaction URL</li>
       <li>Public verification page</li>
-      <li>Verification QR code</li>
+      <li>Optional PDF export with QR shortcut</li>
       <li>MultiversX blockchain</li>
     </ul>
   </section>
@@ -268,7 +268,7 @@ async function renderHomePage(baseUrl: string): Promise<string> {
     <h2>Frequently asked questions</h2>
     <dl>
       <dt>Is my file uploaded to your servers?</dt>
-      <dd>No, never. Your file stays on your device. Only its fingerprint (a unique 64-character code) is computed locally and recorded on the blockchain.</dd>
+      <dd>No. Only the SHA-256 hash is transmitted. Source data never leaves the agent's runtime environment.</dd>
       <dt>What is the MultiversX blockchain?</dt>
       <dd>MultiversX is a high-performance, eco-friendly European blockchain. Unlike Bitcoin, it consumes very little energy.</dd>
       <dt>Does it have legal value?</dt>
@@ -287,6 +287,7 @@ async function renderHomePage(baseUrl: string): Promise<string> {
   <p>Powered by <a href="https://multiversx.com">MultiversX</a></p>
   <nav>
     <a href="${baseUrl}/agents">For AI Agents</a> |
+    <a href="${baseUrl}/mcp">MCP Server</a> |
     <a href="${baseUrl}/legal/mentions">Legal notices</a> |
     <a href="${baseUrl}/legal/privacy">Privacy policy</a> |
     <a href="${baseUrl}/legal/terms">Terms</a>
@@ -327,14 +328,14 @@ ${safeJsonLd({
   },
   "featureList": [
     "SHA-256 blockchain anchoring on MultiversX",
-    "Privacy-preserving: files never leave your device",
+    "Privacy-preserving: source data remains in the agent runtime; only SHA-256 hashes are transmitted",
     "REST API with API key authentication",
     "MCP (Model Context Protocol) integration for AI agents",
     "x402 HTTP-native payments with USDC on Base",
     "Agent Audit Log Standard (4W framework: WHO/WHAT/WHEN/WHY)",
     "Server-side violation detection with trust scoring (Base event integration planned)",
     "GitHub Action for CI/CD pipeline integration",
-    "Downloadable PDF certificate with QR code",
+    "Public proof_id and blockchain transaction URL (optional PDF export with QR shortcut)",
     "Public verification page for each proof",
     "Trust scoring and agent leaderboard"
   ],
@@ -365,7 +366,7 @@ ${safeJsonLd({
       "name": "Is my file uploaded to Prove Before Act servers?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "No, never. Your file stays on your device. Only its fingerprint (a unique 64-character SHA-256 hash) is computed locally in your browser and recorded on the blockchain. Prove Before Act never sees, stores, or transmits your actual file."
+        "text": "No. Only the SHA-256 hash is transmitted. Source data never leaves the agent's runtime environment."
       }
     },
     {
@@ -684,7 +685,7 @@ resp = requests.post("${baseUrl}/api/batch",
 
     <h3>SDKs &amp; frameworks</h3>
     <ul>
-      <li>Python: <code>pip install xproof</code> — LangChain, CrewAI, AutoGen, LlamaIndex, OpenAI Agents SDK</li>
+      <li>Python: <code>pip install prove-before-act</code> — LangChain, CrewAI, AutoGen, LlamaIndex, OpenAI Agents SDK. The <code>xproof</code> module name remains a legacy compatibility alias.</li>
       <li>JavaScript: <code>npm install prove-before-act</code> — Vercel AI, LangChain JS</li>
     </ul>
   </section>
@@ -842,7 +843,7 @@ resp = requests.post("${baseUrl}/api/batch",
 
     <h3>SDK 与框架</h3>
     <ul>
-      <li>Python：<code>pip install xproof</code> — 支持 LangChain、CrewAI、AutoGen、LlamaIndex、OpenAI Agents SDK</li>
+      <li>Python：<code>pip install prove-before-act</code> — 支持 LangChain、CrewAI、AutoGen、LlamaIndex、OpenAI Agents SDK。<code>xproof</code> 模块名仅保留为旧版兼容别名。</li>
       <li>JavaScript：<code>npm install prove-before-act</code> — 支持 Vercel AI、LangChain JS</li>
     </ul>
   </section>
@@ -1143,7 +1144,7 @@ Content-Type: application/json
   <section>
     <h2>Framework Integrations</h2>
     <ul>
-      <li><strong>LangChain</strong> — pip install xproof → XProofTool() in agent tools list</li>
+      <li><strong>LangChain</strong> — pip install prove-before-act → XProofTool() in agent tools list (<code>xproof</code> module name is a legacy compatibility alias)</li>
       <li><strong>CrewAI</strong> — XProofTool as @tool, anchor before crew.kickoff()</li>
       <li><strong>AutoGen</strong> — register_for_llm() decorator, anchor in pre-action hook</li>
       <li><strong>LlamaIndex</strong> — FunctionTool.from_defaults(fn=xproof.anchor)</li>

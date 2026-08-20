@@ -9,7 +9,8 @@ Demonstrates four common patterns for the XProofuAgentMiddleware:
 Run: python main.py
 
 Requirements:
-    pip install xproof
+    pip install prove-before-act[fetchai]
+    # The xproof module name below is a legacy compatibility alias.
 """
 
 from unittest.mock import MagicMock

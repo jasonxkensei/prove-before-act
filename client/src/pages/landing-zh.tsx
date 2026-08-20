@@ -559,7 +559,7 @@ GET /api/agents/{wallet}/incident-report
               </div>
               <div className="p-4 font-mono text-xs text-[#e6edf3] overflow-x-auto leading-relaxed">
                 <div className="text-[#8b949e]">import hashlib, json</div>
-                <div className="text-[#8b949e]">import xproof  <span className="text-[#8b949e]"># pip install xproof</span></div>
+                <div className="text-[#8b949e]">import xproof  <span className="text-[#8b949e]"># 旧版兼容模块；pip install prove-before-act</span></div>
                 <div className="mt-3"><span className="text-[#f97583]">client</span> = xproof.Client(api_key=<span className="text-[#a5d6ff]">"pm_..."</span>)</div>
                 <div className="mt-4 text-[#8b949e]"># 步骤1：执行前，锚定决策依据（WHY）</div>
                 <div><span className="text-[#e3b341]">why_proof</span> = client.certify(</div>

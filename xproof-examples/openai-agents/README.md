@@ -16,7 +16,8 @@ Both record the 4W framework: WHO = agent/tool name at runtime, WHAT = SHA-256 o
 ## Install
 
 ```bash
-pip install xproof openai-agents
+# Canonical distribution; `xproof` imports below are legacy module aliases.
+pip install prove-before-act openai-agents
 ```
 
 ## Usage

@@ -10,7 +10,8 @@ Certify every message exchanged between AutoGen agents on the MultiversX blockch
 ## Install
 
 ```bash
-pip install xproof pyautogen
+# Canonical distribution; `xproof` imports below are legacy module aliases.
+pip install prove-before-act pyautogen
 ```
 
 ## Usage

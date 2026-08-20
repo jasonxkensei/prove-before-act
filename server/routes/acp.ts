@@ -1530,7 +1530,7 @@ export function registerAcpRoutes(app: Express) {
                     required: ["agent_name"],
                     properties: {
                       agent_name: { type: "string", minLength: 1, maxLength: 100, description: "A unique name for your agent", example: "my-trading-bot" },
-                      webhook_url: { type: "string", format: "uri", description: "Optional HTTPS webhook URL to receive certification notifications", example: "https://your-agent.example.com/webhooks/xproof" },
+                      webhook_url: { type: "string", format: "uri", description: "Optional HTTPS webhook URL to receive certification notifications", example: "https://your-agent.example.com/webhooks/prove-before-act" },
                     },
                   },
                 },

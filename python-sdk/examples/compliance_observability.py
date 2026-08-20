@@ -26,6 +26,7 @@ from contextlib import contextmanager
 from typing import Any, Optional
 from unittest.mock import MagicMock, patch
 
+# `xproof` is the legacy module name retained by the canonical prove-before-act distribution.
 from xproof.models import ConfidenceTrail, PolicyCheckResult, PolicyViolation
 
 logger = logging.getLogger("xproof.compliance")

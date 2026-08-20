@@ -427,11 +427,14 @@ AI agents discover Prove Before Act capabilities through multiple standard endpo
 ```
 [1] GET /api/acp/products
     - Returns available products with pricing
-    - Product: "blockchain-certification" at the current flat rate in EGLD (see /api/pricing)
+    - Product: "pba-certification" at the current flat rate in EGLD (see /api/pricing)
       |
 [2] POST /api/acp/checkout
     Authorization: Bearer pm_<api_key>
-    Body: { product_id, file_hash, file_name, author_name }
+    Body: { product_id: "pba-certification", inputs: { file_hash, filename, author_name },
+            payer_wallet, payer_wallet_signature }
+    - payer_wallet_signature signs:
+      pba-acp-checkout:pba-certification:<file_hash>:<payer_wallet>
     - Validates API key
     - Creates checkout record with 30-minute expiry
     - Calculates EGLD amount at current rate

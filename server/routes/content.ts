@@ -2198,6 +2198,7 @@ ${urls}
       integrations: {
         openclaw_skill: "https://github.com/jasonxkensei/prove-before-act-openclaw-skill",
         github_action: "https://github.com/marketplace/actions/xproof-certify",
+        github_action_note: "Legacy GitHub Marketplace slug, maintained for existing CI pipelines. Use the canonical action repository jasonxkensei/prove-before-act-action for new integrations.",
         github_action_repo: "https://github.com/jasonxkensei/prove-before-act-action",
         langchain: `${baseUrl}/learn/api.md`,
         crewai: `${baseUrl}/learn/api.md`,
@@ -2259,7 +2260,7 @@ Certify a file in one API call:
 curl -X POST https://provebeforeact.com/api/proof \\\\
   -H "Authorization: Bearer pm_YOUR_API_KEY" \\\\
   -H "Content-Type: application/json" \\\\
-  -d '{"file_hash": "a1b2c3d4...64-char-sha256-hex", "filename": "document.pdf", "webhook_url": "https://your-agent.example.com/webhooks/xproof"}'
+  -d '{"file_hash": "a1b2c3d4...64-char-sha256-hex", "filename": "document.pdf", "webhook_url": "https://your-agent.example.com/webhooks/prove-before-act"}'
 \\\`\\\`\\\`
 
 Response: proof_id, verify_url, certificate_url, blockchain transaction hash, webhook_status.
@@ -2334,18 +2335,18 @@ After execution, call \\\`submit_outcome\\\` with the actual outcome to track ca
 
 ### SDK — Python
 \\\`\\\`\\\`bash
-pip install xproof
+pip install prove-before-act
 \\\`\\\`\\\`
 \\\`\\\`\\\`python
-from xproof import XProofClient
+from xproof import XProofClient  # legacy module name retained by the canonical package
 client = XProofClient(api_key="pm_YOUR_API_KEY")
 proof = client.certify_file("path/to/file.pdf")
 print(proof.verify_url)
 # Staged confidence
-from xproof import certify_with_confidence
+from xproof import certify_with_confidence  # legacy module name retained for compatibility
 certify_with_confidence(api_key="pm_...", file_hash="...", decision_id="...", confidence_level=0.8, stage="pre-commitment")
 \\\`\\\`\\\`
-PyPI: https://pypi.org/project/prove-before-act/ — Integrations: LangChain, CrewAI, LlamaIndex, AutoGen, OpenAI Agents SDK, Vercel AI. The \`xproof\` distribution name remains a legacy compatibility alias.
+PyPI: https://pypi.org/project/prove-before-act/ — Integrations: LangChain, CrewAI, LlamaIndex, AutoGen, OpenAI Agents SDK, Vercel AI. \`pip install xproof\` and the \`xproof\` module name are legacy compatibility aliases.
 
 ### SDK — JavaScript / TypeScript
 \\\`\\\`\\\`bash
@@ -2967,10 +2968,10 @@ Prove Before Act works with any MCP-compatible agent (Claude Code, Codex, OpenCl
 ### Python SDK
 Install: \`pip install prove-before-act\`
 PyPI: https://pypi.org/project/prove-before-act/
-\`xproof\` is the legacy import/package name retained for compatibility.
+\`xproof\` is the legacy import/package name retained for compatibility; new installs use \`pip install prove-before-act\`.
 
 \`\`\`python
-from xproof import XProofClient
+from xproof import XProofClient  # legacy module name retained by the canonical package
 
 client = XProofClient(api_key="pm_YOUR_API_KEY")
 
@@ -4263,6 +4264,7 @@ export const xproofAuditPlugin: Plugin = {
       integrations: {
         openclaw_skill: "https://github.com/jasonxkensei/prove-before-act-openclaw-skill",
         github_action: "https://github.com/marketplace/actions/xproof-certify",
+        github_action_note: "Legacy GitHub Marketplace slug, maintained for existing CI pipelines. Use jasonxkensei/prove-before-act-action for new integrations.",
         langchain: `${baseUrl}/agent-tools/langchain.py`,
         crewai: `${baseUrl}/agent-tools/crewai.py`,
         audit_guard_langchain: `${baseUrl}/agent-tools/audit-guard-langchain.py`,
@@ -4337,7 +4339,7 @@ description: Answers to the 10 exact questions autonomous agents ask when evalua
 url: ${baseUrl}/agent-context.md
 human_page: ${baseUrl}/agent-context
 updated: 2026-07-03
-tags: [proof-of-existence, blockchain-certification, agent-accountability, x402, MCP, audit-trail, Prove-Before-Act]
+tags: [proof-of-existence, pba-certification, agent-accountability, x402, MCP, audit-trail, Prove-Before-Act]
 ---
 
 # Prove Before Act — Agent Context Document

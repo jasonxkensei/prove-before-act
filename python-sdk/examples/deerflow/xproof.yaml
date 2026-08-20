@@ -67,7 +67,7 @@ example:
 
 dependencies:
   python:
-    - "xproof>=0.1.0"
+    - "prove-before-act>=0.1.0" # `xproof` remains the legacy Python module name.
 
 env:
   - name: PROVEBEFOREACT_API_KEY
