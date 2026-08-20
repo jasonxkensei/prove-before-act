@@ -75,7 +75,10 @@ jobs:
       - name: Wait for server readiness
         run: |
           for i in $(seq 1 60); do
-            if curl -sf "$TEST_BASE_URL/api/health" > /dev/null; then
+            # /api/health is an operational health gate and correctly returns
+            # 503 in CI when optional blockchain/signer settings are absent.
+            # Use a lightweight public route for process readiness instead.
+            if curl -sf "$TEST_BASE_URL/api/acp/openapi.json" > /dev/null; then
               echo "Server is ready"
               exit 0
             fi
