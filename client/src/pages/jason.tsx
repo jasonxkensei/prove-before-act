@@ -12,6 +12,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { PublicSiteHeader, PublicSiteFooter } from "@/components/public-site-chrome";
 
 const REFERENCE_AGENT_WALLET = "erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9";
 const LIVE_PROOF_PATH = "/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b";
@@ -45,30 +46,7 @@ export default function JasonPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between">
-          <a href="/" className="flex items-center gap-2" data-testid="link-jason-logo-home">
-            <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
-          </a>
-          <nav className="hidden items-center gap-6 md:flex" aria-label="Primary navigation">
-            <a href="/agents" className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
-              For agents
-            </a>
-            <a href="/agent-context" className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
-              Agent context
-            </a>
-            <a href="/docs" className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">
-              Docs
-            </a>
-          </nav>
-          <Button asChild size="sm" variant="outline">
-            <a href="/agents" data-testid="link-jason-nav-integrate">
-              Integrate an agent
-              <ArrowRight className="ml-2 h-3.5 w-3.5" />
-            </a>
-          </Button>
-        </div>
-      </header>
+      <PublicSiteHeader />
 
       <main>
         <section className="border-b bg-muted/25 py-16 md:py-24">
@@ -225,16 +203,7 @@ export default function JasonPage() {
         </section>
       </main>
 
-      <footer className="border-t py-8">
-        <div className="container flex flex-col items-center justify-between gap-3 text-center text-sm text-muted-foreground sm:flex-row sm:text-left">
-          <span>© {new Date().getFullYear()} Prove Before Act.</span>
-          <div className="flex items-center gap-4">
-            <a href="/" className="hover:text-foreground">Product</a>
-            <a href="/docs" className="hover:text-foreground">Docs</a>
-            <a href="/agent-context" className="hover:text-foreground">For agents</a>
-          </div>
-        </div>
-      </footer>
+      <PublicSiteFooter />
     </div>
   );
 }

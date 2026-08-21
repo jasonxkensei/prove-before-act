@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PublicSiteHeader, PublicSiteFooter } from "@/components/public-site-chrome";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -143,27 +144,7 @@ curl ${BASE}/api/proof/a3f2b1c4-7890-4def-abcd-1234567890ab`;
 export default function DocsTradingPage() {
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Button asChild variant="ghost" size="icon" data-testid="button-back-docs">
-              <a href="/docs"><ArrowLeft className="h-4 w-4" /></a>
-            </Button>
-            <a href="/" className="flex items-center gap-2" data-testid="link-logo">
-              <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
-            </a>
-            <Badge variant="outline">Integration Guide</Badge>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button asChild variant="ghost" size="sm" data-testid="link-api-docs">
-              <a href="/docs">API Reference</a>
-            </Button>
-            <Button asChild variant="ghost" size="sm" data-testid="link-leaderboard">
-              <a href="/leaderboard">Leaderboard</a>
-            </Button>
-          </div>
-        </div>
-      </header>
+      <PublicSiteHeader />
 
       <div className="container py-10 max-w-3xl mx-auto">
         <div className="mb-10">
@@ -390,21 +371,8 @@ export default function DocsTradingPage() {
           </section>
         </div>
 
-        <footer className="border-t mt-12 pt-8">
-          <div className="text-center text-sm text-muted-foreground">
-            <p className="mb-3">
-              <a href={`${BASE}/leaderboard`} className="text-primary hover:underline" data-testid="link-footer-leaderboard">provebeforeact.com/leaderboard</a>
-              {" · "}
-              <a href="/docs" className="text-primary hover:underline" data-testid="link-footer-docs">API Reference</a>
-              {" · "}
-              <a href="/" className="text-primary hover:underline" data-testid="link-footer-home">provebeforeact.com</a>
-            </p>
-            <p className="text-xs">
-              If you can't prove execution, your backtests are marketing.
-            </p>
-          </div>
-        </footer>
       </div>
+      <PublicSiteFooter />
     </div>
   );
 }

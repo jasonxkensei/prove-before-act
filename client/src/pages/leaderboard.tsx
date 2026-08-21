@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
+import { PublicSiteHeader, PublicSiteFooter } from "@/components/public-site-chrome";
 import { Shield, Trophy, Search, Bot, ArrowRight, TrendingUp, TrendingDown, Flame, BadgeCheck, Award, ChevronLeft, ChevronRight, Sparkles, AlertTriangle, Crosshair, UserPlus, Loader2, Key, Copy, Check } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -272,21 +273,7 @@ export default function Leaderboard() {
   return (
     <>
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between gap-4">
-          <Link href="/" data-testid="link-logo-home" className="flex items-center gap-2">
-            <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
-          </Link>
-          <nav className="flex items-center gap-4">
-            <Button asChild variant="ghost" size="sm" data-testid="link-nav-home">
-              <Link href="/">Home</Link>
-            </Button>
-            <Button asChild variant="ghost" size="sm" data-testid="link-nav-dashboard">
-              <Link href="/dashboard">Dashboard</Link>
-            </Button>
-          </nav>
-        </div>
-      </header>
+      <PublicSiteHeader />
 
       <div className="container mx-auto max-w-5xl py-12">
         <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
@@ -724,6 +711,7 @@ export default function Leaderboard() {
           </div>
         </div>
       )}
+      <PublicSiteFooter />
     </div>
 
     {/* ── Register your agent dialog ───────────────────────────────────────── */}
