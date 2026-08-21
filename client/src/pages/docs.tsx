@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PublicSiteFooter, PublicSiteHeader } from "@/components/public-site-chrome";
 import {
   Shield,
   Search,
@@ -816,35 +817,16 @@ export default function DocsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Button asChild variant="ghost" size="icon" data-testid="button-back-home">
-              <a href="/"><ArrowLeft className="h-4 w-4" /></a>
-            </Button>
-            <a href="/" className="flex items-center gap-2" data-testid="link-logo-docs">
-              <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
-            </a>
-            <Badge variant="outline">API Docs</Badge>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <Button asChild variant="ghost" size="sm" data-testid="link-4w-guide">
-              <a href="/docs/4w">4W Guide</a>
-            </Button>
-            <Button asChild variant="ghost" size="sm" data-testid="link-trading-guide">
-              <a href="/docs/trading">Trading Guide</a>
-            </Button>
-            <Button asChild variant="ghost" size="sm" data-testid="link-llms-txt">
-              <a href="/llms.txt" target="_blank" rel="noopener noreferrer">llms.txt</a>
-            </Button>
-            <Button asChild variant="ghost" size="sm" data-testid="link-openapi">
-              <a href="/api/acp/openapi.json" target="_blank" rel="noopener noreferrer">OpenAPI</a>
-            </Button>
-          </div>
-        </div>
-      </header>
+      <PublicSiteHeader primaryActionHref="/#free-trial" />
 
       <div className="container py-10 max-w-4xl mx-auto">
+        <div className="mb-8 flex flex-wrap items-center justify-center gap-2">
+          <Badge variant="outline">API Docs</Badge>
+          <Button asChild variant="ghost" size="sm" data-testid="link-4w-guide"><a href="/docs/4w">4W Guide</a></Button>
+          <Button asChild variant="ghost" size="sm" data-testid="link-trading-guide"><a href="/docs/trading">Trading Guide</a></Button>
+          <Button asChild variant="ghost" size="sm" data-testid="link-llms-txt"><a href="/llms.txt" target="_blank" rel="noopener noreferrer">llms.txt</a></Button>
+          <Button asChild variant="ghost" size="sm" data-testid="link-openapi"><a href="/api/acp/openapi.json" target="_blank" rel="noopener noreferrer">OpenAPI</a></Button>
+        </div>
         <div className="mb-10 text-center">
           <h1 className="text-3xl md:text-4xl font-bold mb-3" data-testid="text-docs-title">API Reference</h1>
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto mb-6">
@@ -995,14 +977,7 @@ curl ${BASE}/api/proof/YOUR_PROOF_ID`}</pre>
         </Card>
       </div>
 
-      <footer className="border-t py-8">
-        <div className="container text-center text-sm text-muted-foreground">
-          <p>
-            Need help? Check <a href="/llms.txt" className="text-primary hover:underline" data-testid="link-footer-llms">llms.txt</a> for machine-readable docs
-            or visit the <a href="/" className="text-primary hover:underline" data-testid="link-footer-home">homepage</a>.
-          </p>
-        </div>
-      </footer>
+      <PublicSiteFooter />
     </div>
   );
 }

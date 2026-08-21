@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { PublicSiteFooter, PublicSiteHeader } from "@/components/public-site-chrome";
 
 const STYLES = `
   .pba-learn-root {
@@ -230,12 +231,7 @@ export default function LearnPage() {
       <style>{STYLES}</style>
       <div className="pba-learn-root">
 
-        {/* ── Nav ── */}
-        <nav className="pba-learn-nav">
-          <a href="/" className="pba-learn-nav-brand">Prove Before Act</a>
-          <span className="pba-learn-nav-spacer" />
-          <a href="/standard" className="pba-learn-nav-spec">Full specification →</a>
-        </nav>
+        <PublicSiteHeader paper />
 
         {/* ── Main ── */}
         <main className="pba-learn-main">
@@ -291,11 +287,7 @@ export default function LearnPage() {
           </div>
         </main>
 
-        {/* ── Credit ── */}
-        <div className="pba-learn-credit">
-          <a href="/standard">provebeforeact.com/standard</a>
-          {" · "}reference implementation: xProof
-        </div>
+        <PublicSiteFooter paper />
 
       </div>
     </>

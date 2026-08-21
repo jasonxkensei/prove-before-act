@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PublicSiteFooter, PublicSiteHeader } from "@/components/public-site-chrome";
 import {
   Bot,
   Zap,
@@ -1424,39 +1425,7 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur">
-        <div className="container flex h-14 items-center justify-between gap-4">
-          <a href="/" className="flex items-center gap-2 shrink-0" data-testid="link-logo-home">
-            <img src="/pba-logo.svg" alt="Prove Before Act" className="h-7 w-auto" />
-          </a>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Bot className="h-3.5 w-3.5 shrink-0" />
-            <span className="hidden sm:inline">Optimized for autonomous agents and LLMs</span>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <a
-              href="/agent-context/zh"
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors border border-border/50 rounded-md px-2.5 py-1.5 font-mono"
-              data-testid="link-lang-zh-agent-context"
-            >
-              中文
-            </a>
-            <Button asChild variant="outline" size="sm" data-testid="button-machine-readable">
-              <a href="/agent-context.md" target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
-                .md
-              </a>
-            </Button>
-            <Button asChild size="sm" data-testid="button-get-started">
-              <a href="/">
-                Get started
-                <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-              </a>
-            </Button>
-          </div>
-        </div>
-      </header>
+      <PublicSiteHeader primaryActionHref="/#free-trial" />
 
       <main className="container py-10 max-w-4xl">
         {/* Page header */}
@@ -1843,6 +1812,7 @@ await sendToCustomer(ticketId, responseText, { audit_ref: proof_id });`,
           </div>
         </div>
       </main>
+      <PublicSiteFooter />
     </div>
   );
 }

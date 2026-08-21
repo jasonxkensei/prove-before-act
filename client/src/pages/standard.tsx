@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { PublicSiteFooter, PublicSiteHeader } from "@/components/public-site-chrome";
 
 const STYLES = `
   .pba-std-root {
@@ -338,6 +339,7 @@ export default function StandardPage() {
     <>
       <style>{STYLES}</style>
       <div className="pba-std-root">
+        <PublicSiteHeader paper />
         {/* ── Header ── */}
         <div className="pba-std-header">
           <div className="pba-std-container">
@@ -350,12 +352,6 @@ export default function StandardPage() {
         </div>
 
         <div className="pba-std-container">
-          {/* ── Quick nav ── */}
-          <div style={{ padding: "0.75rem 0", borderBottom: "1px solid #d8d5cf", marginBottom: "0.5rem", fontSize: "0.85rem", display: "flex", gap: "1.5rem" }}>
-            <a href="/learn" style={{ color: "#4a4a4a", fontFamily: "'Courier New', monospace", fontSize: "11px", letterSpacing: "0.06em", textDecoration: "none" }}>← 60-second overview</a>
-            <a href="/agents" style={{ color: "#4a4a4a", fontFamily: "'Courier New', monospace", fontSize: "11px", letterSpacing: "0.06em", textDecoration: "none" }}>Integrate →</a>
-          </div>
-
           {/* ── TOC ── */}
           <div className="pba-std-toc">
             <div className="pba-std-toc-label">Contents</div>
@@ -720,17 +716,11 @@ if intent_proof.status == "confirmed":
               <p>The goal is not for xProof to be the only implementation. The goal is for <em>Prove Before Act</em> to become the vocabulary developers reach for when they need to answer: <strong>what did this agent decide, and when did it decide it?</strong></p>
               <p style={{ marginTop: "1rem", marginBottom: 0 }}>The day someone writes in their README <em>"This agent implements the Prove Before Act pattern"</em> without using xProof, the category will have arrived.</p>
             </div>
-            <p>Contact: <a href="https://provebeforeact.com">provebeforeact.com</a> · <a href="https://x.com/JasonxProof">@JasonxProof</a></p>
+            <p>Contact: <a href="https://provebeforeact.com">provebeforeact.com</a> · <a href="https://x.com/ProveBeforeAct">@ProveBeforeAct</a></p>
           </section>
         </div>
 
-        {/* ── Footer ── */}
-        <footer className="pba-std-footer">
-          <div className="pba-std-container">
-            <div className="pba-std-footer-logo">Prove Before Act</div>
-            <div className="pba-std-footer-sub">Draft v0.1 · August 2026 · provebeforeact.com/standard</div>
-          </div>
-        </footer>
+        <PublicSiteFooter paper />
       </div>
     </>
   );

@@ -29,15 +29,9 @@ import {
   Zap,
   Play,
   Network,
-  MoreHorizontal,
 } from "lucide-react";
 import { WalletLoginModal } from "@/components/wallet-login-modal";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { PublicSiteFooter, PublicSiteHeader } from "@/components/public-site-chrome";
 import { trackAgentCta, useAgentCtaExposure } from "@/lib/conversionTracking";
 import {
   Accordion,
@@ -258,95 +252,11 @@ export default function Landing() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between">
-          <a href="/" className="flex items-center gap-2" data-testid="link-logo-home">
-            <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
-          </a>
-          <nav className="hidden md:flex items-center gap-6">
-            <a href="#how-it-works" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-how-it-works">
-              How it works
-            </a>
-            <a href="/standard" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-standard">
-              Standard
-            </a>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-                  data-testid="button-nav-more"
-                >
-                  More
-                  <MoreHorizontal className="h-4 w-4" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <DropdownMenuItem asChild>
-                  <a href="/docs" data-testid="link-nav-docs">API Docs</a>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <a href="/agents" data-testid="link-nav-agents">For AI Agents</a>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <a href="/agent-context" data-testid="link-nav-agent-context">Agent Context</a>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <a href="/mcp" data-testid="link-nav-mcp">MCP Server</a>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <a href="/leaderboard" data-testid="link-nav-leaderboard">Trust Leaderboard</a>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <a href="/stats" data-testid="link-nav-metrics">Metrics</a>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <a href="/coherence" data-testid="link-nav-coherence">Coherence</a>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <a href="/founder" data-testid="link-nav-founder">About the founder</a>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <a href="#faq" data-testid="link-nav-faq">FAQ</a>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <a
-              href="#free-trial"
-              className="text-sm font-medium text-primary bg-primary/10 hover:bg-primary/20 border border-primary/20 rounded-md px-3 py-1.5 transition-colors"
-              data-testid="link-nav-start-free"
-            >
-              Start free
-            </a>
-          </nav>
-          <div className="flex items-center gap-3">
-            <a
-              href="#free-trial"
-              className="text-sm font-medium text-primary bg-primary/10 hover:bg-primary/20 border border-primary/20 rounded-md px-3 py-1.5 transition-colors md:hidden"
-              data-testid="link-nav-start-free-mobile"
-            >
-              Start free
-            </a>
-            <a
-              href="/zh"
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors border border-border/50 rounded-md px-2.5 py-1.5 font-mono"
-              data-testid="link-lang-zh"
-            >
-              中文
-            </a>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={handleConnect}
-              data-testid="button-login"
-            >
-              <Wallet className="mr-2 h-4 w-4" />
-              Connect
-            </Button>
-          </div>
-        </div>
-      </header>
+      <PublicSiteHeader
+        howItWorksHref="#how-it-works"
+        primaryActionHref="#free-trial"
+        onConnect={handleConnect}
+      />
       {/* Hero Section */}
       <section className="container pt-14 pb-20 md:pt-20 md:pb-28">
         <div className="mx-auto max-w-5xl text-center">
@@ -1439,66 +1349,7 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
           </div>
         </div>
       </section>
-      {/* Footer */}
-      <footer className="border-t py-12">
-        <div className="container">
-          <div className="mx-auto max-w-5xl">
-            <div className="grid gap-8 md:grid-cols-4 mb-12">
-              <div className="md:col-span-2">
-                <div className="flex items-center gap-2 mb-4">
-                  <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
-                </div>
-                <p className="text-sm text-muted-foreground max-w-xs">
-                  The on-chain notary for AI agents. Verifiable trust, anchored on MultiversX.
-                </p>
-              </div>
-              
-              <div>
-                <h4 className="font-semibold mb-4">Product</h4>
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li><a href="#how-it-works" className="hover:text-foreground transition-colors">How it works</a></li>
-                  <li><a href="#faq" className="hover:text-foreground transition-colors">FAQ</a></li>
-                  <li><a href="/docs" className="hover:text-foreground transition-colors" data-testid="link-footer-docs">API Docs</a></li>
-                  <li><a href="/standard" className="hover:text-foreground transition-colors" data-testid="link-footer-standard">PBA Standard</a></li>
-                  <li><a href="/mcp" className="hover:text-foreground transition-colors" data-testid="link-footer-mcp">MCP Server</a></li>
-                  <li><a href="/agents" className="hover:text-foreground transition-colors" data-testid="link-footer-agents">For AI Agents</a></li>
-                  <li><a href="/leaderboard" className="hover:text-foreground transition-colors" data-testid="link-footer-leaderboard">Trust Leaderboard</a></li>
-                  <li><a href="/stats" className="hover:text-foreground transition-colors" data-testid="link-footer-stats">Metrics</a></li>
-                  <li><a href="/founder" className="hover:text-foreground transition-colors" data-testid="link-footer-founder">About the founder</a></li>
-                  <li><a href="/learn" className="hover:text-foreground transition-colors" data-testid="link-footer-learn">The pattern (60 sec)</a></li>
-                  <li><a href="/standard" className="hover:text-foreground transition-colors" data-testid="link-footer-standard">Full specification</a></li>
-                </ul>
-              </div>
-              
-              <div>
-                <h4 className="font-semibold mb-4">Legal</h4>
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li><a href="/legal/mentions" className="hover:text-foreground transition-colors" data-testid="link-legal-mentions">Legal notices</a></li>
-                  <li><a href="/legal/privacy" className="hover:text-foreground transition-colors" data-testid="link-legal-privacy">Privacy policy</a></li>
-                  <li><a href="/legal/terms" className="hover:text-foreground transition-colors" data-testid="link-legal-terms">Terms</a></li>
-                </ul>
-              </div>
-            </div>
-            
-            <div className="border-t pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <p className="text-sm text-muted-foreground">
-                © {new Date().getFullYear()} Prove Before Act. All rights reserved.
-              </p>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>Powered by</span>
-                <a 
-                  href="https://multiversx.com" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="font-medium text-primary hover:underline"
-                >
-                  MultiversX
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-      </footer>
+      <PublicSiteFooter />
       <WalletLoginModal 
         open={isLoginModalOpen} 
         onOpenChange={setIsLoginModalOpen} 

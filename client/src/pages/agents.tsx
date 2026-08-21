@@ -21,6 +21,7 @@ import {
   Crosshair,
 } from "lucide-react";
 import { WalletLoginModal } from "@/components/wallet-login-modal";
+import { PublicSiteFooter, PublicSiteHeader } from "@/components/public-site-chrome";
 
 const CALIBRATION_STYLES: Record<string, { badge: string; label: string }> = {
   calibrated:     { badge: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30", label: "Calibrated" },
@@ -194,41 +195,7 @@ export default function AgentsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between">
-          <a href="/" className="flex items-center gap-2" data-testid="link-logo-home">
-            <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
-          </a>
-          <nav className="hidden md:flex items-center gap-6">
-            <a href="/#how-it-works" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-how-it-works">
-              How it works
-            </a>
-            <a href="/leaderboard" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-leaderboard">
-              Leaderboard
-            </a>
-            <a href="/stats" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-metrics">
-              Metrics
-            </a>
-            <a href="/mcp" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-mcp">
-              MCP Server
-            </a>
-            <a href="/#faq" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-faq">
-              FAQ
-            </a>
-          </nav>
-          <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleConnect}
-              data-testid="button-login"
-            >
-              <Wallet className="mr-2 h-4 w-4" />
-              Connect
-            </Button>
-          </div>
-        </div>
-      </header>
+      <PublicSiteHeader onConnect={handleConnect} />
       <section className="container py-20 md:py-28">
         <div className="mx-auto max-w-5xl text-center">
           <Badge variant="secondary" className="mb-6 px-4 py-1.5" data-testid="badge-universal-compatibility">
@@ -395,59 +362,7 @@ export default function AgentsPage() {
           </div>
         </div>
       </section>
-      <footer className="border-t py-12">
-        <div className="container">
-          <div className="mx-auto max-w-5xl">
-            <div className="grid gap-8 md:grid-cols-4 mb-12">
-              <div className="md:col-span-2">
-                <div className="flex items-center gap-2 mb-4">
-                  <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
-                </div>
-                <p className="text-sm text-muted-foreground max-w-xs">
-                  The on-chain notary for AI agents. Verifiable trust, anchored on MultiversX.
-                </p>
-              </div>
-
-              <div>
-                <h4 className="font-semibold mb-4">Product</h4>
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li><a href="/#how-it-works" className="hover:text-foreground transition-colors">How it works</a></li>
-                  <li><a href="/#faq" className="hover:text-foreground transition-colors">FAQ</a></li>
-                  <li><a href="/agents" className="hover:text-foreground transition-colors" data-testid="link-footer-agents">For AI Agents</a></li>
-                  <li><a href="/leaderboard" className="hover:text-foreground transition-colors" data-testid="link-footer-leaderboard">Leaderboard</a></li>
-                  <li><a href="/stats" className="hover:text-foreground transition-colors" data-testid="link-footer-stats">Metrics</a></li>
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="font-semibold mb-4">Legal</h4>
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li><a href="/legal/mentions" className="hover:text-foreground transition-colors" data-testid="link-legal-mentions">Legal notices</a></li>
-                  <li><a href="/legal/privacy" className="hover:text-foreground transition-colors" data-testid="link-legal-privacy">Privacy policy</a></li>
-                  <li><a href="/legal/terms" className="hover:text-foreground transition-colors" data-testid="link-legal-terms">Terms</a></li>
-                </ul>
-              </div>
-            </div>
-
-            <div className="border-t pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <p className="text-sm text-muted-foreground">
-                © {new Date().getFullYear()} Prove Before Act. All rights reserved.
-              </p>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>Powered by</span>
-                <a
-                  href="https://multiversx.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-medium text-primary hover:underline"
-                >
-                  MultiversX
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-      </footer>
+      <PublicSiteFooter />
       <WalletLoginModal
         open={isLoginModalOpen}
         onOpenChange={setIsLoginModalOpen}
