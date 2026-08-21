@@ -195,6 +195,61 @@ test.describe("public-site chrome — More dropdown keyboard navigation", () => 
   });
 });
 
+// ── 3b. More dropdown keyboard navigation — /standard and /agents ────────────
+//
+// The header is shared across all public routes.  These tests confirm the More
+// button is reachable via the Tab key and operable with Enter on routes where
+// primaryActionHref defaults to /agents rather than an in-page anchor, ensuring
+// the focus order is correct on pages other than the landing page.
+
+for (const route of ["/standard", "/agents"] as const) {
+  test.describe(`public-site chrome — More dropdown keyboard navigation on ${route}`, () => {
+    test.use({ viewport: { width: 1280, height: 800 } });
+
+    test.beforeEach(async ({ page }) => {
+      await page.goto(route);
+    });
+
+    test(`More button is reachable by Tab on ${route}`, async ({ page }) => {
+      // Move keyboard focus into the page, then Tab through the header links
+      // until the More button receives focus.  The desktop nav order is:
+      //   logo → How it works → Standard → More (button-nav-more) → Start free
+      // We allow up to 10 Tab presses to account for any additional focusable
+      // elements (e.g. skip-to-content links) that a particular page may add.
+      await page.keyboard.press("Tab");
+      const moreButton = page.getByTestId("button-nav-more");
+      let focused = false;
+      for (let i = 0; i < 10; i++) {
+        const active = await page.evaluate(() => document.activeElement?.getAttribute("data-testid"));
+        if (active === "button-nav-more") {
+          focused = true;
+          break;
+        }
+        await page.keyboard.press("Tab");
+      }
+      expect(focused, `More button should be reachable by Tab on ${route}`).toBe(true);
+      // Confirm the element itself is visible and focusable.
+      await expect(moreButton).toBeVisible();
+    });
+
+    test(`More dropdown opens with Enter after Tab focus on ${route}`, async ({ page }) => {
+      // Tab until the More button is focused (same traversal as above).
+      await page.keyboard.press("Tab");
+      for (let i = 0; i < 10; i++) {
+        const active = await page.evaluate(() => document.activeElement?.getAttribute("data-testid"));
+        if (active === "button-nav-more") break;
+        await page.keyboard.press("Tab");
+      }
+      // Open the dropdown with Enter.
+      await page.keyboard.press("Enter");
+      await expect(page.getByRole("menuitem", { name: "For AI Agents" })).toBeVisible();
+      // Close with Escape; the dropdown must disappear.
+      await page.keyboard.press("Escape");
+      await expect(page.getByRole("menuitem", { name: "For AI Agents" })).not.toBeVisible();
+    });
+  });
+}
+
 // ── 4. Mobile viewport — primary action and language link accessible ─────────
 
 test.describe("public-site chrome — mobile viewport", () => {
