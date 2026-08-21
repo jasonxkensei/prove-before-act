@@ -425,6 +425,89 @@ ${safeJsonLd({
 </html>`;
 }
 
+function renderLearnPage(baseUrl: string): string {
+  const title = "Prove Before Act in 60 Seconds";
+  const description = "The problem, the flow, and the invariant — everything you need to understand Prove Before Act before reading the full specification.";
+  const canonical = `${baseUrl}/learn`;
+
+  return `${commonHead(title, description, canonical, "article")}
+<style>
+  body { background:#f8f7f4; color:#0f0f0f; font-family:Georgia,'Times New Roman',serif; margin:0; padding:0; min-height:100vh; display:flex; flex-direction:column; }
+  * { box-sizing:border-box; }
+  nav { border-bottom:1px solid #d8d5cf; padding:.65rem 2rem; display:flex; align-items:center; gap:1.5rem; font-family:'Courier New',monospace; font-size:11px; letter-spacing:.06em; }
+  nav a { color:#0f0f0f; text-decoration:none; }
+  .brand { font-weight:bold; font-size:12px; letter-spacing:.08em; text-transform:uppercase; }
+  .spacer { flex:1; }
+  .spec-link { color:#888; }
+  main { flex:1; display:flex; flex-direction:column; justify-content:center; max-width:680px; margin:0 auto; padding:1.5rem 2rem 1rem; width:100%; }
+  .badge { font-family:'Courier New',monospace; font-size:10px; letter-spacing:.15em; text-transform:uppercase; color:#888; margin-bottom:.6rem; }
+  h1 { font-size:clamp(1.5rem,3.5vw,2.4rem); font-weight:normal; line-height:1.15; letter-spacing:-.02em; margin:0 0 .5rem; }
+  .tagline { font-size:1rem; color:#4a4a4a; font-style:italic; margin:0 0 1.25rem; }
+  hr { border:none; border-top:1px solid #d8d5cf; margin:0 0 1.1rem; }
+  .problem { font-size:.975rem; line-height:1.6; margin:0 0 1.25rem; }
+  .flow { display:flex; align-items:center; justify-content:center; gap:0; margin:0 0 1.1rem; flex-wrap:wrap; row-gap:.5rem; }
+  .step { display:flex; flex-direction:column; align-items:center; gap:.2rem; }
+  .box { border:1px solid #c0bdb8; padding:.45rem .9rem; font-family:'Courier New',monospace; font-size:11px; letter-spacing:.07em; min-width:78px; text-align:center; background:white; }
+  .box.p { background:#0f0f0f; color:white; border-color:#0f0f0f; }
+  .lbl { font-family:'Courier New',monospace; font-size:9px; color:#aaa; letter-spacing:.08em; text-transform:uppercase; }
+  .arr { font-size:1rem; color:#c0bdb8; margin:0 .3rem; padding-bottom:1rem; flex-shrink:0; }
+  pre { background:#f0ede8; border-left:3px solid #0f0f0f; padding:.75rem 1rem; font-family:'Courier New',monospace; font-size:12.5px; line-height:1.55; margin:0 0 1.25rem; }
+  .dim { color:#888; }
+  .ctas { display:flex; gap:.75rem; flex-wrap:wrap; margin:0 0 1rem; }
+  .cta-p { display:inline-block; background:#0f0f0f; color:white; font-family:'Courier New',monospace; font-size:12px; letter-spacing:.06em; padding:.65rem 1.25rem; text-decoration:none; border:1px solid #0f0f0f; }
+  .cta-s { display:inline-block; background:transparent; color:#0f0f0f; font-family:'Courier New',monospace; font-size:12px; letter-spacing:.06em; padding:.65rem 1.25rem; text-decoration:none; border:1px solid #c0bdb8; }
+  footer { font-family:'Courier New',monospace; font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:#bbb; text-align:center; padding:.75rem 0 1rem; border-top:1px solid #ebe9e4; }
+  footer a { color:#bbb; text-decoration:none; }
+  @media(max-width:600px){ main { padding:1.2rem 1.2rem .8rem; justify-content:flex-start; } .flow { justify-content:flex-start; } }
+</style>
+<body>
+<nav>
+  <a href="${baseUrl}" class="brand">Prove Before Act</a>
+  <span class="spacer"></span>
+  <a href="${baseUrl}/standard" class="spec-link">Full specification →</a>
+</nav>
+<main>
+  <div class="badge">60-second overview</div>
+  <h1>What did this agent decide,<br>and when did it decide it?</h1>
+  <p class="tagline">A design pattern for accountable autonomous agents</p>
+  <hr>
+  <p class="problem">Agents act. When something goes wrong, one question follows — and today it is almost always unanswerable. Logs tell you what the agent says it did. <em>Prove Before Act makes it commit before acting.</em></p>
+  <div class="flow">
+    <div class="step"><div class="box">OBSERVE</div><div class="lbl">input</div></div>
+    <div class="arr">→</div>
+    <div class="step"><div class="box">DECIDE</div><div class="lbl">intent</div></div>
+    <div class="arr">→</div>
+    <div class="step"><div class="box p">PROVE</div><div class="lbl">anchored</div></div>
+    <div class="arr">→</div>
+    <div class="step"><div class="box">ACT</div><div class="lbl">execute</div></div>
+    <div class="arr">→</div>
+    <div class="step"><div class="box p">PROVE</div><div class="lbl">outcome</div></div>
+  </div>
+  <pre>T(intent_proof) &lt; T(action)
+<span class="dim">if T(intent_proof) &ge; T(action): not evidence &mdash; just a record</span></pre>
+  <div class="ctas">
+    <a href="${baseUrl}/standard" class="cta-p">Read the specification →</a>
+    <a href="${baseUrl}" class="cta-s">Try xProof →</a>
+  </div>
+</main>
+<footer>
+  <a href="${baseUrl}/standard">provebeforeact.com/standard</a> · reference implementation: xProof
+</footer>
+<script type="application/ld+json">
+${safeJsonLd({
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": title,
+  "description": description,
+  "url": canonical,
+  "author": { "@type": "Person", "name": "Jason Petitfourg", "url": `${baseUrl}/founder` },
+  "publisher": { "@type": "Organization", "name": "Prove Before Act", "url": baseUrl }
+}, null, 2)}
+</script>
+</body>
+</html>`;
+}
+
 function renderStandardPage(baseUrl: string): string {
   const title = "Prove Before Act — A Design Pattern for Accountable Autonomous Agents";
   const description = "The Prove Before Act technical specification: definitions, threat model, core invariant, four primitives, 4W audit trail, and reference implementation. Draft v0.1.";
@@ -2033,6 +2116,13 @@ export function prerenderMiddleware() {
           .set("Content-Type", "text/html")
           .set("Link", agentLinks)
           .send(renderStandardPage(baseUrl));
+      }
+
+      if (path === "/learn") {
+        return res.status(200)
+          .set("Content-Type", "text/html")
+          .set("Link", agentLinks)
+          .send(renderLearnPage(baseUrl));
       }
 
       if (path === "/leaderboard") {

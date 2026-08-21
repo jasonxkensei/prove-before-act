@@ -1431,6 +1431,8 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
                   <li><a href="/leaderboard" className="hover:text-foreground transition-colors" data-testid="link-footer-leaderboard">Trust Leaderboard</a></li>
                   <li><a href="/stats" className="hover:text-foreground transition-colors" data-testid="link-footer-stats">Metrics</a></li>
                   <li><a href="/founder" className="hover:text-foreground transition-colors" data-testid="link-footer-founder">About the founder</a></li>
+                  <li><a href="/learn" className="hover:text-foreground transition-colors" data-testid="link-footer-learn">The pattern (60 sec)</a></li>
+                  <li><a href="/standard" className="hover:text-foreground transition-colors" data-testid="link-footer-standard">Full specification</a></li>
                 </ul>
               </div>
               

@@ -38,6 +38,7 @@ const FleetPage = lazy(() => import("@/pages/fleet"));
 const FleetManagePage = lazy(() => import("@/pages/fleet-manage"));
 const JasonPage = lazy(() => import("@/pages/jason"));
 const StandardPage = lazy(() => import("@/pages/standard"));
+const LearnPage = lazy(() => import("@/pages/learn"));
 
 function Router() {
   const { isAuthenticated, isLoading } = useWalletAuth();
@@ -96,6 +97,7 @@ function Router() {
           <Route path="/coherence" component={CoherencePage} />
            <Route path="/founder" component={JasonPage} />
           <Route path="/standard" component={StandardPage} />
+          <Route path="/learn" component={LearnPage} />
           <Route path="/fleet" component={FleetPage} />
           <Route path="/fleets" component={FleetManagePage} />
           {/* /stats shows public platform metrics (unauthenticated /api/stats endpoint).
@@ -145,6 +147,7 @@ function Router() {
         <Route path="/coherence" component={CoherencePage} />
          <Route path="/founder" component={JasonPage} />
         <Route path="/standard" component={StandardPage} />
+        <Route path="/learn" component={LearnPage} />
         <Route path="/fleet" component={FleetPage} />
         <Route path="/fleets" component={FleetManagePage} />
         <Route path="/zh" component={LandingZh} />

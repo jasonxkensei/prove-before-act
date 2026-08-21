@@ -350,6 +350,12 @@ export default function StandardPage() {
         </div>
 
         <div className="pba-std-container">
+          {/* ── Quick nav ── */}
+          <div style={{ padding: "0.75rem 0", borderBottom: "1px solid #d8d5cf", marginBottom: "0.5rem", fontSize: "0.85rem", display: "flex", gap: "1.5rem" }}>
+            <a href="/learn" style={{ color: "#4a4a4a", fontFamily: "'Courier New', monospace", fontSize: "11px", letterSpacing: "0.06em", textDecoration: "none" }}>← 60-second overview</a>
+            <a href="/agents" style={{ color: "#4a4a4a", fontFamily: "'Courier New', monospace", fontSize: "11px", letterSpacing: "0.06em", textDecoration: "none" }}>Integrate →</a>
+          </div>
+
           {/* ── TOC ── */}
           <div className="pba-std-toc">
             <div className="pba-std-toc-label">Contents</div>
