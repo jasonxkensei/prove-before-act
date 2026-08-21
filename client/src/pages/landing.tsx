@@ -283,9 +283,7 @@ export default function Landing() {
             <a href="/coherence" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-coherence">
               Coherence
             </a>
-            <a href="/founder" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-founder">
-              About Jason
-            </a>
+            <a href="/founder" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-founder">Founder</a>
             <a href="#faq" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-faq">
               FAQ
             </a>
@@ -551,105 +549,104 @@ export default function Landing() {
                   </>
                 ) : (
                   /* Success state */
-                  <>
-                  <div className="rounded-md bg-primary/10 border border-primary/20 p-5 text-left" data-testid="card-proof-result">
-                    <div className="flex items-center gap-2 mb-3">
-                      <CheckCircle className="h-5 w-5 text-primary shrink-0" />
-                      <p className="text-sm font-semibold text-primary">Proof anchored on MultiversX!</p>
-                    </div>
-                    <div className="space-y-1 mb-4">
-                      <p className="text-xs text-muted-foreground">
-                        File: <span className="font-medium text-foreground">{proofFile?.name}</span>
-                      </p>
-                      <p className="text-xs text-muted-foreground font-mono">
-                        SHA-256: {proofHash.slice(0, 24)}…
-                      </p>
-                      {proofResult.proof_id && (
+                  (<>
+                    <div className="rounded-md bg-primary/10 border border-primary/20 p-5 text-left" data-testid="card-proof-result">
+                      <div className="flex items-center gap-2 mb-3">
+                        <CheckCircle className="h-5 w-5 text-primary shrink-0" />
+                        <p className="text-sm font-semibold text-primary">Proof anchored on MultiversX!</p>
+                      </div>
+                      <div className="space-y-1 mb-4">
                         <p className="text-xs text-muted-foreground">
-                          Proof ID: <span className="font-mono">{proofResult.proof_id}</span>
+                          File: <span className="font-medium text-foreground">{proofFile?.name}</span>
                         </p>
-                      )}
-                      {proofResult.blockchain?.transaction_hash && (
                         <p className="text-xs text-muted-foreground font-mono">
-                          Tx: {proofResult.blockchain.transaction_hash.slice(0, 20)}…
+                          SHA-256: {proofHash.slice(0, 24)}…
                         </p>
-                      )}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        asChild
-                        size="sm"
-                        variant="outline"
-                        data-testid="button-view-proof"
-                      >
-                        <a
-                          href={proofResult.verify_url || `/proof/${proofResult.proof_id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          <ExternalLink className="mr-1.5 h-3 w-3" />
-                          View proof
-                        </a>
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          const url = proofResult.verify_url
-                            ? `https://provebeforeact.com${proofResult.verify_url.startsWith("/") ? "" : "/"}${proofResult.verify_url}`
-                            : `https://provebeforeact.com/proof/${proofResult.proof_id}`;
-                          navigator.clipboard.writeText(url);
-                        }}
-                        data-testid="button-copy-proof-url"
-                      >
-                        <Link2 className="mr-1.5 h-3 w-3" />
-                        Copy link
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => { setProofFile(null); setProofHash(""); setProofResult(null); setProofError(null); }}
-                        data-testid="button-proof-another"
-                      >
-                        Anchor another
-                      </Button>
-                      {proofResult.trial?.remaining !== undefined && (
-                        <Badge variant="outline" className="text-xs ml-auto">
-                          {proofResult.trial.remaining} proof{proofResult.trial.remaining !== 1 ? "s" : ""} remaining
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Post-success next steps — no wallet needed */}
-                  <div className="mt-5 rounded-md border border-muted bg-muted/30 p-4 text-left">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Next: integrate into your fleet</p>
-                    <div className="flex flex-col gap-2">
-                      <div className="flex items-start gap-3">
-                        <Terminal className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-                        <div>
-                          <p className="text-sm font-medium">Add one line to your agent's loop</p>
+                        {proofResult.proof_id && (
                           <p className="text-xs text-muted-foreground">
-                            Hash the output → POST to <code className="font-mono bg-muted px-1 rounded">/api/proof</code> with your <code className="font-mono bg-muted px-1 rounded">pm_</code> key. 
-                            Every action becomes a verifiable record.
+                            Proof ID: <span className="font-mono">{proofResult.proof_id}</span>
                           </p>
-                        </div>
+                        )}
+                        {proofResult.blockchain?.transaction_hash && (
+                          <p className="text-xs text-muted-foreground font-mono">
+                            Tx: {proofResult.blockchain.transaction_hash.slice(0, 20)}…
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          asChild
+                          size="sm"
+                          variant="outline"
+                          data-testid="button-view-proof"
+                        >
+                          <a
+                            href={proofResult.verify_url || `/proof/${proofResult.proof_id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <ExternalLink className="mr-1.5 h-3 w-3" />
+                            View proof
+                          </a>
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            const url = proofResult.verify_url
+                              ? `https://provebeforeact.com${proofResult.verify_url.startsWith("/") ? "" : "/"}${proofResult.verify_url}`
+                              : `https://provebeforeact.com/proof/${proofResult.proof_id}`;
+                            navigator.clipboard.writeText(url);
+                          }}
+                          data-testid="button-copy-proof-url"
+                        >
+                          <Link2 className="mr-1.5 h-3 w-3" />
+                          Copy link
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => { setProofFile(null); setProofHash(""); setProofResult(null); setProofError(null); }}
+                          data-testid="button-proof-another"
+                        >
+                          Anchor another
+                        </Button>
+                        {proofResult.trial?.remaining !== undefined && (
+                          <Badge variant="outline" className="text-xs ml-auto">
+                            {proofResult.trial.remaining} proof{proofResult.trial.remaining !== 1 ? "s" : ""} remaining
+                          </Badge>
+                        )}
                       </div>
                     </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <Button asChild size="sm" data-testid="button-trial-fleet-docs">
-                        <a href="/docs">
-                          Fleet integration guide
-                          <ArrowRight className="ml-1 h-3 w-3" />
-                        </a>
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={handleConnect} data-testid="button-trial-connect-wallet">
-                        <Wallet className="mr-1.5 h-3.5 w-3.5" />
-                        Connect wallet
-                      </Button>
+                    {/* Post-success next steps — no wallet needed */}
+                    <div className="mt-5 rounded-md border border-muted bg-muted/30 p-4 text-left">
+                      <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Next: integrate into your fleet</p>
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-start gap-3">
+                          <Terminal className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                          <div>
+                            <p className="text-sm font-medium">Add one line to your agent's loop</p>
+                            <p className="text-xs text-muted-foreground">
+                              Hash the output → POST to <code className="font-mono bg-muted px-1 rounded">/api/proof</code> with your <code className="font-mono bg-muted px-1 rounded">pm_</code> key. 
+                              Every action becomes a verifiable record.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Button asChild size="sm" data-testid="button-trial-fleet-docs">
+                          <a href="/docs">
+                            Fleet integration guide
+                            <ArrowRight className="ml-1 h-3 w-3" />
+                          </a>
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={handleConnect} data-testid="button-trial-connect-wallet">
+                          <Wallet className="mr-1.5 h-3.5 w-3.5" />
+                          Connect wallet
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                  </>
+                  </>)
                 )}
 
                 {/* Pre-proof next steps (key obtained but no proof yet) */}
@@ -724,7 +721,6 @@ export default function Landing() {
           </div>
         </div>
       </section>
-
       {/* Machine Economy Stack */}
       <section className="border-t bg-muted/20 py-12 md:py-16">
         <div className="container">
@@ -813,7 +809,6 @@ export default function Landing() {
           </div>
         </div>
       </section>
-
       {/* Use-cases */}
       <section className="border-t py-16 md:py-20">
         <div className="container">
@@ -900,7 +895,6 @@ proofs = xproof.certify_batch([
           </div>
         </div>
       </section>
-
       {/* Prove Before Act + x402 Section */}
       <section id="prove-before-act" className="py-16 md:py-20">
         <div className="container">
@@ -1001,7 +995,6 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
           </div>
         </div>
       </section>
-
       {/* How It Works */}
       <section id="how-it-works" className="border-y bg-muted/30 py-20 md:py-28">
         <div className="container">
@@ -1306,8 +1299,6 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
           </div>
         </div>
       </section>
-
-
       {/* FAQ */}
       <section id="faq" className="py-20 md:py-28">
         <div className="container">
