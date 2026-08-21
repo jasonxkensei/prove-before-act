@@ -92,14 +92,18 @@ const STYLES = `
     justify-content: center;
     gap: 0;
     margin: 0 0 1.1rem;
-    flex-wrap: wrap;
-    row-gap: 0.5rem;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.15rem 0.1rem 0.35rem;
+    scrollbar-width: thin;
   }
   .pba-learn-step {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: 0.2rem;
+    flex: 0 0 auto;
   }
   .pba-learn-box {
     border: 1px solid #c0bdb8;
@@ -196,7 +200,7 @@ const STYLES = `
 
   @media (max-width: 600px) {
     .pba-learn-main { padding: 1.2rem 1.2rem 0.8rem; justify-content: flex-start; }
-    .pba-learn-flow { justify-content: flex-start; }
+    .pba-learn-flow { justify-content: flex-start; margin-left: -0.2rem; margin-right: -0.2rem; }
     .pba-learn-ctas { flex-direction: column; }
     .pba-learn-cta-primary, .pba-learn-cta-secondary { text-align: center; }
   }
