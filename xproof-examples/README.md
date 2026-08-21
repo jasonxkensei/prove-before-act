@@ -4,6 +4,8 @@ Standalone examples showing how to certify AI agent outputs on the **MultiversX 
 
 Prove Before Act gives every agent action a tamper-proof audit trail anchored on-chain in ~6 seconds. Each certification records the **4W framework**: Who acted, What was produced, When it happened, and Why.
 
+**Integration terminology:** Prove Before Act is the accountability pattern for autonomous agents; xProof is its reference implementation. Treat WHY as a declared decision basis—intent, relevant context, and authorization or policy basis—not internal chain-of-thought.
+
 ## Examples
 
 | Framework | Language | Description |

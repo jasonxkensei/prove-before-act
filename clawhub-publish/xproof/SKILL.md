@@ -8,17 +8,17 @@ metadata: {"prove-before-act": {"category":"proof,security,compliance,accountabi
 
 # Prove Before Act — Accountability Layer for AI Agents
 
-This skill describes how to anchor reasoning (WHY) before an action and its result (WHAT) afterwards with Prove Before Act. It provides an auditable record when the returned proof is confirmed; it does not itself enforce an execution policy.
+This skill describes how to anchor a declared decision basis (WHY) before an action and its result (WHAT) afterwards with Prove Before Act. Prove Before Act is the accountability pattern for autonomous agents, and xProof is its reference implementation. A declared decision basis includes the intended action, relevant context, and authorization or policy basis; it is never private step-by-step reasoning or internal chain-of-thought. The skill provides an auditable record when the returned proof is confirmed; it does not itself enforce an execution policy.
 
 > **Current product and compatibility notice:** Prove Before Act is the product name. The ClawHub install slug `@jasonxkensei/xproof` is retained as a legacy compatibility identifier for existing OpenClaw installations. Install the canonical Python package as `prove-before-act`; its supported Python module namespace is `xproof`. `XProofClient`, `XPROOF_*`, `xProof-Action`, and `jasonxkensei/xProof` are legacy protocol, action, or repository identifiers retained for compatibility. MX-8004 support is not active unless `GET /api/mx8004/status` reports `status: "active"`; the current production response is `status: "not_configured"`.
 
 ## The Core Pattern: Prove Before & After Act
 
 ```
-1. Reason (WHY) → 2. Hash locally → 3. Anchor WHY on-chain → 4. Get proof_id → 5. Execute → 6. Hash result (WHAT) → 7. Anchor WHAT on-chain → 8. Full 4W trail
+1. Declare decision basis (WHY) → 2. Hash locally → 3. Anchor WHY on-chain → 4. Get proof_id → 5. Execute → 6. Hash result (WHAT) → 7. Anchor WHAT on-chain → 8. Full 4W trail
 ```
 
-Anchor reasoning (WHY) on-chain **before** execution. Anchor the actual result/output (WHAT) **after** for a complete 4W audit trail. The proof_id is your immutable pre-execution commitment — if something goes wrong, you have forensic evidence that the reasoning preceded the action.
+Anchor the declared decision basis (WHY) on-chain **before** execution. Anchor the actual result/output (WHAT) **after** for a complete 4W audit trail. The proof_id is your immutable pre-execution commitment — if something goes wrong, you have forensic evidence that the declared basis preceded the action.
 
 **4W breakdown — what each letter means and who provides it:**
 
@@ -27,15 +27,15 @@ Anchor reasoning (WHY) on-chain **before** execution. Anchor the actual result/o
 | **W**HO | Which agent or actor made this decision? | **MX-8004** — optional identity integration when live status reports active |
 | **W**HAT | What output or action was certified? | **Prove Before Act** — SHA-256 hash of the output, anchored on MultiversX mainnet |
 | **W**HEN | Immutable timestamp? | **Prove Before Act** — MultiversX block finality (~6 s); not a self-reported clock |
-| **W**HY | What reasoning led to the decision? | **Prove Before Act** — `action_description`, `risk_level`, and `context` fields from `/api/audit` |
+| **W**HY | What declared decision basis supports the action? | **Prove Before Act** — `action_description`, `risk_level`, and `context` fields from `/api/audit` |
 
 Prove Before Act records WHAT / WHEN / WHY context. MX-8004 may provide WHO when its integration is active. Check live proof and MX-8004 responses before treating the resulting record as complete.
 
 > **Agent reference:** [`https://provebeforeact.com/agent-context`](https://provebeforeact.com/agent-context) — 13 Q&A sections written specifically for autonomous agents: production deployment patterns, retry policy, x402 payment walkthrough, 4W audit trail deep-dive, privacy model, fleet monitoring, latency benchmarks, and framework integration examples (LangChain, CrewAI, AutoGen, LlamaIndex, OpenAI Agents SDK, Fetch.ai).
 
-**Why Prove Before Act?** An agent that can prove its reasoning before acting is fundamentally more trustworthy than one that cannot. It creates an unbreakable causal chain: the intent existed before the action, and the blockchain makes that sequence immutable.
+**Why Prove Before Act?** An agent that can prove its declared decision basis before acting is fundamentally more accountable than one that cannot. It creates an unbreakable causal chain: the declared intent existed before the action, and the blockchain makes that sequence immutable.
 
-**Why audit?** Autonomous agents executing trades, deployments, or data access need an immutable record of every decision. The Agent Audit Log Standard describes a blocking pattern your agent can adopt: obtain a proof before executing. Enforcement is implemented in your agent code; Prove Before Act supplies the proof record.
+**Why audit?** Autonomous agents executing trades, deployments, or data access need an immutable record of every declared decision basis. The Agent Audit Log Standard describes a blocking pattern your agent can adopt: obtain a proof before executing. Enforcement is implemented in your agent code; Prove Before Act supplies the proof record.
 
 **Why violations?** Operators can use recorded violations as an accountability signal when the relevant Base integration is deployed and active. Confirm contract and event availability from the live documentation before automating a policy.
 
@@ -95,7 +95,7 @@ import json
 
 from xproof import XProofClient
 
-decision = {"action": "publish report", "reason": "approved by operator"}
+decision = {"action": "publish report", "decision_basis": "approved by operator"}
 sha256_hex = hashlib.sha256(
     json.dumps(decision, sort_keys=True).encode("utf-8"),
 ).hexdigest()

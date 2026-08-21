@@ -30,9 +30,12 @@ parameters:
   - name: why
     type: string
     required: false
-    default: "DeerFlow agent certification"
+    default: "skill_certification"
     description: >
-      Reason or context for the certification (maps to the 4W "Why" field).
+      Legacy fingerprint-only 4W "Why" field. It is reduced to a SHA-256
+      fingerprint before serialization and is NOT a human-readable reason —
+      pass a fixed action classification or opaque ID, never free-text
+      rationale.
 
 output:
   type: json
@@ -55,7 +58,7 @@ example:
     {
       "content": "Q3 revenue analysis: $4.2M, up 15% YoY",
       "file_name": "q3-analysis.json",
-      "why": "Quarterly earnings certification"
+      "why": "earnings_certification"
     }
   output: |
     {

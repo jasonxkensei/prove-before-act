@@ -68,18 +68,26 @@ class XProofCallbackHandler(BaseCallbackHandler):  # type: ignore[misc]  # BaseC
         context: str = "",
         parent_run_id: Optional[str] = None,
     ) -> None:
+        # The public-metadata boundary permits only classifications, hashes,
+        # timestamps, and opaque IDs. ``why`` is the legacy fingerprint-only 4W
+        # field and carries a fixed action classification. The human-readable
+        # ``context`` argument is deliberately NOT written to metadata (it is
+        # not a classification/hash/ID), so no raw description reaches the
+        # public proof.
+        del context  # never placed in public metadata
+        metadata: dict[str, Any] = {
+            "who": self.agent_name,
+            "what": data_hash,
+            "when": datetime.now(timezone.utc).isoformat(),
+            "why": action_type,
+            "action_type": action_type,
+            "framework": "langchain",
+        }
         entry: CertifyEntry = {
             "file_hash": data_hash,
             "file_name": file_name,
             "author": self.agent_name,
-            "metadata": {
-                "who": self.agent_name,
-                "what": data_hash,
-                "when": datetime.now(timezone.utc).isoformat(),
-                "why": context or action_type,
-                "action_type": action_type,
-                "framework": "langchain",
-            },
+            "metadata": metadata,
         }
         if parent_run_id:
             entry["metadata"]["parent_run_id"] = parent_run_id

@@ -74,18 +74,26 @@ class XProofAutoGenHooks:
         file_name: str,
         context: str = "",
     ) -> None:
+        # The public-metadata boundary permits only classifications, hashes,
+        # timestamps, and opaque IDs. ``why`` is the legacy fingerprint-only 4W
+        # field and carries a fixed action classification. The human-readable
+        # ``context`` argument is deliberately NOT written to metadata (it is
+        # not a classification/hash/ID), so no raw description reaches the
+        # public proof.
+        del context  # never placed in public metadata
+        metadata: dict[str, Any] = {
+            "who": self.agent_name,
+            "what": data_hash,
+            "when": datetime.now(timezone.utc).isoformat(),
+            "why": action_type,
+            "action_type": action_type,
+            "framework": "autogen",
+        }
         entry: CertifyEntry = {
             "file_hash": data_hash,
             "file_name": file_name,
             "author": self.agent_name,
-            "metadata": {
-                "who": self.agent_name,
-                "what": data_hash,
-                "when": datetime.now(timezone.utc).isoformat(),
-                "why": context or action_type,
-                "action_type": action_type,
-                "framework": "autogen",
-            },
+            "metadata": metadata,
         }
 
         if self.batch_mode:
@@ -231,7 +239,9 @@ def xproof_certify_decision(
     ``file_hash`` must be supplied; ``decision_text`` takes precedence.
 
     Args:
-        decision_text: Raw text hashed to produce ``file_hash``.
+            decision_text: Sanitized declared decision-basis record hashed to
+                produce ``file_hash``; never private step-by-step reasoning or
+                internal chain-of-thought.
         file_hash: Pre-computed 64-char hex SHA-256.  Used only when
             ``decision_text`` is empty.
         confidence_level: Agent's self-assessed confidence between 0.0 and
@@ -248,7 +258,10 @@ def xproof_certify_decision(
         who: 4W — agent identity (defaults to *author*).
         what: 4W — action description (defaults to the hash).
         when: 4W — ISO-8601 timestamp (defaults to current UTC time).
-        why: 4W — reason for the decision.
+        why: 4W — legacy fingerprint-only name for the declared decision basis.
+            Reduced to a SHA-256 fingerprint before serialization; never sent as
+            plaintext. Unsafe for private text — pass a safe public
+            classification/opaque ID or omit it.
         metadata: Extra key-value pairs stored with the proof.
         api_key: Prove Before Act API key (ignored if *client* is provided).
         client: Pre-configured :class:`~xproof.client.XProofClient`.
@@ -277,7 +290,7 @@ def xproof_certify_decision(
                 threshold_stage="pre-commitment",
                 decision_id="del-run-2026-04-20",
                 reversibility_class="irreversible",
-                why="Scheduled GDPR data-retention cleanup",
+                why="gdpr-retention-cleanup",
                 author="data-hygiene-agent",
                 api_key="pm_...",
             )

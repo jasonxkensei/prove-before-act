@@ -362,6 +362,8 @@ def run_crewai_certification(decision_id: str) -> None:
     decision_text = _json.dumps(
         {"action": "delete_pii_records", "scope": "eu-region", "count": 15_000}
     )
+    # This is a sanitized declared decision basis, never private step-by-step
+    # reasoning or internal chain-of-thought.
 
     compliant_client = _build_mock_client_for_tool(decision_id + "-ok", compliant=True)
     tool_ok = XProofCrewCertifyTool(client=compliant_client, author="data-hygiene-agent")
@@ -371,7 +373,7 @@ def run_crewai_certification(decision_id: str) -> None:
         threshold_stage="pre-commitment",
         decision_id=decision_id + "-ok",
         reversibility_class="irreversible",
-        why="Scheduled GDPR retention cleanup",
+        why="gdpr-retention-cleanup",
     )
     assert tx == "tx-mvx-crew-demo", "Expected transaction hash from certified call"
     print(json.dumps({"result": "ok", "tool": "XProofCrewCertifyTool", "tx": tx}))
@@ -385,7 +387,7 @@ def run_crewai_certification(decision_id: str) -> None:
             threshold_stage="pre-commitment",
             decision_id=decision_id + "-blocked",
             reversibility_class="irreversible",
-            why="Scheduled GDPR retention cleanup",
+            why="gdpr-retention-cleanup",
         )
         raise AssertionError("Expected PolicyViolationError was not raised")
     except PolicyViolationError as exc:
@@ -432,6 +434,8 @@ def run_autogen_certification(decision_id: str) -> None:
     decision_text = _json.dumps(
         {"action": "delete_pii_records", "scope": "eu-region", "count": 15_000}
     )
+    # This is a sanitized declared decision basis, never private step-by-step
+    # reasoning or internal chain-of-thought.
 
     compliant_client = _build_mock_client_for_tool(decision_id + "-ok", compliant=True)
     tx = xproof_certify_decision(
@@ -440,7 +444,7 @@ def run_autogen_certification(decision_id: str) -> None:
         threshold_stage="pre-commitment",
         decision_id=decision_id + "-ok",
         reversibility_class="irreversible",
-        why="Scheduled GDPR retention cleanup",
+        why="gdpr-retention-cleanup",
         author="data-hygiene-agent",
         client=compliant_client,
     )
@@ -455,7 +459,7 @@ def run_autogen_certification(decision_id: str) -> None:
             threshold_stage="pre-commitment",
             decision_id=decision_id + "-blocked",
             reversibility_class="irreversible",
-            why="Scheduled GDPR retention cleanup",
+            why="gdpr-retention-cleanup",
             author="data-hygiene-agent",
             client=blocked_client,
         )

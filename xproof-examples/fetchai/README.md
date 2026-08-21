@@ -2,11 +2,13 @@
 
 Anchor every uAgent decision on **MultiversX mainnet** before the action that follows it. Each certification records the 4W audit trail: **Who** acted, **What** was produced, **When** it happened, and **Why**.
 
+**Integration terminology:** Prove Before Act is the accountability pattern for autonomous agents; xProof is its reference implementation. Treat WHY as a declared decision basis—intent, relevant context, and authorization or policy basis—not internal chain-of-thought.
+
 ## Why this matters
 
 uAgents operate autonomously — they send messages, execute trades, and trigger smart contracts without a human in the loop. When a dispute or audit occurs, self-reported logs are not independent evidence.
 
-Prove Before Act anchors the **WHY** (trigger + reasoning) on-chain *before* the action, and the **WHAT** (output) *after*. Both proofs share a `decision_id`, creating a verifiable confidence trail no one can retroactively alter.
+Prove Before Act anchors the **WHY** (trigger + declared decision basis) on-chain *before* the action, and the **WHAT** (output) *after*. Both proofs share a `decision_id`, creating a verifiable confidence trail no one can retroactively alter.
 
 ## Quickstart
 

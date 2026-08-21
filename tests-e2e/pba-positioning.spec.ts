@@ -79,6 +79,12 @@ test.describe("PBA public positioning — interactive surfaces", () => {
     await page.goto("/agent-context/zh");
     await expect(page.getByText(/Prove Before Act 是模式，xProof 是参考实现/)).toBeVisible();
     await expect(page.getByText(/而非内部思维链/).first()).toBeVisible();
+    await expect(page.getByTestId("banner-integrator-invariant-zh")).toContainText(
+      "只能锚定声明的决策依据",
+    );
+    await expect(page.getByTestId("banner-integrator-invariant-zh")).toContainText(
+      "私有思维链",
+    );
   });
 
   test("incident-report gap and violation states retain the decision-basis boundary", async ({

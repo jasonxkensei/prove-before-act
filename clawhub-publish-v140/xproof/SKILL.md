@@ -8,7 +8,7 @@ metadata: {"prove-before-act": {"category":"proof,security,compliance,accountabi
 
 # Prove Before Act — Accountability Layer for AI Agents
 
-This skill enables an agent to anchor hash-based proof records on MultiversX and use the Prove Before Act API for audit context. Always check a returned proof's live status before relying on it.
+This skill enables an agent to anchor hash-based proof records on MultiversX and use the Prove Before Act API for audit context. Prove Before Act is the accountability pattern for autonomous agents; xProof is its reference implementation. Treat WHY as a declared decision basis—intent, relevant context, and authorization or policy basis—not private step-by-step reasoning or internal chain-of-thought. Always check a returned proof's live status before relying on it.
 
 > **Current product and compatibility notice:** Prove Before Act is the product name. The ClawHub install slug `@jasonxkensei/xproof` is retained as a legacy compatibility identifier for existing OpenClaw installations. Install the canonical Python package as `prove-before-act`; its supported Python module namespace is `xproof`. `XProofClient`, `XPROOF_*`, `xProof-Action`, and `jasonxkensei/xProof` are legacy protocol, action, or repository identifiers retained for compatibility. MX-8004 support is not active unless `GET /api/mx8004/status` reports `status: "active"`; the current production response is `status: "not_configured"`.
 
@@ -211,7 +211,7 @@ No configuration needed. Pay the current live per-proof USDC rate on Base (eip15
 |:---|:---|:---|
 | `register_free_trial` | **None** | Get a free `pm_` key + 10 proofs without an account or wallet |
 | `certify_file` | Bearer | Create blockchain proof -- SHA-256 hash, filename, optional author/webhook |
-| `certify_with_confidence` | Bearer | Certify with confidence score, model name, and reasoning trace |
+| `certify_with_confidence` | Bearer | Certify with confidence score, model name, and declared decision-basis context (never private reasoning or internal chain-of-thought) |
 | `verify_proof` | None | Verify existing proof by UUID |
 | `get_proof` | None | Retrieve proof in JSON or Markdown format |
 | `discover_services` | None | List capabilities, pricing, and usage guidance |

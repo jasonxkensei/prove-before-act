@@ -119,11 +119,14 @@ export default function AgentContextPage() {
             </p>
             <CodeBlock lang="python" code={`import hashlib, requests
 
+# declared_decisions: list of strings — each is a declared decision basis (never raw prompts or chain-of-thought)
+# The basis stays local: only its hash is sent. Metadata is classification-only
+# (fixed role/action_type/opaque IDs) — never the basis text or anything derived from it.
 actions = [
-    {"file_hash": hashlib.sha256(a.encode()).hexdigest(),
-     "filename": f"action-{i}.json",
-     "metadata": {"who": agent_id, "what": a}}
-    for i, a in enumerate(agent_actions)
+    {"file_hash": hashlib.sha256(d.encode()).hexdigest(),
+     "filename": f"decision-{i}.json",
+     "metadata": {"who": agent_id, "action_type": "decision", "decision_id": f"dec_{i}"}}
+    for i, d in enumerate(declared_decisions)
 ]
 
 # One call — up to 100 items
@@ -167,11 +170,11 @@ if count < EXPECTED_DAILY_MIN:
             <p className="text-xs text-muted-foreground mb-2">
               For high-stakes agents (trading, legal, medical), make the proof a hard prerequisite. The action <em>does not proceed</em> if anchoring fails.
             </p>
-            <CodeBlock lang="python" code={`def prove_before_act(reasoning: dict, action_fn, api_key: str):
-    """Execute action only after proof is anchored."""
+            <CodeBlock lang="python" code={`def prove_before_act(decision_basis: dict, action_fn, api_key: str):
+    """Execute action only after proof of the declared decision basis is anchored."""
     proof = anchor_with_retry(
-        file_hash=sha256(reasoning),
-        filename="reasoning.json",
+        file_hash=sha256(decision_basis),
+        filename="decision_basis.json",
         api_key=api_key
     )
     if proof is None:
@@ -246,14 +249,15 @@ curl -X POST https://provebeforeact.com/api/proof \\
             <p className="text-xs font-semibold mb-2">Complete Python x402 implementation (copy-paste ready):</p>
             <CodeBlock lang="python" code={`import hashlib, json, base64, requests
 
-def anchor_x402(reasoning: dict, filename: str, wallet_signer) -> dict:
+def anchor_x402(decision_doc: dict, filename: str, wallet_signer) -> dict:
     """
     Anchor a proof via x402 — no API key, no account needed.
+    decision_doc: declared decision basis (NOT internal chain-of-thought, prompts, or step-by-step deliberation)
     wallet_signer: object with .sign_x402(payment_info) → signed_payment dict
     Compatible facilitators: Coinbase CDP, Conway Terminal, OpenClaw
     """
-    # 1. Hash locally — nothing sensitive leaves this function
-    content = json.dumps(reasoning, sort_keys=True, ensure_ascii=False).encode()
+    # 1. Hash the declared decision basis locally — raw content never leaves this function
+    content = json.dumps(decision_doc, sort_keys=True, ensure_ascii=False).encode()
     file_hash = hashlib.sha256(content).hexdigest()
 
     payload = {"file_hash": file_hash, "filename": filename}
@@ -284,7 +288,7 @@ def anchor_x402(reasoning: dict, filename: str, wallet_signer) -> dict:
 
 # Usage — no Prove Before Act account, no API key
 result = anchor_x402(
-    reasoning={"decision": "BUY BTC", "rationale": "RSI=38", "ts": "2026-06-02T14:30:00Z"},
+    decision_doc={"decision": "BUY BTC", "rationale": "RSI=38", "ts": "2026-06-02T14:30:00Z"},
     filename="decision_001.json",
     wallet_signer=my_base_wallet   # your wallet adapter
 )
@@ -588,19 +592,22 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
           <div>
             <p className="text-xs font-semibold mb-2">2. Use <code className="font-mono bg-muted px-1 rounded">certify_file</code> — anchor a decision before acting:</p>
             <CodeBlock lang="json" code={`// MCP tool call: certify_file
+// The declared decision basis is hashed locally; only file_hash + classification-only
+// metadata are sent. No basis text, rationale/why, or outcome details in metadata.
 {
   "name": "certify_file",
   "arguments": {
-    "file_hash": "sha256_of_your_reasoning_document",
+    "file_hash": "sha256_of_your_declared_decision_basis",
     "filename": "decision_2026-06-02.md",
     "author": "my-agent-v2",
     "metadata": {
       "who": "my-agent-v2",
-      "what": "Approved trade: BUY 0.5 BTC at $67,400",
+      "action_type": "trade_execution",
+      "category": "finance",
       "when": "2026-06-02T14:30:00Z",
-      "why": "RSI below 40, portfolio allocation below target, risk approved",
       "model": "gpt-4o",
-      "session_id": "sess_abc123"
+      "session_id": "sess_abc123",
+      "decision_id": "dec_abc123"
     }
   }
 }
@@ -608,20 +615,17 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
           </div>
           <div>
             <p className="text-xs font-semibold mb-2">3. Use <code className="font-mono bg-muted px-1 rounded">audit_agent_session</code> — compliance gate before critical action:</p>
-            <CodeBlock lang="json" code={`{
+            <CodeBlock lang="json" code={`// Inputs and basis stay local — only their hash + classification-only fields are sent.
+// No input field names, sources, or decision content in the request.
+{
   "name": "audit_agent_session",
   "arguments": {
     "agent_id": "trading-agent-v2",
     "session_id": "sess_abc123",
     "action_type": "trade_execution",
-    "action_description": "Execute BUY order for 0.5 BTC",
     "inputs_hash": "sha256_of_all_inputs_analyzed",
-    "inputs_manifest": {
-      "fields": ["btc_price", "portfolio_nav", "rsi_14d", "volatility_30d"],
-      "sources": ["binance_ws", "coingecko"]
-    },
     "risk_level": "high",
-    "decision": "approved"
+    "decision_id": "dec_abc123"
   }
 }
 // COMPLIANCE GATE: action only proceeds if proof_id is returned`} />
@@ -679,21 +683,24 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
             ))}
           </div>
           <p className="text-xs text-muted-foreground">
-            To activate the 4W trail, include at least one of <code className="font-mono bg-muted px-1 rounded text-xs">who</code>, <code className="font-mono bg-muted px-1 rounded text-xs">what</code>, <code className="font-mono bg-muted px-1 rounded text-xs">when</code>, <code className="font-mono bg-muted px-1 rounded text-xs">why</code> in the <code className="font-mono bg-muted px-1 rounded text-xs">metadata</code> field. The 4W section is then automatically rendered on the public proof page at <code className="font-mono bg-muted px-1 rounded text-xs">/proof/&#123;id&#125;</code>.
+            Public metadata is optional and classification-only: use intentionally public identifiers such as <code className="font-mono bg-muted px-1 rounded text-xs">who</code>, <code className="font-mono bg-muted px-1 rounded text-xs">when</code>, <code className="font-mono bg-muted px-1 rounded text-xs">action_type</code>, or an opaque <code className="font-mono bg-muted px-1 rounded text-xs">decision_id</code>. Keep the WHY document and its rationale local; never place them in <code className="font-mono bg-muted px-1 rounded text-xs">metadata</code>. The public trail is rendered at <code className="font-mono bg-muted px-1 rounded text-xs">/proof/&#123;id&#125;</code>.
           </p>
-          <CodeBlock lang="bash" code={`curl -X POST https://provebeforeact.com/api/proof \\
+          <CodeBlock lang="bash" code={`# The declared decision basis is hashed locally — the basis text, rationale, and
+# inputs stay on your machine. Only file_hash + classification-only metadata are sent.
+curl -X POST https://provebeforeact.com/api/proof \\
   -H "Authorization: Bearer pm_YOUR_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
     "file_hash": "YOUR_SHA256",
-    "filename": "reasoning_session_001.md",
+    "filename": "decision_basis_session_001.md",
     "metadata": {
       "who": "trading-agent-v2",
-      "what": "Approved BUY order for 0.5 BTC",
+      "action_type": "trade_execution",
+      "category": "finance",
       "when": "2026-06-02T14:30:00Z",
-      "why": "RSI=38, below 40 threshold; nav_allocation=2.1%, below 3% cap; policy_version=v3.1",
       "model": "gpt-4o-mini",
-      "session_id": "sess_abc123"
+      "session_id": "sess_abc123",
+      "decision_id": "dec_abc123"
     }
   }'`} />
         </div>
@@ -732,7 +739,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
             <p className="text-xs font-semibold">Known privacy considerations:</p>
             <div className="space-y-1.5 text-xs text-muted-foreground ml-2">
               <p><strong className="text-foreground">Timing correlation:</strong> Frequent anchor patterns can reveal agent activity rhythm. Mitigate by batching with <code className="font-mono bg-muted px-1 rounded text-xs">POST /api/batch</code> or adding jitter.</p>
-              <p><strong className="text-foreground">Metadata exposure:</strong> The <code className="font-mono bg-muted px-1 rounded text-xs">who</code>, <code className="font-mono bg-muted px-1 rounded text-xs">what</code>, <code className="font-mono bg-muted px-1 rounded text-xs">why</code> fields are stored and rendered publicly if <code className="font-mono bg-muted px-1 rounded text-xs">is_public: true</code>. Use generic descriptions for sensitive decisions.</p>
+              <p><strong className="text-foreground">Metadata exposure:</strong> Every metadata field is stored and rendered publicly if <code className="font-mono bg-muted px-1 rounded text-xs">is_public: true</code>. Send only intentionally public classifications and opaque IDs—never a declared decision basis, its rationale, prompts, or input data.</p>
               <p><strong className="text-foreground">On-chain permanence:</strong> Once a transaction is confirmed on MultiversX, it cannot be deleted. Design your metadata accordingly.</p>
               <p><strong className="text-foreground">Not a ZK system:</strong> Prove Before Act uses SHA-256 hashing, not zero-knowledge proofs. A determined adversary with access to the original data can verify the hash matches. If ZK is required, combine with a ZK proving layer upstream.</p>
             </div>
@@ -801,6 +808,11 @@ class ProveBeforeAct:
     """
     Core Prove Before Act loop for autonomous agents.
     Anchor a declared decision basis BEFORE executing any significant action.
+
+    INVARIANT: Only declared decision bases (summaries of WHY the agent is acting,
+    key inputs, and the chosen action) should be anchored. Never send or include
+    private chain-of-thought, hidden reasoning steps, raw prompts, or any
+    step-by-step deliberation in the content you hash or in metadata fields.
     """
     
     def __init__(self, api_key: str, agent_id: str):
@@ -808,16 +820,17 @@ class ProveBeforeAct:
         self.agent_id = agent_id
         self.base = "https://provebeforeact.com"
     
-    def anchor(self, reasoning: dict, action_description: str) -> str | None:
+    def anchor(self, decision_basis: dict, action_description: str) -> str | None:
         """
         Step 1-3: Hash the declared decision basis, anchor it, return proof_id.
         Call this BEFORE executing any action.
+        decision_basis: declared decision basis — NOT chain-of-thought or raw prompts.
         """
         # Step 1: Serialize the declared decision basis canonically
-        reasoning_json = json.dumps(reasoning, sort_keys=True, ensure_ascii=False)
+        basis_json = json.dumps(decision_basis, sort_keys=True, ensure_ascii=False)
         
-        # Step 2: Hash locally — nothing sensitive leaves this function
-        file_hash = hashlib.sha256(reasoning_json.encode()).hexdigest()
+        # Step 2: Hash locally — raw content never leaves this function
+        file_hash = hashlib.sha256(basis_json.encode()).hexdigest()
         
         # Step 3: Anchor to Prove Before Act
         try:
@@ -826,14 +839,16 @@ class ProveBeforeAct:
                 headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
                 json={
                     "file_hash": file_hash,
-                    "filename": f"reasoning_{reasoning.get('session_id', 'unknown')}.json",
+                    "filename": f"decision_basis_{decision_basis.get('session_id', 'unknown')}.json",
+                    # Metadata is classification-only: fixed role/action_type and opaque IDs.
+                    # Never send the basis object, its rationale/why, inputs, or anything derived from it.
                     "metadata": {
                         "who": self.agent_id,
-                        "what": action_description,
-                        "when": reasoning.get("timestamp"),
-                        "why": reasoning.get("rationale"),
-                        "model": reasoning.get("model"),
-                        "session_id": reasoning.get("session_id"),
+                        "action_type": decision_basis.get("action_type", "decision"),
+                        "when": decision_basis.get("timestamp"),
+                        "model": decision_basis.get("model"),
+                        "session_id": decision_basis.get("session_id"),
+                        "decision_id": decision_basis.get("decision_id"),
                     }
                 },
                 timeout=10
@@ -845,12 +860,13 @@ class ProveBeforeAct:
             self._log_fallback(file_hash, action_description, str(e))
         return None
     
-    def run_with_proof(self, reasoning: dict, action_fn, action_description: str):
+    def run_with_proof(self, decision_basis: dict, action_fn, action_description: str):
         """
         Full Prove Before Act cycle.
         Action only runs after proof_id is obtained.
+        decision_basis: declared decision basis — NOT chain-of-thought or raw prompts.
         """
-        proof_id = self.anchor(reasoning, action_description)
+        proof_id = self.anchor(decision_basis, action_description)
         
         if proof_id is None:
             # Soft failure: log and continue (or raise if policy requires hard stop)
@@ -869,8 +885,13 @@ class ProveBeforeAct:
 # Usage example
 agent = ProveBeforeAct(api_key="pm_YOUR_KEY", agent_id="my-agent-v2")
 
-reasoning = {
+# Declared decision basis: key inputs + rationale + chosen action — NOT step-by-step deliberation.
+# rationale + inputs are hashed locally and NEVER sent; only the classification-only
+# fields (action_type, decision_id, session_id, model) travel in metadata above.
+decision_basis = {
     "session_id": "sess_001",
+    "decision_id": "dec_001",
+    "action_type": "trade_execution",
     "timestamp": "2026-06-02T14:30:00Z",
     "model": "gpt-4o-mini",
     "rationale": "BTC RSI=38 (below 40 threshold), portfolio allocation=2.1% (below 3% cap). Risk policy v3.1 approves. Confidence: HIGH.",
@@ -878,7 +899,7 @@ reasoning = {
 }
 
 outcome = agent.run_with_proof(
-    reasoning=reasoning,
+    decision_basis=decision_basis,
     action_fn=lambda: execute_trade("BUY", "BTC", 0.5),
     action_description="Execute BUY 0.5 BTC at market price"
 )
@@ -941,8 +962,10 @@ BASE = "https://provebeforeact.com"
 
 # ── Step 1: Anchor WHY via check_coherence MCP tool ──────────────────────────
 # MCP call: { "name": "check_coherence", "arguments": { ... } }
-# REST equivalent — hash the payload and certify with coherence metadata:
-coherence_payload = {
+# REST equivalent — hash the declared basis and certify with coherence metadata.
+# INVARIANT: Use declared decision basis only — never include private chain-of-thought,
+# hidden reasoning steps, raw prompts, or step-by-step deliberation here.
+declared_basis = {
     "type": "coherence_check",
     "role": "WHY",
     "intent": "Optimize portfolio allocation for Q3",
@@ -951,15 +974,24 @@ coherence_payload = {
     "who": "trading-agent-v2",
 }
 anchor = hashlib.sha256(
-    json.dumps(coherence_payload, sort_keys=True).encode()
+    json.dumps(declared_basis, sort_keys=True).encode()
 ).hexdigest()
 
+# The basis (intent/context/decision) stays local — only its hash is sent.
+# Metadata is classification-only: fixed role + opaque IDs. Never spread the basis
+# object or send its intent, context, decision, or any derived text.
 why_resp = requests.post(f"{BASE}/api/proof",
     headers={"Authorization": f"Bearer {API_KEY}"},
     json={
         "file_hash": anchor,
         "filename": "coherence-check.json",
-        "metadata": {**coherence_payload, "what": coherence_payload["decision"], "why": coherence_payload["intent"]}
+        "metadata": {
+            "who": declared_basis["who"],
+            "role": "WHY",
+            "action_type": "coherence_check",
+            "category": "finance",
+            "decision_id": "dec_coh_abc123",
+        }
     }).json()
 
 why_proof_id = why_resp["proof_id"]
@@ -970,6 +1002,8 @@ result = execute_trade("BUY", "BTC", 0.5)
 
 # ── Step 3: Anchor WHAT — link back to WHY ────────────────────────────────────
 what_hash = hashlib.sha256(json.dumps(result, sort_keys=True).encode()).hexdigest()
+# The result stays local — only its hash is sent. Metadata is classification-only;
+# the WHAT content is never disclosed, only the opaque why_proof_id link.
 what_resp = requests.post(f"{BASE}/api/proof",
     headers={"Authorization": f"Bearer {API_KEY}"},
     json={
@@ -977,9 +1011,9 @@ what_resp = requests.post(f"{BASE}/api/proof",
         "filename": "trade-result.json",
         "metadata": {
             "who": "trading-agent-v2",
-            "what": "Executed BUY 0.5 BTC",
-            "why_proof_id": why_proof_id,   # ← links WHAT to WHY
             "role": "WHAT",
+            "action_type": "trade_execution",
+            "why_proof_id": why_proof_id,   # ← opaque link from WHAT to WHY
         }
     }).json()
 
@@ -1150,14 +1184,17 @@ print(f"WHAT: {BASE}/proof/{what_resp['proof_id']}")`} />
               </tbody>
             </table>
           </div>
-          <CodeBlock lang="json" code={`// Example: full metadata on a high-stakes action
+          <CodeBlock lang="json" code={`// Example: classification-only metadata on a high-stakes action.
+// The declared decision basis (the WHAT/WHY text and inputs) is hashed locally and
+// stays there — it is NOT sent. Only fixed, intentionally disclosable fields travel:
+// role/action_type, sanitized category, opaque IDs, hashes, and timestamps.
 {
   "file_hash": "a1b2c3...64hex",
   "filename": "trade_decision_001.json",
   "metadata": {
     "who": "trading-agent-v3",
-    "what": "Execute BUY 0.5 BTC at $67,400",
-    "why": "RSI=38 (oversold), nav_allocation=2.1% (below 3% cap), risk policy v3.1 approved",
+    "action_type": "trade_execution",
+    "category": "finance",
     "confidence_score": 0.87,
     "reversibility_class": "costly",
     "model_hash": "sha256_of_gpt4o_weights_snapshot",
@@ -1165,6 +1202,7 @@ print(f"WHAT: {BASE}/proof/{what_resp['proof_id']}")`} />
     "reasoning_started_at": "2026-06-13T14:29:52Z",
     "action_taken_at": "2026-06-13T14:30:01Z",
     "session_id": "sess_abc123",
+    "decision_id": "dec_abc123",
     "jurisdiction_type": "SEC-regulated"
   }
 }`} />
@@ -1191,11 +1229,16 @@ print(f"WHAT: {BASE}/proof/{what_resp['proof_id']}")`} />
 from xproof import xproof  # legacy module name; install: pip install prove-before-act
 
 @tool
-def prove_before_act(reasoning: str, action: str) -> str:
-    """Anchor a declared decision basis on-chain before executing any significant action."""
+def prove_before_act(declared_basis: str, action_type: str) -> str:
+    """
+    Anchor a declared decision basis on-chain before executing any significant action.
+    declared_basis: human-readable summary of WHY — NOT raw prompts or chain-of-thought.
+    """
+    # content is hashed locally by the SDK; the basis text never leaves the machine.
+    # Metadata is classification-only — no basis text, rationale/why, or action content.
     proof = xproof.anchor(
-        content=reasoning,
-        metadata={"who": "langchain-agent", "what": action, "why": reasoning}
+        content=declared_basis,
+        metadata={"who": "langchain-agent", "action_type": action_type}
     )
     return f"Proof anchored: {proof.verify_url}"
 
@@ -1209,10 +1252,13 @@ tools = [prove_before_act, ...]`} />
 from xproof import xproof  # legacy module name; install: pip install prove-before-act
 
 def anchor_before_kickoff(crew_inputs: dict) -> str:
-    reasoning = str(crew_inputs)
+    # Summarize the declared decision basis — not raw prompts or step-by-step deliberation
+    declared_basis = f"Crew kickoff: goal={crew_inputs.get('goal', 'unspecified')}, context={crew_inputs.get('context', 'none')}"
+    # content is hashed locally by the SDK — the basis stays local.
+    # Metadata is classification-only: fixed role + action_type, nothing derived from the basis.
     proof = xproof.anchor(
-        content=reasoning,
-        metadata={"who": "crewai-orchestrator", "what": "crew kickoff", "why": reasoning}
+        content=declared_basis,
+        metadata={"who": "crewai-orchestrator", "action_type": "crew_kickoff"}
     )
     return proof.id  # attach proof_id to crew context
 
@@ -1226,18 +1272,23 @@ crew = Crew(agents=[...], tasks=[...], step_callback=anchor_before_kickoff)`} />
 from xproof import xproof  # legacy module name; install: pip install prove-before-act
 
 @function_tool
-def anchor_reasoning(reasoning: str, action_description: str) -> str:
-    """Prove Before Act — anchor a declared decision basis before execution. Returns proof_id."""
+def anchor_decision_basis(declared_basis: str, action_type: str) -> str:
+    """
+    Prove Before Act — anchor a declared decision basis before execution. Returns proof_id.
+    declared_basis: summary of WHY — NOT internal chain-of-thought or raw prompts.
+    """
+    # content is hashed locally by the SDK; the basis stays local.
+    # Metadata is classification-only — no basis text or action content is sent.
     proof = xproof.anchor(
-        content=reasoning,
-        metadata={"who": "openai-agent", "what": action_description, "why": reasoning}
+        content=declared_basis,
+        metadata={"who": "openai-agent", "action_type": action_type}
     )
     return proof.id
 
 agent = Agent(
     name="AccountableAgent",
-    instructions="Always call anchor_reasoning BEFORE executing any significant action.",
-    tools=[anchor_reasoning, ...]
+    instructions="Always call anchor_decision_basis BEFORE executing any significant action. Pass a clear declared decision basis — not your internal reasoning steps.",
+    tools=[anchor_decision_basis, ...]
 )`} />
           </div>
 
@@ -1247,11 +1298,20 @@ agent = Agent(
 from xproof import xproof  # legacy module name; install: pip install prove-before-act
 
 def pre_action_hook(sender, message, recipient, request_reply):
-    """Hook: anchor every outbound action before it is processed."""
+    """
+    Hook: anchor a declared decision basis for every outbound action before it is processed.
+    Only anchors the action declaration — not the full internal message thread or chain-of-thought.
+    """
     if request_reply and "action:" in message.get("content", "").lower():
+        # Extract the declared action line only — not the full message content
+        action_line = next(
+            (ln for ln in message["content"].splitlines() if "action:" in ln.lower()), ""
+        )
+        # action_line is hashed locally as the basis and never sent.
+        # Metadata is classification-only: fixed role + action_type, no message content.
         xproof.anchor(
-            content=message["content"],
-            metadata={"who": sender.name, "what": message["content"][:200]}
+            content=action_line or message["content"][:200],
+            metadata={"who": sender.name, "action_type": "message_action"}
         )
 
 agent = ConversableAgent(name="my-agent", ...)
@@ -1263,17 +1323,22 @@ agent.register_hook("process_message_before_send", pre_action_hook)`} />
             <CodeBlock lang="python" code={`from llama_index.core.tools import FunctionTool
 from xproof import xproof  # legacy module name; install: pip install prove-before-act
 
-def anchor_proof(reasoning: str, action: str) -> str:
+def anchor_decision_basis(declared_basis: str, action_type: str) -> str:
+    """
+    declared_basis: declared decision basis (WHY) — NOT internal chain-of-thought or prompts.
+    """
+    # content is hashed locally by the SDK; the basis stays local.
+    # Metadata is classification-only — no basis text or action content is sent.
     proof = xproof.anchor(
-        content=reasoning,
-        metadata={"who": "llamaindex-agent", "what": action, "why": reasoning}
+        content=declared_basis,
+        metadata={"who": "llamaindex-agent", "action_type": action_type}
     )
     return f"proof_id={proof.id} verify={proof.verify_url}"
 
 xproof_tool = FunctionTool.from_defaults(
-    fn=anchor_proof,
-    name="anchor_proof",
-    description="Anchor a declared decision basis BEFORE executing any action. Call this first."
+    fn=anchor_decision_basis,
+    name="anchor_decision_basis",
+    description="Anchor a declared decision basis BEFORE executing any action. Pass WHY, not chain-of-thought."
 )
 agent = ReActAgent.from_tools([xproof_tool, ...], llm=llm)`} />
           </div>
@@ -1284,16 +1349,21 @@ agent = ReActAgent.from_tools([xproof_tool, ...], llm=llm)`} />
 import { z } from 'zod';
 import { xProof } from 'prove-before-act';  // npm install prove-before-act
 
+// INVARIANT: declaredBasis must be a human-readable declared decision basis (WHY + key inputs).
+// Never pass internal chain-of-thought, hidden reasoning steps, raw prompts, or
+// step-by-step deliberation into this field or any metadata sent to the API.
 const anchorTool = tool({
   description: 'Anchor a declared decision basis on-chain BEFORE executing any significant action. Returns proof_id.',
   parameters: z.object({
-    reasoning: z.string().describe('The agent reasoning / WHY'),
-    action: z.string().describe('The action about to be taken / WHAT'),
+    declaredBasis: z.string().describe('The declared decision basis (WHY) — not internal chain-of-thought or prompts'),
+    actionType: z.string().describe('A fixed action classification, e.g. "trade_execution"'),
   }),
-  execute: async ({ reasoning, action }) => {
+  execute: async ({ declaredBasis, actionType }) => {
+    // content is hashed locally by the SDK — the basis stays local.
+    // Metadata is classification-only: no basis text, rationale/why, or action content.
     const proof = await xproof.anchor({
-      content: reasoning,
-      metadata: { who: 'vercel-ai-agent', what: action, why: reasoning },
+      content: declaredBasis,
+      metadata: { who: 'vercel-ai-agent', action_type: actionType },
     });
     return { proof_id: proof.id, verify_url: proof.verifyUrl };
   },
@@ -1454,6 +1524,14 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
               <strong className="text-foreground">Prove Before Act is the pattern; xProof is the reference implementation.</strong>{" "}
               Anchor a declared decision basis before execution: hash locally → certify on MultiversX → proceed only after checking the returned <code className="font-mono text-sm bg-muted px-1 rounded">proof_id</code> status. This is not a request for internal chain-of-thought. <a href="/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9" className="text-primary underline">View the reference agent's live profile</a>. <a href="/founder" className="text-primary underline">Meet Jason Petitfourg, the AI Product Builder behind Prove Before Act</a>.
           </p>
+          {/* Integrator invariant — always visible */}
+          <div className="mt-2 rounded-md border border-red-500/30 bg-red-500/5 px-4 py-3" data-testid="banner-integrator-invariant">
+            <p className="text-xs font-bold text-red-600 dark:text-red-400 mb-1 uppercase tracking-wide">Integrator invariant — read before copying any snippet</p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              <strong className="text-foreground">Only declared decision bases may be anchored.</strong> A declared decision basis is a concise, human-readable summary of <em>why</em> the agent is acting, what key inputs drove the decision, and what action was chosen. It is explicitly <strong className="text-foreground">not</strong> and must <strong className="text-foreground">never</strong> be: private chain-of-thought, hidden reasoning steps, raw system or user prompts, internal scratchpad text, or any step-by-step deliberation that the user or operator did not intend to be public. Sending private deliberation would violate user privacy, potentially expose proprietary prompts, and defeat the purpose of the hash-only privacy model. Hash the declared decision basis locally; the hash — not the content — is what gets sent to the API.
+            </p>
+          </div>
+
           {/* x402 — first thing agents see */}
           <div className="mt-2 rounded-md border border-primary/30 bg-primary/5 px-4 py-3 flex items-center gap-3" data-testid="badge-x402-top">
             <Zap className="h-4 w-4 text-primary shrink-0" />
@@ -1495,13 +1573,16 @@ curl -X POST https://provebeforeact.com/api/agent/register -H "Content-Type: app
   -d '{"agent_name": "my-agent"}'
 # → { "api_key": "pm_...", "trial": { "quota": 10 } }
 
-# 2. Hash the declared decision basis locally (nothing leaves your machine)
+# 2. Hash the declared decision basis locally (raw content never leaves your machine)
+#    Use a declared decision basis — not internal chain-of-thought or raw prompts
 FILE_HASH=$(python3 -c "import hashlib,json; print(hashlib.sha256(json.dumps({'why':'RSI=38','what':'BUY BTC'},sort_keys=True).encode()).hexdigest())")
 
 # 3. Anchor BEFORE executing — Prove Before Act
+#    The basis stays local; only file_hash + classification-only metadata are sent
+#    (fixed action_type + sanitized category — never the basis text, why, or outcome)
 curl -X POST https://provebeforeact.com/api/proof -H "Authorization: Bearer pm_YOUR_KEY" \\
   -H "Content-Type: application/json" \\
-  -d "{\"file_hash\":\"$FILE_HASH\",\"filename\":\"reasoning.json\",\"metadata\":{\"who\":\"my-agent\",\"what\":\"BUY BTC\",\"why\":\"RSI=38\"}}"
+  -d "{\"file_hash\":\"$FILE_HASH\",\"filename\":\"decision_basis.json\",\"metadata\":{\"who\":\"my-agent\",\"action_type\":\"trade_execution\",\"category\":\"finance\"}}"
 # → { "proof_id": "prf_...", "verify_url": "/proof/...", "status": "pending" }`} />
           </div>
 
@@ -1547,18 +1628,26 @@ curl -X POST https://provebeforeact.com/api/proof -H "Authorization: Bearer pm_Y
                 desc: "Prove a BUY/SELL decision before executing — full 4W audit trail anchored on-chain",
                 codePy: `import hashlib, json, requests
 
-# 1. Declare a decision basis — not internal chain-of-thought
-reasoning = {
+# 1. Declare a decision basis — key inputs + rationale + chosen action
+#    NOT internal chain-of-thought, hidden reasoning steps, or raw prompts
+decision_basis = {
     "who": "trading-agent-v2", "what": "BUY BTC 0.5",
     "why": "RSI=38 (below 40 threshold); allocation=2.1% (below 3% cap)",
     "model": "gpt-4o-mini", "session_id": "sess_001"
 }
-h = hashlib.sha256(json.dumps(reasoning, sort_keys=True).encode()).hexdigest()
+# Hash the basis locally — the basis object stays on this machine, only its hash is sent
+h = hashlib.sha256(json.dumps(decision_basis, sort_keys=True).encode()).hexdigest()
 
-# 2. Anchor BEFORE executing — Prove Before Act
+# 2. Anchor BEFORE executing — metadata is classification-only (fixed action_type +
+#    sanitized category + opaque IDs). Never send the basis object, why, or inputs.
+metadata = {
+    "who": "trading-agent-v2", "action_type": "trade_execution",
+    "category": "finance", "model": "gpt-4o-mini",
+    "session_id": "sess_001", "decision_id": "dec_001",
+}
 resp = requests.post("https://provebeforeact.com/api/proof",
     headers={"Authorization": "Bearer pm_YOUR_KEY"},
-    json={"file_hash": h, "filename": "trade_decision.json", "metadata": reasoning})
+    json={"file_hash": h, "filename": "trade_decision.json", "metadata": metadata})
 proof_id = resp.json()["proof_id"]  # returned in ~1.1s, on-chain in ~6s
 
 # 3. Execute only after proof is anchored
@@ -1566,20 +1655,28 @@ execute_trade("BUY", "BTC", 0.5)
 print(f"Audit trail: https://provebeforeact.com/proof/{proof_id}")`,
                 codeTs: `import crypto from "crypto";
 
-// 1. Declare a decision basis — not internal chain-of-thought
-const reasoning = {
+// 1. Declare a decision basis — key inputs + rationale + chosen action
+// NOT internal chain-of-thought, hidden reasoning steps, or raw prompts
+const decisionBasis = {
   who: "trading-agent-v2", what: "BUY BTC 0.5",
   why: "RSI=38 (below 40 threshold); allocation=2.1% (below 3% cap)",
   model: "gpt-4o-mini", session_id: "sess_001",
 };
-const sorted = JSON.stringify(reasoning, Object.keys(reasoning).sort() as any);
+// Hash the basis locally — the basis object stays local, only its hash is sent
+const sorted = JSON.stringify(decisionBasis, Object.keys(decisionBasis).sort() as any);
 const h = crypto.createHash("sha256").update(sorted).digest("hex");
 
-// 2. Anchor BEFORE executing — Prove Before Act
+// 2. Anchor BEFORE executing — metadata is classification-only (fixed action_type +
+// sanitized category + opaque IDs). Never send the basis object, why, or inputs.
+const metadata = {
+  who: "trading-agent-v2", action_type: "trade_execution",
+  category: "finance", model: "gpt-4o-mini",
+  session_id: "sess_001", decision_id: "dec_001",
+};
 const resp = await fetch("https://provebeforeact.com/api/proof", {
   method: "POST",
   headers: { Authorization: "Bearer pm_YOUR_KEY", "Content-Type": "application/json" },
-  body: JSON.stringify({ file_hash: h, filename: "trade_decision.json", metadata: reasoning }),
+  body: JSON.stringify({ file_hash: h, filename: "trade_decision.json", metadata }),
 });
 const { proof_id } = await resp.json() as { proof_id: string };
 // returned in ~1.1s, on-chain in ~6s
@@ -1595,18 +1692,25 @@ console.log("Audit trail: https://provebeforeact.com/proof/" + proof_id);`,
                 desc: "Anchor a declared decision basis + sources before publishing — verifiable provenance for readers",
                 codePy: `import hashlib, json, requests
 
-# 1. Summarize the declared decision basis and sources — not internal chain-of-thought
-reasoning = {
+# 1. Summarize the declared decision basis and sources
+#    NOT internal chain-of-thought, hidden reasoning steps, or raw prompts
+decision_basis = {
     "who": "research-agent-v1", "what": "Publish Q2 crypto market outlook",
     "why": "5 sources reviewed, confidence=0.87, no contradictions detected",
     "sources": ["arxiv:2406.12345", "bloomberg:BTC-Q2", "coindesk:2026-07-01"]
 }
-h = hashlib.sha256(json.dumps(reasoning, sort_keys=True).encode()).hexdigest()
+# Hash the basis locally — the basis (why + sources) stays local, only its hash is sent
+h = hashlib.sha256(json.dumps(decision_basis, sort_keys=True).encode()).hexdigest()
 
-# 2. Anchor hash — report content never leaves the agent
+# 2. Anchor hash — report content, rationale, and sources never leave the agent.
+#    Metadata is classification-only: fixed action_type + sanitized category + opaque ID.
+metadata = {
+    "who": "research-agent-v1", "action_type": "publish",
+    "category": "research", "decision_id": "dec_research_001",
+}
 resp = requests.post("https://provebeforeact.com/api/proof",
     headers={"Authorization": "Bearer pm_YOUR_KEY"},
-    json={"file_hash": h, "filename": "research_reasoning.json", "metadata": reasoning})
+    json={"file_hash": h, "filename": "research_decision_basis.json", "metadata": metadata})
 proof_id = resp.json()["proof_id"]
 
 # 3. Publish with verifiable provenance link
@@ -1614,20 +1718,27 @@ publish_report(report_content, audit_ref=proof_id)
 print(f"Readers can verify: https://provebeforeact.com/proof/{proof_id}")`,
                 codeTs: `import crypto from "crypto";
 
-// 1. Summarize the declared decision basis and sources — not internal chain-of-thought
-const reasoning = {
+// 1. Summarize the declared decision basis and sources
+// NOT internal chain-of-thought, hidden reasoning steps, or raw prompts
+const decisionBasis = {
   who: "research-agent-v1", what: "Publish Q2 crypto market outlook",
   why: "5 sources reviewed, confidence=0.87, no contradictions detected",
   sources: ["arxiv:2406.12345", "bloomberg:BTC-Q2", "coindesk:2026-07-01"],
 };
-const sorted = JSON.stringify(reasoning, Object.keys(reasoning).sort() as any);
+// Hash the basis locally — the basis (why + sources) stays local, only its hash is sent
+const sorted = JSON.stringify(decisionBasis, Object.keys(decisionBasis).sort() as any);
 const h = crypto.createHash("sha256").update(sorted).digest("hex");
 
-// 2. Anchor hash — report content never leaves the agent
+// 2. Anchor hash — report content, rationale, and sources never leave the agent.
+// Metadata is classification-only: fixed action_type + sanitized category + opaque ID.
+const metadata = {
+  who: "research-agent-v1", action_type: "publish",
+  category: "research", decision_id: "dec_research_001",
+};
 const resp = await fetch("https://provebeforeact.com/api/proof", {
   method: "POST",
   headers: { Authorization: "Bearer pm_YOUR_KEY", "Content-Type": "application/json" },
-  body: JSON.stringify({ file_hash: h, filename: "research_reasoning.json", metadata: reasoning }),
+  body: JSON.stringify({ file_hash: h, filename: "research_decision_basis.json", metadata }),
 });
 const { proof_id } = await resp.json() as { proof_id: string };
 
@@ -1642,38 +1753,54 @@ console.log("Readers can verify: https://provebeforeact.com/proof/" + proof_id);
                 desc: "Certify decision before sending response — dispute-proof audit record",
                 codePy: `import hashlib, json, requests
 
-# 1. Document the decision rationale
-decision = {
+# 1. Document the declared decision basis — policy applied and outcome
+#    NOT internal chain-of-thought or full conversation transcript
+decision_basis = {
     "who": "support-agent-v3", "what": "Refund $47.50 approved",
     "why": "Policy §3.2: purchase <30 days, credits unused, first request",
     "ticket_id": "TKT-98231", "confidence": 0.95
 }
-h = hashlib.sha256(json.dumps(decision, sort_keys=True).encode()).hexdigest()
+# Hash the basis locally — the policy applied, outcome, and ticket ID stay local
+h = hashlib.sha256(json.dumps(decision_basis, sort_keys=True).encode()).hexdigest()
 
-# 2. Certify before sending — creates dispute-proof audit record
+# 2. Certify before sending — creates dispute-proof audit record.
+#    Metadata is classification-only: fixed action_type + sanitized category + opaque ID.
+#    No why/policy details, ticket IDs, or outcome content are sent.
+metadata = {
+    "who": "support-agent-v3", "action_type": "refund_decision",
+    "category": "customer_support", "decision_id": "dec_support_001",
+}
 resp = requests.post("https://provebeforeact.com/api/proof",
     headers={"Authorization": "Bearer pm_YOUR_KEY"},
-    json={"file_hash": h, "filename": "support_decision.json", "metadata": decision})
+    json={"file_hash": h, "filename": "support_decision.json", "metadata": metadata})
 proof_id = resp.json()["proof_id"]
 
 # 3. Send response with proof_id as audit reference
 send_to_customer(ticket_id, response_text, audit_ref=proof_id)`,
                 codeTs: `import crypto from "crypto";
 
-// 1. Document the decision rationale
-const decision = {
+// 1. Document the declared decision basis — policy applied and outcome
+// NOT internal chain-of-thought or full conversation transcript
+const decisionBasis = {
   who: "support-agent-v3", what: "Refund $47.50 approved",
   why: "Policy §3.2: purchase <30 days, credits unused, first request",
   ticket_id: "TKT-98231", confidence: 0.95,
 };
-const sorted = JSON.stringify(decision, Object.keys(decision).sort() as any);
+// Hash the basis locally — the policy applied, outcome, and ticket ID stay local
+const sorted = JSON.stringify(decisionBasis, Object.keys(decisionBasis).sort() as any);
 const h = crypto.createHash("sha256").update(sorted).digest("hex");
 
-// 2. Certify before sending — creates dispute-proof audit record
+// 2. Certify before sending — creates dispute-proof audit record.
+// Metadata is classification-only: fixed action_type + sanitized category + opaque ID.
+// No why/policy details, ticket IDs, or outcome content are sent.
+const metadata = {
+  who: "support-agent-v3", action_type: "refund_decision",
+  category: "customer_support", decision_id: "dec_support_001",
+};
 const resp = await fetch("https://provebeforeact.com/api/proof", {
   method: "POST",
   headers: { Authorization: "Bearer pm_YOUR_KEY", "Content-Type": "application/json" },
-  body: JSON.stringify({ file_hash: h, filename: "support_decision.json", metadata: decision }),
+  body: JSON.stringify({ file_hash: h, filename: "support_decision.json", metadata }),
 });
 const { proof_id } = await resp.json() as { proof_id: string };
 

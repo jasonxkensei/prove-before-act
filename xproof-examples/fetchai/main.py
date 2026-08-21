@@ -4,7 +4,7 @@ Demonstrates the WHY+WHAT dual-certification pattern:
   WHY  = hash of the incoming message (the trigger / justification)
   WHAT = hash of the agent's response (the output to prove)
 
-Both proofs share a ``decision_id`` so the full reasoning chain is
+Both proofs share a ``decision_id`` so the full declared decision-basis trail is
 independently verifiable on MultiversX mainnet.
 
 4W metadata per proof:

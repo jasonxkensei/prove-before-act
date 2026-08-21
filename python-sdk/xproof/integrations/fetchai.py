@@ -185,11 +185,18 @@ class XProofuAgentMiddleware:
         extra_metadata: Optional[dict[str, Any]] = None,
         decision_id: Optional[str] = None,
     ) -> Optional[dict[str, Any]]:
+        # The public-metadata boundary permits only classifications, hashes,
+        # timestamps, and opaque IDs. ``why`` is the legacy fingerprint-only 4W
+        # field and carries a fixed action classification. The human-readable
+        # ``context`` argument is deliberately NOT written to metadata (it is
+        # not a classification/hash/ID), so no raw description reaches the
+        # public proof.
+        del context  # never placed in public metadata
         metadata: dict[str, Any] = {
             "who": self.agent_name,
             "what": file_hash,
             "when": _now_iso(),
-            "why": context,
+            "why": action_type,
             "action_type": action_type,
             "framework": "fetchai-uagents",
         }
@@ -315,7 +322,11 @@ class XProofuAgentMiddleware:
             action_name: Descriptive name of the action (used in file names).
             inputs: Input data / trigger (hashed as WHY).
             outputs: Output data / result (hashed as WHAT).
-            why: Human-readable mandate or justification.
+            why: Legacy fingerprint-only declared decision basis. Stored via
+                ``metadata["why"]`` and reduced to a SHA-256 fingerprint before
+                the request is serialized; never sent as plaintext. Unsafe for
+                private text — pass a safe public classification/opaque ID or
+                omit it.
             confidence_level: Optional float 0.0-1.0.
 
         Returns:
@@ -327,7 +338,7 @@ class XProofuAgentMiddleware:
                 action_name="price-lookup",
                 inputs={"query": "BTC/USDT"},
                 outputs={"price": 67800.0},
-                why="Market price requested by trading strategy",
+                why="price-lookup-mandate",  # safe public label; fingerprinted before send
                 confidence_level=0.95,
             )
             print(result["why_proof"]["proof_id"])
@@ -340,12 +351,18 @@ class XProofuAgentMiddleware:
         why_extra: dict[str, Any] = {"action_name": action_name}
         if confidence_level is not None:
             why_extra["confidence_level"] = float(confidence_level)
+        # The public ``why`` argument is the legacy fingerprint-only declared
+        # decision basis. Route it into ``metadata["why"]`` (centrally reduced
+        # to a SHA-256 fingerprint before serialization). Never place the
+        # human-readable fallback description there.
+        if why:
+            why_extra["why"] = why
 
         why_proof = self._certify(
             file_hash=inputs_hash,
             file_name=f"why-{action_name}-{inputs_hash[:8]}.json",
             action_type="decision",
-            context=why or f"Reasoning before {action_name}",
+            context=f"Declared decision basis before {action_name}",
             extra_metadata=why_extra,
             decision_id=decision_id,
         )
@@ -420,7 +437,7 @@ def xproof_handler(
     Certifies the incoming message (WHY) before the handler runs, then
     certifies the response (WHAT) if the handler returns a value.
 
-    Both proofs share a ``decision_id`` so the full reasoning chain is
+    Both proofs share a ``decision_id`` so the full declared decision-basis trail is
     verifiable on-chain.
 
     Args:

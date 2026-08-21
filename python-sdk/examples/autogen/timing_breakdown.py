@@ -1,10 +1,14 @@
 """AutoGen + xProof: Timing Breakdown example.
 
-Shows how to certify AutoGen agent messages with a full decision chronology.
-The timing breakdown captures:
+Shows how to certify AutoGen agent messages with decision-lifecycle timing.
+Prove Before Act is the accountability pattern; xProof is its reference
+implementation. The timing breakdown captures:
   - instruction_received_at  — when the user sent the message
-  - reasoning_started_at     — when the agent processed it
+  - reasoning_started_at     — legacy field name for when decision-basis preparation began
   - action_taken_at          — when the agent's reply was sent
+
+Timing metadata and WHY must describe a sanitized declared decision basis,
+never private step-by-step reasoning or internal chain-of-thought.
 
 For messages the agent inferred on its own, use ``autonomous_inference``
 as the jurisdiction_type instead of ``instruction_following``.
@@ -40,7 +44,7 @@ def certify_agent_reply(
     # `xproof` is the legacy module name retained by the canonical prove-before-act distribution.
     from xproof.models import TimingBreakdown
 
-    reasoning_started_at = _now()
+    decision_basis_prepared_at = _now()
     time.sleep(0.05)  # simulate agent processing
     action_taken_at = _now()
 
@@ -48,7 +52,7 @@ def certify_agent_reply(
 
     timing: TimingBreakdown = {
         "instruction_received_at": instruction_received_at,
-        "reasoning_started_at": reasoning_started_at,
+        "reasoning_started_at": decision_basis_prepared_at,  # legacy field name
         "action_taken_at": action_taken_at,
         "jurisdiction_type": jurisdiction_type,
     }

@@ -2,6 +2,8 @@
 
 Certify every LLM call in your LangChain application with a tamper-proof blockchain record.
 
+**Integration terminology:** Prove Before Act is the accountability pattern for autonomous agents; xProof is its reference implementation. Treat WHY as a declared decision basis—intent, relevant context, and authorization or policy basis—not internal chain-of-thought.
+
 ## What gets certified
 
 Each `on_llm_end` event produces one certification with:

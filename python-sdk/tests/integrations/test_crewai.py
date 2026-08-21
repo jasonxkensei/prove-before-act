@@ -6,7 +6,12 @@ from unittest.mock import MagicMock
 
 import pytest
 from xproof.exceptions import PolicyViolationError
-from xproof.integrations.crewai import XProofCrewCallback, XProofCrewCertifyTool, XProofTool
+from xproof.integrations.crewai import (
+    XProofCrewCallback,
+    XProofCrewCertifyTool,
+    XProofTool,
+    _hash_data,
+)
 from xproof.models import PolicyViolation
 
 
@@ -78,9 +83,15 @@ class TestXProofCrewCallback:
 
         assert call_kwargs["author"] == "researcher"
         assert call_kwargs["who"] == "researcher"
-        assert call_kwargs["why"] == "Research market trends"
-        assert call_kwargs["metadata"]["framework"] == "crewai"
-        assert call_kwargs["metadata"]["crew_name"] == "test-crew"
+        # why is a fixed fingerprint-only action classification.
+        assert call_kwargs["why"] == "task_completion"
+        meta = call_kwargs["metadata"]
+        # The raw task description is NEVER stored as plaintext; only its hash.
+        assert "task_description" not in meta
+        assert meta["task_description_hash"] == _hash_data("Research market trends")
+        assert not any("Research market trends" in str(v) for v in meta.values())
+        assert meta["framework"] == "crewai"
+        assert meta["crew_name"] == "test-crew"
 
         assert result["agent_role"] == "researcher"
         assert result["proof_id"] == "proof-crew"
@@ -103,8 +114,14 @@ class TestXProofCrewCallback:
         assert mock_client.certify_hash.call_count == 3
         last_call = mock_client.certify_hash.call_args.kwargs
         assert last_call["who"] == "analysis-crew"
-        assert last_call["why"] == "Produce quarterly analysis"
-        assert last_call["metadata"]["task_count"] == 2
+        # why is a fixed fingerprint-only action classification.
+        assert last_call["why"] == "crew_completion"
+        last_meta = last_call["metadata"]
+        # The raw goal is NEVER stored as plaintext; only its hash.
+        assert "goal" not in last_meta
+        assert last_meta["goal_hash"] == _hash_data("Produce quarterly analysis")
+        assert not any("Produce quarterly analysis" in str(v) for v in last_meta.values())
+        assert last_meta["task_count"] == 2
 
         assert result["tasks_certified"] == 2
         assert result["crew_name"] == "analysis-crew"

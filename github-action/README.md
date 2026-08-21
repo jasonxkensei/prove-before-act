@@ -47,7 +47,7 @@ That's it — every push to `main` now anchors a tamper-evident proof of your bu
 | `api_key` | Yes | — | Prove Before Act API key (`pm_xxx`). Store as a GitHub secret. |
 | `files` | Yes | — | Files or glob patterns to certify (space-separated). |
 | `author_name` | No | `''` | Author name to attach to the certification. |
-| `metadata` | No | `''` | JSON object merged into the certification metadata. Use this for AI-agent context, e.g. `{"model_hash":"...","strategy_hash":"...","confidence_level":0.8}`. |
+| `metadata` | No | `''` | JSON object merged into the certification metadata. Use this for AI-agent context, e.g. `{"model_hash":"...","policy_ref":"...","confidence_level":0.8}`. |
 | `fail_on_error` | No | `'true'` | Fail the step if any file could not be certified. Set to `'false'` to only warn and keep the job green. |
 | `max_retries` | No | `'3'` | Retry attempts per file on transient errors (HTTP 429 or 5xx). |
 | `api_url` | No | `https://provebeforeact.com` | API URL (override for testing). |
@@ -92,21 +92,36 @@ That's it — every push to `main` now anchors a tamper-evident proof of your bu
   run: echo "Proofs: ${{ steps.certify.outputs.proof_urls }}"
 ```
 
-### Certify an AI agent's output (reasoning + decision context)
+### Certify an AI agent's declared decision basis and output
 
-Any file can be certified — including a JSON dump of an agent's reasoning trace or final answer. Attach `metadata` so the proof carries model and decision provenance, not just a hash:
+For the Prove Before Act accountability pattern, certify two files per action: a declared decision basis (WHY) before execution, and the action output (WHAT) after. The declared decision basis must be a disclosable document containing intent, relevant context, and authorization/policy basis — never private chain-of-thought. Attach `metadata` so the proof carries model and decision provenance, not just a hash:
 
 ```yaml
-- name: Export agent output
-  run: node ./scripts/export-agent-output.js > agent-output.json
+- name: Export declared decision basis
+  run: node ./scripts/export-decision-basis.js > decision-basis.json
 
-- name: Certify agent output
+- name: Certify declared decision basis (WHY — before execution)
   uses: jasonxkensei/prove-before-act-action@v1
   with:
     api_key: ${{ secrets.PROVEBEFOREACT_API_KEY }}
-    files: 'agent-output.json'
+    files: 'decision-basis.json'
     author_name: 'trading-agent-v3'
-    metadata: '{"model_hash":"sha256:abc123...","strategy_hash":"sha256:def456...","confidence_level":0.92,"decision_id":"trade-2026-07-08-001","threshold_stage":"final"}'
+    metadata: '{"model_hash":"sha256:abc123...","policy_ref":"sha256:def456...","confidence_level":0.92,"decision_id":"trade-2026-07-08-001","threshold_stage":"final"}'
+
+- name: Execute action
+  run: node ./scripts/execute-trade.js
+
+- name: Export action output
+  run: node ./scripts/export-action-output.js > action-output.json
+
+- name: Certify action output (WHAT — after execution)
+  id: what_certify
+  uses: jasonxkensei/prove-before-act-action@v1
+  with:
+    api_key: ${{ secrets.PROVEBEFOREACT_API_KEY }}
+    files: 'action-output.json'
+    author_name: 'trading-agent-v3'
+    metadata: '{"role":"WHAT","decision_id":"trade-2026-07-08-001"}'
 ```
 
 ### Certify only on release tags (conditional usage)

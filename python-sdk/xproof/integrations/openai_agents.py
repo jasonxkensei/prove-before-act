@@ -65,18 +65,26 @@ class XProofRunHooks:
         who_override: Optional[str] = None,
     ) -> None:
         who = who_override or self.agent_name
+        # The public-metadata boundary permits only classifications, hashes,
+        # timestamps, and opaque IDs. ``why`` is the legacy fingerprint-only 4W
+        # field and carries a fixed action classification. The human-readable
+        # ``context`` argument is deliberately NOT written to metadata (it is
+        # not a classification/hash/ID), so no raw description reaches the
+        # public proof.
+        del context  # never placed in public metadata
+        metadata: dict[str, Any] = {
+            "who": who,
+            "what": data_hash,
+            "when": datetime.now(timezone.utc).isoformat(),
+            "why": action_type,
+            "action_type": action_type,
+            "framework": "openai-agents",
+        }
         entry: CertifyEntry = {
             "file_hash": data_hash,
             "file_name": file_name,
             "author": who,
-            "metadata": {
-                "who": who,
-                "what": data_hash,
-                "when": datetime.now(timezone.utc).isoformat(),
-                "why": context or action_type,
-                "action_type": action_type,
-                "framework": "openai-agents",
-            },
+            "metadata": metadata,
         }
 
         if self.batch_mode:
@@ -214,18 +222,26 @@ class XProofTracingProcessor:
         who_override: Optional[str] = None,
     ) -> None:
         who = who_override or self.agent_name
+        # The public-metadata boundary permits only classifications, hashes,
+        # timestamps, and opaque IDs. ``why`` is the legacy fingerprint-only 4W
+        # field and carries a fixed action classification. The human-readable
+        # ``context`` argument is deliberately NOT written to metadata (it is
+        # not a classification/hash/ID), so no raw description reaches the
+        # public proof.
+        del context  # never placed in public metadata
+        metadata: dict[str, Any] = {
+            "who": who,
+            "what": data_hash,
+            "when": datetime.now(timezone.utc).isoformat(),
+            "why": action_type,
+            "action_type": action_type,
+            "framework": "openai-agents",
+        }
         entry: CertifyEntry = {
             "file_hash": data_hash,
             "file_name": file_name,
             "author": who,
-            "metadata": {
-                "who": who,
-                "what": data_hash,
-                "when": datetime.now(timezone.utc).isoformat(),
-                "why": context or action_type,
-                "action_type": action_type,
-                "framework": "openai-agents",
-            },
+            "metadata": metadata,
         }
         self.client.certify_hash(
             file_hash=entry["file_hash"],

@@ -2,6 +2,8 @@
 
 Certify tool executions and agent completions on-chain using the OpenAI Agents SDK.
 
+**Integration terminology:** Prove Before Act is the accountability pattern for autonomous agents; xProof is its reference implementation. Treat WHY as a declared decision basis—intent, relevant context, and authorization or policy basis—not internal chain-of-thought.
+
 Two integration styles are available — pick the one that fits your architecture.
 
 ## What gets certified

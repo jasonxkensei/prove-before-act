@@ -1,7 +1,7 @@
 """Trading agent + xProof: confidence-level anchoring on MultiversX.
 
-A trading agent anchors its reasoning at different confidence thresholds,
-creating a forensic trail that proves the decision was real-time — not
+A trading agent anchors its declared decision basis at different confidence thresholds,
+creating a forensic trail that proves the basis existed in real time — not
 reconstructed after the fact.
 
   60% → initial signal detected
@@ -9,7 +9,7 @@ reconstructed after the fact.
  100% → final decision, trade executed
 
 All three anchors share the same decision_id, so anyone can retrieve the
-full chain and verify the agent's reasoning progression.
+full chain and verify the declared decision-basis progression.
 
 Install:
     pip install prove-before-act>=0.2.2
@@ -163,7 +163,7 @@ def main():
     print("Full trail is publicly verifiable:")
     print(f"  https://xproof.app/api/confidence-trail/{decision_id}")
     print()
-    print("This trail proves the agent's reasoning was real-time,")
+    print("This trail proves the agent's declared decision basis existed in real time,")
     print("not reconstructed after the trade was executed.")
 
 

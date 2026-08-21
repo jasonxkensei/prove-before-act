@@ -15,7 +15,7 @@ Prove Before Act solves this by anchoring a SHA-256 hash of the agent's output o
 | **Who** | The agent or role that produced the output |
 | **What** | SHA-256 hash of the certified content |
 | **When** | ISO 8601 timestamp of certification |
-| **Why** | Context or reason for the certification |
+| **Why** | Legacy fingerprint-only field for a public action classification or opaque ID; never a human-readable reason |
 
 ## Installation
 
@@ -37,12 +37,14 @@ skill = XProofDeerFlowSkill(api_key="pm_...")
 result = skill._run("My research findings")
 
 # Certify with metadata
-result = skill._run('{"content": "Q3 analysis", "file_name": "q3.json", "why": "Quarterly review"}')
+# `why` is the legacy fingerprint-only 4W field (SHA-256 hashed before sending,
+# not a human-readable reason). Use a fixed action classification / opaque ID.
+result = skill._run('{"content": "Q3 analysis", "file_name": "q3.json", "why": "quarterly_review"}')
 ```
 
 ### 2. Via the skill definition
 
-Copy `Prove Before Act.yaml` into your DeerFlow skills directory. The skill accepts a JSON input with `content` (required), and optional `file_name`, `author`, and `why` fields.
+Copy `Prove Before Act.yaml` into your DeerFlow skills directory. The skill accepts a JSON input with `content` (required), and optional `file_name`, `author`, and `why` fields. `why` is the legacy **fingerprint-only** field — it is SHA-256 hashed before serialization and is not a human-readable reason, so pass a fixed action classification or opaque ID (never free-text rationale).
 
 ### 3. With the existing LangChain integration
 

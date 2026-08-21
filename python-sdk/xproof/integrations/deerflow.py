@@ -35,7 +35,10 @@ class XProofDeerFlowSkill:
     - ``content`` — the text to certify (required).
     - ``file_name`` — name for the certification record.
     - ``author`` — override the default agent name.
-    - ``why`` — reason / context for the certification.
+    - ``why`` — legacy fingerprint-only declared decision basis. Stored via
+      ``metadata["why"]`` and reduced to a SHA-256 fingerprint before the
+      request is serialized; never sent as plaintext. Unsafe for private
+      text — pass a safe public classification/opaque ID or omit it.
 
     Example::
 
@@ -87,7 +90,10 @@ class XProofDeerFlowSkill:
         content = data.get("content", input_text)
         file_name = data.get("file_name", "deerflow-output.json")
         author = data.get("author", self.agent_name)
-        why = data.get("why", "DeerFlow agent certification")
+        # ``why`` is the legacy fingerprint-only 4W field (SHA-256 hashed before
+        # serialization, not a human-readable reason). Default to a fixed action
+        # classification rather than a free-text description.
+        why = data.get("why", "skill_certification")
 
         content_hash = _hash_data(content)
 

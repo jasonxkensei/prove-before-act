@@ -4,7 +4,7 @@ Each agent's task output is certified with 4W metadata:
   WHO  = agent role (researcher, writer, reviewer)
   WHAT = SHA-256 hash of the output
   WHEN = UTC timestamp
-  WHY  = task description
+  WHY  = legacy fingerprint of a public task classification
 
 Run: python main.py
 """

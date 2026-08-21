@@ -6,6 +6,12 @@ All API endpoints are served from the application root. In production, this is t
 
 ---
 
+## Accountability terminology
+
+**Prove Before Act is the accountability pattern for autonomous agents; xProof is its reference implementation.** A WHY record contains a declared decision basis—such as the intended action, relevant context, and authorization—not private step-by-step reasoning or internal chain-of-thought. Compatibility field and SDK names, including `why`, `why_proof_id`, and `XProofClient`, retain their existing names.
+
+---
+
 ## Authentication
 
 Prove Before Act uses two authentication mechanisms depending on the context.

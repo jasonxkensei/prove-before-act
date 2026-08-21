@@ -83,6 +83,8 @@ def run_compliant_scenario(base_decision_id: str) -> None:
     decision_text = json.dumps(
         {"action": "delete_pii_records", "scope": "eu-region", "count": 15_000}
     )
+    # decision_text is a sanitized declared decision basis, never private
+    # step-by-step reasoning or internal chain-of-thought.
 
     client = _build_mock_client(decision_id, compliant=True)
     tool = XProofCertifyTool(client=client, author="data-hygiene-agent")
@@ -96,7 +98,7 @@ def run_compliant_scenario(base_decision_id: str) -> None:
                 "threshold_stage": "pre-commitment",
                 "decision_id": decision_id,
                 "reversibility_class": "irreversible",
-                "why": "Scheduled GDPR retention cleanup",
+                "why": "gdpr-retention-cleanup",
             }
         )
         print(f"  Policy compliant — proceeding (tx: {tx_hash})")
@@ -117,6 +119,8 @@ def run_blocked_scenario(base_decision_id: str) -> None:
     decision_text = json.dumps(
         {"action": "delete_pii_records", "scope": "eu-region", "count": 15_000}
     )
+    # decision_text is a sanitized declared decision basis, never private
+    # step-by-step reasoning or internal chain-of-thought.
 
     client = _build_mock_client(decision_id, compliant=False)
     tool = XProofCertifyTool(client=client, author="data-hygiene-agent")
@@ -130,7 +134,7 @@ def run_blocked_scenario(base_decision_id: str) -> None:
                 "threshold_stage": "pre-commitment",
                 "decision_id": decision_id,
                 "reversibility_class": "irreversible",
-                "why": "Scheduled GDPR retention cleanup",
+                "why": "gdpr-retention-cleanup",
             }
         )
         raise AssertionError("Expected PolicyViolationError was not raised")

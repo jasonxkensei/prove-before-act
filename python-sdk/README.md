@@ -2,7 +2,7 @@
 
 [![Python SDK CI](https://github.com/jasonxkensei/prove-before-act/actions/workflows/python-sdk.yml/badge.svg?branch=main)](https://github.com/jasonxkensei/prove-before-act/actions/workflows/python-sdk.yml) [![PyPI version](https://img.shields.io/pypi/v/prove--before--act)](https://pypi.org/project/prove-before-act/) [![Python versions](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-blue)](https://pypi.org/project/prove-before-act/)
 
-On-chain decision provenance for autonomous agents. **WHY before acting. WHAT after.** Timestamps written by the chain, not your agent.
+On-chain decision provenance for autonomous agents. **Prove Before Act is the accountability pattern; xProof is its reference implementation.** Commit a declared decision basis (WHY) before acting, then record WHAT happened. WHY is never private step-by-step reasoning or internal chain-of-thought. Timestamps are written by the chain, not your agent.
 
 ```bash
 pip install prove-before-act
@@ -29,15 +29,15 @@ curl -X POST https://provebeforeact.com/api/agent/register \
 
 ### Step 2 — Anchor WHY before acting
 
-Hash your reasoning and certify it *before* your agent executes.
+Declare and hash a decision basis—the intended action, relevant context, and authorization or policy basis—and certify it *before* your agent executes. Never submit private step-by-step reasoning or internal chain-of-thought.
 
 ```bash
 curl -X POST https://provebeforeact.com/api/proof \
   -H "Authorization: Bearer pm_..." \
   -H "Content-Type: application/json" \
   -d '{
-    "file_hash": "<sha256_of_reasoning>",
-    "file_name": "reasoning.json",
+    "file_hash": "<sha256_of_declared_decision_basis>",
+    "file_name": "decision-basis.json",
     "author": "my-agent",
     "metadata": { "action_type": "decision" }
   }'
@@ -89,7 +89,7 @@ client = XProofClient.register("my-agent")
 # Step 2: Anchor WHY before acting
 why = client.certify_hash(
     file_hash=hash_string('{"action": "summarize", "model": "gpt-4"}'),
-    file_name="reasoning.json",
+    file_name="decision-basis.json",
     author="my-agent",
     metadata={"action_type": "decision"},
 )
@@ -156,6 +156,14 @@ Settings.callback_manager = CallbackManager([XProofCallbackHandler(api_key="pm_.
 ## 4W Framework (WHO / WHAT / WHEN / WHY)
 
 Full accountability metadata on every certification:
+
+> **`why` is fingerprint-only.** The legacy `why` name — whether passed as the
+> `why` argument or as a `metadata["why"]` entry (including per batch entry) — is
+> deterministically reduced to a SHA-256 fingerprint before the request is
+> serialized. Raw decision-basis or rationale text is **never** transmitted, so
+> `why` is unsafe for storing private text. Pass a safe public
+> classification/opaque ID, an already-computed hash, or omit it — never
+> plaintext rationale or policy text.
 
 ```python
 from xproof import XProofClient, hash_bytes
@@ -273,7 +281,7 @@ else:
 
 ## Timing Breakdown
 
-Anchor the full decision chronology on-chain so forensic auditors can distinguish real-time reasoning from post-hoc reconstruction. Pass a `TimingBreakdown` dict to `certify_with_confidence()`:
+Anchor decision-lifecycle timestamps alongside a concise, sanitized declared decision basis so forensic auditors can distinguish a pre-execution commitment from post-hoc reconstruction. The legacy-named `reasoning_started_at` field records when decision-basis preparation began; it never records private reasoning content. Pass a `TimingBreakdown` dict to `certify_with_confidence()`:
 
 ```python
 from xproof import XProofClient, TimingBreakdown
@@ -283,12 +291,12 @@ client = XProofClient(api_key="pm_your_key")
 
 # Capture timestamps at each lifecycle event
 instruction_ts = "2026-04-20T14:30:00Z"  # when the agent received the task
-reasoning_ts   = "2026-04-20T14:30:01Z"  # when reasoning/planning started
+decision_basis_ts = "2026-04-20T14:30:01Z"  # when decision-basis preparation started
 action_ts      = "2026-04-20T14:30:05Z"  # when the action was executed
 
 timing: TimingBreakdown = {
     "instruction_received_at": instruction_ts,
-    "reasoning_started_at":    reasoning_ts,
+    "reasoning_started_at":    decision_basis_ts,  # legacy field name
     "action_taken_at":         action_ts,
     "jurisdiction_type":       "autonomous_inference",  # legal accountability class
 }
@@ -307,7 +315,7 @@ cert = client.certify_with_confidence(
 # The server echoes timing_breakdown with computed durations
 tb = cert.timing_breakdown
 if tb:
-    print(f"Thinking time : {tb.get('reasoning_duration_ms')} ms")
+    print(f"Decision-basis preparation time (legacy field): {tb.get('reasoning_duration_ms')} ms")
     print(f"Total latency : {tb.get('total_duration_ms')} ms")
 ```
 
@@ -331,7 +339,7 @@ print(JURISDICTION_TYPES)
 ### Reading timing_breakdown from a Certification
 
 When the server echoes the timestamps it also computes:
-- `reasoning_duration_ms` — milliseconds between `reasoning_started_at` and `action_taken_at`
+- `reasoning_duration_ms` — legacy response field for milliseconds between decision-basis preparation and `action_taken_at`
 - `total_duration_ms` — milliseconds between `instruction_received_at` and `action_taken_at`
 
 ```python
@@ -354,7 +362,7 @@ Add `reversibility_class` to any certified action. The server enforces a policy:
 
 ```python
 # An agent is about to execute a trade it cannot undo.
-# It certifies its reasoning at 0.72 confidence — below the 0.95 threshold.
+# It certifies its declared decision basis at 0.72 confidence — below the 0.95 threshold.
 cert = client.certify_with_confidence(
     file_hash=hash_string('{"action": "sell", "ticker": "AAPL", "qty": 500}'),
     file_name="trade-decision.json",
@@ -430,7 +438,7 @@ try:
         "threshold_stage": "pre-commitment",
         "decision_id": decision_id,
         "reversibility_class": "irreversible",
-        "why": "Scheduled GDPR retention cleanup",
+        "why": "gdpr-retention-cleanup",
     })
     print(f"Policy compliant — proceeding (tx: {tx_hash})")
     # delete_pii_records(decision["scope"])   # your execution here
@@ -465,7 +473,7 @@ tx_hash = await certify.arun({
     "threshold_stage": "pre-commitment",
     "decision_id": decision_id,
     "reversibility_class": "irreversible",
-    "why": "Scheduled GDPR retention cleanup",
+    "why": "gdpr-retention-cleanup",
 })
 ```
 
@@ -511,7 +519,7 @@ try:
         threshold_stage="pre-commitment",
         decision_id=decision_id,
         reversibility_class="irreversible",
-        why="Scheduled GDPR retention cleanup",
+        why="gdpr-retention-cleanup",
     )
     print(f"Policy compliant — proceeding (tx: {tx_hash})")
     # delete_pii_records(decision["scope"])   # your execution here
@@ -558,7 +566,7 @@ try:
         threshold_stage="pre-commitment",
         decision_id=decision_id,
         reversibility_class="irreversible",
-        why="Scheduled GDPR retention cleanup",
+        why="gdpr-retention-cleanup",
         author="data-hygiene-agent",
         api_key="pm_...",
     )
@@ -599,9 +607,9 @@ client = XProofClient(api_key="pm_...")
 def hash_string(s: str) -> str:
     return hashlib.sha256(s.encode()).hexdigest()
 
-# ── Step 1: Agent produces its reasoning ─────────────────────────────────────
-# (In a real LangChain / CrewAI / AutoGen agent, this would be the structured
-# chain-of-thought or tool-call output produced just before execution.)
+# ── Step 1: Agent declares its decision basis ─────────────────────────────────
+# Use the intended action, relevant context, and authorization or policy basis.
+# Never include private step-by-step reasoning or internal chain-of-thought.
 
 decision = {
     "action": "delete_pii_records",
@@ -609,14 +617,14 @@ decision = {
     "count": 15_000,
 }
 decision_id = "del-run-2026-04-20"
-reasoning_hash = hash_string(json.dumps(decision, sort_keys=True))
+decision_basis_hash = hash_string(json.dumps(decision, sort_keys=True))
 
 # ── Step 2: Certify BEFORE executing ─────────────────────────────────────────
 # The agent self-assesses its confidence. Because the action is irreversible,
 # the policy requires confidence_level >= 0.95.
 
 cert = client.certify_with_confidence(
-    file_hash=reasoning_hash,
+    file_hash=decision_basis_hash,
     file_name="delete-decision.json",
     author="data-hygiene-agent",
     confidence_level=0.97,               # Agent is highly confident

@@ -245,4 +245,10 @@ def test_4w_metadata_present(handler, mock_client):
     assert "what" in meta
     assert "when" in meta
     assert "why" in meta
+    # why carries a fixed fingerprint-only action classification only.
+    assert meta["why"] == meta["action_type"]
+    # No raw human-readable context/description is ever placed in metadata.
+    assert "action_context" not in meta
+    assert not any("Tool invocation" in str(v) for v in meta.values())
+    assert not any("web_search" in str(v) for v in meta.values())
     assert meta["framework"] == "langchain"

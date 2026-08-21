@@ -2,6 +2,8 @@
 
 Certify every agent's task output in a CrewAI crew with an on-chain audit trail.
 
+**Integration terminology:** Prove Before Act is the accountability pattern for autonomous agents; xProof is its reference implementation. Treat WHY as a declared decision basis—intent, relevant context, and authorization or policy basis—not internal chain-of-thought.
+
 ## What gets certified
 
 - **Per-task**: each `on_task_complete` produces one certification — WHO = agent role, WHY = task description

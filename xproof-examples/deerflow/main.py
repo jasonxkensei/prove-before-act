@@ -5,7 +5,7 @@ a tamper-proof on-chain record of its output with 4W metadata:
   WHO  = agent name
   WHAT = SHA-256 hash of the content
   WHEN = UTC timestamp
-  WHY  = configurable reason
+  WHY  = configurable declared decision basis
 
 Install:
     pip install prove-before-act

@@ -1,6 +1,8 @@
 # Trading Agent + Prove Before Act: Confidence-Level Anchoring
 
-Anchor trading decisions at different confidence thresholds to create a forensic trail that proves real-time reasoning — not post-hoc reconstruction.
+Anchor trading decisions at different confidence thresholds to create a forensic trail that proves the declared decision basis existed in real time—not as a post-hoc reconstruction.
+
+**Integration terminology:** Prove Before Act is the accountability pattern for autonomous agents; xProof is its reference implementation. Treat WHY as a declared decision basis—intent, relevant context, and authorization or policy basis—not internal chain-of-thought.
 
 ## How it works
 
@@ -18,7 +20,7 @@ All three proofs share the same `decision_id`, forming a verifiable chain on the
 
 Without confidence anchoring, an agent could claim it "predicted" a move after the fact. With Prove Before Act:
 
-- Each reasoning step is anchored **before** the next step happens
+- Each declared decision basis is anchored **before** the next step happens
 - Timestamps are blockchain-verified, not self-reported
 - Anyone can retrieve the full trail via `GET /api/confidence-trail/:decision_id`
 - The progression from 60% to 100% proves the decision evolved in real-time

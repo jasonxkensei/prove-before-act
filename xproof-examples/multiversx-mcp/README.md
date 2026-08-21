@@ -1,6 +1,8 @@
 # Prove Before Act + MultiversX SC MCP — verifiable smart contract operations
 
-Add an on-chain audit trail to every write operation performed by the [MultiversX SC MCP](https://github.com/psorinionut/multiversx-sc-mcp). Before a contract is deployed, upgraded, or called, Prove Before Act anchors the **WHY** (decision + authorization) on MultiversX mainnet. After the transaction is confirmed, it anchors the **WHAT** (transaction hash + result). Both proofs share a `session_id`, creating a tamper-proof confidence trail no one can retroactively alter.
+Add an on-chain audit trail to every write operation performed by the [MultiversX SC MCP](https://github.com/psorinionut/multiversx-sc-mcp). Before a contract is deployed, upgraded, or called, Prove Before Act anchors the **WHY** (declared decision basis + authorization) on MultiversX mainnet. After the transaction is confirmed, it anchors the **WHAT** (transaction hash + result). Both proofs share a `session_id`, creating a tamper-proof confidence trail no one can retroactively alter.
+
+**Integration terminology:** Prove Before Act is the accountability pattern for autonomous agents; xProof is its reference implementation. Treat WHY as a declared decision basis—intent, relevant context, and authorization or policy basis—not internal chain-of-thought.
 
 ## Why this matters
 

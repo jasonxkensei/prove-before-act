@@ -4,8 +4,10 @@ The ``xproof`` package and ``XProofClient`` class names are legacy
 compatibility identifiers.
 """
 
+import hashlib
 import math
 import os
+import re
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, Optional, Union, cast
@@ -51,6 +53,35 @@ except Exception:
 
 DEFAULT_BASE_URL = "https://provebeforeact.com"
 DEFAULT_TIMEOUT = 30
+
+_CANONICAL_HASH_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _fingerprint_why(value: Any) -> str:
+    """Normalize any ``why`` value into a privacy-safe SHA-256 fingerprint.
+
+    The legacy ``why`` name (both the explicit ``why`` argument and a
+    ``metadata["why"]`` entry) is treated as **fingerprint-only** and is
+    **never** transmitted as plaintext. Any supplied value is deterministically
+    reduced to a 64-character lowercase hex SHA-256 digest before the request is
+    serialized, so raw decision-basis or rationale text can never reach the
+    public proof metadata through any code path.
+
+    An already-canonical value (a 64-character lowercase hex digest) is
+    preserved verbatim so re-certifying a previously fingerprinted ``why`` is
+    stable and idempotent. Every other value — including free-form rationale,
+    policy text, or non-string inputs — is hashed.
+
+    Args:
+        value: The raw ``why`` value supplied by the caller.
+
+    Returns:
+        A 64-character lowercase hex SHA-256 fingerprint. Never plaintext.
+    """
+    if isinstance(value, str) and _CANONICAL_HASH_RE.match(value):
+        return value
+    text = value if isinstance(value, str) else str(value)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 class XProofClient:
@@ -229,8 +260,16 @@ class XProofClient:
             who: 4W — agent identity.
             what: 4W — action hash or description.
             when: 4W — ISO-8601 timestamp.
-            why: 4W — instruction or reason.
-            metadata: Arbitrary key-value metadata stored alongside the proof.
+            why: 4W — legacy name for the declared decision basis. **Fingerprint
+                only.** Any value (or a ``metadata["why"]`` entry) is reduced to a
+                SHA-256 fingerprint before serialization and is never transmitted
+                as plaintext, so it is unsafe to rely on it storing readable
+                private text. Pass a safe public classification/opaque ID or omit
+                it; never pass plaintext rationale or policy text.
+            metadata: Optional, intentionally public classification metadata
+                (for example action categories, opaque IDs, timestamps, or
+                fingerprints). Never pass decision-basis text, rationale,
+                prompts, sources, or policy details.
 
         Returns:
             A :class:`Certification` with the on-chain proof details.
@@ -273,9 +312,21 @@ class XProofClient:
         - **who**: Agent identity (wallet, name, or ID)
         - **what**: Action hash or description being certified
         - **when**: ISO-8601 timestamp of the action
-        - **why**: Instruction hash, goal, or reason for the action
+        - **why**: Legacy name for the declared decision basis. **Fingerprint
+          only** — see the argument note below.
 
-        Any additional key-value pairs can be passed via *metadata*.
+        Pass only intentionally public classifications, opaque IDs, timestamps,
+        or fingerprints via *metadata*; never pass decision-basis content or
+        other private decision material.
+
+        .. warning::
+            The legacy ``why`` name — whether supplied as the ``why`` argument or
+            as a ``metadata["why"]`` entry — is **fingerprint-only**. The SDK
+            deterministically reduces any value to a SHA-256 fingerprint before
+            the request is serialized, so raw decision-basis or rationale text
+            never reaches the public proof metadata. It is therefore unsafe for
+            storing private text. Supply a safe public
+            classification/opaque ID or omit it.
 
         Args:
             file_hash: 64-character lowercase hex SHA-256 digest.
@@ -284,11 +335,17 @@ class XProofClient:
             who: 4W — agent identity.
             what: 4W — action hash or description.
             when: 4W — ISO-8601 timestamp.
-            why: 4W — instruction or reason.
+            why: 4W — legacy name for the declared decision basis.
+                **Fingerprint only** (SHA-256); never transmitted as plaintext.
+                Unsafe for private text — pass a safe public
+                classification/opaque ID or omit it.
             reversibility_class: Governance class — one of ``reversible``,
                 ``costly``, or ``irreversible``. Irreversible actions above
                 the configured confidence threshold trigger a policy violation.
-            metadata: Arbitrary key-value metadata stored alongside the proof.
+            metadata: Optional, intentionally public classification metadata
+                (for example action categories, opaque IDs, timestamps, or
+                fingerprints). Never pass decision-basis text, rationale,
+                prompts, sources, or policy details.
 
         Returns:
             A :class:`Certification` with the on-chain proof details.
@@ -304,9 +361,11 @@ class XProofClient:
         if when is not None:
             proof_metadata["when"] = when
         if why is not None:
-            proof_metadata["why"] = why
+            proof_metadata["why"] = _fingerprint_why(why)
         if reversibility_class is not None:
             proof_metadata["reversibility_class"] = reversibility_class
+        if "why" in proof_metadata and proof_metadata["why"] is not None:
+            proof_metadata["why"] = _fingerprint_why(proof_metadata["why"])
 
         payload: dict[str, Any] = {
             "filename": file_name,
@@ -343,7 +402,7 @@ class XProofClient:
         Creates a forensic trail by anchoring proofs at different confidence
         thresholds, linked by a shared ``decision_id``. An agent trading at
         60%, 80%, then final creates an immutable trail that distinguishes
-        real reasoning from post-hoc reconstruction.
+        a declared decision basis from post-hoc reconstruction.
 
         Args:
             file_hash: 64-character lowercase hex SHA-256 digest.
@@ -357,18 +416,27 @@ class XProofClient:
             who: 4W -- agent identity.
             what: 4W -- action hash or description.
             when: 4W -- ISO-8601 timestamp.
-            why: 4W -- instruction or reason.
+            why: 4W -- legacy name for the declared decision basis.
+                **Fingerprint only.** Any value (or a ``metadata["why"]`` entry)
+                is deterministically reduced to a SHA-256 fingerprint before
+                serialization and is never transmitted as plaintext, so it is
+                unsafe for private step-by-step reasoning, internal
+                chain-of-thought, rationale, or policy text. Pass a safe public
+                classification/opaque ID or omit it.
             reversibility_class: Governance class, typed as one of
                 ``'reversible'``, ``'costly'``, or ``'irreversible'``.
                 Irreversible actions above the configured confidence threshold
                 trigger a policy violation.
             timing: Optional :class:`~xproof.TimingBreakdown` dict with up to
                 four ISO8601 timestamps (``instruction_received_at``,
-                ``reasoning_started_at``, ``action_taken_at``) and an optional
-                ``jurisdiction_type`` legal classification. These are stored in
+                ``reasoning_started_at`` (a legacy decision-basis timing name),
+                ``action_taken_at``) and an optional ``jurisdiction_type`` legal
+                classification. These are stored in
                 the proof metadata and returned as ``timing_breakdown`` on the
                 :class:`~xproof.Certification` response.
-            metadata: Extra key-value metadata stored alongside the proof.
+            metadata: Optional, intentionally public classification metadata
+                only; never pass decision-basis text, rationale, prompts,
+                sources, or policy details.
 
         Returns:
             A :class:`Certification` with the on-chain proof details,
@@ -413,9 +481,11 @@ class XProofClient:
         if when is not None:
             proof_metadata["when"] = when
         if why is not None:
-            proof_metadata["why"] = why
+            proof_metadata["why"] = _fingerprint_why(why)
         if reversibility_class is not None:
             proof_metadata["reversibility_class"] = reversibility_class
+        if "why" in proof_metadata and proof_metadata["why"] is not None:
+            proof_metadata["why"] = _fingerprint_why(proof_metadata["why"])
         if timing:
             jt = timing.get("jurisdiction_type")
             if jt is not None and jt not in JURISDICTION_TYPES:
@@ -541,6 +611,13 @@ class XProofClient:
 
         Both types accept an optional ``author`` key.
 
+        .. warning::
+            A ``metadata["why"]`` entry on any batch entry is treated as the
+            legacy **fingerprint-only** ``why`` name: it is reduced to a SHA-256
+            fingerprint before serialization and is never transmitted as
+            plaintext. Do not place private rationale or policy text there — use
+            a safe public classification/opaque ID or omit it.
+
         Example::
 
             from xproof import XProofClient, CertifyEntry, PathCertifyEntry
@@ -603,6 +680,8 @@ class XProofClient:
                 ):
                     if key in entry_timing:
                         entry_meta[key] = entry_timing[key]
+            if "why" in entry_meta and entry_meta["why"] is not None:
+                entry_meta["why"] = _fingerprint_why(entry_meta["why"])
             if entry_meta:
                 entry["metadata"] = entry_meta
             entries.append(entry)

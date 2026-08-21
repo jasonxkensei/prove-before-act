@@ -2,6 +2,8 @@
 
 Certify every message exchanged between AutoGen agents on the MultiversX blockchain.
 
+**Integration terminology:** Prove Before Act is the accountability pattern for autonomous agents; xProof is its reference implementation. Treat WHY as a declared decision basis—intent, relevant context, and authorization or policy basis—not internal chain-of-thought.
+
 ## What gets certified
 
 - **Sent messages** (`process_message_before_send`) — WHO = sender agent name

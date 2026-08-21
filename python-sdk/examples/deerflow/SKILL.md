@@ -64,7 +64,7 @@ curl -s -X POST https://provebeforeact.com/api/proof \
       \"who\": \"deerflow-agent\",
       \"what\": \"$HASH\",
       \"when\": \"$(date -u +%Y-%m-%dT%H:%M:%S.000Z)\",
-      \"why\": \"Quarterly earnings certification\",
+      \"why\": \"earnings_certification\",
       \"framework\": \"deerflow\"
     }
   }" | jq .
@@ -96,8 +96,10 @@ skill = XProofDeerFlowSkill(api_key="pm_...")
 # Plain text
 result = skill._run("My research findings")
 
-# With metadata
-result = skill._run('{"content": "Q3 analysis", "why": "Quarterly review"}')
+# With metadata — `why` is the legacy fingerprint-only field (SHA-256 hashed
+# before sending, not a human-readable reason). Use a fixed action
+# classification / opaque ID.
+result = skill._run('{"content": "Q3 analysis", "why": "quarterly_review"}')
 ```
 
 ### Using the LangChain callback (DeerFlow uses LangGraph internally)
@@ -144,7 +146,7 @@ Every certification answers four questions:
 | **WHO** | `who` | Which agent produced the output |
 | **WHAT** | `what` | SHA-256 hash of the content (the content itself stays private) |
 | **WHEN** | `when` | Blockchain timestamp — written by the chain, not the agent |
-| **WHY** | `why` | Context: why was this output produced |
+| **WHY** | `why` | Legacy fingerprint-only field — SHA-256 hashed before serialization, not a human-readable reason. Pass a fixed action classification / opaque ID, never free-text rationale |
 
 ## Payment Options
 

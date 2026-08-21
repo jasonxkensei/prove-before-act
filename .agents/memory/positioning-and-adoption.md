@@ -18,3 +18,19 @@ Prefer “the agent’s decision basis (WHY)” over “the agent’s reasoning�
 **Why:** “Reasoning” can be interpreted as private chain-of-thought, while the mechanism only requires an auditable decision basis.
 
 **How to apply:** Replace the phrase consistently across the homepage, agent pages, SDK/docs copy, and other public surfaces when editing messaging. Preserve the concrete sequence: observe → decide → prove → act → prove.
+
+## Distribution-surface coverage
+
+When updating PBA terminology, treat package READMEs, published legacy skill copies, public SDK tool docstrings, and framework examples as public integration surfaces—not just the primary website or task-listed documentation.
+
+**Why:** Integrators often enter through an SDK or published skill. A stale reasoning-first quickstart can contradict the safe decision-basis model and invite private chain-of-thought disclosure even when the public site is correct.
+
+**How to apply:** Search all distribution directories for developer-facing guidance and update terminology together. Preserve documented compatibility vocabulary, but explain it as declared decision-basis metadata rather than private reasoning.
+
+## Hash-only documentation must be literal
+
+When public guidance says a declared decision basis is hashed locally, request examples must send only the hash plus minimal, intentionally public classification metadata—not the basis object, its `why`/rationale, prompts, source lists, tickets, policy details, or a spread of the local object.
+
+**Why:** Forwarding locally hashed content through `metadata` defeats the privacy claim and turns a copy-paste integration guide into a data-disclosure risk.
+
+**How to apply:** Use opaque IDs and public categories in examples, and validate every language/version of public agent guidance for disclosure-safe request examples.

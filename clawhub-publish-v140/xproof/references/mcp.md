@@ -118,7 +118,7 @@ Create a blockchain certification for a file.
 
 ### `certify_with_confidence`
 
-Certify a file along with a confidence score, model name, and reasoning trace -- used for AI-generated content where provenance must include the model's self-reported certainty.
+Certify a file along with a confidence score, model name, and declared decision-basis context -- used for AI-generated content where provenance must include the model's self-reported certainty. Never hash or submit private step-by-step reasoning or internal chain-of-thought.
 
 **Parameters:**
 
@@ -128,7 +128,7 @@ Certify a file along with a confidence score, model name, and reasoning trace --
 | `filename` | string | Yes | Original filename |
 | `confidence` | number | Yes | 0.0 to 1.0 -- model's self-reported confidence |
 | `model_name` | string | Yes | e.g. `gpt-4o`, `claude-sonnet-4`, `grok-4` |
-| `reasoning_hash` | string | No | SHA-256 of the reasoning trace (linked WHY proof) |
+| `reasoning_hash` | string | No | Legacy compatibility field name for the SHA-256 of the declared decision basis (linked WHY proof); never private step-by-step reasoning or internal chain-of-thought |
 | `author_name` | string | No | Default: "AI Agent" |
 
 ---
