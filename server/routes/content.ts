@@ -2398,6 +2398,7 @@ Dedicated document answering the 10 exact questions agents ask when evaluating P
 The markdown version is optimized for LLM indexers and crawlers. It includes copy-paste Python code and a full comparison matrix.
 
 ## Documentation & Machine Interfaces
+- Prove Before Act specification: https://provebeforeact.com/standard — The Prove Before Act specification — design pattern, core invariant, 4W audit trail
 - [Agent Context (10 questions agents ask)](https://provebeforeact.com/agent-context.md)
 - [OpenAPI Specification](/api/acp/openapi.json)
 - [API Guide](/learn/api.md)
@@ -2687,6 +2688,7 @@ Flat $${priceUsd} per certification — no tiers, no promo. Prepaid packs: 100/$
 Without proof, any agent output — code, data, models, reports — has no verifiable origin. Prove Before Act creates immutable, on-chain evidence of what was produced, by whom, and when. Certified agents can prove originality and integrity. Non-certified agents cannot.
 
 ## Documentation & Machine Interfaces
+- [Prove Before Act specification](https://provebeforeact.com/standard) — The Prove Before Act specification — design pattern, core invariant, 4W audit trail
 - [OpenAPI Specification](${baseUrl}/api/acp/openapi.json)
 - [API Guide](${baseUrl}/learn/api.md)
 - [Service Discovery](${baseUrl}/api/acp/products)
