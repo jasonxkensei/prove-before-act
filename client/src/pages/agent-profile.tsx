@@ -1850,7 +1850,7 @@ export default function AgentProfilePage() {
                       <p className="text-2xl font-bold tabular-nums" data-testid="text-chains-30d">
                         {agent.execution_context_summary.decision_chains_30d}
                       </p>
-                      <p className="mt-1 text-xs text-muted-foreground">Decision chains (30d)</p>
+                      <p className="mt-1 text-xs text-muted-foreground">Decision-basis proofs (30d)</p>
                     </div>
                     <div className="rounded-md bg-muted/30 p-3 text-center">
                       <p className={`text-2xl font-bold tabular-nums ${

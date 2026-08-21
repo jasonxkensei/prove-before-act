@@ -227,7 +227,7 @@ export default function ProofPage() {
                     <div className="flex items-start gap-3 rounded-lg bg-muted/30 p-4">
                       <GitBranch className="mt-0.5 h-5 w-5 text-primary" />
                       <div className="flex-1 min-w-0">
-                        <p className="mb-1 text-sm font-medium text-muted-foreground">Decision chain</p>
+                        <p className="mb-1 text-sm font-medium text-muted-foreground">Declared decision basis</p>
                         <div className="flex items-center gap-2">
                           <p className="flex-1 break-all font-mono text-sm" data-testid="text-decision-id">
                             {decisionId}
@@ -324,7 +324,7 @@ export default function ProofPage() {
                     </span>
                   </div>
                   <p className="mt-2 text-xs text-muted-foreground">
-                    Across {contextDrift.total_anchors} anchors in this decision chain
+                    Across {contextDrift.total_anchors} anchors in this declared decision basis
                   </p>
                 </div>
 

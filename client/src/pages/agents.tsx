@@ -181,14 +181,14 @@ export default function AgentsPage() {
   };
 
   useEffect(() => {
-    document.title = "Integrations - Prove Before Act";
+    document.title = "Prove Before Act — The accountability pattern for autonomous agents";
     const meta = document.querySelector('meta[name="description"]');
     if (meta) {
-      meta.setAttribute("content", "Prove Before Act integrates with every major agent protocol. One proof layer, every platform.");
+      meta.setAttribute("content", "Prove Before Act is the accountability pattern for autonomous agents. xProof is its reference implementation across MCP, x402, ACP, and REST.");
     } else {
       const newMeta = document.createElement("meta");
       newMeta.name = "description";
-      newMeta.content = "Prove Before Act integrates with every major agent protocol. One proof layer, every platform.";
+      newMeta.content = "Prove Before Act is the accountability pattern for autonomous agents. xProof is its reference implementation across MCP, x402, ACP, and REST.";
       document.head.appendChild(newMeta);
     }
   }, []);
@@ -204,13 +204,13 @@ export default function AgentsPage() {
           </Badge>
 
           <h1 className="mb-6 text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-tight" data-testid="text-hero-title">
-            Works everywhere
+            The accountability pattern
             <br />
-            <span className="text-primary">agents work.</span>
+            <span className="text-primary">for autonomous agents.</span>
           </h1>
 
           <p className="mx-auto mb-8 max-w-2xl text-lg md:text-xl text-muted-foreground leading-relaxed" data-testid="text-hero-subtitle">
-            Prove Before Act integrates with every major agent protocol. One proof layer, every platform.
+            Prove Before Act lets an agent commit a declared decision basis before it acts. xProof is the reference implementation across MCP, x402, ACP, and REST.
           </p>
           <p className="text-sm text-muted-foreground">
             Certifying a file as an individual?{" "}

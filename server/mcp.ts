@@ -928,8 +928,8 @@ export async function createMcpServer(ctx: McpContext) {
           text: JSON.stringify({
             service: "Prove Before Act",
             legacy_compatibility_identifiers: ["xproof package and protocol names", "XProofClient SDK class names"],
-            tagline: "Proof and accountability layer for AI agents",
-            description: "Anchor SHA-256 file hashes on MultiversX for verifiable proof records. Check each proof's returned status before relying on it.",
+            tagline: "The accountability pattern for autonomous agents; xProof is the reference implementation",
+            description: "Commit a declared decision basis before acting, never internal chain-of-thought, then anchor verifiable outcome records on MultiversX. Check each proof's returned status before relying on it.",
             pricing: { amount: priceUsd.toString(), currency: "USD", payment_method: "EGLD", note: "Paid in EGLD at current exchange rate" },
             capabilities: [
               `register_trial - START HERE if you have no key. Get ${TRIAL_QUOTA} trial certifications, subject to the live registration response.`,
@@ -1376,9 +1376,9 @@ export async function createMcpServer(ctx: McpContext) {
 
   server.tool(
     "investigate_proof",
-    "Reconstruct the full 4W audit trail for a contested agent action. Returns WHO (agent identity + SIGIL), WHAT (SHA-256 hash on-chain), WHEN (MultiversX block timestamp), WHY (decision chain anchored before acting). Includes verification summary with intent_preceded_execution flag, chronological timeline of WHY/WHAT proofs, and session heartbeat anchor. Requires x402 payment (current per-call USDC price on Base via X-PAYMENT header) or API key authentication. Without payment, returns payment requirements with USDC address and amount.",
+    "Reconstruct the full 4W audit trail for a contested agent action. Returns WHO (agent identity + SIGIL), WHAT (SHA-256 hash on-chain), WHEN (MultiversX block timestamp), WHY (declared decision basis anchored before acting, never internal chain-of-thought). Includes verification summary with intent_preceded_execution flag, chronological timeline of WHY/WHAT proofs, and session heartbeat anchor. Requires x402 payment (current per-call USDC price on Base via X-PAYMENT header) or API key authentication. Without payment, returns payment requirements with USDC address and amount.",
     {
-      proof_id: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i).describe("UUID of any proof in the action pair — WHY (reasoning), WHAT (action), or heartbeat session proof"),
+      proof_id: z.string().regex(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i).describe("UUID of any proof in the action pair — WHY (declared decision basis), WHAT (action), or heartbeat session proof"),
       wallet: z.string().min(3).describe("Agent wallet address (erd1...) that owns the proof"),
     },
     async ({ proof_id, wallet }) => {
@@ -1717,7 +1717,7 @@ export async function createMcpServer(ctx: McpContext) {
   );
 
   // ── check_coherence ───────────────────────────────────────────────────────
-  // Anchor an agent's WHY reasoning before executing an action.
+  // Anchor an agent's declared decision basis before executing an action.
   // Implements the Prove Before Act / Coherence Layer pattern:
   //   1. Agent writes intent + context + decision
   //   2. check_coherence hashes the payload and anchors it on-chain as a WHY proof
@@ -1725,7 +1725,7 @@ export async function createMcpServer(ctx: McpContext) {
   // The two proofs can be linked via metadata.why_proof_id for full 4W audit trail.
   server.tool(
     "check_coherence",
-    `Anchor your agent's reasoning as an immutable WHY proof BEFORE executing an action. Implements the Prove Before Act / Coherence Layer pattern. Pass intent (goal), context (facts considered), and decision (action about to execute). Receives: proof_id, coherence_anchor (SHA-256 of the payload), timestamp. Link the returned proof_id to your WHAT proof via certify_file metadata.why_proof_id to complete the full 4W audit trail. Cost: $${currentPriceUsd} per anchor (same as certify_file).`,
+    `Anchor your agent's declared decision basis as an immutable WHY proof BEFORE executing an action — never internal chain-of-thought. Implements the Prove Before Act / Coherence Layer pattern. Pass intent (goal), context (facts considered), and decision (action about to execute). Receives: proof_id, coherence_anchor (SHA-256 of the payload), timestamp. Link the returned proof_id to your WHAT proof via certify_file metadata.why_proof_id to complete the full 4W audit trail. Cost: $${currentPriceUsd} per anchor (same as certify_file).`,
     {
       intent: z
         .string()
@@ -1761,7 +1761,7 @@ export async function createMcpServer(ctx: McpContext) {
         // anchor is scoped to the calling account (owner identity is part of
         // the hashed payload) so identical payloads from different accounts
         // can never collide on the globally-unique certifications.file_hash —
-        // see server/coherence-anchor.ts for the full rationale.
+        // see server/coherence-anchor.ts for the design rationale.
         const ownerWallet = await getApiKeyOwnerWallet({ userId: auth.userId }).catch(() => null);
         const ownerIdent = ownerWallet || auth.userId;
         const { anchor: coherenceAnchor, effectiveWho } = buildCoherenceAnchor({ intent, context, decision, who, ownerIdent });

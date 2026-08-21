@@ -78,23 +78,23 @@ const tradePayload = `{
 }`;
 
 const asyncPattern = `async function executeWithProof(trade) {
-  // 1. Execute first — always
-  const result = await broker.execute(trade);
-
-  // 2. Hash payload — keep strategy private
-  const payload = buildAuditPayload(trade, result);
+  // 1. Declare the decision basis before executing — keep strategy private
+  const payload = buildAuditPayload(trade);
   const hash    = sha256(JSON.stringify(payload));
 
-  // 3. Anchor async — 2s timeout, non-blocking
-  certifyAsync(hash, payload).catch(err => {
-    localQueue.push({ hash, payload, timestamp: Date.now() });
-  });
+  // 2. Require a proof receipt, not blockchain confirmation
+  const proofId = await certifyBeforeAction(hash, payload);
+  if (!proofId) throw new Error('Pre-execution proof receipt required');
 
-  // 4. Return immediately — proof follows
+  // 3. Execute after the declared decision basis was accepted
+  const result = await broker.execute(trade);
+
+  // 4. Anchor the verified result after execution
+  certifyOutcomeAsync(result, proofId);
   return result;
 }
 
-async function certifyAsync(hash, payload) {
+async function certifyBeforeAction(hash, payload) {
   const res = await fetch('${BASE}/api/proof', {
     method: 'POST',
     headers: { 'Authorization': 'Bearer YOUR_API_KEY' },
@@ -102,7 +102,7 @@ async function certifyAsync(hash, payload) {
     signal: AbortSignal.timeout(2000)
   });
   const { proof_id } = await res.json();
-  await db.saveTrade({ ...trade, proof_id });
+  return proof_id; // receipt in ~1.1s; on-chain confirmation follows asynchronously
 }`;
 
 const settlementResponse = `{
@@ -163,7 +163,7 @@ export default function DocsTradingPage() {
             <CardContent className="p-4 flex items-center gap-3">
               <Zap className="h-5 w-5 text-primary shrink-0" />
               <p className="text-sm font-medium">
-                Core principle — <span className="text-muted-foreground font-normal">Audit must never block execution.</span>
+                  Core principle — <span className="text-muted-foreground font-normal">Submit the declared decision basis before execution; do not wait for blockchain confirmation.</span>
               </p>
             </CardContent>
           </Card>
@@ -195,10 +195,11 @@ export default function DocsTradingPage() {
           </section>
 
           <section data-testid="section-async-pattern">
-            <SectionHeader icon={Zap} number="02" title="Non-blocking async pattern" />
+            <SectionHeader icon={Zap} number="02" title="Pre-execution receipt pattern" />
             <p className="text-sm text-muted-foreground mb-4">
-              Trading execution must never depend synchronously on Prove Before Act confirmation.
-              Execute first, anchor after, always within a 2-second hard timeout.
+              Trading execution must receive a Prove Before Act proof ID for the declared decision basis before it acts.
+              It does not need to wait for a blockchain confirmation: keep the 2-second timeout on the proof receipt,
+              and fail closed or defer the trade when that receipt is unavailable.
             </p>
             <CodeBlock code={asyncPattern} language="typescript" />
           </section>
@@ -208,7 +209,7 @@ export default function DocsTradingPage() {
               <Zap className="h-5 w-5 text-primary shrink-0" />
               <div>
                 <p className="text-sm font-medium">
-                  Going further — certify the <em>reasoning</em> before acting, not just the output after.
+                  Going further — certify a <em>declared decision basis</em> before acting, never internal chain-of-thought, not just the output after.
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
                   The 4W workflow anchors WHO, WHAT, WHEN, and WHY for full auditability.{" "}

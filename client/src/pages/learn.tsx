@@ -219,7 +219,7 @@ export default function LearnPage() {
       if (!el) { el = document.createElement("meta"); el.setAttribute("property", property); document.head.appendChild(el); }
       el.content = content;
     };
-    const desc = "Prove Before Act in 60 seconds. The problem, the flow, and the invariant — then read the spec or try xProof.";
+    const desc = "Prove Before Act in 60 seconds. The problem, the flow, and the invariant — then read the specification or explore xProof, the reference implementation.";
     setMeta("description", desc);
     setOg("og:title", "Prove Before Act in 60 Seconds");
     setOg("og:description", desc);
@@ -287,7 +287,7 @@ export default function LearnPage() {
           {/* ── CTAs ── */}
           <div className="pba-learn-ctas">
             <a href="/standard" className="pba-learn-cta-primary">Read the specification →</a>
-            <a href="/" className="pba-learn-cta-secondary">Try xProof →</a>
+            <a href="/" className="pba-learn-cta-secondary">Explore xProof, the reference implementation →</a>
           </div>
         </main>
 

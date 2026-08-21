@@ -158,7 +158,7 @@ function commonHead(title: string, description: string, canonicalUrl: string, og
 <link rel="manifest" href="/site.webmanifest">
 <meta name="theme-color" content="#10b981">
 
-<meta name="keywords" content="blockchain certification, proof of existence, MultiversX, AI agent, x402, MCP, proof of authorship, timestamp proof, SHA-256, agent commerce">
+<meta name="keywords" content="pre-execution evidence, agent accountability, commit before execution, decision provenance, blockchain certification, MultiversX, AI agent, x402, MCP, SHA-256, agent commerce">
 <meta name="author" content="Prove Before Act">
 
 <link rel="ai-plugin" href="/.well-known/ai-plugin.json">
@@ -210,8 +210,8 @@ function safeJsonLd(
 
 async function renderHomePage(baseUrl: string): Promise<string> {
   const priceUsd = await getCertificationPriceUsd();
-  const title = "Prove Before Act — The on-chain notary for AI agents";
-  const description = `The on-chain notary for AI agents. Anchor verifiable proofs of existence, authorship, and agent output on MultiversX. API-first, x402-compatible, with a current live per-proof price at /api/pricing.`;
+  const title = "Prove Before Act — The accountability pattern for autonomous agents";
+  const description = `Prove Before Act is the accountability pattern for autonomous agents: commit an independently verifiable decision basis before execution. xProof is the reference implementation, anchoring proofs on MultiversX with a current live per-proof price at /api/pricing.`;
 
   return `${commonHead(title, description, baseUrl)}
 <body>
@@ -228,28 +228,28 @@ async function renderHomePage(baseUrl: string): Promise<string> {
 
 <main>
   <section>
-    <h1>Prove before your agent acts.</h1>
-    <p>Give agents and operators a durable, independently verifiable record of a decision, output, or critical action.</p>
+    <h1>The accountability pattern for autonomous agents.</h1>
+    <p>Prove Before Act lets an agent commit an independently verifiable decision basis before it acts. xProof is the reference implementation; on-chain proofs for files, decisions, and outcomes are the primitives it uses.</p>
   <p>Current live rate: $${priceUsd.toFixed(2)} per certification — <a href="${baseUrl}/api/pricing">see /api/pricing</a>. Not a fixed published price.</p>
     <a href="${baseUrl}/agents">Integrate an agent</a>
     <a href="${baseUrl}/certify">Verify a local file</a>
   </section>
 
   <section>
-    <h2>How an accountable agent works</h2>
-    <p>Build a verifiable trail around the decisions and outputs that matter.</p>
+    <h2>How pre-execution evidence works</h2>
+    <p>Build a verifiable trail around the declared decision basis, intended action, and outcome that matter.</p>
     <ol>
       <li>
-        <h3>Record an action or output</h3>
-        <p>Your agent hashes a decision record, model output, data snapshot, or build artifact locally. The source material stays private.</p>
+        <h3>Declare a decision basis and intended action</h3>
+        <p>Your agent records the decision, declared justification, context, and intended action locally. This is not a request for internal chain-of-thought.</p>
       </li>
       <li>
-        <h3>Hash the agent output</h3>
-        <p>A SHA-256 hash is computed locally from the agent's output. Only the hash is transmitted — source material stays private.</p>
+        <h3>Hash locally</h3>
+        <p>A SHA-256 hash is computed locally from that declared record, a model output, data snapshot, or build artifact. Only the hash is transmitted — source material stays private.</p>
       </li>
       <li>
-        <h3>Engraved on the blockchain</h3>
-        <p>The hash is anchored on MultiversX. The agent receives a proof_id and blockchain transaction URL — independently verifiable by any third party.</p>
+        <h3>Anchor before acting</h3>
+        <p>xProof anchors the hash on MultiversX. The agent receives a proof_id and blockchain transaction URL — independently verifiable by any third party before the action begins.</p>
       </li>
     </ol>
   </section>
@@ -280,7 +280,7 @@ async function renderHomePage(baseUrl: string): Promise<string> {
 
   <section>
     <h2>Make critical actions accountable</h2>
-    <p>Operators can require an independently verifiable proof before deployment, handoff, payment, or external action. Current live rate: $${priceUsd.toFixed(2)} per certification; see <a href="${baseUrl}/api/pricing">/api/pricing</a>.</p>
+    <p>Operators can require independently verifiable pre-execution evidence before deployment, handoff, payment, or another external action. Current live rate: $${priceUsd.toFixed(2)} per certification; see <a href="${baseUrl}/api/pricing">/api/pricing</a>.</p>
   </section>
 </main>
 
@@ -321,7 +321,7 @@ ${safeJsonLd({
   "url": "https://provebeforeact.com",
   "applicationCategory": "DeveloperApplication",
   "operatingSystem": "Web",
-  "description": "Proof and accountability layer for AI agents. Anchor verifiable proofs on MultiversX with server-side violation detection; optional Base event integration is planned.",
+  "description": "The accountability pattern for autonomous agents. xProof is the reference implementation, anchoring independently verifiable pre-execution evidence on MultiversX.",
   "offers": {
     "@type": "Offer",
     "price": `${priceUsd.toFixed(2)}`,
@@ -329,6 +329,7 @@ ${safeJsonLd({
     "description": "Per-proof pricing. No subscription. Pay in USDC on Base or EGLD on MultiversX. 10 free proofs on registration."
   },
   "featureList": [
+    "Pre-execution evidence: commit a declared decision basis before acting",
     "SHA-256 blockchain anchoring on MultiversX",
     "Privacy-preserving: source data remains in the agent runtime; only SHA-256 hashes are transmitted",
     "REST API with API key authentication",
@@ -360,7 +361,7 @@ ${safeJsonLd({
       "name": "What is Prove Before Act?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Prove Before Act is a proof and accountability layer for AI agents. It anchors verifiable proofs of existence, authorship, and timestamp on the MultiversX blockchain. Users and agents submit a SHA-256 hash of their file or decision, which is permanently recorded on-chain as tamper-proof evidence."
+        "text": "Prove Before Act is the accountability pattern for autonomous agents. An agent commits a declared decision basis and intended action before execution, producing independently verifiable pre-execution evidence. xProof is the reference implementation and anchors SHA-256 proofs on MultiversX."
       }
     },
     {
@@ -392,7 +393,7 @@ ${safeJsonLd({
       "name": "How do AI agents integrate with Prove Before Act?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "AI agents can integrate via REST API with an API key, Model Context Protocol (MCP) for autonomous decision anchoring, or x402 HTTP-native payments for zero-setup proof creation. The Agent Audit Log Standard describes a pre-execution accountability pattern — agents anchor their reasoning (WHY) before acting (WHAT); blocking on a proof is a policy the operator implements in agent code."
+        "text": "AI agents can integrate via REST API with an API key, Model Context Protocol (MCP) for autonomous decision anchoring, or x402 HTTP-native payments for zero-setup proof creation. The Prove Before Act pattern captures a declared decision basis (WHY), intended action (WHAT), and ledger timestamp (WHEN) before acting — never internal chain-of-thought. Blocking on a proof is a policy the operator implements in agent code."
       }
     },
     {
@@ -408,7 +409,7 @@ ${safeJsonLd({
       "name": "What is the 4W framework?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "The 4W framework (WHO/WHAT/WHEN/WHY) is Prove Before Act's Agent Proof Standard for accountability. WHO identifies the agent, WHAT records the action, WHEN timestamps it on-chain, and WHY anchors the reasoning before execution. This creates a complete, verifiable audit trail for autonomous agent decisions."
+        "text": "The 4W framework (WHO/WHAT/WHEN/WHY) is Prove Before Act's accountability schema. WHO identifies the agent, WHAT records the action, WHEN timestamps it on-chain, and WHY records the declared decision basis before execution. This creates a complete, verifiable audit trail for autonomous agent decisions."
       }
     },
     {
@@ -488,7 +489,7 @@ function renderLearnPage(baseUrl: string): string {
 <span class="dim">if T(intent_proof) &ge; T(action): not evidence &mdash; just a record</span></pre>
   <div class="ctas">
     <a href="${baseUrl}/standard" class="cta-p">Read the specification →</a>
-    <a href="${baseUrl}" class="cta-s">Try xProof →</a>
+    <a href="${baseUrl}" class="cta-s">Explore xProof, the reference implementation →</a>
   </div>
 </main>
 <footer>
@@ -1104,8 +1105,8 @@ function renderProofNotFound(baseUrl: string): string {
 
 async function renderAgentsPage(baseUrl: string): Promise<string> {
   const priceUsd = await getCertificationPriceUsd();
-  const title = "MCP + Prove Before Act — Prove Before Act for AI Agents";
-  const description = `Prove Before Act works everywhere agents work. MCP, x402, ACP, REST. Prove Before Act: anchor reasoning before execution, $${priceUsd.toFixed(2)} per proof, no account needed via x402.`;
+  const title = "Prove Before Act — Accountability pattern for autonomous agents";
+  const description = `Prove Before Act is the accountability pattern for autonomous agents. xProof is its reference implementation across MCP, x402, ACP, and REST: commit a declared decision basis before execution for $${priceUsd.toFixed(2)} per proof.`;
 
   return `${commonHead(title, description, `${baseUrl}/agents`)}
 <body>
@@ -1119,8 +1120,8 @@ async function renderAgentsPage(baseUrl: string): Promise<string> {
 </header>
 
 <main>
-  <h1>Prove Before Act for AI Agents</h1>
-  <p><strong>Prove Before Act is the accountability layer for autonomous agents.</strong> Instead of being a black box, your agent becomes transparent, auditable, and verifiable. Anchor your reasoning (WHY) on-chain <em>before</em> executing — then anchor the actual result (WHAT) after. Full 4W audit trail on MultiversX. $${priceUsd.toFixed(2)}/proof. No API key needed via x402.</p>
+  <h1>The accountability pattern for autonomous agents</h1>
+  <p><strong>Prove Before Act creates independently verifiable pre-execution evidence.</strong> An agent declares its decision basis (WHY), context, and intended action before executing; xProof is the reference implementation that anchors the proof on MultiversX. The actual result (WHAT) can be anchored after. This is not a request for internal chain-of-thought. $${priceUsd.toFixed(2)}/proof. No API key needed via x402.</p>
   <p>Certifying a file as an individual? Use <a href="${baseUrl}/certify">Certify a file</a>.</p>
   <p><a href="${baseUrl}/agents/zh">中文版 →</a></p>
 
@@ -1149,10 +1150,10 @@ async function renderAgentsPage(baseUrl: string): Promise<string> {
   </section>
 
   <section>
-    <h2>Complete example — Reasoning → Hash → Certify → Act</h2>
+    <h2>Complete example — Decision basis → Hash → Certify → Act</h2>
     <pre><code>import hashlib, json, requests
 
-# 1. Document reasoning
+# 1. Document a declared decision basis (not internal chain-of-thought)
 reasoning = {"who": "my-agent", "what": "BUY BTC 0.5", "why": "RSI=38, below threshold"}
 
 # 2. Hash locally — nothing leaves your machine
@@ -1263,8 +1264,8 @@ resp = requests.post("${baseUrl}/api/batch",
 
 async function renderAgentsPageZh(baseUrl: string): Promise<string> {
   const priceUsd = await getCertificationPriceUsd();
-  const title = "MCP + Prove Before Act — AI 智能体的链上存证与合规审计";
-  const description = `Prove Before Act 支持所有主流智能体协议：MCP、x402、ACP、REST。执行前锚定推理（WHY），执行后锚定实际结果（WHAT）。每次存证 $${priceUsd.toFixed(2)}，通过 x402 无需账户即可使用。`;
+  const title = "Prove Before Act — AI 智能体的执行前问责模式";
+  const description = `Prove Before Act 是自主智能体的问责模式，xProof 是其参考实现。支持 MCP、x402、ACP、REST：执行前锚定声明的决策依据（WHY），执行后锚定实际结果（WHAT）。每次存证 $${priceUsd.toFixed(2)}，通过 x402 无需账户即可使用。`;
 
   return `${commonHead(title, description, `${baseUrl}/agents/zh`)}
 <body>
@@ -1278,8 +1279,8 @@ async function renderAgentsPageZh(baseUrl: string): Promise<string> {
 </header>
 
 <main>
-  <h1>Prove Before Act：AI 智能体的链上存证层 — Prove Before Act（先证明，后行动）</h1>
-  <p><strong>Prove Before Act 是自主智能体的问责基础设施。</strong>让你的智能体不再是黑箱，而是透明、可审计、可验证的系统。在执行前锚定推理过程（WHY），执行后锚定实际结果（WHAT）。完整的 4W（Who/What/When/Why）审计留痕，基于 MultiversX 区块链。每次存证 $${priceUsd.toFixed(2)}，通过 x402 无需 API key 即可使用。</p>
+  <h1>Prove Before Act：自主智能体的执行前问责模式</h1>
+  <p><strong>Prove Before Act 是自主智能体的问责模式，xProof 是其参考实现。</strong>让你的智能体不再是黑箱，而是透明、可审计、可验证的系统。在执行前锚定声明的决策依据（WHY），执行后锚定实际结果（WHAT）。这并不要求披露内部思维链。完整的 4W（Who/What/When/Why）审计留痕，基于 MultiversX 区块链。每次存证 $${priceUsd.toFixed(2)}，通过 x402 无需 API key 即可使用。</p>
   <p>适用于合规存证（如《生成式人工智能服务管理暂行办法》）、风控留痕、以及多智能体舰队的审计追溯需求。</p>
 
   <section>
@@ -1307,10 +1308,10 @@ async function renderAgentsPageZh(baseUrl: string): Promise<string> {
   </section>
 
   <section>
-    <h2>完整示例 — 推理 → 哈希 → 存证 → 行动</h2>
+    <h2>完整示例 — 声明的决策依据 → 哈希 → 存证 → 行动</h2>
     <pre><code>import hashlib, json, requests
 
-# 1. 记录推理过程
+# 1. 记录声明的决策依据（不是内部思维链）
 reasoning = {"who": "my-agent", "what": "BUY BTC 0.5", "why": "RSI=38, below threshold"}
 
 # 2. 本地哈希计算 — 原始数据不会离开本机
@@ -1425,15 +1426,16 @@ async function renderAgentContextPage(baseUrl: string): Promise<string> {
     getReferenceAgentSnapshot(),
   ]);
   const referenceMetrics = renderReferenceAgentMetrics(referenceAgent);
-  const title = "Prove Before Act Agent Context — On-chain accountability layer for autonomous agents";
-  const description = "Prove Before Act anchors your agent's intent before execution on MultiversX. Prove Before Act: no API key needed via x402, 4W audit trail, MCP native. Free trial: 10 proofs, no wallet.";
+  const title = "Prove Before Act Agent Context — Accountability pattern for autonomous agents";
+  const description = "Prove Before Act is the accountability pattern for autonomous agents. xProof anchors a declared decision basis before execution on MultiversX, with MCP and x402 support.";
 
   return `${commonHead(title, description, `${baseUrl}/agent-context`)}
 <body>
 <header><nav><a href="${baseUrl}"><strong>Prove Before Act</strong></a> | <a href="${baseUrl}/standard">The PBA Specification</a> | <a href="${baseUrl}/agent-context.md">Machine-readable (.md)</a></nav></header>
 <main>
   <h1>Prove Before Act Agent Context</h1>
-  <p><strong>Anchor intent before execution.</strong> Hash locally → certify on MultiversX → proceed with <code>proof_id</code>. Production reference: ${referenceMetrics} <a href="${baseUrl}/agent/${REFERENCE_AGENT_WALLET}">Moltbook public profile</a>. <a href="${baseUrl}/founder">Jason Petitfourg is the AI Product Builder behind Prove Before Act</a>.</p>
+  <p><strong>Anchor a declared decision basis before execution.</strong> Prove Before Act is the pattern; xProof is the reference implementation. Hash locally → certify on MultiversX → proceed with <code>proof_id</code>. Production reference: ${referenceMetrics} <a href="${baseUrl}/agent/${REFERENCE_AGENT_WALLET}">Moltbook public profile</a>. <a href="${baseUrl}/founder">Jason Petitfourg is the AI Product Builder behind Prove Before Act</a>.</p>
+  <p><strong>Decision basis, not chain-of-thought.</strong> Record only the declared decision, justification, context, and intended action that you choose to make auditable. The original content stays local; only its SHA-256 hash is transmitted.</p>
   <p>No API key needed. Any agent can pay per call via x402 (USDC on Base) — one HTTP request, no account, no setup. Discoverable via <a href="${baseUrl}/llms.txt">llms.txt</a> and <a href="${baseUrl}/.well-known/provebeforeact.json">/.well-known/provebeforeact.json</a>.</p>
 
   <section>
@@ -1442,7 +1444,7 @@ async function renderAgentContextPage(baseUrl: string): Promise<string> {
 curl -X POST ${baseUrl}/api/agent/register -H "Content-Type: application/json" -d '{"agent_name": "my-agent"}'
 # → { "api_key": "pm_...", "trial": { "quota": 10 } }
 
-# 2. Hash reasoning locally (nothing leaves your machine)
+# 2. Hash the declared decision basis locally (nothing leaves your machine)
 FILE_HASH=$(python3 -c "import hashlib,json; print(hashlib.sha256(json.dumps({'why':'RSI=38','what':'BUY BTC'},sort_keys=True).encode()).hexdigest())")
 
 # 3. Anchor BEFORE executing — Prove Before Act
@@ -1470,7 +1472,7 @@ curl -X POST ${baseUrl}/api/batch -H "Authorization: Bearer pm_YOUR_KEY" \\
     <h2>Use-case examples — copy-paste ready</h2>
     <ul>
       <li><strong>Trading agent</strong> (Finance · High-value decisions) — Prove a BUY/SELL decision before executing. Full 4W audit trail on-chain.</li>
-      <li><strong>Research agent</strong> (Content · Reports · Analysis) — Anchor reasoning + sources before publishing. Verifiable provenance for readers.</li>
+      <li><strong>Research agent</strong> (Content · Reports · Analysis) — Anchor a declared decision basis + sources before publishing. Verifiable provenance for readers.</li>
       <li><strong>Support agent</strong> (Customer service · Compliance) — Certify decision before sending response. Dispute-proof audit record.</li>
     </ul>
 
@@ -1478,7 +1480,7 @@ curl -X POST ${baseUrl}/api/batch -H "Authorization: Bearer pm_YOUR_KEY" \\
     <p>Prove a BUY/SELL decision before executing — full 4W audit trail anchored on-chain.</p>
     <pre><code>import hashlib, json, requests
 
-# 1. Document your reasoning
+# 1. Document the declared decision basis
 reasoning = {
     "who": "trading-agent-v2", "what": "BUY BTC 0.5",
     "why": "RSI=38 (below 40 threshold); allocation=2.1% (below 3% cap)",
@@ -1497,10 +1499,10 @@ execute_trade("BUY", "BTC", 0.5)
 print(f"Audit trail: ${baseUrl}/proof/{proof_id}")</code></pre>
 
     <h3>Research agent — Content · Reports · Analysis</h3>
-    <p>Anchor reasoning + sources before publishing — verifiable provenance for readers.</p>
+    <p>Anchor a declared decision basis + sources before publishing — verifiable provenance for readers.</p>
     <pre><code>import hashlib, json, requests
 
-# 1. Summarize reasoning and sources
+# 1. Summarize the declared decision basis and sources
 reasoning = {
     "who": "research-agent-v1", "what": "Publish Q2 crypto market outlook",
     "why": "5 sources reviewed, confidence=0.87, no contradictions detected",
@@ -1571,7 +1573,7 @@ Resend + X-PAYMENT: &lt;base64-signed-payment&gt; → 200 {"proof_id": "..."}</c
       <li><strong>WHO</strong> — Which agent, model, or actor made this decision</li>
       <li><strong>WHAT</strong> — What action or output was certified</li>
       <li><strong>WHEN</strong> — Immutable on-chain timestamp from MultiversX block</li>
-      <li><strong>WHY</strong> — The full reasoning that led to the decision</li>
+      <li><strong>WHY</strong> — The declared decision basis, not internal chain-of-thought</li>
     </ul>
   </section>
 
@@ -1584,7 +1586,7 @@ Resend + X-PAYMENT: &lt;base64-signed-payment&gt; → 200 {"proof_id": "..."}</c
         <tr><td><strong>WHO</strong></td><td>Which agent or actor made this decision?</td><td><strong>MX-8004</strong> — optional MultiversX identity integration when the live status is active</td></tr>
         <tr><td><strong>WHAT</strong></td><td>What output or action was certified?</td><td><strong>Prove Before Act</strong> — SHA-256 hash of the output, anchored on MultiversX mainnet</td></tr>
         <tr><td><strong>WHEN</strong></td><td>Immutable timestamp?</td><td><strong>Prove Before Act</strong> — MultiversX block finality (~6 s); not a self-reported clock</td></tr>
-        <tr><td><strong>WHY</strong></td><td>What reasoning led to the decision?</td><td><strong>Prove Before Act</strong> — <code>action_description</code>, <code>risk_level</code>, and <code>context</code> fields from <code>/api/audit</code></td></tr>
+        <tr><td><strong>WHY</strong></td><td>What declared decision basis supported the action?</td><td><strong>Prove Before Act</strong> — <code>action_description</code>, <code>risk_level</code>, and <code>context</code> fields from <code>/api/audit</code></td></tr>
       </tbody>
     </table>
     <p>Prove Before Act records <strong>WHAT / WHEN / WHY</strong>. MX-8004 can add <strong>WHO</strong> only when its live status is active; it is not configured in production at present.</p>
@@ -1675,13 +1677,13 @@ Content-Type: application/json
       <tbody>
         <tr><td>who</td><td>string</td><td>Agent identifier, model name, or wallet address</td></tr>
         <tr><td>what</td><td>string</td><td>Action or output being certified</td></tr>
-        <tr><td>why</td><td>string</td><td>Reasoning that led to the decision</td></tr>
+        <tr><td>why</td><td>string</td><td>Declared decision basis for the action — not internal chain-of-thought</td></tr>
         <tr><td>confidence_score</td><td>0.0–1.0</td><td>Model's self-reported certainty</td></tr>
         <tr><td>reversibility_class</td><td>enum</td><td>reversible / costly / irreversible</td></tr>
         <tr><td>model_hash</td><td>sha256</td><td>Hash of model weights — detects identity drift</td></tr>
         <tr><td>strategy_hash</td><td>sha256</td><td>Hash of strategy/prompt — detects strategy changes</td></tr>
         <tr><td>instruction_received_at</td><td>ISO 8601</td><td>When the agent received the task</td></tr>
-        <tr><td>reasoning_started_at</td><td>ISO 8601</td><td>When reasoning began</td></tr>
+        <tr><td>reasoning_started_at</td><td>ISO 8601</td><td>When the agent began forming the declared decision basis</td></tr>
         <tr><td>action_taken_at</td><td>ISO 8601</td><td>When action was executed (after proof)</td></tr>
         <tr><td>jurisdiction_type</td><td>string</td><td>Legal context for compliance gating</td></tr>
       </tbody>
@@ -1832,8 +1834,8 @@ ${safeJsonLd({
 
 function renderCoherencePage(baseUrl: string, priceUsd: number): string {
   return commonHead(
-    "Coherence Layer — Prove Before Act | Prove Before Act",
-    "Anchor your WHY before acting. check_coherence anchors intent on-chain before every AI decision. Link it to your WHAT proof after execution to produce an auditable coherence score.",
+    "Coherence Layer — Pre-execution accountability | Prove Before Act",
+    "Anchor a declared decision basis before acting. xProof's check_coherence tool records intent, context, and decision without requesting internal chain-of-thought, then links it to the verified outcome.",
     `${baseUrl}/coherence`,
   ) + `
 <body>
@@ -1841,7 +1843,7 @@ function renderCoherencePage(baseUrl: string, priceUsd: number): string {
 <nav style="margin-bottom:2rem"><a href="${escapeHtml(baseUrl)}" style="color:#10b981;text-decoration:none;font-weight:600">← Prove Before Act</a></nav>
 
 <h1 style="font-size:2rem;font-weight:700;margin-bottom:.5rem">Coherence Layer — Prove Before Act</h1>
-<p style="color:#555;font-size:1.1rem;margin-bottom:2rem">Close the loop between intent and result. Anchor your <strong>WHY</strong> before acting, anchor your <strong>WHAT</strong> after, link the pair to produce a public, on-chain coherence score.</p>
+<p style="color:#555;font-size:1.1rem;margin-bottom:2rem">Close the loop between intent and result. Before acting, declare and anchor your <strong>WHY</strong> — the chosen intent, context, and decision basis, never internal chain-of-thought. Anchor your <strong>WHAT</strong> after, then link the pair to produce a public, on-chain coherence score.</p>
 
 <h2>Full 4W loop</h2>
 <table style="width:100%;border-collapse:collapse;margin-bottom:1.5rem">
@@ -1853,14 +1855,14 @@ function renderCoherencePage(baseUrl: string, priceUsd: number): string {
 </tr></thead>
 <tbody>
   <tr><td style="padding:.5rem 1rem;border:1px solid #e5e7eb"><strong>WHO</strong></td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">MX-8004 identity (optional)</td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">When active</td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">Agent identity, when configured</td></tr>
-  <tr><td style="padding:.5rem 1rem;border:1px solid #e5e7eb"><strong>WHY</strong></td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb"><code>check_coherence</code></td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">Before act</td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">Intent + context + decision hash</td></tr>
+  <tr><td style="padding:.5rem 1rem;border:1px solid #e5e7eb"><strong>WHY</strong></td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb"><code>check_coherence</code></td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">Before act</td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">Declared intent + context + decision basis hash</td></tr>
   <tr><td style="padding:.5rem 1rem;border:1px solid #e5e7eb"><strong>WHAT</strong></td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb"><code>certify_file</code></td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">After act</td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">Result / output hash</td></tr>
   <tr><td style="padding:.5rem 1rem;border:1px solid #e5e7eb"><strong>WHEN</strong></td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">MultiversX timestamp</td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">Automatic</td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">Immutable block timestamp</td></tr>
 </tbody>
 </table>
 
-<h2>check_coherence — Anchor your WHY before acting</h2>
-<p>MCP tool implementing Prove Before Act. Call BEFORE executing any significant action. Pass <code>intent</code>, <code>context</code>, and <code>decision</code>.</p>
+<h2>check_coherence — Anchor a declared decision basis before acting</h2>
+<p>xProof&apos;s MCP tool implements the Prove Before Act pattern. Call it BEFORE executing any significant action. Pass a declared <code>intent</code>, <code>context</code>, and <code>decision</code>; do not provide internal chain-of-thought.</p>
 <pre style="background:#f9fafb;padding:1rem;border-radius:.5rem;overflow-x:auto;font-size:.85rem"><code>{ "name": "check_coherence", "arguments": { "intent": "...", "context": "...", "decision": "...", "who": "optional" } }</code></pre>
 <p><strong>Response:</strong> <code>proof_id</code>, <code>coherence_anchor</code> (SHA-256), <code>timestamp</code>, <code>verify_url</code>, <code>next_step.link_why_to_what</code>.<br>
 <strong>Cost:</strong> $${priceUsd.toFixed(2)}/anchor (live rate). First 10 free. Idempotent: identical payloads return the same <code>proof_id</code>.</p>
@@ -1875,7 +1877,7 @@ function renderCoherencePage(baseUrl: string, priceUsd: number): string {
 <p><strong>Unlinked WHY anchor:</strong> <code>pending</code> for &lt;1 h, then <code>divergent</code> after 1 h; flagged as proposed <code>fault</code> violation after 2 h TTL.</p>
 
 <h2>require_coherence_anchor — Coherence Artisan policy gate</h2>
-<p>MCP tool for orchestrators. Before delegating a sub-action, verify a valid WHY anchor exists. <strong>Free — no credit consumed.</strong></p>
+<p>MCP tool for orchestrators. Before delegating a sub-action, verify a valid declared decision-basis (WHY) anchor exists. <strong>Free — no credit consumed.</strong></p>
 <ul>
   <li><code>allowed: true</code> → anchor valid; returns <code>anchor_id</code>, <code>expires_at</code>, <code>verify_url</code></li>
   <li><code>allowed: false</code> → reason <code>NO_ANCHOR</code> or <code>ANCHOR_EXPIRED</code>; <code>required_action: "check_coherence"</code></li>

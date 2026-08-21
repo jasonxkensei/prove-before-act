@@ -669,7 +669,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
               { w: "WHO", desc: "Which agent, model, or actor made this decision", example: "my-agent-v2 (GPT-4o, session: sess_abc)" },
               { w: "WHAT", desc: "What action or output was certified", example: "Approved trade: BUY 0.5 BTC at $67,400" },
               { w: "WHEN", desc: "Immutable on-chain timestamp from MultiversX block", example: "2026-06-02T14:30:12Z (block #15,447,203)" },
-              { w: "WHY", desc: "The full reasoning that led to the decision", example: "RSI below 40, allocation below target, risk approved by policy v3.1" },
+              { w: "WHY", desc: "The declared decision basis — not internal chain-of-thought", example: "RSI below 40, allocation below target, risk approved by policy v3.1" },
             ].map((item) => (
               <div key={item.w} className="rounded-md border bg-muted/30 p-3">
                 <div className="text-base font-bold text-primary mb-1">{item.w}</div>
@@ -706,7 +706,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
       content: (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Prove Before Act is built on a <strong className="text-foreground">hash-only model</strong>: your file, reasoning document, or agent output never leaves your environment. Only its SHA-256 fingerprint is transmitted.
+            Prove Before Act is built on a <strong className="text-foreground">hash-only model</strong>: your file, declared decision basis, or agent output never leaves your environment. Only its SHA-256 fingerprint is transmitted.
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3">
@@ -722,7 +722,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
               <p className="text-xs font-semibold mb-2">What stays entirely local</p>
               <ul className="text-xs text-muted-foreground space-y-1 ml-2">
                 <li>• The actual file content</li>
-                <li>• Reasoning document text</li>
+                <li>• Declared decision-basis document text</li>
                 <li>• Input data values</li>
                 <li>• Model weights or strategy details</li>
               </ul>
@@ -783,7 +783,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
     {
       id: "workflow",
       icon: Play,
-      title: "Complete agent workflow: reasoning → hash → anchor → action",
+      title: "Complete agent workflow: decision basis → hash → anchor → action",
       badge: "Copy-paste ready",
       content: (
         <div className="space-y-4">
@@ -800,7 +800,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
 class ProveBeforeAct:
     """
     Core Prove Before Act loop for autonomous agents.
-    Anchor reasoning BEFORE executing any significant action.
+    Anchor a declared decision basis BEFORE executing any significant action.
     """
     
     def __init__(self, api_key: str, agent_id: str):
@@ -810,10 +810,10 @@ class ProveBeforeAct:
     
     def anchor(self, reasoning: dict, action_description: str) -> str | None:
         """
-        Step 1-3: Hash reasoning, anchor it, return proof_id.
+        Step 1-3: Hash the declared decision basis, anchor it, return proof_id.
         Call this BEFORE executing any action.
         """
-        # Step 1: Serialize reasoning canonically
+        # Step 1: Serialize the declared decision basis canonically
         reasoning_json = json.dumps(reasoning, sort_keys=True, ensure_ascii=False)
         
         # Step 2: Hash locally — nothing sensitive leaves this function
@@ -886,7 +886,7 @@ print(f"Trade executed. Proof: https://provebeforeact.com{outcome['verify_url']}
           <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3">
             <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-1">What this gives you</p>
             <ul className="text-xs text-muted-foreground space-y-0.5 ml-2">
-              <li>• Every action has a cryptographic proof of the reasoning that preceded it</li>
+              <li>• Every action has a cryptographic proof of the declared decision basis that preceded it</li>
               <li>• The proof is publicly verifiable at <code className="font-mono bg-muted px-1 rounded">provebeforeact.com/proof/&#123;id&#125;</code> — no Prove Before Act account needed to verify</li>
               <li>• 4W audit trail is automatically rendered on the proof page</li>
               <li>• If the agent is compromised or behaves unexpectedly, you have a full forensic record</li>
@@ -898,7 +898,7 @@ print(f"Trade executed. Proof: https://provebeforeact.com{outcome['verify_url']}
     {
       id: "coherence",
       icon: Play,
-      title: "Coherence Layer — anchor your WHY before acting",
+        title: "Coherence Layer — anchor your decision basis before acting",
       badge: "New",
       content: (
         <div className="space-y-4">
@@ -1130,13 +1130,13 @@ print(f"WHAT: {BASE}/proof/{what_resp['proof_id']}")`} />
                 {[
                   { field: "who", type: "string", desc: "Agent identifier, model name, or wallet address" },
                   { field: "what", type: "string", desc: "Action or output being certified" },
-                  { field: "why", type: "string", desc: "Reasoning that led to the decision (Prove Before Act anchor)" },
+                  { field: "why", type: "string", desc: "Declared decision basis for the action (Prove Before Act anchor; not internal chain-of-thought)" },
                   { field: "confidence_score", type: "0.0–1.0", desc: "Model's self-reported certainty — surfaces on proof page" },
                   { field: "reversibility_class", type: "enum", desc: "'reversible' / 'costly' / 'irreversible' — risk classification for audit gates" },
                   { field: "model_hash", type: "sha256", desc: "Hash of model weights — detects identity drift between anchors" },
                   { field: "strategy_hash", type: "sha256", desc: "Hash of strategy/prompt — detects strategy changes across sessions" },
                   { field: "instruction_received_at", type: "ISO 8601", desc: "When the agent received the task from the orchestrator" },
-                  { field: "reasoning_started_at", type: "ISO 8601", desc: "When the agent began producing its reasoning trace" },
+                  { field: "reasoning_started_at", type: "ISO 8601", desc: "When the agent began forming the declared decision basis" },
                   { field: "action_taken_at", type: "ISO 8601", desc: "When the action was executed (must be after proof_id is returned)" },
                   { field: "jurisdiction_type", type: "string", desc: "Legal context for compliance gating (e.g. 'EU-AI-Act', 'SEC-regulated')" },
                   { field: "session_id", type: "string", desc: "Links multiple proofs in the same agent session — used by investigate_proof" },
@@ -1192,7 +1192,7 @@ from xproof import xproof  # legacy module name; install: pip install prove-befo
 
 @tool
 def prove_before_act(reasoning: str, action: str) -> str:
-    """Anchor reasoning on-chain before executing any significant action."""
+    """Anchor a declared decision basis on-chain before executing any significant action."""
     proof = xproof.anchor(
         content=reasoning,
         metadata={"who": "langchain-agent", "what": action, "why": reasoning}
@@ -1227,7 +1227,7 @@ from xproof import xproof  # legacy module name; install: pip install prove-befo
 
 @function_tool
 def anchor_reasoning(reasoning: str, action_description: str) -> str:
-    """Prove Before Act — anchor reasoning before execution. Returns proof_id."""
+    """Prove Before Act — anchor a declared decision basis before execution. Returns proof_id."""
     proof = xproof.anchor(
         content=reasoning,
         metadata={"who": "openai-agent", "what": action_description, "why": reasoning}
@@ -1273,7 +1273,7 @@ def anchor_proof(reasoning: str, action: str) -> str:
 xproof_tool = FunctionTool.from_defaults(
     fn=anchor_proof,
     name="anchor_proof",
-    description="Anchor reasoning BEFORE executing any action. Call this first."
+    description="Anchor a declared decision basis BEFORE executing any action. Call this first."
 )
 agent = ReActAgent.from_tools([xproof_tool, ...], llm=llm)`} />
           </div>
@@ -1285,7 +1285,7 @@ import { z } from 'zod';
 import { xProof } from 'prove-before-act';  // npm install prove-before-act
 
 const anchorTool = tool({
-  description: 'Anchor reasoning on-chain BEFORE executing any significant action. Returns proof_id.',
+  description: 'Anchor a declared decision basis on-chain BEFORE executing any significant action. Returns proof_id.',
   parameters: z.object({
     reasoning: z.string().describe('The agent reasoning / WHY'),
     action: z.string().describe('The action about to be taken / WHAT'),
@@ -1395,7 +1395,7 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
             <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3">
               <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-2">Use Prove Before Act when</p>
               <ul className="text-xs text-muted-foreground space-y-1">
-                <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-emerald-500" />You need Prove Before Act — proof of reasoning BEFORE action</li>
+                <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-emerald-500" />You need Prove Before Act — proof of a declared decision basis BEFORE action</li>
                 <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-emerald-500" />You want zero-account machine payments (x402 + USDC on Base)</li>
                 <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-emerald-500" />You want a public trust score + audit trail for your agent</li>
                 <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-emerald-500" />Privacy matters — only the hash is public, content stays local</li>
@@ -1415,7 +1415,7 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
 
           <div className="rounded-md border border-primary/20 bg-primary/5 p-3">
             <p className="text-xs text-muted-foreground">
-              <strong className="text-foreground">Bottom line:</strong> Prove Before Act is the right choice for agents that need to prove their reasoning before acting — especially at low cost, with x402, and without a pre-existing account. It is not trying to replace Arweave or Sign Protocol. It's filling the gap they don't cover: agent decision accountability at {priceStr}/proof (live rate).
+              <strong className="text-foreground">Bottom line:</strong> Prove Before Act is the right choice for agents that need to prove a declared decision basis before acting — especially at low cost, with x402, and without a pre-existing account. It is not trying to replace Arweave or Sign Protocol. It fills the gap they do not cover: pre-execution accountability at {priceStr}/proof (live rate).
             </p>
           </div>
         </div>
@@ -1447,12 +1447,12 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
               Discoverable via llms.txt + /.well-known/provebeforeact.json
             </Badge>
           </div>
-          <h1 className="text-3xl sm:text-4xl font-bold mb-3 tracking-tight">
-            Prove Before Act Agent Context
+            <h1 className="text-3xl sm:text-4xl font-bold mb-3 tracking-tight" data-testid="text-agent-context-title">
+              The accountability pattern for autonomous agents
           </h1>
-          <p className="text-muted-foreground text-base leading-relaxed max-w-2xl mb-4">
-            <strong className="text-foreground">Anchor intent before execution.</strong>{" "}
-            Hash locally → certify on MultiversX → proceed only after checking the returned <code className="font-mono text-sm bg-muted px-1 rounded">proof_id</code> status. <a href="/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9" className="text-primary underline">View the reference agent's live profile</a>. <a href="/founder" className="text-primary underline">Meet Jason Petitfourg, the AI Product Builder behind Prove Before Act</a>.
+            <p className="text-muted-foreground text-base leading-relaxed max-w-2xl mb-4" data-testid="text-agent-context-positioning">
+              <strong className="text-foreground">Prove Before Act is the pattern; xProof is the reference implementation.</strong>{" "}
+              Anchor a declared decision basis before execution: hash locally → certify on MultiversX → proceed only after checking the returned <code className="font-mono text-sm bg-muted px-1 rounded">proof_id</code> status. This is not a request for internal chain-of-thought. <a href="/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9" className="text-primary underline">View the reference agent's live profile</a>. <a href="/founder" className="text-primary underline">Meet Jason Petitfourg, the AI Product Builder behind Prove Before Act</a>.
           </p>
           {/* x402 — first thing agents see */}
           <div className="mt-2 rounded-md border border-primary/30 bg-primary/5 px-4 py-3 flex items-center gap-3" data-testid="badge-x402-top">
@@ -1495,7 +1495,7 @@ curl -X POST https://provebeforeact.com/api/agent/register -H "Content-Type: app
   -d '{"agent_name": "my-agent"}'
 # → { "api_key": "pm_...", "trial": { "quota": 10 } }
 
-# 2. Hash reasoning locally (nothing leaves your machine)
+# 2. Hash the declared decision basis locally (nothing leaves your machine)
 FILE_HASH=$(python3 -c "import hashlib,json; print(hashlib.sha256(json.dumps({'why':'RSI=38','what':'BUY BTC'},sort_keys=True).encode()).hexdigest())")
 
 # 3. Anchor BEFORE executing — Prove Before Act
@@ -1526,7 +1526,7 @@ curl -X POST https://provebeforeact.com/api/proof -H "Authorization: Bearer pm_Y
             <div className="grid gap-3 sm:grid-cols-3">
               {[
                 { id: "trading", icon: TrendingUp, label: "Trading agent", context: "Finance · High-value decisions", desc: "Prove a BUY/SELL decision before executing. Full 4W audit trail on-chain." },
-                { id: "research", icon: Eye, label: "Research agent", context: "Content · Reports · Analysis", desc: "Anchor reasoning + sources before publishing. Verifiable provenance for readers." },
+                { id: "research", icon: Eye, label: "Research agent", context: "Content · Reports · Analysis", desc: "Anchor a declared decision basis + sources before publishing. Verifiable provenance for readers." },
                 { id: "support", icon: Shield, label: "Support agent", context: "Customer service · Compliance", desc: "Certify decision before sending response. Dispute-proof audit record." },
               ].map((uc) => (
                 <div key={uc.id} className="rounded-md border bg-background p-3">
@@ -1547,7 +1547,7 @@ curl -X POST https://provebeforeact.com/api/proof -H "Authorization: Bearer pm_Y
                 desc: "Prove a BUY/SELL decision before executing — full 4W audit trail anchored on-chain",
                 codePy: `import hashlib, json, requests
 
-# 1. Document your reasoning
+# 1. Declare a decision basis — not internal chain-of-thought
 reasoning = {
     "who": "trading-agent-v2", "what": "BUY BTC 0.5",
     "why": "RSI=38 (below 40 threshold); allocation=2.1% (below 3% cap)",
@@ -1566,7 +1566,7 @@ execute_trade("BUY", "BTC", 0.5)
 print(f"Audit trail: https://provebeforeact.com/proof/{proof_id}")`,
                 codeTs: `import crypto from "crypto";
 
-// 1. Document your reasoning
+// 1. Declare a decision basis — not internal chain-of-thought
 const reasoning = {
   who: "trading-agent-v2", what: "BUY BTC 0.5",
   why: "RSI=38 (below 40 threshold); allocation=2.1% (below 3% cap)",
@@ -1592,10 +1592,10 @@ console.log("Audit trail: https://provebeforeact.com/proof/" + proof_id);`,
                 id: "research",
                 label: "Research agent",
                 context: "Content · Reports · Analysis",
-                desc: "Anchor reasoning + sources before publishing — verifiable provenance for readers",
+                desc: "Anchor a declared decision basis + sources before publishing — verifiable provenance for readers",
                 codePy: `import hashlib, json, requests
 
-# 1. Summarize reasoning and sources
+# 1. Summarize the declared decision basis and sources — not internal chain-of-thought
 reasoning = {
     "who": "research-agent-v1", "what": "Publish Q2 crypto market outlook",
     "why": "5 sources reviewed, confidence=0.87, no contradictions detected",
@@ -1614,7 +1614,7 @@ publish_report(report_content, audit_ref=proof_id)
 print(f"Readers can verify: https://provebeforeact.com/proof/{proof_id}")`,
                 codeTs: `import crypto from "crypto";
 
-// 1. Summarize reasoning and sources
+// 1. Summarize the declared decision basis and sources — not internal chain-of-thought
 const reasoning = {
   who: "research-agent-v1", what: "Publish Q2 crypto market outlook",
   why: "5 sources reviewed, confidence=0.87, no contradictions detected",

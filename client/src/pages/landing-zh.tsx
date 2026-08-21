@@ -144,21 +144,21 @@ export default function LandingZh() {
       <section className="container pt-14 pb-20 md:pt-20 md:pb-28">
         <div className="mx-auto max-w-5xl text-center">
           <div className="mb-5 flex justify-center">
-            <Badge variant="outline" className="text-xs px-3 py-1 gap-1.5" data-testid="badge-prove-before-act-zh">
+              <Badge variant="outline" className="text-xs px-3 py-1 gap-1.5" data-testid="badge-prove-before-act-zh">
               <AlertTriangle className="h-3 w-3 text-amber-500" />
-              AI决策无留痕，监管追责无依据
+                Prove Before Act — 自主智能体的问责模式
             </Badge>
           </div>
 
           <h1 className="mb-6 text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-tight">
-            AI决策，
+            Prove Before Act：
             <br />
-            <span className="text-primary">链上留痕。</span>
+            <span className="text-primary">自主智能体的问责模式。</span>
           </h1>
 
           <p className="mx-auto mb-5 max-w-2xl text-lg md:text-xl text-muted-foreground leading-relaxed">
-            监管检查时，您能提供AI决策的完整证明吗？Prove Before Act 为每次智能体操作生成<strong className="text-foreground">不可篡改的合规存证</strong>——
-            决策前锚定推理依据，执行后锚定实际结果，构建完整的<strong className="text-foreground">风控留痕与审计追溯链</strong>。
+            Prove Before Act 是自主智能体的问责模式，<strong className="text-foreground">xProof 是其参考实现</strong>——
+            执行前锚定可声明、可独立验证的决策依据（而非内部思维链），执行后锚定实际结果，构建完整的<strong className="text-foreground">风控留痕与审计追溯链</strong>。
           </p>
 
           <div className="mb-8 flex justify-center">
@@ -309,14 +309,14 @@ export default function LandingZh() {
                   合规风控的标准操作闭环
                 </h2>
                 <p className="text-muted-foreground max-w-xl mx-auto text-sm">
-                  执行前将推理依据（WHY）锚定链上，形成<strong className="text-foreground">合规留痕</strong>；
+                  执行前将声明的决策依据（WHY）锚定链上，形成<strong className="text-foreground">合规留痕</strong>；
                   执行后将实际结果（WHAT）存证，完成<strong className="text-foreground">风控审计轨迹</strong>。
                   全程可供审计员、监管机构或合作系统随时独立验证。
                 </p>
               </div>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-0">
                 {[
-                  { step: "1", label: "推理", sublabel: "Reason", desc: "智能体记录完整推理过程与决策依据（WHY）", icon: Bot },
+                  { step: "1", label: "决策", sublabel: "Decide", desc: "智能体声明决策依据、上下文与意图（WHY）", icon: Bot },
                   { step: "2", label: "锚定WHY", sublabel: "Anchor WHY", desc: "哈希后在执行前锚定上链", icon: Blocks },
                   { step: "3", label: "执行", sublabel: "Execute", desc: "行动执行，WHY的链上引用不可篡改", icon: Play },
                   { step: "4", label: "锚定WHAT", sublabel: "Anchor WHAT", desc: "执行完成后将实际结果存证上链", icon: Shield },
@@ -400,7 +400,7 @@ export default function LandingZh() {
                 {
                   w: "WHY",
                   zh: "决策依据",
-                  desc: "完整推理链在执行前锚定——出现争议时，这是证明AI决策合理性的核心证据",
+                  desc: "声明的决策依据在执行前锚定——而非内部思维链；出现争议时，这是证明AI决策合理性的核心证据",
                   reg: "《算法推荐管理规定》：算法决策须有可解释的依据",
                   icon: Network,
                   color: "text-amber-500",

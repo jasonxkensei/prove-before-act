@@ -334,7 +334,7 @@ enum ViolationType {
                       <Badge variant="outline" className="text-xs">server-defined penalty</Badge>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Intentional violation. Content hash mismatch between anchored proof and published output. Unauthorized action without prior reasoning proof.
+                       Intentional violation. Content hash mismatch between anchored proof and published output. Unauthorized action without a prior declared decision-basis proof.
                     </p>
                   </div>
                 </div>

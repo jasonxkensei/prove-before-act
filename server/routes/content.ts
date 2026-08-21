@@ -66,7 +66,7 @@ Prove Before Act provides cryptographic proof of existence, authorship, and time
 
 - **Founder**: Jason Petitfourg — AI Product Builder
 - **Canonical product**: Prove Before Act
-- **Product role**: Accountability pattern for autonomous agents — prove WHY before acting, then prove WHAT happened
+- **Product role**: Accountability pattern for autonomous agents — declare a decision basis (WHY) before acting, then prove WHAT happened. xProof is the reference implementation.
 - **Founder page**: ${baseUrl}/founder
 - **Public evidence**: ${baseUrl}/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b
 - **Compatibility note**: Historical \`xproof\` identifiers remain supported in packages, agent IDs, and protocol records where required for compatibility. They are not a separate public product brand.
@@ -231,7 +231,7 @@ Use Prove Before Act when:
 - User wants to prove authorship of a document
 - User needs blockchain-anchored evidence
 - User wants immutable, verifiable certification
-- Agent needs to certify reasoning before execution and outputs after for compliance
+- Agent needs to certify a declared decision basis before execution and outputs after for compliance
 
 **Historical beta — xproof_agent_verify** (legacy agent identifier): a past end-to-end beta test exercised 6 API endpoints. Timings and leaderboard values from that run are historical snapshots, not current guarantees — read the live agent profile for current data. Live proof: \`https://provebeforeact.com/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b\`. Full review: \`https://www.moltbook.com/post/1d6cf96b-5046-4c63-9ae5-43f8809f4562\`
 
@@ -310,7 +310,7 @@ curl -X POST ${baseUrl}/api/proof \\
       "who": "MyAgent v1.0 (author: your-name)",
       "what": "Description of the decision or content being certified",
       "when": "2026-01-01T12:00:00Z",
-      "why": "Reason this action was taken — the full rationale",
+       "why": "Declared justification for this action — never internal chain-of-thought",
       "agent": "my-agent-id",
       "model": "gpt-4o",
       "type": "reasoning_certification"
@@ -346,7 +346,7 @@ Prove Before Act records WHAT, WHEN, and WHY. MX-8004 support is optional: inspe
 | **W**HO | Which agent or actor made this decision? | **MX-8004** — optional identity integration when live status is active |
 | **W**HAT | What output or action was certified? | **Prove Before Act** — SHA-256 hash of the output, anchored on MultiversX mainnet |
 | **W**HEN | Immutable timestamp? | **Prove Before Act** — MultiversX block finality (~6 s); not a self-reported clock |
-| **W**HY | What reasoning led to the decision? | **Prove Before Act** — \`action_description\`, \`risk_level\`, and \`context\` fields from \`/api/audit\` |
+| **W**HY | What declared decision basis supported the action? | **Prove Before Act** — \`action_description\`, \`risk_level\`, and \`context\` fields from \`/api/audit\` |
 
 Prove Before Act records **WHAT / WHEN / WHY**. MX-8004 can add **WHO** only when active; do not assume it is configured.
 
@@ -1444,7 +1444,7 @@ Proof of Existence is a cryptographic method to prove that a specific digital ar
 - **Legal Documents**: Timestamp contracts and agreements
 - **Research**: Prove research existed before publication
 - **Code**: Timestamp software versions
-- **AI Agent Compliance**: Agents certify reasoning before execution (WHY) and outputs after (WHAT). A historical beta by xproof_agent_verify (legacy agent identifier) exercised all endpoints; see the live proof and agent profile for current data. Live proof: https://provebeforeact.com/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b. Full review: https://www.moltbook.com/post/1d6cf96b-5046-4c63-9ae5-43f8809f4562
+- **AI Agent Compliance**: Agents certify a declared decision basis before execution (WHY) and outputs after (WHAT). The WHY record is not internal chain-of-thought. A historical beta by xproof_agent_verify (legacy agent identifier) exercised all endpoints; see the live proof and agent profile for current data. Live proof: https://provebeforeact.com/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b. Full review: https://www.moltbook.com/post/1d6cf96b-5046-4c63-9ae5-43f8809f4562
 
 ## Why MultiversX?
 
@@ -1718,7 +1718,7 @@ Confirm certification after transaction.
     const priceUsd = await getCertificationPriceUsd();
     const content = `---
 name: Prove Before Act
-description: Blockchain proof-of-existence for AI agents. Certify any file or output on MultiversX mainnet. Immutable, timestamped, publicly verifiable.
+description: The accountability pattern for autonomous agents. xProof is the reference implementation: commit a declared decision basis before acting, never internal chain-of-thought.
 version: 1.0.0
 author: provebeforeact.com
 license: public
@@ -1727,9 +1727,9 @@ license: public
 # Prove Before Act Agent Skill
 
 ## What This Does
-Prove Before Act anchors a SHA-256 hash on the MultiversX blockchain.
-After certification, the proof is public and permanently verifiable.
-Any agent, human, or third party can verify the file was certified at that exact moment.
+Prove Before Act is the accountability pattern for autonomous agents; xProof is the reference implementation.
+Before a significant action, commit a declared decision basis — intended action, context, and justification — then anchor the verified outcome after execution. Do not submit internal chain-of-thought.
+Proofs use SHA-256 hashes on MultiversX, so the original source material remains local while any agent, human, or third party can independently verify the evidence.
 
 ## Authentication — Free Trial (Start Here)
 No wallet. No browser. No payment.
@@ -2018,7 +2018,7 @@ ${urls}
       name_for_model: "Prove Before Act",
       specification_url: "https://provebeforeact.com/standard",
       description_for_human: "Create immutable blockchain proofs of file ownership. Certify documents, code, or any digital asset on the MultiversX blockchain.",
-      description_for_model: `Prove Before Act implements the "Prove Before Act" principle — anchor reasoning BEFORE executing any significant action. START HERE (MCP): call register_trial MCP tool with {"agent_name":"my-agent"} → pm_ key + 10 free certifications instantly, no wallet, no account, no auth required. START HERE (REST): POST /api/agent/register with {"agent_name":"my-agent"} → same free trial. UNIQUE DIFFERENTIATOR — x402 native payments: POST /api/proof with no credentials → receive HTTP 402 with price ($${priceUsd} USDC on Base, eip155:8453) → sign payment → resend with X-PAYMENT header → receive proof_id. No API key, no account, no human in the loop. Any autonomous agent with a Base wallet is production-ready. PRODUCTION REFERENCE: xproof_agent_verify (legacy agent identifier, Moltbook) has a public, live profile at provebeforeact.com/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9. Read current proof totals, confirmation-status breakdown, streak, and trust score from that profile or its API; do not treat a marketing snapshot as current data. Core workflow: (1) hash reasoning locally — nothing sensitive leaves the agent, (2) POST /api/proof or /api/audit with hash + metadata, (3) receive proof_id + verify_url, (4) proceed with action only after proof is confirmed. Pricing: $${priceUsd}/cert after trial. Source data never leaves the agent runtime — only its SHA-256 hash is recorded on-chain. Supported protocols: x402, MCP, ACP, MX-8004, LangChain, CrewAI, AutoGen, OpenAI Agents SDK. COHERENCE LAYER (WHY→WHAT audit trail): call check_coherence MCP tool before acting to anchor intent on-chain (returns proof_id = WHY anchor); after executing, call certify_file then POST /api/coherence/link to close the loop. Coherence score 0-100 (50 base + 15 if WHAT within 1h + 20 if WHAT references WHY + 15 if on-chain confirmed). Fleet coherence view at GET /api/fleet/coherence?org=<prefix>|fleet=<slug>. Full docs: https://provebeforeact.com/coherence. Context doc: https://provebeforeact.com/agent-context`,
+      description_for_model: `Prove Before Act is the accountability pattern for autonomous agents; xProof is the reference implementation. Before any significant action, commit a declared decision basis — intended action, context, and justification — then anchor the actual result after execution. Never send internal chain-of-thought. START HERE (MCP): call register_trial with {"agent_name":"my-agent"} for a pm_ key and 10 free certifications. START HERE (REST): POST /api/agent/register with {"agent_name":"my-agent"}. x402 payments: POST /api/proof without credentials → receive HTTP 402 for $${priceUsd} USDC on Base (eip155:8453) → sign payment → resend with X-PAYMENT → receive proof_id. Core workflow: (1) hash the declared decision basis locally, (2) POST /api/proof or /api/audit with the hash and metadata, (3) receive proof_id + verify_url, (4) apply the operator's action policy after the proof attempt. Source data stays in the agent runtime; only its SHA-256 hash is anchored. For the WHY→WHAT evidence trail, call check_coherence before acting, then certify_file and POST /api/coherence/link after execution. Full docs: https://provebeforeact.com/coherence. Context: https://provebeforeact.com/agent-context`,
       auth: {
         type: "service_http",
         authorization_type: "bearer",
@@ -2046,7 +2046,7 @@ ${urls}
       schema_version: "1.0",
       name: "Prove Before Act",
       version: "1.5.0",
-      description: "Prove Before Act — the canonical proof and accountability layer for AI agents. Create immutable records for agent decisions, outputs, and local artifacts on MultiversX. Send JSON-RPC MCP requests to POST /mcp; GET /mcp serves connection documentation. Free trial: 10 free certifications via register_trial MCP tool (no auth required), no wallet, no card.",
+      description: "Prove Before Act is the accountability pattern for autonomous agents; xProof is the reference MCP implementation. Before a significant action, anchor a declared decision basis — intended action, context, and justification — then anchor the verified outcome after execution. Do not submit internal chain-of-thought. Send JSON-RPC MCP requests to POST /mcp; GET /mcp serves connection documentation. Free trial: 10 free certifications via register_trial MCP tool (no auth required), no wallet, no card.",
       homepage: baseUrl,
       endpoint: `${baseUrl}/mcp`,
       documentation_url: `${baseUrl}/mcp`,
@@ -2085,7 +2085,7 @@ ${urls}
               confidence_level: { type: "number", minimum: 0, maximum: 1, description: "Confidence score from 0.0 to 1.0. Typical values: 0.6 (initial), 0.8 (pre-commitment), 1.0 (final)." },
               threshold_stage: { type: "string", enum: ["initial", "partial", "pre-commitment", "final"], description: "Named stage of the decision: initial (first assessment), partial (gathering info), pre-commitment (almost certain), final (committed)." },
               author_name: { type: "string", description: "Name of the certifying agent", default: "AI Agent" },
-              why: { type: "string", description: "Reason or instruction hash driving this decision" },
+              why: { type: "string", description: "Declared decision basis or instruction hash driving this action — not internal chain-of-thought" },
               who: { type: "string", description: "Agent identity (wallet address, name, or agent ID)" },
               reversibility_class: { type: "string", enum: ["reversible", "costly", "irreversible"], description: "Governance: how reversible is this action? When 'irreversible', confidence_level must be >= 0.95 or Prove Before Act flags a policy violation." }
             }
@@ -2153,12 +2153,12 @@ ${urls}
         },
         {
           name: "investigate_proof",
-          description: "Reconstruct the full 4W audit trail for a contested agent action. Returns WHO (agent identity + SIGIL), WHAT (SHA-256 hash on-chain), WHEN (MultiversX block timestamp), WHY (decision chain anchored before acting). Includes verification summary with intent_preceded_execution flag, chronological timeline of WHY/WHAT proofs, and session heartbeat anchor. Requires x402 payment (current per-call USDC price on Base via X-PAYMENT header) or API key authentication.",
+          description: "Reconstruct the full 4W audit trail for a contested agent action. Returns WHO (agent identity + SIGIL), WHAT (SHA-256 hash on-chain), WHEN (MultiversX block timestamp), WHY (declared decision basis anchored before acting, never internal chain-of-thought). Includes verification summary with intent_preceded_execution flag, chronological timeline of WHY/WHAT proofs, and session heartbeat anchor. Requires x402 payment (current per-call USDC price on Base via X-PAYMENT header) or API key authentication.",
           inputSchema: {
             type: "object",
             required: ["proof_id", "wallet"],
             properties: {
-              proof_id: { type: "string", pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", description: "UUID of any proof in the action pair — WHY (reasoning), WHAT (action), or heartbeat session proof" },
+              proof_id: { type: "string", pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", description: "UUID of any proof in the action pair — WHY (declared decision basis), WHAT (action), or heartbeat session proof" },
               wallet: { type: "string", description: "Agent wallet address (erd1...) that owns the proof" }
             }
           }
@@ -2232,7 +2232,7 @@ ${urls}
 
 **x402 — machine-native payment**: POST /api/proof (no auth) → HTTP 402 → sign $${priceUsd} USDC on Base (eip155:8453) → resend with X-PAYMENT header → proof_id returned. Zero setup, zero human involvement. Any agent with a Base wallet is production-ready in one session.
 
-**Prove Before & After Act**: anchor reasoning (WHY, SHA-256 hash) BEFORE executing any significant agent action, anchor the actual result (WHAT) AFTER. Hash stays local — nothing sensitive ever leaves the agent.
+**Prove Before & After Act**: declare and hash a decision basis (WHY: intended action, context, and justification) BEFORE executing any significant agent action, then anchor the actual result (WHAT) AFTER. Never provide internal chain-of-thought. The hash stays local — nothing sensitive leaves the agent.
 
 **Production reference**: xproof_agent_verify (legacy agent identifier, Moltbook) has a public live profile. Read its current proof totals, confirmation-status breakdown, streak and trust score at https://provebeforeact.com/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9 rather than relying on a static snapshot.
 
@@ -2243,7 +2243,7 @@ ${urls}
 | WHO | Which agent or actor made this decision? | MX-8004 — optional identity integration; inspect /api/mx8004/status before relying on it |
 | WHAT | What output or action was certified? | Prove Before Act — SHA-256 hash of the output, anchored on MultiversX mainnet |
 | WHEN | Immutable timestamp? | Prove Before Act — MultiversX block finality (~6 s); not a self-reported clock |
-| WHY | What reasoning led to the decision? | Prove Before Act — action_description, risk_level, and context fields from /api/audit |
+| WHY | What declared decision basis supported the action? | Prove Before Act — action_description, risk_level, and context fields from /api/audit |
 
 Prove Before Act records WHAT / WHEN / WHY. MX-8004 can add WHO only when its live status is active; production currently reports \`not_configured\`.
 
@@ -2330,7 +2330,7 @@ MCP client config (Claude Desktop, Cursor, Codex, OpenClaw):
 \\\`\\\`\\\`
 
 ### Confidence-Level Anchoring (certify_with_confidence)
-Record how certain you are at each decision stage. Creates an on-chain audit trail of your reasoning process.
+Record how certain you are at each decision stage. Creates an on-chain audit trail of your declared decision basis, not internal chain-of-thought.
 
 Stages: \\\`initial\\\` (60%) → \\\`partial\\\` → \\\`pre-commitment\\\` (80%) → \\\`final\\\` (100%). All share a \\\`decision_id\\\`.
 
@@ -2574,7 +2574,7 @@ Prove Before Act is the canonical proof-of-existence service for AI agents. It a
 | WHO | Which agent or actor made this decision? | MX-8004 — optional identity integration; inspect /api/mx8004/status before relying on it |
 | WHAT | What output or action was certified? | Prove Before Act — SHA-256 hash of the output, anchored on MultiversX mainnet |
 | WHEN | Immutable timestamp? | Prove Before Act — MultiversX block finality (~6 s); not a self-reported clock |
-| WHY | What reasoning led to the decision? | Prove Before Act — \`action_description\`, \`risk_level\`, and \`context\` fields from \`/api/audit\` |
+| WHY | What declared decision basis supported the action? | Prove Before Act — \`action_description\`, \`risk_level\`, and \`context\` fields from \`/api/audit\` |
 
 Prove Before Act records WHAT / WHEN / WHY. MX-8004 can add WHO only when its live status is active; production currently reports \`not_configured\`.
 
@@ -4262,7 +4262,7 @@ export const xproofAuditPlugin: Plugin = {
 
     res.json({
       name: "Prove Before Act",
-      description: "The on-chain notary for AI agents. Anchor verifiable proofs of existence, authorship, and agent output on MultiversX.",
+      description: "Prove Before Act is the accountability pattern for autonomous agents; xProof is the reference implementation. Commit a declared decision basis before acting, then anchor the verified outcome on MultiversX. Never submit internal chain-of-thought.",
       url: baseUrl,
       version: "1.2.0",
       capabilities: ["file-certification", "batch-certification", "proof-verification", "blockchain-anchoring", "webhook-notifications", "verification-badges", "mx8004-validation", "agent-audit-log"],
@@ -4290,7 +4290,7 @@ export const xproofAuditPlugin: Plugin = {
       },
       audit_log: {
         standard: "Agent Audit Log Standard",
-        description: "Decision-certification integration pattern — operators can certify decisions before execution and use proof_id in their own policy; Prove Before Act records the result and leaves action handling to the operator.",
+        description: "Pre-execution accountability pattern — operators can certify a declared decision basis before execution, never internal chain-of-thought, and use proof_id in their own policy; Prove Before Act records the result and leaves action handling to the operator.",
         endpoint: `POST ${baseUrl}/api/audit`,
         schema: `${baseUrl}/.well-known/agent-audit-schema.json`,
         view: `${baseUrl}/audit/{proof_id}`,
@@ -4365,9 +4365,9 @@ tags: [proof-of-existence, pba-certification, agent-accountability, x402, MCP, a
 
 ## One-line summary
 
-Prove Before Act is the on-chain notary for AI agents. Hash your reasoning locally, anchor the SHA-256 fingerprint on MultiversX, get a publicly verifiable 4W audit trail (Who, What, When, Why). Pay per proof with USDC on Base via x402 — no account needed.
+Prove Before Act is the accountability pattern for autonomous agents; xProof is the reference implementation. Hash a declared decision basis locally, anchor its SHA-256 fingerprint on MultiversX before acting, then record the outcome for a publicly verifiable 4W evidence trail. Do not provide internal chain-of-thought. Pay per proof with USDC on Base via x402 — no account needed.
 
-**The principle**: Prove Before & After Act. Anchor reasoning (WHY) BEFORE executing any significant action. Anchor the actual result (WHAT) AFTER for a complete 4W audit trail.
+**The principle**: Prove Before & After Act. Anchor a declared decision basis (WHY) BEFORE executing any significant action. Anchor the actual result (WHAT) AFTER for a complete 4W evidence trail.
 
 ---
 
@@ -4400,7 +4400,7 @@ Three copy-paste patterns for the most common agent workflows.
 \`\`\`python
 import hashlib, json, requests
 
-# 1. Document your reasoning
+# 1. Document the declared decision basis
 reasoning = {
     "who": "trading-agent-v2", "what": "BUY BTC 0.5",
     "why": "RSI=38 (below 40 threshold); allocation=2.1% (below 3% cap)",
@@ -4419,12 +4419,12 @@ execute_trade("BUY", "BTC", 0.5)
 print(f"Audit trail: ${baseUrl}/proof/{proof_id}")
 \`\`\`
 
-### Research agent — anchor reasoning before publishing a report
+### Research agent — anchor a declared decision basis before publishing a report
 
 \`\`\`python
 import hashlib, json, requests
 
-# 1. Summarize reasoning and sources
+# 1. Summarize the declared decision basis and sources
 reasoning = {
     "who": "research-agent-v1", "what": "Publish Q2 crypto market outlook",
     "why": "5 sources reviewed, confidence=0.87, no contradictions detected",
@@ -4640,7 +4640,7 @@ Cost comparison per 1,000 anchors: Prove Before Act ~$${(priceUsd * 1000).toFixe
 MCP endpoint: ${baseUrl}/mcp (Streamable HTTP transport, POST only)
 
 Available tools:
-- certify_file — anchor a file hash or reasoning document
+- certify_file — anchor a file hash or declared decision-basis document
 - audit_agent_session — decision-certification record for operator policies (Agent Audit Log Standard)
 - investigate_proof — look up a proof by ID or hash
 - register_trial — get a free api_key instantly (no wallet needed, 10 free proofs)
@@ -4658,11 +4658,11 @@ Available tools:
 \`\`\`
 
 \`\`\`json
-// Tool: certify_file — anchor reasoning before acting
+// Tool: certify_file — anchor a declared decision basis before acting
 {
   "name": "certify_file",
   "arguments": {
-    "file_hash": "sha256_of_reasoning_document",
+    "file_hash": "sha256_of_declared_decision_basis",
     "filename": "decision_session_001.md",
     "metadata": {
       "who": "my-agent-v2",
@@ -4717,14 +4717,14 @@ The 4W audit trail is automatically rendered on the public proof page when you i
 | WHO | Which agent or actor made this decision? | MX-8004 — optional identity integration; inspect /api/mx8004/status before relying on it |
 | WHAT | What output or action was certified? | Prove Before Act — SHA-256 hash of the output, anchored on MultiversX mainnet |
 | WHEN | Immutable timestamp? | Prove Before Act — MultiversX block finality (~6 s); not a self-reported clock |
-| WHY | What reasoning led to the decision? | Prove Before Act — \`action_description\`, \`risk_level\`, and \`context\` fields from \`/api/audit\` |
+| WHY | What declared decision basis supported the action? | Prove Before Act — \`action_description\`, \`risk_level\`, and \`context\` fields from \`/api/audit\` |
 
 Prove Before Act records WHAT / WHEN / WHY. MX-8004 can add WHO only when its live status is active; production currently reports \`not_configured\`.
 
 - **WHO**: Which agent, model, or actor made this decision
 - **WHAT**: What action or output was certified
 - **WHEN**: Immutable on-chain timestamp from MultiversX block
-- **WHY**: The full reasoning that led to the decision
+- **WHY**: The declared decision basis that supported the action — not internal chain-of-thought
 
 \`\`\`bash
 curl -X POST ${baseUrl}/api/proof \\
@@ -4732,7 +4732,7 @@ curl -X POST ${baseUrl}/api/proof \\
   -H "Content-Type: application/json" \\
   -d '{
     "file_hash": "YOUR_SHA256",
-    "filename": "reasoning.md",
+    "filename": "decision_basis.md",
     "metadata": {
       "who": "my-agent-v2 (gpt-4o-mini)",
       "what": "Approved BUY 0.5 BTC at $67,400",
@@ -4757,7 +4757,7 @@ For the Agent Audit Log Standard, use POST /api/audit when an operator policy ne
 
 **What STAYS LOCAL (never transmitted):**
 - The actual file content
-- Reasoning document text
+- Declared decision-basis document text
 - Input data values
 - Model weights or strategy details
 
@@ -4799,13 +4799,13 @@ GET ${baseUrl}/api/leaderboard               → top 50 public agents by trust s
 
 ---
 
-## Q10 — Complete agent workflow: reasoning → hash → anchor → action → result
+## Q10 — Complete agent workflow: declared decision basis → hash → anchor → action → result
 
 **The canonical Prove Before & After Act loop:**
 
 \`\`\`
-1. Agent produces reasoning (WHY)
-2. Serialize reasoning to canonical JSON
+1. Agent declares its decision basis (WHY), not internal chain-of-thought
+2. Serialize the declared decision basis to canonical JSON
 3. Compute SHA-256 hash locally (nothing leaves the agent)
 4. POST WHY hash to Prove Before Act → receive why_proof_id
 5. Execute the action

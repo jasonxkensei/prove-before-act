@@ -538,7 +538,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
               { w: "WHO", zh: "操作主体", desc: "哪个智能体、模型或操作者做出了这个决策", example: "my-agent-v2（GPT-4o，会话：sess_abc）" },
               { w: "WHAT", zh: "操作结果", desc: "被认证的操作或输出是什么", example: "批准交易：买入0.5 BTC，价格$67,400" },
               { w: "WHEN", zh: "操作时间", desc: "MultiversX区块上的不可篡改时间戳", example: "2026-06-02T14:30:12Z（区块 #15,447,203）" },
-              { w: "WHY", zh: "决策依据", desc: "导致该决策的完整推理过程", example: "RSI低于40，配置低于目标，风险策略v3.1已批准" },
+              { w: "WHY", zh: "决策依据", desc: "声明的决策依据，而非内部思维链", example: "RSI低于40，配置低于目标，风险策略v3.1已批准" },
             ].map((item) => (
               <div key={item.w} className="rounded-md border bg-muted/30 p-3">
                 <div className="flex items-baseline gap-2 mb-1">
@@ -578,7 +578,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
       content: (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Prove Before Act基于<strong className="text-foreground">仅哈希模型</strong>构建：您的文件、推理文档或智能体输出永远不会离开您的环境。只有其SHA-256指纹会被传输。
+            Prove Before Act基于<strong className="text-foreground">仅哈希模型</strong>构建：您的文件、声明的决策依据文档或智能体输出永远不会离开您的环境。只有其SHA-256指纹会被传输。
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3">
@@ -594,7 +594,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
               <p className="text-xs font-semibold mb-2">完全保留在本地的内容</p>
               <ul className="text-xs text-muted-foreground space-y-1 ml-2">
                 <li>• 实际文件内容</li>
-                <li>• 推理文档文本</li>
+                <li>• 声明的决策依据文档文本</li>
                 <li>• 输入数据值</li>
                 <li>• 模型权重或策略细节</li>
               </ul>
@@ -856,7 +856,7 @@ print(f"已锚定: {status['anchored']} | 待提交: {status['queue_pending']} |
     {
       id: "workflow",
       icon: Play,
-      title: "完整智能体工作流：推理 → 哈希 → 锚定 → 执行",
+      title: "完整智能体工作流：决策依据 → 哈希 → 锚定 → 执行",
       badge: "可直接复制使用",
       content: (
         <div className="space-y-4">
@@ -864,7 +864,7 @@ print(f"已锚定: {status['anchored']} | 待提交: {status['queue_pending']} |
             这是标准的<strong className="text-foreground">行动前证明</strong>闭环。将此模式复制到任意智能体框架中即可使用。
           </p>
           <div className="flex items-center gap-2 flex-wrap text-xs">
-            {["1. 推理（WHY）", "→", "2. 本地哈希", "→", "3. 链上锚定", "→", "4. 获取proof_id", "→", "5. 执行（WHAT）"].map((s, i) => (
+            {["1. 决策依据（WHY）", "→", "2. 本地哈希", "→", "3. 链上锚定", "→", "4. 获取proof_id", "→", "5. 执行（WHAT）"].map((s, i) => (
               <span key={i} className={s === "→" ? "text-muted-foreground/40" : "rounded bg-primary/10 text-primary px-2 py-1 font-medium"}>{s}</span>
             ))}
           </div>
@@ -873,7 +873,7 @@ print(f"已锚定: {status['anchored']} | 待提交: {status['queue_pending']} |
 class ProveBeforeAct:
     """
     行动前证明核心闭环，适用于自主智能体。
-    在执行任何重要操作前，先锚定推理过程。
+    在执行任何重要操作前，先锚定声明的决策依据，而非内部思维链。
     """
     
     def __init__(self, api_key: str, agent_id: str):
@@ -883,10 +883,10 @@ class ProveBeforeAct:
     
     def anchor(self, reasoning: dict, action_description: str) -> str | None:
         """
-        步骤1-3：哈希推理过程，锚定上链，返回proof_id。
+        步骤1-3：哈希声明的决策依据，锚定上链，返回proof_id。
         在执行任何操作之前调用此方法。
         """
-        # 步骤1：规范化序列化推理内容
+        # 步骤1：规范化序列化声明的决策依据
         reasoning_json = json.dumps(reasoning, sort_keys=True, ensure_ascii=False)
         
         # 步骤2：本地哈希 — 敏感内容不离开此函数
@@ -958,7 +958,7 @@ print(f"交易已执行。存证链接: https://provebeforeact.com{outcome['veri
           <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3">
             <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-1">这为您提供的保障</p>
             <ul className="text-xs text-muted-foreground space-y-0.5 ml-2">
-              <li>• 每次操作都有密码学存证，证明在行动前存在相应的推理过程</li>
+              <li>• 每次操作都有密码学存证，证明在行动前存在相应的声明决策依据</li>
               <li>• 存证可在 <code className="font-mono bg-muted px-1 rounded">provebeforeact.com/proof/&#123;id&#125;</code> 公开验证 — 无需Prove Before Act账号</li>
               <li>• 4W审计轨迹自动渲染在存证页面上</li>
               <li>• 若智能体遭受入侵或行为异常，您拥有完整的取证记录</li>
@@ -1061,13 +1061,13 @@ print(f"交易已执行。存证链接: https://provebeforeact.com{outcome['veri
                 {[
                   { field: "who", type: "string", desc: "智能体标识符、模型名称或钱包地址" },
                   { field: "what", type: "string", desc: "被认证的操作或输出" },
-                  { field: "why", type: "string", desc: "导致决策的推理过程（行动前证明锚点）" },
+                  { field: "why", type: "string", desc: "声明的决策依据（行动前证明锚点，而非内部思维链）" },
                   { field: "confidence_score", type: "0.0–1.0", desc: "模型自报的置信度 — 显示在存证页面" },
                   { field: "reversibility_class", type: "枚举值", desc: "'reversible'可逆 / 'costly'代价高 / 'irreversible'不可逆 — 审计门控的风险分级" },
                   { field: "model_hash", type: "sha256", desc: "模型权重哈希 — 检测多次锚定间的模型身份漂移" },
                   { field: "strategy_hash", type: "sha256", desc: "策略/提示词哈希 — 检测多个会话间的策略变更" },
                   { field: "instruction_received_at", type: "ISO 8601", desc: "智能体从协调器接收任务的时间" },
-                  { field: "reasoning_started_at", type: "ISO 8601", desc: "智能体开始生成推理轨迹的时间" },
+                  { field: "reasoning_started_at", type: "ISO 8601", desc: "智能体开始形成声明的决策依据的时间" },
                   { field: "action_taken_at", type: "ISO 8601", desc: "操作执行的时间（必须晚于proof_id返回时间）" },
                   { field: "jurisdiction_type", type: "string", desc: "合规门控的法律背景（如 'EU-AI-Act'、'SEC-regulated'）" },
                   { field: "session_id", type: "string", desc: "将同一智能体会话中的多个存证关联起来 — 供investigate_proof使用" },
@@ -1122,7 +1122,7 @@ from xproof import xproof  # 旧版兼容模块；pip install prove-before-act
 
 @tool
 def prove_before_act(reasoning: str, action: str) -> str:
-    """执行任何重要操作前，先将推理过程锚定到链上。"""
+    """执行任何重要操作前，先将声明的决策依据锚定到链上。"""
     proof = xproof.anchor(
         content=reasoning,
         metadata={"who": "langchain-agent", "what": action, "why": reasoning}
@@ -1155,7 +1155,7 @@ from xproof import xproof
 
 @function_tool
 def anchor_reasoning(reasoning: str, action_description: str) -> str:
-    """行动前证明 — 执行前先锚定推理过程。返回proof_id。"""
+    """行动前证明 — 执行前先锚定声明的决策依据。返回proof_id。"""
     proof = xproof.anchor(
         content=reasoning,
         metadata={"who": "openai-agent", "what": action_description, "why": reasoning}
@@ -1191,9 +1191,9 @@ import { z } from 'zod';
 import { xProof } from 'prove-before-act';  // npm install prove-before-act
 
 const anchorTool = tool({
-  description: '在执行任何重要操作前将推理过程锚定到链上。返回proof_id。',
+  description: '在执行任何重要操作前将声明的决策依据锚定到链上。返回proof_id。',
   parameters: z.object({
-    reasoning: z.string().describe('智能体推理过程 / WHY'),
+    reasoning: z.string().describe('智能体声明的决策依据 / WHY（不是内部思维链）'),
     action: z.string().describe('即将执行的操作 / WHAT'),
   }),
   execute: async ({ reasoning, action }) => {
@@ -1275,7 +1275,7 @@ const anchorTool = tool({
             <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3">
               <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-2">适合使用Prove Before Act的场景</p>
               <ul className="text-xs text-muted-foreground space-y-1">
-                <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-emerald-500" />需要行动前证明——在行动前有推理过程的存证</li>
+                <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-emerald-500" />需要行动前证明——在行动前有声明决策依据的存证</li>
                 <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-emerald-500" />需要零账号机器支付（x402 + Base链USDC）</li>
                 <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-emerald-500" />需要公开信任评分+审计轨迹</li>
                 <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-emerald-500" />隐私重要——仅哈希公开，内容保留本地</li>
@@ -1294,7 +1294,7 @@ const anchorTool = tool({
           </div>
           <div className="rounded-md border border-primary/20 bg-primary/5 p-3">
             <p className="text-xs text-muted-foreground">
-              <strong className="text-foreground">结论：</strong>对于需要在行动前证明其推理过程的智能体——尤其是低成本、通过x402、且无预有账号的场景——Prove Before Act是正确的选择。它不试图替代Arweave或Sign Protocol，而是填补它们没有覆盖的空白：以当前实时费率实现智能体决策问责。
+              <strong className="text-foreground">结论：</strong>对于需要在行动前证明其声明决策依据的智能体——尤其是低成本、通过x402、且无预有账号的场景——Prove Before Act是正确的选择。它不试图替代Arweave或Sign Protocol，而是填补它们没有覆盖的空白：以当前实时费率实现智能体决策问责。
             </p>
           </div>
         </div>
@@ -1362,8 +1362,8 @@ const anchorTool = tool({
             Prove Before Act 智能体集成文档
           </h1>
           <p className="text-muted-foreground text-base leading-relaxed max-w-2xl mb-1">
-            <strong className="text-foreground">执行前锚定意图。</strong>{" "}
-            在MultiversX上证明 <code className="font-mono text-sm bg-muted px-1 rounded">intent_preceded_execution: true</code>——拥有公开的4W审计轨迹和零账号的x402支付。
+              <strong className="text-foreground">Prove Before Act 是模式，xProof 是参考实现。</strong>{" "}
+              执行前锚定声明的决策依据（而非内部思维链），在MultiversX上证明 <code className="font-mono text-sm bg-muted px-1 rounded">intent_preceded_execution: true</code>——拥有公开的4W审计轨迹和零账号的x402支付。
           </p>
           <p className="text-xs text-muted-foreground max-w-2xl mb-4">
             生产验证：证明总量、确认状态、信任评分与连续运行数据均由 <a href="/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9" className="text-primary underline">Moltbook公开档案</a> 实时提供。无营销内容——只有集成所需的核心信息。
@@ -1399,7 +1399,7 @@ curl -X POST https://provebeforeact.com/api/agent/register \\
   -d '{"agent_name": "my-agent"}'
 # → { "api_key": "pm_...", "trial": { "quota": 10, "remaining": 10 } }
 
-# 2. 本地哈希推理内容 — 数据不离开本机
+# 2. 本地哈希声明的决策依据 — 数据不离开本机
 python3 -c "import hashlib,json; d={'why':'RSI=38，低于阈值','what':'买入BTC 0.5'}; print(hashlib.sha256(json.dumps(d,sort_keys=True).encode()).hexdigest())"
 # → a1b2c3...64hex
 
@@ -1423,7 +1423,7 @@ curl -X POST https://provebeforeact.com/api/proof \\
                 desc: "在执行买卖操作前证明决策 — 完整的4W链上审计轨迹",
                 code: `import hashlib, json, requests
 
-# 1. 记录推理过程
+# 1. 记录声明的决策依据
 reasoning = {
     "who": "trading-agent-v2", "what": "买入BTC 0.5",
     "why": "RSI=38（低于40阈值）；仓位比例=2.1%（低于3%上限）",
@@ -1445,10 +1445,10 @@ print(f"审计记录: https://provebeforeact.com/proof/{proof_id}")`,
                 id: "research",
                 label: "研究智能体",
                 context: "内容 · 报告 · 分析",
-                desc: "发布报告前锚定推理过程与来源 — 可验证的溯源证明",
+                desc: "发布报告前锚定声明的决策依据与来源 — 可验证的溯源证明",
                 code: `import hashlib, json, requests
 
-# 1. 汇总推理过程与数据来源
+# 1. 汇总声明的决策依据与数据来源
 reasoning = {
     "who": "research-agent-v1", "what": "发布Q2加密市场展望报告",
     "why": "已审阅5个来源，置信度=0.87，未发现矛盾信息",

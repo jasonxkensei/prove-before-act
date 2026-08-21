@@ -263,18 +263,18 @@ export default function Landing() {
           <div className="mb-5 flex justify-center">
             <Badge variant="outline" className="text-xs px-3 py-1 gap-1.5" data-testid="badge-prove-before-act">
               <Play className="h-3 w-3 text-primary" />
-              Prove Before Act — anchor reasoning before executing
+              Prove Before Act — the accountability pattern for autonomous agents
             </Badge>
           </div>
 
           <h1 className="mb-3 text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-tight">
             Prove Before Act
             <br />
-            <span className="text-primary">accountability for&nbsp;agents.</span>
+            <span className="text-primary">the accountability pattern<br />for autonomous agents.</span>
           </h1>
 
-          <p className="mx-auto mb-8 max-w-2xl text-lg md:text-xl text-muted-foreground leading-relaxed">
-            Anchor your agent's reasoning on-chain before it executes.{" "}
+          <p className="mx-auto mb-8 max-w-2xl text-lg md:text-xl text-muted-foreground leading-relaxed" data-testid="text-hero-positioning">
+            Commit an independently verifiable decision basis before your agent acts.{" "}
             {price}/proof · 10 free certs · no wallet needed.
           </p>
 
@@ -320,7 +320,7 @@ export default function Landing() {
           </p>
 
           <p className="mt-2 text-xs text-muted-foreground">
-            Built on the{" "}
+            <span data-testid="text-hero-reference-implementation">xProof is the reference implementation of the{" "}</span>
             <a href="/standard" className="underline underline-offset-2 hover:text-foreground transition-colors" data-testid="link-hero-standard">
               Prove Before Act specification
             </a>
@@ -738,8 +738,8 @@ export default function Landing() {
               ))}
             </div>
             <p className="mt-8 text-center text-sm text-muted-foreground">
-              Prove Before Act is the accountability layer.{" "}
-              <span className="text-foreground font-medium">Every agent action, proven on-chain.</span>
+              Prove Before Act is the accountability pattern.{" "}
+              <span className="text-foreground font-medium">xProof is its reference implementation for independently verifiable evidence.</span>
             </p>
           </div>
         </div>
@@ -761,7 +761,7 @@ export default function Landing() {
                   <span className="text-sm font-bold">Trading Agent</span>
                   <Badge variant="secondary" className="text-xs ml-auto">High value</Badge>
                 </div>
-                <p className="text-xs text-muted-foreground mb-3">Prove the reasoning behind every trade <em>before</em> execution — non-repudiable audit trail for regulators.</p>
+                <p className="text-xs text-muted-foreground mb-3">Prove the declared decision basis behind every trade <em>before</em> execution — an independently verifiable audit trail for regulators.</p>
                 <pre className="rounded bg-muted/60 border border-border/40 p-3 text-xs font-mono leading-relaxed overflow-x-auto whitespace-pre">{`# Anchor before executing the trade
 proof = xproof.certify(
   file_hash=sha256(strategy_json),
@@ -777,7 +777,7 @@ if not proof: raise PolicyError("no proof = no trade")`}</pre>
                   <span className="text-sm font-bold">Research Agent</span>
                   <Badge variant="secondary" className="text-xs ml-auto">Attribution</Badge>
                 </div>
-                <p className="text-xs text-muted-foreground mb-3">Anchor reasoning + sources before publishing — readers can verify the report hasn't been altered.</p>
+                <p className="text-xs text-muted-foreground mb-3">Anchor the declared decision basis + sources before publishing — readers can verify the report has not been altered.</p>
                 <pre className="rounded bg-muted/60 border border-border/40 p-3 text-xs font-mono leading-relaxed overflow-x-auto whitespace-pre">{`# Anchor before publishing the report
 proof = xproof.certify(
   file_hash=sha256(report_json),
@@ -845,12 +845,12 @@ proofs = xproof.certify_batch([
                   The canonical agent accountability loop
                 </h2>
                 <p className="text-muted-foreground max-w-xl mx-auto text-sm">
-                  Anchor reasoning (WHY) on-chain <em>before</em> executing. Anchor actual result (WHAT) after. Full 4W audit trail — available to auditors, regulators, or any other agent.
+                  Anchor the agent&apos;s declared decision basis (WHY) <em>before</em> executing. Anchor the actual result (WHAT) after. Full 4W evidence trail — available to auditors, regulators, or any other agent.
                 </p>
               </div>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-0 sm:gap-0">
                 {[
-                  { step: "1", label: "Reason", desc: "Agent writes full reasoning + decision (WHY)", icon: Bot },
+                  { step: "1", label: "Decide", desc: "Agent declares its decision basis + intent (WHY)", icon: Bot },
                   { step: "2", label: "Anchor WHY", desc: "Hash → anchor on-chain before acting", icon: Blocks },
                   { step: "3", label: "Execute", desc: "Action proceeds with immutable WHY reference", icon: Play },
                   { step: "4", label: "Anchor WHAT", desc: "Certify actual result after execution", icon: Shield },
@@ -1192,7 +1192,7 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
               <div className="p-4 font-mono text-xs text-[#e6edf3] overflow-x-auto leading-relaxed">
                 <div className="text-[#8b949e]">import hashlib, json, base64, requests</div>
                 <div className="mt-3"><span className="text-[#f97583]">def</span> <span className="text-[#b392f0]">anchor_x402</span><span className="text-[#e6edf3]">(reasoning: dict, wallet_signer) -&gt; dict:</span></div>
-                <div className="pl-4 text-[#8b949e]">"""Prove Before Act — anchor reasoning, then execute."""</div>
+                <div className="pl-4 text-[#8b949e]">"""Prove Before Act — anchor a declared decision basis, then execute."""</div>
                 <div className="pl-4 mt-2 text-[#8b949e]"># 1. Hash locally — nothing sensitive leaves this function</div>
                 <div className="pl-4"><span className="text-[#e3b341]">file_hash</span> = hashlib.sha256(json.dumps(reasoning, sort_keys=<span className="text-[#79c0ff]">True</span>).encode()).hexdigest()</div>
                 <div className="pl-4 mt-2 text-[#8b949e]"># 2. POST without auth → HTTP 402 with price + payment terms</div>
