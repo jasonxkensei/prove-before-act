@@ -375,7 +375,14 @@ export default function Landing() {
             </Button>
           </div>
 
-          <p className="mt-4 text-sm text-muted-foreground font-mono">
+          <p className="mt-3 text-sm text-muted-foreground">
+            New to Prove Before Act?{" "}
+            <a href="/learn" className="underline underline-offset-2 hover:text-foreground transition-colors" data-testid="link-hero-learn">
+              60-second overview →
+            </a>
+          </p>
+
+          <p className="mt-3 text-sm text-muted-foreground font-mono">
             Register free → Get key → First proof in 1 curl
           </p>
 
