@@ -1430,7 +1430,7 @@ async function renderAgentContextPage(baseUrl: string): Promise<string> {
 
   return `${commonHead(title, description, `${baseUrl}/agent-context`)}
 <body>
-<header><nav><a href="${baseUrl}"><strong>Prove Before Act</strong></a> | <a href="${baseUrl}/agent-context.md">Machine-readable (.md)</a></nav></header>
+<header><nav><a href="${baseUrl}"><strong>Prove Before Act</strong></a> | <a href="${baseUrl}/standard">The PBA Specification</a> | <a href="${baseUrl}/agent-context.md">Machine-readable (.md)</a></nav></header>
 <main>
   <h1>Prove Before Act Agent Context</h1>
   <p><strong>Anchor intent before execution.</strong> Hash locally → certify on MultiversX → proceed with <code>proof_id</code>. Production reference: ${referenceMetrics} <a href="${baseUrl}/agent/${REFERENCE_AGENT_WALLET}">Moltbook public profile</a>. <a href="${baseUrl}/founder">Jason Petitfourg is the AI Product Builder behind Prove Before Act</a>.</p>
@@ -1745,6 +1745,7 @@ Content-Type: application/json
     <h2>Register now — 10 free certs, no wallet, no card</h2>
     <p><strong><a href="${baseUrl}/api/agent/register">POST /api/agent/register</a></strong> → instant pm_ key → anchor your first proof in under 30 seconds.</p>
     <ul>
+      <li><a href="${baseUrl}/standard">The Prove Before Act specification — design pattern, core invariant, 4W audit trail, and reference implementation</a></li>
       <li><a href="${baseUrl}/docs">REST API docs</a></li>
       <li><a href="${baseUrl}/agent-context.md">Machine-readable (.md) — optimized for LLM context windows</a></li>
       <li><a href="${baseUrl}/mcp">MCP endpoint — certify_file, audit_agent_session, register_trial</a></li>

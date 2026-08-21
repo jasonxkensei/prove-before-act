@@ -1493,6 +1493,18 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
             </p>
           </div>
 
+          {/* PBA Specification reference */}
+          <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground" data-testid="badge-standard-link">
+            <ExternalLink className="h-3 w-3 shrink-0 text-primary/70" />
+            <span>
+              The Prove Before Act specification is at{" "}
+              <a href="/standard" className="text-primary underline font-medium hover:text-primary/80 transition-colors">
+                provebeforeact.com/standard
+              </a>{" "}
+              — design pattern, core invariant, 4W audit trail, and reference implementation.
+            </span>
+          </div>
+
           {/* Quick Start — visible before accordion */}
           <div className="mt-6 rounded-md border border-border bg-muted/10 p-4" data-testid="section-quickstart">
             <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
@@ -1817,6 +1829,7 @@ await sendToCustomer(ticketId, responseText, { audit_ref: proof_id });`,
           <div className="flex flex-wrap gap-2 pt-1">
             {[
               { label: "REST API docs", href: "/docs" },
+              { label: "PBA specification", href: "/standard" },
               { label: "llms.txt", href: "/llms.txt" },
               { label: "MCP endpoint", href: "https://provebeforeact.com/mcp" },
               { label: "Moltbook case study", href: "/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9" },

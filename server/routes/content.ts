@@ -169,7 +169,8 @@ The proof is self-verifiable without relying on Prove Before Act infrastructure.
 - \`/learn/proof-of-existence.md\` - What is proof of existence
 - \`/learn/verification.md\` - How to verify proofs
 - \`/learn/api.md\` - API documentation
-- \`/agent-context\` - Agent-first deep-dive: production patterns, retry policy, 4W audit trail walkthrough, x402 payment, cost, MCP examples, and framework integrations (LangChain, CrewAI, AutoGen, LlamaIndex, OpenAI Agents SDK, Fetch.ai)
+- \`/standard\` - The Prove Before Act specification: design pattern, core invariant, 4W audit trail, threat model, four primitives, and reference implementation. Canonical definition of the pattern at provebeforeact.com/standard
+- \`/agent-context\` - Agent-first deep-dive: production patterns, retry policy, 4W audit trail walkthrough, x402 payment, cost, MCP examples, and framework integrations (LangChain, CrewAI, AutoGen, LlamaIndex, OpenAI Agents SDK, Fetch.ai). Cross-links to /standard for the full specification
 
 ## Simplified Certification (POST /api/proof)
 
@@ -4356,6 +4357,7 @@ tags: [proof-of-existence, pba-certification, agent-accountability, x402, MCP, a
 # Prove Before Act — Agent Context Document
 > Answers to the 10 questions autonomous agents ask when evaluating Prove Before Act.
 > Machine-readable version. Human page: ${baseUrl}/agent-context
+> The Prove Before Act specification is at ${baseUrl}/standard — design pattern, core invariant, 4W audit trail, and reference implementation.
 
 ## One-line summary
 
