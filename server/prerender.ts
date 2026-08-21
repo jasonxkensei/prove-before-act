@@ -221,7 +221,8 @@ async function renderHomePage(baseUrl: string): Promise<string> {
     <a href="${baseUrl}/agents">For AI Agents</a> |
     <a href="${baseUrl}/certify">Certify a file (for individuals)</a> |
     <a href="${baseUrl}/mcp">MCP Server</a> |
-    <a href="${baseUrl}/docs">API Docs</a>
+    <a href="${baseUrl}/docs">API Docs</a> |
+    <a href="${baseUrl}/standard">The Standard</a>
   </nav>
 </header>
 

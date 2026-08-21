@@ -270,6 +270,9 @@ export default function Landing() {
             <a href="/docs" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-docs">
               Docs
             </a>
+            <a href="/standard" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-standard">
+              Standard
+            </a>
               <a href="/mcp" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-mcp">
                 MCP Server
             </a>
@@ -374,6 +377,13 @@ export default function Landing() {
 
           <p className="mt-4 text-sm text-muted-foreground font-mono">
             Register free → Get key → First proof in 1 curl
+          </p>
+
+          <p className="mt-2 text-xs text-muted-foreground">
+            Built on the{" "}
+            <a href="/standard" className="underline underline-offset-2 hover:text-foreground transition-colors" data-testid="link-hero-standard">
+              Prove Before Act specification
+            </a>
           </p>
 
           {/* x402 callout — above the fold */}
@@ -1426,6 +1436,7 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
                   <li><a href="#how-it-works" className="hover:text-foreground transition-colors">How it works</a></li>
                   <li><a href="#faq" className="hover:text-foreground transition-colors">FAQ</a></li>
                   <li><a href="/docs" className="hover:text-foreground transition-colors" data-testid="link-footer-docs">API Docs</a></li>
+                  <li><a href="/standard" className="hover:text-foreground transition-colors" data-testid="link-footer-standard">PBA Standard</a></li>
                   <li><a href="/mcp" className="hover:text-foreground transition-colors" data-testid="link-footer-mcp">MCP Server</a></li>
                   <li><a href="/agents" className="hover:text-foreground transition-colors" data-testid="link-footer-agents">For AI Agents</a></li>
                   <li><a href="/leaderboard" className="hover:text-foreground transition-colors" data-testid="link-footer-leaderboard">Trust Leaderboard</a></li>
