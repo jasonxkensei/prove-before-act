@@ -10,7 +10,7 @@
     "check": "tsc",
     "test": "vitest run",
     "db:push": "drizzle-kit push",
-    "postinstall": "node scripts/patch-playwright-webkit.mjs"
+    "postinstall": "node scripts/patch-playwright-webkit.mjs && npx playwright install"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
