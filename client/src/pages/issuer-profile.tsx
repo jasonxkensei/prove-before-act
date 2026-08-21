@@ -13,6 +13,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PublicSiteFooter, PublicSiteHeader } from "@/components/public-site-chrome";
 import { formatDistanceToNow } from "date-fns";
 
 interface IssuerProfile {
@@ -102,16 +103,7 @@ export default function IssuerProfilePage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="border-b bg-background/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-4xl mx-auto px-4 py-3">
-          <Button variant="ghost" size="sm" asChild data-testid="button-nav-leaderboard">
-            <Link href="/leaderboard">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Leaderboard
-            </Link>
-          </Button>
-        </div>
-      </div>
+      <PublicSiteHeader />
 
       <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
         {/* Header */}
@@ -329,6 +321,7 @@ export default function IssuerProfilePage() {
           </Card>
         )}
       </div>
+      <PublicSiteFooter />
     </div>
   );
 }

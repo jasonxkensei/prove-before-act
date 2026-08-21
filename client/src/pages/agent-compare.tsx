@@ -4,6 +4,7 @@ import { Shield, ArrowLeft, Loader2, AlertCircle, TrendingUp, TrendingDown, Minu
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PublicSiteFooter, PublicSiteHeader } from "@/components/public-site-chrome";
 import { useEffect } from "react";
 import {
   ResponsiveContainer,
@@ -403,20 +404,7 @@ export default function AgentComparePage() {
 
   return (
     <div className="min-h-screen bg-background" data-testid="page-agent-compare">
-      <header className="border-b bg-card/50 backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-3">
-            <Shield className="h-6 w-6 text-primary" />
-            <h1 className="text-lg font-semibold" data-testid="text-page-title">Agent Comparison</h1>
-          </div>
-          <Link href="/leaderboard">
-            <Button variant="outline" size="sm" data-testid="link-back-leaderboard-header">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to Leaderboard
-            </Button>
-          </Link>
-        </div>
-      </header>
+      <PublicSiteHeader />
 
       <main className="max-w-7xl mx-auto px-4 py-6 flex flex-col gap-6">
         {/* Trust metrics table */}
@@ -620,6 +608,7 @@ export default function AgentComparePage() {
           </CardContent>
         </Card>
       </main>
+      <PublicSiteFooter />
     </div>
   );
 }

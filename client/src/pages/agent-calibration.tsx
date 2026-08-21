@@ -15,6 +15,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { PublicSiteFooter, PublicSiteHeader } from "@/components/public-site-chrome";
 import { formatDistanceToNow } from "date-fns";
 
 interface CalibrationPoint {
@@ -536,19 +537,7 @@ export default function AgentCalibrationPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between gap-4">
-          <Link href="/" data-testid="link-logo-home" className="flex items-center gap-2">
-            <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
-          </Link>
-          <Button asChild variant="ghost" size="sm" data-testid="button-back-profile">
-            <Link href={`/agent/${wallet}`}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Agent profile
-            </Link>
-          </Button>
-        </div>
-      </header>
+      <PublicSiteHeader />
 
       <div className="container mx-auto max-w-4xl py-10 space-y-6">
         {isLoading && (
@@ -859,6 +848,7 @@ export default function AgentCalibrationPage() {
           </>
         )}
       </div>
+      <PublicSiteFooter />
     </div>
   );
 }
