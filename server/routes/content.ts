@@ -1981,6 +1981,7 @@ Sitemap: ${baseUrl}/sitemap.xml
       { path: '/leaderboard',            changefreq: 'daily',   priority: '0.9' },
       { path: '/compare',                changefreq: 'weekly',  priority: '0.7' },
       { path: '/stats',                  changefreq: 'daily',   priority: '0.8' },
+      { path: '/standard',               changefreq: 'monthly', priority: '0.9' },
       { path: '/docs',                   changefreq: 'monthly', priority: '0.8' },
       { path: '/mcp',                    changefreq: 'monthly', priority: '0.8' },
       { path: '/docs/trading',           changefreq: 'monthly', priority: '0.7' },
