@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 
 /**
  * Smoke-tests for the shared PublicSiteHeader / PublicSiteFooter rendered on
@@ -249,6 +249,61 @@ for (const route of ["/standard", "/agents"] as const) {
     });
   });
 }
+
+// ── 3c. More dropdown — exact Tab count to reach More button ────────────────
+//
+// This test pins the exact number of Tab presses required to reach
+// button-nav-more from document start on a fresh desktop-viewport page load.
+//
+// If a new focusable element (skip link, cookie banner, announcement bar) is
+// inserted before the nav, the count will change and this test will fail loudly,
+// alerting the author to check and update EXPECTED_TABS_TO_MORE below.
+//
+// Current focus order on a desktop 1280 px viewport (no optional elements):
+//   Tab 1 → logo anchor           (link-logo-home)
+//   Tab 2 → How it works anchor   (link-nav-how-it-works)
+//   Tab 3 → Standard anchor       (link-nav-standard)
+//   Tab 4 → More button           (button-nav-more)
+//
+// If this test fails after a deliberate header change, update the constant and
+// the comment above to reflect the new order, then re-verify keyboard UX by
+// hand before committing.
+const EXPECTED_TABS_TO_MORE = 4;
+
+/** Returns the number of Tab presses needed to focus button-nav-more,
+ *  or -1 when the element is not reached within `limit` presses. */
+async function countTabsToMoreButton(page: Page, limit = 20): Promise<number> {
+  for (let count = 1; count <= limit; count++) {
+    await page.keyboard.press("Tab");
+    const active = await page.evaluate(() =>
+      document.activeElement?.getAttribute("data-testid"),
+    );
+    if (active === "button-nav-more") return count;
+  }
+  return -1;
+}
+
+test.describe("public-site chrome — exact Tab count to More button", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test(
+    `More button is reached in exactly ${EXPECTED_TABS_TO_MORE} Tab presses from document start`,
+    async ({ page }) => {
+      await page.goto("/");
+      const count = await countTabsToMoreButton(page);
+      expect(
+        count,
+        `Expected exactly ${EXPECTED_TABS_TO_MORE} Tab presses to reach button-nav-more ` +
+          `but got ${count === -1 ? "not found within 20 presses" : count}. ` +
+          `A focusable element was likely added or removed before the More button in ` +
+          `client/src/components/public-site-chrome.tsx. ` +
+          `Update EXPECTED_TABS_TO_MORE in tests-e2e/public-nav-chrome.spec.ts to match ` +
+          `the new count (currently ${EXPECTED_TABS_TO_MORE}) and verify the keyboard ` +
+          `focus order is still correct before committing.`,
+      ).toBe(EXPECTED_TABS_TO_MORE);
+    },
+  );
+});
 
 // ── 4. Mobile viewport — primary action and language link accessible ─────────
 
