@@ -92,9 +92,17 @@ describe("Prove Before Act API", () => {
       expect(body.name_for_model).toBe("Prove Before Act");
       expect(body.description_for_human).toBeDefined();
       expect(body.description_for_model).toBeDefined();
+      expect(body.specification_url).toBe("https://provebeforeact.com/standard");
       expect(body.auth).toBeDefined();
       expect(body.api).toBeDefined();
       expect(body.api.type).toBe("openapi");
+    });
+
+    it("GET /.well-known/provebeforeact.json should link to the canonical PBA specification", async () => {
+      const res = await fetch(`${BASE_URL}/.well-known/provebeforeact.json`);
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.specification_url).toBe("https://provebeforeact.com/standard");
     });
   });
 

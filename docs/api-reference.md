@@ -853,7 +853,8 @@ These endpoints serve machine-readable metadata for AI agent discovery. All are 
 |----------|-------------|-------------|
 | `/.well-known/provebeforeact.md` | text/markdown | Full Prove Before Act specification document |
 | `/.well-known/proofmint.md` | redirect | Redirects to provebeforeact.md (backward compatibility) |
-| `/.well-known/ai-plugin.json` | application/json | OpenAI ChatGPT Plugin manifest |
+| `/.well-known/provebeforeact.json` | application/json | Unified discovery manifest; `specification_url` points to `https://provebeforeact.com/standard` |
+| `/.well-known/ai-plugin.json` | application/json | OpenAI ChatGPT Plugin manifest; `specification_url` points to `https://provebeforeact.com/standard` |
 | `/.well-known/mcp.json` | application/json | Model Context Protocol manifest |
 | `/.well-known/agent.json` | application/json | Agent Protocol manifest |
 | `/llms.txt` | text/plain | LLM-friendly service summary |
@@ -866,6 +867,9 @@ These endpoints serve machine-readable metadata for AI agent discovery. All are 
 | `/genesis.proof.json` | application/json | Genesis certification record |
 | `/learn/proof-of-existence.md` | text/markdown | Educational: proof of existence |
 | `/learn/verification.md` | text/markdown | Educational: verification guide |
+
+The JSON discovery manifests expose `specification_url` as the canonical URL for the
+Prove Before Act pattern definition: `https://provebeforeact.com/standard`.
 | `/learn/api.md` | text/markdown | Educational: API usage guide |
 | `/robots.txt` | text/plain | SEO and AI crawler hints |
 | `/sitemap.xml` | application/xml | Sitemap for search engines |

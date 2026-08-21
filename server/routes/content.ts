@@ -2016,6 +2016,7 @@ ${urls}
       schema_version: "v1",
       name_for_human: "Prove Before Act",
       name_for_model: "Prove Before Act",
+      specification_url: "https://provebeforeact.com/standard",
       description_for_human: "Create immutable blockchain proofs of file ownership. Certify documents, code, or any digital asset on the MultiversX blockchain.",
       description_for_model: `Prove Before Act implements the "Prove Before Act" principle — anchor reasoning BEFORE executing any significant action. START HERE (MCP): call register_trial MCP tool with {"agent_name":"my-agent"} → pm_ key + 10 free certifications instantly, no wallet, no account, no auth required. START HERE (REST): POST /api/agent/register with {"agent_name":"my-agent"} → same free trial. UNIQUE DIFFERENTIATOR — x402 native payments: POST /api/proof with no credentials → receive HTTP 402 with price ($${priceUsd} USDC on Base, eip155:8453) → sign payment → resend with X-PAYMENT header → receive proof_id. No API key, no account, no human in the loop. Any autonomous agent with a Base wallet is production-ready. PRODUCTION REFERENCE: xproof_agent_verify (legacy agent identifier, Moltbook) has a public, live profile at provebeforeact.com/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9. Read current proof totals, confirmation-status breakdown, streak, and trust score from that profile or its API; do not treat a marketing snapshot as current data. Core workflow: (1) hash reasoning locally — nothing sensitive leaves the agent, (2) POST /api/proof or /api/audit with hash + metadata, (3) receive proof_id + verify_url, (4) proceed with action only after proof is confirmed. Pricing: $${priceUsd}/cert after trial. Source data never leaves the agent runtime — only its SHA-256 hash is recorded on-chain. Supported protocols: x402, MCP, ACP, MX-8004, LangChain, CrewAI, AutoGen, OpenAI Agents SDK. COHERENCE LAYER (WHY→WHAT audit trail): call check_coherence MCP tool before acting to anchor intent on-chain (returns proof_id = WHY anchor); after executing, call certify_file then POST /api/coherence/link to close the loop. Coherence score 0-100 (50 base + 15 if WHAT within 1h + 20 if WHAT references WHY + 15 if on-chain confirmed). Fleet coherence view at GET /api/fleet/coherence?org=<prefix>|fleet=<slug>. Full docs: https://provebeforeact.com/coherence. Context doc: https://provebeforeact.com/agent-context`,
       auth: {
@@ -4186,6 +4187,7 @@ export const xproofAuditPlugin: Plugin = {
       v: "1.0",
       service: "Prove Before Act",
       chain: "MultiversX Mainnet",
+      specification_url: "https://provebeforeact.com/standard",
       quickstart: {
         trial: {
           note: `${TRIAL_QUOTA} free certifications — no wallet, no payment, no browser`,
