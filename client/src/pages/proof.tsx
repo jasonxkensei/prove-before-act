@@ -7,6 +7,7 @@ import { Shield, ExternalLink, Download, Copy, CheckCircle, Calendar, Hash, User
 import { format } from "date-fns";
 import { formatHash, copyToClipboard } from "@/lib/hashUtils";
 import { useToast } from "@/hooks/use-toast";
+import { PublicSiteFooter, PublicSiteHeader } from "@/components/public-site-chrome";
 import type { Certification } from "@shared/schema";
 import { safeHref } from "@shared/url";
 
@@ -94,17 +95,7 @@ export default function ProofPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between">
-          <a href="/" className="flex items-center gap-2" data-testid="link-logo-home">
-            <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
-          </a>
-          <Button asChild variant="outline" size="sm" data-testid="button-home-header">
-            <a href="/">Home</a>
-          </Button>
-        </div>
-      </header>
+      <PublicSiteHeader />
 
       <div className="container mx-auto max-w-4xl py-16">
         {/* Verification Badge */}
@@ -449,6 +440,7 @@ export default function ProofPage() {
           </p>
         </div>
       </div>
+      <PublicSiteFooter />
     </div>
   );
 }
