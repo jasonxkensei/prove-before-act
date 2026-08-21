@@ -29,8 +29,15 @@ import {
   Zap,
   Play,
   Network,
+  MoreHorizontal,
 } from "lucide-react";
 import { WalletLoginModal } from "@/components/wallet-login-modal";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { trackAgentCta, useAgentCtaExposure } from "@/lib/conversionTracking";
 import {
   Accordion,
@@ -261,32 +268,50 @@ export default function Landing() {
             <a href="#how-it-works" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-how-it-works">
               How it works
             </a>
-            <a href="/leaderboard" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-leaderboard">
-              Leaderboard
-            </a>
-            <a href="/stats" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-metrics">
-              Metrics
-            </a>
-            <a href="/docs" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-docs">
-              Docs
-            </a>
             <a href="/standard" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-standard">
               Standard
             </a>
-              <a href="/mcp" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-mcp">
-                MCP Server
-            </a>
-            <a href="/agent-context" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1" data-testid="link-nav-agent-context">
-              <Bot className="h-3.5 w-3.5" />
-              For Agents
-            </a>
-            <a href="/coherence" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-coherence">
-              Coherence
-            </a>
-            <a href="/founder" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-founder">Founder</a>
-            <a href="#faq" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-faq">
-              FAQ
-            </a>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+                  data-testid="button-nav-more"
+                >
+                  More
+                  <MoreHorizontal className="h-4 w-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem asChild>
+                  <a href="/docs" data-testid="link-nav-docs">API Docs</a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a href="/agents" data-testid="link-nav-agents">For AI Agents</a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a href="/agent-context" data-testid="link-nav-agent-context">Agent Context</a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a href="/mcp" data-testid="link-nav-mcp">MCP Server</a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a href="/leaderboard" data-testid="link-nav-leaderboard">Trust Leaderboard</a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a href="/stats" data-testid="link-nav-metrics">Metrics</a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a href="/coherence" data-testid="link-nav-coherence">Coherence</a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a href="/founder" data-testid="link-nav-founder">About the founder</a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a href="#faq" data-testid="link-nav-faq">FAQ</a>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <a
               href="#free-trial"
               className="text-sm font-medium text-primary bg-primary/10 hover:bg-primary/20 border border-primary/20 rounded-md px-3 py-1.5 transition-colors"
