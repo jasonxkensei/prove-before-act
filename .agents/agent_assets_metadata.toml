@@ -6,15 +6,74 @@ id = "R6NawBePX8WEQ-20A29PB"
 uri = "file://Prove Before Act-v140-clawhub-upload.zip"
 type = "unspecified"
 title = "Prove Before Act v1.4.0 — fichiers propres pour drag-drop Clawhub"
+logical_id = "b71f7725-9976-413c-a423-5b51286d2148"
 
 [[outputs]]
 id = "mUo_jH9jFr_TnVZ9hZu9a"
 uri = "file://Prove Before Act-v150-clawhub-upload.zip"
 type = "unspecified"
 title = "Prove Before Act v1.5.0 — doc complète + Section 0 Free Trial (drag-drop Clawhub)"
+logical_id = "8915b151-c6be-4b8e-a268-ac3005a310c0"
 
 [[outputs]]
 id = "dPrHaErY0Nc_SZXRoFYVe"
 uri = "file://Prove Before Act-skill-v4.zip"
 type = "unspecified"
 title = "Prove Before Act-skill-v4.zip — 12 fichiers (sans LICENSE)"
+logical_id = "97769d67-dcd8-42de-ab4f-d6da34a926f8"
+
+[[outputs]]
+id = "Ymq4hKDf88bYB2C0DaoEd"
+uri = "file://audit/interface-audit.md"
+type = "text"
+title = "ProveBeforeAct interface audit"
+description = "Read-only UX and visual audit, prioritized findings, and protected integration zones."
+logical_id = "9f9207cf-29ff-42d2-b5eb-fac8bd1d4297"
+content_hash = "sha256:edacf522d8ea23ecda4fbf191a16f88d27b4394627ee87e71d1f1363de08b6c8"
+size = 5994
+mtime_ms = 1788511741793
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/9f9207cf-29ff-42d2-b5eb-fac8bd1d4297/81c2a145-199c-4260-a559-fe90e7b5c9d6"
+storage_version_token = "1788511834593769"
+content_type = "text/markdown"
+
+[[outputs]]
+id = "-EiC3oUNvg7lBWfxldvV-"
+uri = "file://audit/design-system-proposal.md"
+type = "text"
+title = "ProveBeforeAct design system proposal"
+description = "Proposed visual direction, semantic foundations, components, responsive rules, and approval gate."
+logical_id = "eb2673f2-1def-4f65-a83e-90747cd83ea8"
+content_hash = "sha256:8dcbe8c0475d9898be5acca15ebeca578d864cb112b7c486c2b60a902fa1ba03"
+size = 6826
+mtime_ms = 1788511759625
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/eb2673f2-1def-4f65-a83e-90747cd83ea8/7ba087a5-a703-4395-815b-e50160eed258"
+storage_version_token = "1788511835212151"
+content_type = "text/markdown"
+
+[[outputs]]
+id = "hbJeuaNhNZOHlHhYZ85-n"
+uri = "file://audit/premium-home-desktop.jpg"
+type = "image"
+title = "Premium homepage — desktop"
+description = "Verified 1280px capture of the proposed accountability-infrastructure direction."
+logical_id = "6fdde2f5-84b7-4463-bdce-670b5ae0e050"
+content_hash = "sha256:6e24c1517db766f0ea3f51fb9ba7066454de963a631c7cfb6ecb718dc701272a"
+size = 75167
+mtime_ms = 1788511696005
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/6fdde2f5-84b7-4463-bdce-670b5ae0e050/cc81e2e3-2971-4a4a-b1ee-9a9771df0404"
+storage_version_token = "1788511835902320"
+content_type = "image/jpeg"
+
+[[outputs]]
+id = "oGNYfGiH-7v1ekPOTDezf"
+uri = "file://audit/premium-home-mobile.png"
+type = "image"
+title = "Premium homepage — mobile"
+description = "Verified 390px capture of the same responsive homepage concept."
+logical_id = "440b11a1-6023-42ef-a9e7-51d369844f3b"
+content_hash = "sha256:312a12df58cfe9d2fffed2558050c130e4a6b20eb72c6919b3025775a984d6d4"
+size = 48505
+mtime_ms = 1788511712293
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/440b11a1-6023-42ef-a9e7-51d369844f3b/95bc23ab-da9d-460e-b0b9-12f657be3087"
+storage_version_token = "1788511836838231"
+content_type = "image/png"
