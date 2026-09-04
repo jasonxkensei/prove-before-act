@@ -4,7 +4,7 @@ import { Link, Redirect } from "wouter";
 import { Activity, AlertTriangle, Bot, Clock3, ExternalLink, FileWarning, Loader2, ShieldCheck, Users } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useWalletAuth } from "@/hooks/useWalletAuth";
-import { trackEvent } from "@/lib/analytics";
+import { getFleetProofSummaryAttempt, trackEvent } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -129,7 +129,8 @@ export default function FleetOverviewPage() {
   const proofSummary = useQuery<ProofSummary>({
     queryKey: ["/api/fleet/agents", selectedAgent?.agent_id, "proof-summary"],
     enabled: Boolean(isAuthenticated && selectedAgent?.agent_id),
-    queryFn: async () => {
+    queryFn: async ({ client, queryKey }) => {
+      const attempt = getFleetProofSummaryAttempt(client.getQueryState(queryKey)?.fetchFailureCount ?? 0);
       try {
         const response = await fetch(`/api/fleet/agents/${encodeURIComponent(selectedAgent!.agent_id!)}/proof-summary`, { credentials: "include" });
         const body = await response.json().catch(() => ({}));
@@ -137,12 +138,14 @@ export default function FleetOverviewPage() {
         trackEvent("fleet_proof_summary_loaded", {
           location: "fleet_overview",
           outcome: "success",
+          attempt,
         });
         return body;
       } catch (error) {
         trackEvent("fleet_proof_summary_loaded", {
           location: "fleet_overview",
           outcome: "failure",
+          attempt,
         });
         throw error;
       }
