@@ -315,7 +315,12 @@ export function registerCalibrationRoutes(app: Express) {
         });
       } catch (err: any) {
         // Unique constraint violation — outcome already submitted for this proof
-        if (err?.code === "23505" || err?.message?.includes("unique")) {
+        const dbError = err?.cause ?? err;
+        if (
+          dbError?.code === "23505" ||
+          dbError?.message?.includes("unique") ||
+          err?.message?.includes("unique")
+        ) {
           return res.status(409).json({
             error: "OUTCOME_ALREADY_SUBMITTED",
             message: "An outcome has already been submitted for this proof. Each proof can only have one outcome.",

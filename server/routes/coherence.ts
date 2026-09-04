@@ -49,9 +49,11 @@ function linkResponse(check: typeof coherenceChecks.$inferSelect, alreadyLinked 
   return {
     // Canonical agent-facing response contract. Scores in persistence remain
     // 0–100 for existing fleet/history calculations, while this endpoint
-    // returns a portable 0–1 ratio.
+    // returns a portable 0–1 ratio. Expose the equivalent percentage
+    // explicitly as well so consumers never have to infer the score scale.
     coherence_id: check.id,
     coherence_score: score / 100,
+    coherence_score_percent: score,
     linked: true,
     success: true,
     ...(alreadyLinked ? { already_linked: true } : {}),

@@ -915,6 +915,8 @@ curl -X POST ${baseUrl}/api/coherence/link \\
 \`\`\`json
 {
   "success": true,
+  "coherence_score": 0.85,
+  "coherence_score_percent": 85,
   "coherence_check": {
     "id": "…", "why_proof_id": "…", "linked_proof_id": "…",
     "intent_hash": "…", "coherence_score": 85, "created_at": "ISO-8601"
@@ -930,7 +932,7 @@ curl -X POST ${baseUrl}/api/coherence/link \\
 }
 \`\`\`
 
-**Coherence score:** 50 base for linking + 15 if the WHAT was certified within 1h of the WHY + 20 if the WHAT's \`metadata.why_proof_id\` references the WHY + 15 if the WHAT is confirmed on-chain. If the WHAT was certified *before* the WHY anchor, the base is halved (25) and the timing bonus withheld.
+**Coherence score:** the top-level \`coherence_score\` is a 0–1 ratio (\`0.85\` above); \`coherence_score_percent\` is its explicit 0–100 equivalent (\`85\`). The nested legacy \`coherence_check.coherence_score\` also remains 0–100. Scoring is 50 base for linking + 15 if the WHAT was certified within 1h of the WHY + 20 if the WHAT's \`metadata.why_proof_id\` references the WHY + 15 if the WHAT is confirmed on-chain. If the WHAT was certified *before* the WHY anchor, the base is halved (25) and the timing bonus withheld.
 
 **Error cases:**
 
@@ -4943,7 +4945,7 @@ curl -X POST ${baseUrl}/api/coherence/link \\
   -d '{"why_proof_id": "<UUID from check_coherence>", "what_proof_id": "<UUID from certify_file>"}'
 \`\`\`
 
-Coherence score: 50 base + 15 if WHAT within 1h of WHY + 20 if WHAT \`metadata.why_proof_id\` references WHY + 15 if WHAT on-chain confirmed.
+Response score scales: top-level \`coherence_score\` is a 0–1 ratio; top-level \`coherence_score_percent\` and legacy \`coherence_check.coherence_score\` are 0–100. Coherence score: 50 base + 15 if WHAT within 1h of WHY + 20 if WHAT \`metadata.why_proof_id\` references WHY + 15 if WHAT on-chain confirmed.
 
 Unlinked WHY anchor: \`pending\` for <1h, then \`divergent\` after 1h; flagged as \`fault\` violation after 2h TTL — both lower public coherence rate.
 

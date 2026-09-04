@@ -77,3 +77,17 @@ mtime_ms = 1788511712293
 storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/440b11a1-6023-42ef-a9e7-51d369844f3b/95bc23ab-da9d-460e-b0b9-12f657be3087"
 storage_version_token = "1788511836838231"
 content_type = "image/png"
+
+[[outputs]]
+id = "hXSI9qCLiGm8HO7sO5f6H"
+uri = "file://attached_assets/moltbook_1773578013568.ts"
+type = "unspecified"
+title = "Bot Moltbook corrigé — Prove Before Act"
+description = "Version auditée avec WHY fail-closed, metadata sans chain-of-thought, confidence trail 0.60→0.80→1.00, cohérence, policy-check, outcome et incident-report."
+logical_id = "74ac3056-7dfa-41f0-a65e-56380fb23ad9"
+content_hash = "sha256:7bd62870ffe6a13694abe1534089bb7b34bd86ab5fdf66772f583c74537520aa"
+size = 163242
+mtime_ms = 1788536338883
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/74ac3056-7dfa-41f0-a65e-56380fb23ad9/2b3cbd7a-63c3-4653-bacc-201c3c239bc2"
+storage_version_token = "1788536445730112"
+content_type = "application/octet-stream"

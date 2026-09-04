@@ -197,6 +197,10 @@ describe("POST /api/coherence/link", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.success).toBe(true);
+    // The canonical top-level score is a ratio; the explicit percent field
+    // prevents consumers from mistaking 1 for 1%.
+    expect(body.coherence_score).toBe(1);
+    expect(body.coherence_score_percent).toBe(100);
     expect(body.coherence_check.coherence_score).toBe(100);
     expect(body.coherence_check.why_proof_id).toBe(whyId);
     expect(body.coherence_check.linked_proof_id).toBe(whatId);
@@ -220,6 +224,8 @@ describe("POST /api/coherence/link", () => {
     expect(body.success).toBe(true);
     expect(body.already_linked).toBe(true);
     // Score preserved from the original link.
+    expect(body.coherence_score).toBe(1);
+    expect(body.coherence_score_percent).toBe(100);
     expect(body.coherence_check.coherence_score).toBe(100);
   });
 
@@ -274,6 +280,11 @@ describe("POST /api/coherence/link", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.success).toBe(true);
+    // This WHAT is timely and confirmed but does not reference this REST WHY:
+    // 50 + 15 + 15 = 80. Assert both public score scales stay aligned.
+    expect(body.coherence_score).toBe(0.8);
+    expect(body.coherence_score_percent).toBe(80);
+    expect(body.coherence_check.coherence_score).toBe(80);
     expect(body.coherence_check.why_proof_id).toBe(whyRestId);
 
     // Verify the coherence_checks row was created.
