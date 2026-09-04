@@ -18,3 +18,4 @@
 - [Immutable release sources](github-raw-cache-after-api-writes.md) — build release bundles from immutable source revisions, not mutable branch references
 - [PBA positioning and adoption](positioning-and-adoption.md) — lead with pre-execution accountability and independent adoption; use “decision basis” instead of “reasoning”
 - [Drizzle composite FK introspection](drizzle-composite-fk-introspection.md) — stable 0.31 can churn composite FKs; use generated ownership keys when push idempotence matters
+- [Public route dual rendering](public-route-dual-rendering.md) — crawler prerenders can bypass React entirely; keep both representations aligned and test each delivery path

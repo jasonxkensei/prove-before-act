@@ -5,7 +5,6 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useWalletAuth } from "@/hooks/useWalletAuth";
-import { Loader2 } from "lucide-react";
 import Landing from "@/pages/landing";
 const LandingZh = lazy(() => import("@/pages/landing-zh"));
 
@@ -46,26 +45,29 @@ function Router() {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4">
-          <img src="/pba-logo.svg" alt="Prove Before Act" className="h-12 w-auto animate-pulse" />
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span>Loading...</span>
+      <div className="flex min-h-[100dvh] items-center justify-center bg-background px-6">
+        <div className="w-full max-w-xs space-y-5">
+          <img src="/pba-logo.svg" alt="Prove Before Act" className="h-10 w-auto animate-pulse" />
+          <div className="space-y-2" aria-label="Loading application">
+            <div className="skeleton-line h-2 w-full" />
+            <div className="skeleton-line h-2 w-2/3" />
           </div>
+          <p className="font-mono text-[0.68rem] uppercase tracking-[0.16em] text-muted-foreground">Restoring secure session</p>
         </div>
       </div>
     );
   }
 
   const fallback = (
-    <div className="flex h-screen items-center justify-center bg-background">
-      <div className="flex flex-col items-center gap-4">
-        <img src="/pba-logo.svg" alt="Prove Before Act" className="h-12 w-auto animate-pulse" />
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          <span>Loading...</span>
+    <div className="flex min-h-[100dvh] items-center justify-center bg-background px-6">
+      <div className="w-full max-w-xs space-y-5">
+        <img src="/pba-logo.svg" alt="Prove Before Act" className="h-10 w-auto animate-pulse" />
+        <div className="space-y-2" aria-label="Loading page">
+          <div className="skeleton-line h-2 w-full" />
+          <div className="skeleton-line h-2 w-2/3" />
+          <div className="skeleton-line h-20 w-full" />
         </div>
+        <p className="font-mono text-[0.68rem] uppercase tracking-[0.16em] text-muted-foreground">Loading evidence surface</p>
       </div>
     </div>
   );
@@ -99,8 +101,13 @@ function Router() {
            <Route path="/founder" component={JasonPage} />
           <Route path="/standard" component={StandardPage} />
           <Route path="/learn" component={LearnPage} />
+           <Route path="/mcp"><Redirect to="/docs" /></Route>
           <Route path="/fleet" component={FleetPage} />
-          <Route path="/fleets" component={FleetManagePage} />
+           <Route path="/fleets"><Redirect to="/fleet" /></Route>
+           <Route path="/dashboard"><Redirect to="/" /></Route>
+           <Route path="/certify"><Redirect to="/" /></Route>
+           <Route path="/settings"><Redirect to="/" /></Route>
+           <Route path="/fleet/overview"><Redirect to="/" /></Route>
           {/* /stats shows public platform metrics (unauthenticated /api/stats endpoint).
               Accessible without login — admin-only sections are protected server-side via
               requireAdmin on /api/admin/* routes and simply don't render for non-admins. */}
@@ -108,9 +115,7 @@ function Router() {
           <Route path="/admin">
             <Redirect to="/" />
           </Route>
-          <Route>
-            <Redirect to="/" />
-          </Route>
+           <Route component={NotFound} />
 
         </Switch>
       </Suspense>
@@ -149,6 +154,7 @@ function Router() {
          <Route path="/founder" component={JasonPage} />
         <Route path="/standard" component={StandardPage} />
         <Route path="/learn" component={LearnPage} />
+         <Route path="/mcp"><Redirect to="/docs" /></Route>
         <Route path="/fleet" component={FleetPage} />
         <Route path="/fleets" component={FleetManagePage} />
         <Route path="/fleet/overview" component={FleetOverviewPage} />

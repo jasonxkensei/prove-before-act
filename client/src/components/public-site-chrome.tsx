@@ -30,6 +30,7 @@ export function PublicSiteHeader({
 }: PublicSiteHeaderProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const headerRef = useRef<HTMLElement>(null);
+  const mobileTriggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const existingTarget = document.getElementById("main-content");
@@ -48,6 +49,17 @@ export function PublicSiteHeader({
       if (assignedTabIndex && target.tabIndex === -1) target.removeAttribute("tabindex");
     };
   }, []);
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMobileOpen(false);
+        mobileTriggerRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [mobileOpen]);
   const headerClass = paper
     ? "border-[hsl(40_13%_78%)] bg-[hsl(42_28%_94%)]/95 text-[hsl(42_18%_18%)]"
     : "border-border/80 bg-background/95 supports-[backdrop-filter]:bg-background/80";
@@ -92,7 +104,6 @@ export function PublicSiteHeader({
               <DropdownMenuLabel>Developers</DropdownMenuLabel>
               <DropdownMenuItem asChild><a href="/docs">API Docs</a></DropdownMenuItem>
               <DropdownMenuItem asChild><a href="/agent-context">Agent Context</a></DropdownMenuItem>
-              <DropdownMenuItem asChild><a href="/mcp">MCP Server</a></DropdownMenuItem>
               <DropdownMenuItem asChild><a href="/coherence">Coherence</a></DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild><a href="/founder">About the founder</a></DropdownMenuItem>
@@ -130,6 +141,7 @@ export function PublicSiteHeader({
             </Button>
           )}
           <button
+             ref={mobileTriggerRef}
             type="button"
             className={`touch-target inline-flex items-center justify-center rounded-md border md:hidden ${paper ? "border-[hsl(40_13%_78%)]" : "border-border"}`}
             aria-expanded={mobileOpen}
@@ -150,7 +162,7 @@ export function PublicSiteHeader({
             <div className={`mt-2 px-3 pb-1 font-mono text-[0.65rem] uppercase tracking-[0.16em] ${paper ? "text-[hsl(40_9%_42%)]" : "text-muted-foreground"}`}>Explore</div>
             {[
               ["/learn", "60-second overview"], ["/agents", "For AI Agents"], ["/leaderboard", "Trust Leaderboard"], ["/stats", "Metrics"],
-              ["/docs", "API Docs"], ["/agent-context", "Agent Context"], ["/mcp", "MCP Server"], ["/coherence", "Coherence"],
+               ["/docs", "API Docs"], ["/agent-context", "Agent Context"], ["/coherence", "Coherence"],
               ["/founder", "About the founder"], ["/#faq", "FAQ"],
             ].map(([href, label]) => (
               <a key={href} href={href} className={mobileLinkClass} onClick={() => setMobileOpen(false)}>{label}</a>
@@ -200,7 +212,6 @@ export function PublicSiteFooter({ paper = false }: { paper?: boolean }) {
             <ul className={`space-y-2 text-sm ${muted}`}>
               <li><a href="/docs" className="transition-colors hover:text-primary">API Docs</a></li>
               <li><a href="/agent-context" className="transition-colors hover:text-primary">Agent Context</a></li>
-              <li><a href="/mcp" className="transition-colors hover:text-primary">MCP Server</a></li>
               <li><a href="/legal/privacy" className="transition-colors hover:text-primary">Privacy</a></li>
               <li><a href="/legal/terms" className="transition-colors hover:text-primary">Terms</a></li>
             </ul>

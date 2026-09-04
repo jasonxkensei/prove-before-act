@@ -1838,14 +1838,63 @@ function renderCoherencePage(baseUrl: string, priceUsd: number): string {
     "Anchor a declared decision basis before acting. xProof's check_coherence tool records intent, context, and decision without requesting internal chain-of-thought, then links it to the verified outcome.",
     `${baseUrl}/coherence`,
   ) + `
+<style>
+  :root { color-scheme: dark; }
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; background: #111612; }
+  body { margin: 0; min-width: 320px; overflow-x: hidden; background: #111612; color: #e8ebe5; font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif; font-size: 16px; line-height: 1.65; }
+  a { color: #8ef2bd; } a:hover { color: #b1ffd0; }
+  :focus-visible { outline: 2px solid #8ef2bd; outline-offset: 3px; }
+  .coherence-shell { min-height: 100vh; }
+  .coherence-skip { position: absolute; left: 1rem; top: -5rem; z-index: 10; padding: .65rem .9rem; border-radius: 4px; background: #8ef2bd; color: #102119; font-weight: 700; text-decoration: none; }
+  .coherence-skip:focus { top: 1rem; }
+  .coherence-header { border-bottom: 1px solid #303832; background: rgba(17,22,18,.95); padding: 0 1.25rem; }
+  .coherence-nav { display: flex; align-items: center; justify-content: space-between; gap: 1rem; max-width: 1040px; min-height: 64px; margin: 0 auto; }
+  .coherence-brand { color: #e8ebe5; text-decoration: none; font-weight: 700; letter-spacing: -.02em; }
+  .coherence-brand-mark { color: #8ef2bd; margin-right: .45rem; }
+  .coherence-links { display: flex; align-items: center; gap: 1.15rem; font-size: .88rem; }
+  .coherence-links a { color: #aeb7af; text-decoration: none; }
+  .coherence-links a:hover { color: #b1ffd0; }
+  .coherence-main { max-width: 1040px; margin: 0 auto; padding: 2.5rem 1.25rem 5rem; }
+  .coherence-main h1, .coherence-main h2, .coherence-main h3 { color: #f0f5f1; line-height: 1.18; }
+  .coherence-main h1 { max-width: 780px; margin: 0 0 .8rem; font-size: clamp(2rem, 5vw, 3.45rem); letter-spacing: -.045em; }
+  .coherence-main h2 { margin: 3.4rem 0 1rem; padding-top: 1.45rem; border-top: 1px solid #303832; font-size: clamp(1.25rem, 3vw, 1.65rem); letter-spacing: -.025em; }
+  .coherence-main h3 { margin: 2rem 0 .75rem; font-size: 1.05rem; }
+  .coherence-main p { max-width: 72ch; margin: 0 0 1.15rem; color: #b4c0b6; }
+  .coherence-kicker { margin: 0 0 .6rem; color: #8ef2bd; font-family: "DM Mono", ui-monospace, monospace; font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; }
+  .coherence-lede { max-width: 70ch; color: #c2cec4 !important; font-size: 1.08rem; }
+  .coherence-table-scroll { max-width: 100%; overflow-x: auto; margin-bottom: 1.5rem; border: 1px solid #303832; background: #171f19; -webkit-overflow-scrolling: touch; }
+  .coherence-table-scroll table { min-width: 680px; margin: 0 !important; }
+  .coherence-table-scroll th { background: #202b23; color: #8ef2bd; }
+  .coherence-table-scroll th, .coherence-table-scroll td { border-color: #303832 !important; color: #c4cec5; }
+  .coherence-main code, .coherence-main pre { font-family: "DM Mono", ui-monospace, monospace; }
+  .coherence-main code { color: #b5f0c9; background: #19271e; border: 1px solid #303832; border-radius: 3px; padding: .12em .35em; font-size: .88em; overflow-wrap: anywhere; }
+  .coherence-main pre { max-width: 100%; overflow-x: auto !important; overflow-wrap: anywhere; white-space: pre-wrap !important; word-break: break-word; background: #101a14 !important; color: #c9d7cc !important; border: 1px solid #303832; border-left: 3px solid #8ef2bd; border-radius: 5px; -webkit-overflow-scrolling: touch; }
+  .coherence-footer { border-top: 1px solid #303832; padding: 2rem 1.25rem; color: #849389; font-size: .88rem; }
+  .coherence-footer-inner { max-width: 1040px; margin: 0 auto; }
+  @media (max-width: 600px) { .coherence-header { padding: 0 1rem; } .coherence-nav { min-height: 58px; } .coherence-links { gap: .75rem; font-size: .8rem; } .coherence-main { padding: 2rem 1rem 3.5rem; } .coherence-main h1 { font-size: 2.15rem; } }
+</style>
 <body>
-<main style="font-family:Inter,sans-serif;max-width:860px;margin:0 auto;padding:2rem 1.5rem;color:#111">
-<nav style="margin-bottom:2rem"><a href="${escapeHtml(baseUrl)}" style="color:#10b981;text-decoration:none;font-weight:600">← Prove Before Act</a></nav>
+<div class="coherence-shell">
+<a class="coherence-skip" href="#main-content">Skip to main content</a>
+<header class="coherence-header">
+  <nav class="coherence-nav" aria-label="Primary navigation">
+    <a class="coherence-brand" href="${escapeHtml(baseUrl)}"><span class="coherence-brand-mark">●</span>Prove Before Act</a>
+    <div class="coherence-links">
+      <a href="${escapeHtml(baseUrl)}/agent-context">For agents</a>
+      <a href="${escapeHtml(baseUrl)}/docs">Docs</a>
+      <a href="${escapeHtml(baseUrl)}/leaderboard">Leaderboard</a>
+    </div>
+  </nav>
+</header>
+<main id="main-content" class="coherence-main" tabindex="-1">
+<p class="coherence-kicker">Pre-execution evidence · coherence layer</p>
 
 <h1 style="font-size:2rem;font-weight:700;margin-bottom:.5rem">Coherence Layer — Prove Before Act</h1>
-<p style="color:#555;font-size:1.1rem;margin-bottom:2rem">Close the loop between intent and result. Before acting, declare and anchor your <strong>WHY</strong> — the chosen intent, context, and decision basis, never internal chain-of-thought. Anchor your <strong>WHAT</strong> after, then link the pair to produce a public, on-chain coherence score.</p>
+<p class="coherence-lede">Close the loop between intent and result. Before acting, declare and anchor your <strong>WHY</strong> — the chosen intent, context, and decision basis. Anchor your <strong>WHAT</strong> after, then link the pair to produce a public, on-chain coherence score.</p>
 
 <h2>Full 4W loop</h2>
+<div class="coherence-table-scroll">
 <table style="width:100%;border-collapse:collapse;margin-bottom:1.5rem">
 <thead><tr style="background:#f3f4f6">
   <th style="padding:.6rem 1rem;text-align:left;border:1px solid #e5e7eb">W</th>
@@ -1860,6 +1909,7 @@ function renderCoherencePage(baseUrl: string, priceUsd: number): string {
   <tr><td style="padding:.5rem 1rem;border:1px solid #e5e7eb"><strong>WHEN</strong></td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">MultiversX timestamp</td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">Automatic</td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">Immutable block timestamp</td></tr>
 </tbody>
 </table>
+</div>
 
 <h2>check_coherence — Anchor a declared decision basis before acting</h2>
 <p>xProof&apos;s MCP tool implements the Prove Before Act pattern. Call it BEFORE executing any significant action. Pass a declared <code>intent</code>, <code>context</code>, and <code>decision</code>; do not provide internal chain-of-thought.</p>
@@ -1901,6 +1951,13 @@ GET ${escapeHtml(baseUrl)}/api/fleet/coherence?fleet=&lt;slug&gt;</code></pre>
   <li><a href="${escapeHtml(baseUrl)}/fleet" style="color:#10b981">Fleet view</a> — interactive fleet coherence dashboard</li>
 </ul>
 </main>
+<footer class="coherence-footer">
+  <div class="coherence-footer-inner">
+    Prove Before Act · independently verifiable evidence for autonomous agents ·
+    <a href="${escapeHtml(baseUrl)}/standard">Read the standard</a>
+  </div>
+</footer>
+</div>
 </body></html>`;
 }
 

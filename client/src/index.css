@@ -77,16 +77,18 @@
 
 @layer base {
   * { @apply border-border; }
-  html { scroll-behavior: smooth; }
-  body { @apply font-sans antialiased bg-background text-foreground; }
+  html { scroll-behavior: smooth; background: hsl(var(--background)); }
+  body { @apply font-sans antialiased bg-background text-foreground; min-width: 0; overflow-x: hidden; }
   button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
   :focus-visible { @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-background; }
+  ::selection { background: hsl(var(--primary) / .24); color: hsl(var(--foreground)); }
+  a { text-underline-offset: 0.2em; }
 }
 
 @layer components {
   .page-shell { @apply min-h-[100dvh] bg-background text-foreground; }
   .page-container { @apply container mx-auto w-full; }
-  .panel { @apply rounded-md border border-card-border bg-card; }
+  .panel { @apply rounded-md border border-card-border bg-card shadow-sm; }
   .panel-inset { @apply rounded-md border border-border/70 bg-background/60; }
   .evidence-surface {
     color: hsl(42 18% 18%);
@@ -108,6 +110,15 @@
   }
   .contained-hash { @apply break-all font-mono text-xs tracking-tight text-muted-foreground; }
   .touch-target { @apply min-h-11 min-w-11; }
+  .operational-header { @apply sticky top-0 z-50 border-b border-border/80 bg-background/95 backdrop-blur; }
+  .operational-nav { @apply flex items-center gap-1 rounded-md border border-border/70 bg-card/70 p-1; }
+  .metric-strip { @apply grid grid-cols-2 divide-x divide-y divide-border overflow-hidden rounded-md border border-border/80 bg-card sm:grid-cols-4 sm:divide-y-0; }
+  .metric-cell { @apply min-w-0 p-4 sm:p-5; }
+  .metric-label { @apply font-mono text-[0.65rem] uppercase tracking-[0.14em] text-muted-foreground; }
+  .metric-value { @apply mt-1 text-2xl font-semibold tabular-nums tracking-tight; }
+  .evidence-rule { @apply border-l-2 border-primary bg-primary/5 px-4 py-3; }
+  .state-panel { @apply rounded-md border border-border/80 bg-card/60 p-8 text-center; }
+  .skeleton-line { @apply animate-pulse rounded-sm bg-muted; }
 }
 
 @layer utilities {

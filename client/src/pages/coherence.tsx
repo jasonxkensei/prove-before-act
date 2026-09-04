@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PublicSiteFooter, PublicSiteHeader } from "@/components/public-site-chrome";
 import {
   Bot,
   Zap,
@@ -48,40 +49,10 @@ function CodeBlock({ code, lang = "bash" }: { code: string; lang?: string }) {
 
 export default function CoherencePage() {
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between">
-          <a href="/" className="flex items-center gap-2">
-            <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
-          </a>
-          <nav className="hidden md:flex items-center gap-6">
-            <a href="/" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-              Home
-            </a>
-            <a href="/agent-context" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
-              <Bot className="h-3.5 w-3.5" />
-              For Agents
-            </a>
-            <a href="/docs" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-              Docs
-            </a>
-            <a href="/leaderboard" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-              Leaderboard
-            </a>
-          </nav>
-          <div className="flex items-center gap-3">
-            <Button asChild size="sm">
-              <a href="/#free-trial">
-                Start free
-                <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-              </a>
-            </Button>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-[100dvh] overflow-x-hidden bg-background text-foreground">
+      <PublicSiteHeader primaryActionHref="/#free-trial" primaryActionLabel="Start free" />
 
-      <main>
+      <main id="main-content" tabIndex={-1}>
         {/* ── Hero ──────────────────────────────────────────────────────────── */}
         <section className="container pt-16 pb-20 md:pt-24 md:pb-28">
           <div className="mx-auto max-w-4xl text-center">
@@ -670,6 +641,7 @@ print(f"WHAT: https://provebeforeact.com/proof/{what_resp['proof_id']}")`}
           </div>
         </section>
       </main>
+      <PublicSiteFooter />
     </div>
   );
 }
