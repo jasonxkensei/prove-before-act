@@ -346,8 +346,79 @@ export default function Landing() {
         </div>
         <div className="mt-16 flex flex-wrap items-center justify-between gap-4 border-y border-[#303832] py-6 font-mono text-[10px] tracking-[.1em] text-[#69766c]"><span>OBSERVE</span><b>→</b><span>DECIDE</span><b>→</b><strong className="text-[#8ef2bd]">PROVE</strong><b>→</b><span>ACT</span><b>→</b><strong className="text-[#8ef2bd]">PROVE</strong></div>
       </section>
+      <section id="why-now" className="border-b border-[#303832] bg-[#101511] px-5 py-20 md:px-[10vw] md:py-28" data-testid="section-why-now">
+        <div className="mx-auto max-w-6xl">
+          <div className="font-mono text-[10px] tracking-[.14em] text-[#8ef2bd]">02 / WHY NOW</div>
+          <div className="mt-10 grid gap-12 lg:grid-cols-[.82fr_1.18fr] lg:gap-20">
+            <div>
+              <h2 className="max-w-xl text-4xl font-semibold leading-[.98] tracking-[-.05em] md:text-6xl">
+                Evidence cannot be created
+                <br />
+                <span className="font-serif font-normal italic text-[#8ef2bd]">after the fact.</span>
+              </h2>
+              <p className="mt-7 max-w-md text-[15px] leading-7 text-[#9da89e]">
+                The right time to build an accountability record is before a client, auditor, insurer, or regulator asks for one.
+              </p>
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row lg:flex-col lg:items-start xl:flex-row">
+                <Button
+                  asChild
+                  className="border-[#8ef2bd] bg-[#8ef2bd] text-[#102119] hover:bg-[#b1ffd0]"
+                  data-testid="button-why-now-first-proof"
+                >
+                  <a
+                    href="/agents"
+                    onClick={() => trackAgentCta("cta_clicked", "landing", "why_now_first_proof")}
+                  >
+                    Run your first proof <ArrowRight className="ml-2 h-4 w-4" />
+                  </a>
+                </Button>
+                <Button
+                  asChild
+                  variant="outline"
+                  className="border-[#56635b] bg-transparent text-[#e8ebe5] hover:border-[#8ef2bd] hover:bg-transparent hover:text-[#8ef2bd]"
+                  data-testid="button-why-now-standard"
+                >
+                  <a href="/standard">Inspect the standard</a>
+                </Button>
+              </div>
+            </div>
+
+            <ol className="border-t border-[#303832]">
+              {[
+                {
+                  number: "01",
+                  title: "The downside is asymmetric.",
+                  body: `A first integration is small and predictable: 10 free proofs, then the live rate is ${price}/proof. Waiting costs nothing—until someone asks for evidence that was never created. At that point, it cannot be reconstructed.`,
+                },
+                {
+                  number: "02",
+                  title: "The proof must precede the incident.",
+                  body: "A record written after a dispute shows what you say happened. A commitment anchored before execution proves what the agent declared before it acted. The timestamp is the value.",
+                },
+                {
+                  number: "03",
+                  title: "A verifiable history compounds.",
+                  body: "Operators that start now build a durable record across decisions and outcomes. When accountability becomes a requirement, they can show history—not a compliance process that began yesterday.",
+                },
+              ].map((argument) => (
+                <li
+                  key={argument.number}
+                  className="grid gap-4 border-b border-[#303832] py-7 sm:grid-cols-[42px_1fr] sm:gap-6"
+                  data-testid={`why-now-argument-${argument.number}`}
+                >
+                  <span className="font-mono text-[10px] tracking-[.12em] text-[#5f6d63]">{argument.number}</span>
+                  <div>
+                    <h3 className="text-lg font-semibold tracking-[-.02em] text-[#e8ebe5]">{argument.title}</h3>
+                    <p className="mt-2 max-w-2xl text-sm leading-6 text-[#88948b]">{argument.body}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </div>
+      </section>
       <section id="loop" className="border-b border-[#303832] bg-[#e3e6dd] px-5 py-20 text-[#172019] md:px-[10vw] md:py-28">
-        <div className="font-mono text-[10px] tracking-[.14em] text-[#287650]">02 / THE CANONICAL LOOP</div>
+        <div className="font-mono text-[10px] tracking-[.14em] text-[#287650]">03 / THE CANONICAL LOOP</div>
         <div className="mt-10 flex flex-col justify-between gap-5 md:flex-row md:items-end"><h2 className="text-4xl font-semibold leading-none tracking-[-.05em] md:text-6xl">A commitment is not<br /><span className="font-serif font-normal italic">a transcript.</span></h2><p className="max-w-md text-[15px] leading-7 text-[#56635a]">Declare the basis that can be inspected. Keep private cognition private. Make the boundary between intent and action public.</p></div>
         <div className="mt-12 grid border border-[#aeb8ae] md:grid-cols-5">
           {["Collect the relevant state.", "Declare the decision basis.", "Anchor the commitment.", "Execute the approved action.", "Record the outcome."].map((lead, i) => <div key={lead} className={`min-h-[170px] border-b border-[#aeb8ae] p-5 last:border-0 md:border-b-0 md:border-r md:last:border-r-0 ${i === 2 ? "bg-[#18241d] text-[#e8ebe5]" : ""}`}><span className="font-mono text-[11px] text-[#64806d]">0{i + 1}</span><h3 className="my-6 font-mono text-sm tracking-[.05em]">{["OBSERVE", "DECIDE", "PROVE", "ACT", "PROVE"][i]}</h3><strong className="text-[13px]">{lead}</strong><p className={`mt-2 text-xs leading-5 ${i === 2 ? "text-[#a0ada3]" : "text-[#6d796f]"}`}>{["Signals, files, balances, permissions.", "A concise, inspectable justification.", "Hash, timestamp, actor, issuer.", "The commitment travels with the action.", "Close the loop with what happened."][i]}</p></div>)}

@@ -235,6 +235,26 @@ async function renderHomePage(baseUrl: string): Promise<string> {
     <a href="${baseUrl}/certify">Verify a local file</a>
   </section>
 
+  <section id="why-now">
+    <h2>Why integrate before anyone requires it?</h2>
+    <p><strong>Evidence cannot be created after the fact.</strong> The right time to build an accountability record is before a client, auditor, insurer, or regulator asks for one.</p>
+    <ol>
+      <li>
+        <h3>The downside is asymmetric</h3>
+        <p>A first integration is small and predictable: 10 free proofs, then the current live rate is $${priceUsd.toFixed(2)} per proof. Waiting costs nothing until someone asks for evidence that was never created. At that point, it cannot be reconstructed.</p>
+      </li>
+      <li>
+        <h3>The proof must precede the incident</h3>
+        <p>A record written after a dispute shows what you say happened. A commitment anchored before execution proves what the agent declared before it acted. The timestamp is the value.</p>
+      </li>
+      <li>
+        <h3>A verifiable history compounds</h3>
+        <p>Operators that start now build a durable record across decisions and outcomes. When accountability becomes a requirement, they can show history—not a compliance process that began yesterday.</p>
+      </li>
+    </ol>
+    <p><a href="${baseUrl}/agents">Run your first proof</a> · <a href="${baseUrl}/standard">Inspect the Prove Before Act standard</a></p>
+  </section>
+
   <section>
     <h2>How pre-execution evidence works</h2>
     <p>Build a verifiable trail around the declared decision basis, intended action, and outcome that matter.</p>

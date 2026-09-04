@@ -9,6 +9,7 @@ export const CTA_EVENT_NAMES = ["cta_seen", "cta_clicked"] as const;
 export const CTA_PAGES = ["landing", "landing_zh", "leaderboard"] as const;
 export const CTA_NAMES = [
   "hero_free_trial",
+  "why_now_first_proof",
   "trial_register",
   "leaderboard_register",
 ] as const;
