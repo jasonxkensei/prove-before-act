@@ -6,8 +6,7 @@ Certify every LLM call, query, and tool invocation from your LlamaIndex pipeline
 
 ```bash
 # Canonical distribution; `xproof` imports below are legacy module aliases.
-pip install prove-before-act[llamaindex]
-# or: pip install prove-before-act llama-index-core
+pip install prove-before-act llama-index-core
 ```
 
 ## Quick Start

@@ -43,9 +43,6 @@ dev = [
     "types-requests>=2.25.0",
     "pre-commit>=3.0",
 ]
-llamaindex = [
-    "llama-index-core>=0.14.20",
-]
 autogen = [
     "pyautogen>=0.2.0",
 ]
