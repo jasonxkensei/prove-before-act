@@ -4,6 +4,7 @@ import { Link, Redirect } from "wouter";
 import { Activity, AlertTriangle, Bot, Clock3, ExternalLink, FileWarning, Loader2, ShieldCheck, Users } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useWalletAuth } from "@/hooks/useWalletAuth";
+import { trackEvent } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -129,10 +130,22 @@ export default function FleetOverviewPage() {
     queryKey: ["/api/fleet/agents", selectedAgent?.agent_id, "proof-summary"],
     enabled: Boolean(isAuthenticated && selectedAgent?.agent_id),
     queryFn: async () => {
-      const response = await fetch(`/api/fleet/agents/${encodeURIComponent(selectedAgent!.agent_id!)}/proof-summary`, { credentials: "include" });
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.message || "Unable to load proof summary.");
-      return body;
+      try {
+        const response = await fetch(`/api/fleet/agents/${encodeURIComponent(selectedAgent!.agent_id!)}/proof-summary`, { credentials: "include" });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(body.message || "Unable to load proof summary.");
+        trackEvent("fleet_proof_summary_loaded", {
+          location: "fleet_overview",
+          outcome: "success",
+        });
+        return body;
+      } catch (error) {
+        trackEvent("fleet_proof_summary_loaded", {
+          location: "fleet_overview",
+          outcome: "failure",
+        });
+        throw error;
+      }
     },
   });
 
@@ -276,7 +289,10 @@ export default function FleetOverviewPage() {
                                 variant="outline"
                                 size="sm"
                                 className="col-span-2 mt-1 w-full border-[#526158] bg-transparent text-[#e8ebe5] hover:bg-[#202b23] hover:text-white"
-                                onClick={() => setSelectedAgent(agent)}
+                                onClick={() => {
+                                  trackEvent("fleet_proof_summary_opened", { location: "fleet_overview" });
+                                  setSelectedAgent(agent);
+                                }}
                                 data-testid={`fleet-overview-open-summary-${agent.agent_id}`}
                               >
                                 Open proof summary <ExternalLink className="ml-2 h-4 w-4" aria-hidden="true" />
