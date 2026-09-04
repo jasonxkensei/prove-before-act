@@ -90,6 +90,41 @@ describe("pending_outcome_count — cross-tab refresh (server half of the fix)",
     await pool.query(`DELETE FROM users WHERE wallet_address = $1`, [TEST_WALLET]);
   });
 
+  it("counts a public pending proof without disclosing a private one owned by the same public-profile user", async () => {
+    const visibilityWallet = "erd1calibrationvisibility00000000000000000000000000000000000000000";
+    const userRow = await pool.query<{ id: string }>(
+      `INSERT INTO users (wallet_address, is_public_profile)
+       VALUES ($1, TRUE)
+       RETURNING id`,
+      [visibilityWallet],
+    );
+    const visibilityUserId = userRow.rows[0].id;
+
+    try {
+      await pool.query(
+        `INSERT INTO certifications
+           (user_id, file_name, file_hash, blockchain_status, is_public, metadata)
+         VALUES
+           ($1, 'public-pending.txt', $2, 'confirmed', TRUE,
+            jsonb_build_object('confidence_level', 0.81::float)),
+           ($1, 'private-pending.txt', $3, 'confirmed', FALSE,
+            jsonb_build_object('confidence_level', 0.64::float))`,
+        [
+          visibilityUserId,
+          crypto.randomBytes(16).toString("hex"),
+          crypto.randomBytes(16).toString("hex"),
+        ],
+      );
+
+      const response = await fetch(`${BASE_URL}/api/agent/calibration/${visibilityUserId}`);
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as { pending_outcome_count: number };
+      expect(body.pending_outcome_count).toBe(1);
+    } finally {
+      await pool.query(`DELETE FROM users WHERE id = $1`, [visibilityUserId]);
+    }
+  });
+
   it("a fresh GET (simulating tab B regaining focus) reflects the outcome submitted by tab A", async () => {
     // Insert a pending cert for the owner.
     const uniqueHash = crypto.randomBytes(16).toString("hex");

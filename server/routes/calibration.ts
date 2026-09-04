@@ -490,17 +490,16 @@ export function registerCalibrationRoutes(app: Express) {
         return res.json(cached.body);
       }
 
-      // Count certifications that carry metadata.confidence_level but have no
-      // submitted outcome yet — surfaced on the public profile as an actionable
-      // "pending outcomes" prompt for the owner. This is safe to expose here:
-      // the endpoint already gates on isPublicProfile above, so private
-      // accounts 404 in full and this count only ever describes a public
-      // profile's own pending certifications (no private-account side channel).
+      // Count public certifications that carry metadata.confidence_level but
+      // have no submitted outcome yet. The public-profile gate above protects
+      // account visibility; c.is_public separately prevents this aggregate from
+      // revealing the existence of the owner's private certifications.
       const pendingResult = await pool.query<{ cnt: string }>(
         `SELECT COUNT(*) AS cnt
          FROM certifications c
          LEFT JOIN agent_outcomes ao ON ao.certification_id = c.id
          WHERE c.user_id = $1
+           AND c.is_public = TRUE
            AND c.metadata->>'confidence_level' IS NOT NULL
            AND ao.id IS NULL`,
         [user.id]
