@@ -134,6 +134,9 @@ export function registerAcpRoutes(app: Express) {
       // Check if the API key owner is an admin wallet
       let acpAdminExempt = false;
       const acpApiKey = (req as any).apiKey;
+      // validateApiKey resolves this from the authenticated key only. Keep it separate
+      // from buyer fields and checkout metadata, neither of which is attribution input.
+      const requestAgentId = (req as any).agentId as string | undefined;
       const requestingUserId = acpApiKey?.userId || null;
       if (acpApiKey?.userId) {
         const ownerWallet = await getApiKeyOwnerWallet(acpApiKey);
@@ -467,6 +470,7 @@ export function registerAcpRoutes(app: Express) {
                 blockchainStatus: "pending",
                 isPublic: true,
                 authMethod: "acp",
+                ...(requestAgentId ? { agentId: requestAgentId } : {}),
                 ...(data.inputs.metadata ? { metadata: data.inputs.metadata } : {}),
               })
               .returning({ id: certifications.id });
@@ -911,6 +915,9 @@ export function registerAcpRoutes(app: Express) {
               transactionUrl: `${explorerUrl}/transactions/${data.tx_hash}`,
               blockchainStatus: "confirmed",
               authMethod: "acp",
+              // Deliberately do not write agentId here. The pending reservation
+              // carries the checkout-time authenticated agent attribution, and a
+              // confirm caller may be a different authenticated agent.
             })
             .where(
               and(
@@ -975,6 +982,15 @@ export function registerAcpRoutes(app: Express) {
         // Legacy path: checkout predates the reservation mechanism — INSERT the certification row.
         // This can still fail if a concurrent non-ACP route claimed the fileHash, in which case
         // we surface a clear error rather than silently failing with a 500.
+        // A confirm may be authenticated with an API key belonging to a different account than
+        // the checkout owner. Only attribute this new legacy row when validateApiKey's
+        // owner-safe resolved agent belongs to the owner retained on the checkout.
+        const currentValidatedAgent = (req as any).agent as
+          | { id?: string; ownerAccountId?: string }
+          | undefined;
+        const legacyAgentId = currentValidatedAgent?.ownerAccountId === acpOwnerId
+          ? currentValidatedAgent.id
+          : undefined;
         try {
           const [inserted] = await db
             .insert(certifications)
@@ -989,6 +1005,7 @@ export function registerAcpRoutes(app: Express) {
               blockchainStatus: "confirmed",
               isPublic: true,
               authMethod: "acp",
+              ...(legacyAgentId ? { agentId: legacyAgentId } : {}),
             })
             .returning();
           certification = inserted;

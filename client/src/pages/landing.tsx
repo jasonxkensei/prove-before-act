@@ -213,6 +213,7 @@ export default function Landing() {
     trial?: { remaining?: number };
   } | null>(null);
   const [proofError, setProofError] = useState<string | null>(null);
+  const [caseVerified, setCaseVerified] = useState(false);
 
   const handleFileSelect = async (file: File) => {
     setProofFile(file);
@@ -251,38 +252,32 @@ export default function Landing() {
   });
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-[100dvh] min-w-0 max-w-full overflow-x-hidden bg-[#111612] text-[#e8ebe5]">
       <PublicSiteHeader
         howItWorksHref="#how-it-works"
         primaryActionHref="#free-trial"
         onConnect={handleConnect}
       />
-      {/* Hero Section */}
-      <section className="container pt-14 pb-20 md:pt-20 md:pb-28">
-        <div className="mx-auto max-w-5xl text-center">
-          <div className="mb-5 flex justify-center">
-            <Badge variant="outline" className="text-xs px-3 py-1 gap-1.5" data-testid="badge-prove-before-act">
-              <Play className="h-3 w-3 text-primary" />
-              Prove Before Act — the accountability pattern for autonomous agents
-            </Badge>
-          </div>
-
-          <h1 className="mb-3 text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-tight">
-            Prove Before Act
-            <br />
-            <span className="text-primary">the accountability pattern<br />for autonomous agents.</span>
-          </h1>
-
-          <p className="mx-auto mb-8 max-w-2xl text-lg md:text-xl text-muted-foreground leading-relaxed" data-testid="text-hero-positioning">
-            Commit an independently verifiable decision basis before your agent acts.{" "}
-            {price}/proof · 10 free certs · no wallet needed.
-          </p>
-
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+      {/* Hero — thesis and evidence case file */}
+      <main id="main-content" className="min-w-0 max-w-full overflow-x-hidden">
+      <section className="border-b border-[#303832] bg-[radial-gradient(ellipse_at_80%_45%,#1b2a21_0%,#111612_42%)] px-5 py-16 md:px-12 md:py-24 lg:px-[9vw]">
+        <div className="mx-auto grid max-w-6xl items-center gap-16 lg:grid-cols-[1.02fr_.98fr]">
+          <div>
+            <div className="mb-6 flex items-center gap-2 font-mono text-[10px] font-medium tracking-[.14em] text-[#8ef2bd]" data-testid="badge-prove-before-act">
+              <span className="h-2 w-2 rounded-full bg-[#8ef2bd]" />
+              PUBLIC ACCOUNTABILITY FOR AUTONOMOUS AGENTS
+            </div>
+            <h1 className="mb-7 max-w-3xl text-[clamp(3.25rem,6vw,5.4rem)] font-semibold leading-[.96] tracking-[-.06em]">
+              Accountability starts<br /><span className="font-serif font-normal italic text-[#8ef2bd]">before the action.</span>
+            </h1>
+            <p className="mb-8 max-w-xl text-base leading-7 text-[#aeb7af]" data-testid="text-hero-positioning">
+              Prove Before Act is the open accountability pattern for agents that make consequential decisions. Commit the declared decision basis first. Execute second. Leave evidence anyone can verify. <span className="text-[#e8ebe5]">{price}/proof · 10 free certs · no wallet needed.</span>
+            </p>
+            <div className="flex flex-col gap-3 sm:flex-row">
             <Button
               asChild
               size="lg"
-              className="text-base h-12 px-8"
+              className="h-12 border-[#8ef2bd] bg-[#8ef2bd] px-7 text-sm font-bold text-[#102119] hover:bg-[#b1ffd0]"
               data-testid="button-free-trial-hero"
             >
               <a
@@ -290,54 +285,81 @@ export default function Landing() {
                 ref={heroTrialCtaRef}
                 onClick={() => trackAgentCta("cta_clicked", "landing", "hero_free_trial")}
               >
-                <Bot className="mr-2 h-4 w-4" />
-                I run an agent or service
+                Run your first proof <ArrowRight className="ml-2 h-4 w-4" />
               </a>
             </Button>
             <Button
               asChild
               size="lg"
               variant="outline"
-              className="text-base h-12 px-8"
+              className="h-12 border-[#56635b] bg-transparent px-7 text-sm text-[#e8ebe5] hover:border-[#8ef2bd] hover:bg-transparent hover:text-[#8ef2bd]"
               data-testid="button-certify-file"
             >
               <a href="/certify">
-                <Upload className="mr-2 h-5 w-5" />
-                I need to verify a file
+                See the accountability loop <ArrowRight className="ml-2 h-4 w-4" />
               </a>
             </Button>
-          </div>
-
-          <p className="mt-3 text-sm text-muted-foreground">
-            New to Prove Before Act?{" "}
-            <a href="/learn" className="underline underline-offset-2 hover:text-foreground transition-colors" data-testid="link-hero-learn">
-              60-second overview →
-            </a>
-          </p>
-
-          <p className="mt-3 text-sm text-muted-foreground font-mono">
-            Register free → Get key → First proof in 1 curl
-          </p>
-
-          <p className="mt-2 text-xs text-muted-foreground">
-            <span data-testid="text-hero-reference-implementation">xProof is the reference implementation of the{" "}</span>
-            <a href="/standard" className="underline underline-offset-2 hover:text-foreground transition-colors" data-testid="link-hero-standard">
-              Prove Before Act specification
-            </a>
-          </p>
-
-          {/* x402 callout — above the fold */}
-          <div className="mt-6 flex justify-center">
-            <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-4 py-1.5 text-sm" data-testid="badge-x402-hero">
-              <Zap className="h-3.5 w-3.5 text-primary shrink-0" />
-              <span className="text-muted-foreground">No API key needed — anchor + pay via <strong className="text-foreground">x402</strong> · one HTTP request · USDC on Base</span>
+            </div>
+            <p className="mt-6 flex flex-wrap gap-3 font-mono text-[10px] text-[#79847b]">
+              <span>T(intent_proof) &lt; T(action)</span><span>·</span><span>xProof is the reference implementation</span>
+            </p>
+            <p className="mt-4 text-sm text-[#79847b]">
+              New to Prove Before Act? <a href="/learn" className="text-[#e8ebe5] underline underline-offset-2" data-testid="link-hero-learn">60-second overview →</a>
+            </p>
+            <p className="mt-3 text-xs text-[#79847b]">
+              <span data-testid="text-hero-reference-implementation">xProof is the reference implementation of the </span>
+              <a href="/standard" className="text-[#e8ebe5] underline underline-offset-2" data-testid="link-hero-standard">Prove Before Act specification</a>
+            </p>
+            <div className="mt-5 flex items-center gap-2 text-xs text-[#9ba49c]" data-testid="badge-x402-hero">
+              <Zap className="h-3.5 w-3.5 text-[#8ef2bd]" />
+              <span>No API key needed — anchor + pay via <strong className="text-[#e8ebe5]">x402</strong> · one HTTP request · USDC on Base</span>
             </div>
           </div>
-
+          <div className="relative">
+            <div className="rotate-[1deg] bg-[#e3e6dd] p-5 text-[#142019] shadow-[16px_18px_0_#1a251e] md:p-7" data-testid="card-evidence-case-file">
+              <div className="flex items-center justify-between font-mono text-[10px] tracking-[.07em]">
+                <span>LIVE EVIDENCE / PRF_7A91</span><span className="flex items-center gap-1 text-[#197449]"><CheckCircle className="h-3.5 w-3.5" /> VERIFIED</span>
+              </div>
+              <div className="my-8 text-2xl font-semibold tracking-[-.04em]">Rebalance treasury exposure</div>
+              <div className="space-y-0 text-[11px]">
+                <div className="flex flex-col gap-1 border-t border-[#bac3b8] py-3 sm:flex-row sm:justify-between"><span className="font-mono text-[10px] text-[#65716a]">DECLARED DECISION BASIS</span><strong>RSI 38 · risk approved</strong></div>
+                <div className="flex flex-col gap-1 border-t border-[#bac3b8] py-3 sm:flex-row sm:justify-between"><span className="font-mono text-[10px] text-[#65716a]">COMMITMENT TIMESTAMP</span><strong className="font-mono font-normal">2025-06-18 14:32:07 UTC</strong></div>
+                <div className="flex flex-col gap-1 border-t border-[#bac3b8] py-3 sm:flex-row sm:justify-between"><span className="font-mono text-[10px] text-[#65716a]">ACTOR / ISSUER</span><strong>treasury-agent · xProof</strong></div>
+              </div>
+              <div className="my-2 border-t border-dashed border-[#8b978d]" />
+              <div className="flex items-center justify-between text-[11px]"><span className="flex items-center gap-2 font-mono text-[10px] text-[#65716a]"><span className="h-4 w-1 bg-[#38bd7a]" /> OUTCOME RECORDED</span><strong>Action completed · +0.8% USDC</strong></div>
+              <button className="mt-5 flex items-center gap-2 border-0 bg-transparent p-0 text-[11px] text-[#17764b]" onClick={() => setCaseVerified(!caseVerified)} data-testid="button-case-file-verify">
+                {caseVerified ? "Hide verification fields" : "Inspect verification fields"} <ExternalLink className="h-3 w-3" />
+              </button>
+              {caseVerified && <div className="mt-3 flex items-center gap-2 bg-[#d2ebda] p-2 text-[11px] text-[#18633f]"><CheckCircle className="h-4 w-4" /> Verification checks this hash against the MultiversX commitment</div>}
+            </div>
+            <p className="mt-8 font-mono text-[10px] text-[#6e786f]"><span className="mr-3 text-[#8ef2bd]">01</span>The evidence is the product.</p>
+          </div>
         </div>
       </section>
+
+      <section id="why" className="border-b border-[#303832] px-5 py-20 md:px-[10vw] md:py-28">
+        <div className="mb-10 font-mono text-[10px] tracking-[.14em] text-[#8ef2bd]">01 / THE THESIS</div>
+        <div className="grid gap-10 md:grid-cols-2 md:gap-[12vw]">
+          <h2 className="text-4xl font-semibold leading-none tracking-[-.05em] md:text-6xl">Autonomy without<br /><span className="font-serif font-normal italic text-[#8ef2bd]">accountability</span> is a blind spot.</h2>
+          <div className="max-w-md text-[15px] leading-7 text-[#9da89e]"><p>Agents are moving money, changing infrastructure, and speaking for companies. A log of what happened is not enough.</p><p className="mt-5 text-[#6f7b71]">Prove Before Act adds a narrow, durable invariant: the agent must publish a commitment to its declared decision basis before the action can happen.</p><a href="/standard" className="mt-5 inline-flex items-center gap-2 text-xs text-[#8ef2bd]" data-testid="link-thesis-standard">Read the PBA standard <ArrowRight className="h-4 w-4" /></a></div>
+        </div>
+        <div className="mt-16 flex flex-wrap items-center justify-between gap-4 border-y border-[#303832] py-6 font-mono text-[10px] tracking-[.1em] text-[#69766c]"><span>OBSERVE</span><b>→</b><span>DECIDE</span><b>→</b><strong className="text-[#8ef2bd]">PROVE</strong><b>→</b><span>ACT</span><b>→</b><strong className="text-[#8ef2bd]">PROVE</strong></div>
+      </section>
+      <section id="loop" className="border-b border-[#303832] bg-[#e3e6dd] px-5 py-20 text-[#172019] md:px-[10vw] md:py-28">
+        <div className="font-mono text-[10px] tracking-[.14em] text-[#287650]">02 / THE CANONICAL LOOP</div>
+        <div className="mt-10 flex flex-col justify-between gap-5 md:flex-row md:items-end"><h2 className="text-4xl font-semibold leading-none tracking-[-.05em] md:text-6xl">A commitment is not<br /><span className="font-serif font-normal italic">a transcript.</span></h2><p className="max-w-md text-[15px] leading-7 text-[#56635a]">Declare the basis that can be inspected. Keep private cognition private. Make the boundary between intent and action public.</p></div>
+        <div className="mt-12 grid border border-[#aeb8ae] md:grid-cols-5">
+          {["Collect the relevant state.", "Declare the decision basis.", "Anchor the commitment.", "Execute the approved action.", "Record the outcome."].map((lead, i) => <div key={lead} className={`min-h-[170px] border-b border-[#aeb8ae] p-5 last:border-0 md:border-b-0 md:border-r md:last:border-r-0 ${i === 2 ? "bg-[#18241d] text-[#e8ebe5]" : ""}`}><span className="font-mono text-[11px] text-[#64806d]">0{i + 1}</span><h3 className="my-6 font-mono text-sm tracking-[.05em]">{["OBSERVE", "DECIDE", "PROVE", "ACT", "PROVE"][i]}</h3><strong className="text-[13px]">{lead}</strong><p className={`mt-2 text-xs leading-5 ${i === 2 ? "text-[#a0ada3]" : "text-[#6d796f]"}`}>{["Signals, files, balances, permissions.", "A concise, inspectable justification.", "Hash, timestamp, actor, issuer.", "The commitment travels with the action.", "Close the loop with what happened."][i]}</p></div>)}
+        </div>
+      </section>
+      <section className="border-b border-[#303832] bg-[#171f19] px-5 py-16 md:px-[10vw] md:py-20">
+        <div className="font-mono text-[10px] tracking-[.14em] text-[#758178]">THE PATTERN / THE IMPLEMENTATION</div>
+        <div className="mt-8 grid gap-8 md:grid-cols-[1fr_70px_1fr] md:items-center"><div><h2 className="text-2xl font-semibold">Prove Before Act</h2><p className="mt-3 max-w-md text-sm leading-6 text-[#96a198]">An open pattern for public accountability. The invariant is simple enough to adopt across models, frameworks, and agents.</p></div><div className="text-3xl text-[#65736a]">→</div><div><h2 className="text-2xl font-semibold text-[#8ef2bd]">xProof</h2><p className="mt-3 max-w-md text-sm leading-6 text-[#96a198]">The reference implementation. One API call anchors an independently verifiable proof on MultiversX.</p><a href="/docs" className="mt-4 inline-flex items-center gap-2 text-xs text-[#8ef2bd]">Explore xProof <ArrowRight className="h-4 w-4" /></a></div></div>
+      </section>
+
       {/* Free Trial — Interactive Registration */}
-      <section id="free-trial" className="border-y bg-muted/30 py-16 md:py-20">
+      <section id="free-trial" className="border-y border-[#303832] bg-[#172019] py-16 md:py-20">
         <div className="container">
           <div className="mx-auto max-w-2xl text-center">
             <Badge variant="secondary" className="mb-4 px-3 py-1">
@@ -1349,6 +1371,7 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
           </div>
         </div>
       </section>
+      </main>
       <PublicSiteFooter />
       <WalletLoginModal 
         open={isLoginModalOpen} 

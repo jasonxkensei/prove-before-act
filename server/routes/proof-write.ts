@@ -2,7 +2,7 @@ import { type Express } from "express";
 import crypto from "crypto";
 import { db, pool } from "../db";
 import { logger } from "../logger";
-import { certifications, users, apiKeys, MAX_ONCHAIN_FILENAME_LEN, MAX_ONCHAIN_AUTHOR_LEN, sha256HexSchema } from "@shared/schema";
+import { certifications, users, apiKeys, agents, MAX_ONCHAIN_FILENAME_LEN, MAX_ONCHAIN_AUTHOR_LEN, sha256HexSchema } from "@shared/schema";
 import { eq, desc, sql, and, count, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { paymentRateLimiter, publicSearchRateLimiter } from "../reliability";
@@ -13,6 +13,7 @@ import { auditLogSchema, AUDIT_LOG_JSON_SCHEMA, type AgentAuditLog, REVERSIBILIT
 import { isMX8004Configured, recordCertificationAsJob } from "../mx8004";
 import { checkRateLimit, isAdminWallet, getTrialUser, consumeTrialCredit, getUserCreditBalance, consumeCredit, atomicConsumeCredit, atomicConsumeTrialCredit, refundCredit, refundTrialCredit, getApiKeyOwnerWallet, TRIAL_QUOTA, RATE_LIMIT_MAX_VALUE, buildCanonicalId, tryDisplaceAcpReservation, buildX402Block, buildPrepaidCreditsBlock, buildTrialExhaustedMessage, buildPaymentRequiredMessage } from "./helpers";
 import { inArray } from "drizzle-orm";
+import { resolveAgentForApiKey } from "../agent-identity";
 
 function build4WField(metadata: unknown, baseUrl: string, certId: number | string): Record<string, unknown> {
   if (!metadata || typeof metadata !== "object") return {};
@@ -366,6 +367,7 @@ export function registerProofWriteRoutes(app: Express) {
       let trialInfo: { isTrial: boolean; remaining: number; userId: string } | null = null;
       let creditInfo: { userId: string; balance: number } | null = null;
       let apiKeyUserId: string | null = null;
+      let apiKeyAgentId: string | null = null;
 
       if (hasBearerToken) {
         const rawKey = authHeader!.slice(7);
@@ -409,6 +411,9 @@ export function registerProofWriteRoutes(app: Express) {
             retry_after: Math.ceil((rateLimit.resetAt - Date.now()) / 1000),
           });
         }
+        const logicalAgent = await resolveAgentForApiKey(apiKey);
+        apiKeyAgentId = logicalAgent.id;
+        await db.update(agents).set({ lastSeenAt: new Date() }).where(eq(agents.id, logicalAgent.id));
 
         db.update(apiKeys)
           .set({
@@ -683,6 +688,7 @@ export function registerProofWriteRoutes(app: Express) {
           .insert(certifications)
           .values({
             userId: ownerUserId,
+            ...(apiKeyAgentId ? { agentId: apiKeyAgentId } : {}),
             fileName: data.filename,
             fileHash: data.file_hash,
             fileType: data.filename.split(".").pop() || "unknown",
@@ -1042,6 +1048,7 @@ export function registerProofWriteRoutes(app: Express) {
       let trialInfo: { isTrial: boolean; remaining: number; userId: string } | null = null;
       let creditInfo: { userId: string; balance: number } | null = null;
       let ownerUserId: string | null = null;
+      let apiKeyAgentId: string | null = null;
 
       if (hasBearerToken) {
         const rawKey = authHeader!.slice(7);
@@ -1060,6 +1067,9 @@ export function registerProofWriteRoutes(app: Express) {
         if (!rateLimit.allowed) {
           return res.status(429).json({ error: "RATE_LIMIT_EXCEEDED", message: "Too many requests.", retry_after: Math.ceil((rateLimit.resetAt - Date.now()) / 1000) });
         }
+        const logicalAgent = await resolveAgentForApiKey(apiKey);
+        apiKeyAgentId = logicalAgent.id;
+        await db.update(agents).set({ lastSeenAt: new Date() }).where(eq(agents.id, logicalAgent.id));
 
         db.update(apiKeys).set({ lastUsedAt: new Date(), requestCount: (apiKey.requestCount || 0) + 1 }).where(eq(apiKeys.id, apiKey.id)).execute().catch(() => {});
         authMethod = "api_key";
@@ -1259,6 +1269,7 @@ export function registerProofWriteRoutes(app: Express) {
           .insert(certifications)
           .values({
             userId: ownerUserId,
+            ...(apiKeyAgentId ? { agentId: apiKeyAgentId } : {}),
             fileName,
             fileHash,
             fileType: "json",
@@ -1427,6 +1438,7 @@ export function registerProofWriteRoutes(app: Express) {
       let trialInfo: { isTrial: boolean; remaining: number; userId: string } | null = null;
       let creditInfo: { userId: string; balance: number } | null = null;
       let apiKeyUserId: string | null = null;
+      let apiKeyAgentId: string | null = null;
 
       if (hasBearerToken) {
         const rawKey = authHeader!.slice(7);
@@ -1470,6 +1482,9 @@ export function registerProofWriteRoutes(app: Express) {
             retry_after: Math.ceil((rateLimit.resetAt - Date.now()) / 1000),
           });
         }
+        const logicalAgent = await resolveAgentForApiKey(apiKey);
+        apiKeyAgentId = logicalAgent.id;
+        await db.update(agents).set({ lastSeenAt: new Date() }).where(eq(agents.id, logicalAgent.id));
 
         db.update(apiKeys)
           .set({
@@ -1772,6 +1787,7 @@ export function registerProofWriteRoutes(app: Express) {
             .insert(certifications)
             .values({
               userId: ownerUserId!,
+              ...(apiKeyAgentId ? { agentId: apiKeyAgentId } : {}),
               fileName: file.filename,
               fileHash: file.file_hash,
               fileType: file.filename.split(".").pop() || "unknown",

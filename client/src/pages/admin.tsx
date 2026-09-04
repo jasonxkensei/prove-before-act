@@ -1071,8 +1071,8 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-background" data-testid="admin-dashboard">
-      <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+      <main id="main-content" className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+        <header className="flex flex-wrap items-center justify-between gap-4 mb-8 border-b border-border pb-5">
           <div className="flex items-center gap-3">
             <Link href="/">
               <Button variant="ghost" size="icon" data-testid="button-back-home">
@@ -1085,20 +1085,33 @@ export default function AdminDashboard() {
               <p className="text-sm text-muted-foreground">Real-time metrics for provebeforeact.com</p>
             </div>
           </div>
-          {isAdmin && pendingViolationCount > 0 && (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-destructive/10 border border-destructive/25 rounded-md" data-testid="alert-pending-violations">
-              <ShieldAlert className="h-4 w-4 text-destructive" />
-              <span className="text-sm font-medium text-destructive">
-                {pendingViolationCount} violation{pendingViolationCount !== 1 ? "s" : ""} need review
-              </span>
-            </div>
-          )}
-        </div>
+          <div className="flex flex-wrap items-center gap-3">
+            {health && <StatusIndicator status={health.status} />}
+            {isAdmin && pendingViolationCount > 0 && (
+              <div className="flex items-center gap-2 border border-destructive/25 bg-destructive/10 px-3 py-1.5" data-testid="alert-pending-violations">
+                <ShieldAlert className="h-4 w-4 text-destructive" />
+                <span className="text-sm font-medium text-destructive">
+                  {pendingViolationCount} violation{pendingViolationCount !== 1 ? "s" : ""} need review
+                </span>
+              </div>
+            )}
+            <Button
+              onClick={() => {
+                refetchStats();
+                refetchConversionFunnel();
+              }}
+              data-testid="button-refresh-stats"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh data
+            </Button>
+          </div>
+        </header>
 
 
         {stats && (
           <>
-            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 mb-6">
+            <section className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 mb-6" aria-label="Platform summary">
               <StatCard
                 title="Total Certifications"
                 value={stats.certifications.total}
@@ -1145,9 +1158,9 @@ export default function AdminDashboard() {
                   <p className="text-xs text-muted-foreground mt-1">Certifications in last 5 min</p>
                 </CardContent>
               </Card>
-            </div>
+            </section>
 
-            <div className="grid gap-4 grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 mb-6">
+            <section className="grid gap-3 grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 mb-6" aria-label="Audience summary">
               {stats?.traffic && (
                 <>
                   <StatCard title="Total Visits" value={stats.traffic.total_visits} subtitle="All page views" icon={Globe} />
@@ -1161,7 +1174,7 @@ export default function AdminDashboard() {
                   <StatCard title="Trial Agents" value={stats.agents.trial_agents} subtitle={`${stats.agents.trial_certifications_used} certs used`} icon={Bot} />
                 </>
               )}
-            </div>
+            </section>
 
             <div className="grid gap-4 grid-cols-1 lg:grid-cols-4 mb-6">
               {stats?.traffic && (
@@ -1384,25 +1397,14 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            <div className="flex flex-col items-center gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  refetchStats();
-                  refetchConversionFunnel();
-                }}
-                data-testid="button-refresh-stats"
-              >
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Refresh
-              </Button>
+            <div className="flex flex-col items-center gap-2 border-t border-border pt-5">
               <p className="text-xs text-muted-foreground">
                 Last updated: {new Date(stats.generated_at).toLocaleString()} — Auto-refreshes every 30s
               </p>
             </div>
           </>
         )}
-      </div>
+      </main>
     </div>
   );
 }

@@ -2,10 +2,11 @@ import express from "express";
 import crypto from "crypto";
 import { db } from "../db";
 import { logger } from "../logger";
-import { users, apiKeys, certifications, acpCheckouts } from "@shared/schema";
+import { users, apiKeys, certifications, acpCheckouts, agents } from "@shared/schema";
 import { eq, and, gte } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { pgCheckRateLimit } from "../pgRateLimit";
+import { resolveAgentForApiKey } from "../agent-identity";
 
 /**
  * Attempt to displace an ACP-pending reservation row for the given fileHash.
@@ -187,6 +188,11 @@ export async function validateApiKey(req: express.Request, res: express.Response
     });
   }
 
+  const logicalAgent = await resolveAgentForApiKey(apiKey);
+  await db.update(agents)
+    .set({ lastSeenAt: new Date() })
+    .where(eq(agents.id, logicalAgent.id));
+
   db.update(apiKeys)
     .set({
       lastUsedAt: new Date(),
@@ -197,6 +203,10 @@ export async function validateApiKey(req: express.Request, res: express.Response
     .catch((err) => logger.error("Failed to update API key stats", { error: err.message }));
 
   (req as any).apiKey = apiKey;
+  // Logical attribution is intentionally based only on the authenticated key.
+  // Do not derive it from request metadata or caller-supplied identifiers.
+  (req as any).agent = logicalAgent;
+  (req as any).agentId = logicalAgent.id;
   next();
 }
 

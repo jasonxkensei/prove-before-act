@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Shield, Upload, FileText, ExternalLink, Download, Copy, LogOut, Settings as SettingsIcon, Activity, Check, ArrowRight, Rocket, X, Sparkles, Trophy, Code2 } from "lucide-react";
+import { Shield, Upload, FileText, ExternalLink, Download, Copy, LogOut, Settings as SettingsIcon, Activity, Check, ArrowRight, X, Trophy, Code2 } from "lucide-react";
 import { formatHash, copyToClipboard } from "@/lib/hashUtils";
 import { format } from "date-fns";
 import { Link } from "wouter";
@@ -32,7 +32,7 @@ function TrustBadgeSection({ wallet, isPublic }: { wallet: string; isPublic: boo
   };
 
   return (
-    <Card data-testid="card-trust-badge">
+    <Card className="border-border/70 bg-muted/10 shadow-none" data-testid="card-trust-badge">
       <CardHeader className="pb-3">
         <div className="flex items-center gap-2">
           <Code2 className="h-5 w-5 text-primary" />
@@ -44,7 +44,7 @@ function TrustBadgeSection({ wallet, isPublic }: { wallet: string; isPublic: boo
       </CardHeader>
       <CardContent className="space-y-5">
         {!isPublic ? (
-          <div className="flex items-start gap-3 rounded-md border border-dashed p-4 text-sm text-muted-foreground">
+          <div className="flex items-start gap-3 border-l-2 border-muted-foreground/40 bg-muted/20 p-4 text-sm text-muted-foreground">
             <Shield className="mt-0.5 h-4 w-4 shrink-0" />
             <p>
               Your trust badge is only available when your profile is public.{" "}
@@ -71,7 +71,7 @@ function TrustBadgeSection({ wallet, isPublic }: { wallet: string; isPublic: boo
               <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Markdown — GitHub README
               </p>
-              <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2">
+              <div className="flex items-center gap-2 border bg-background/40 px-3 py-2">
                 <code
                   className="flex-1 truncate font-mono text-xs"
                   data-testid="text-markdown-snippet"
@@ -94,7 +94,7 @@ function TrustBadgeSection({ wallet, isPublic }: { wallet: string; isPublic: boo
               <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 HTML widget — websites &amp; docs
               </p>
-              <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2">
+              <div className="flex items-center gap-2 border bg-background/40 px-3 py-2">
                 <code
                   className="flex-1 truncate font-mono text-xs"
                   data-testid="text-script-snippet"
@@ -157,12 +157,12 @@ function OnboardingCard({ certifications, isPublicProfile, onDismiss }: { certif
   const completedCount = steps.filter(s => s.completed).length;
 
   return (
-    <Card className="mb-8 border-primary/30" data-testid="card-onboarding">
+    <Card className="mb-8 border-border/70 bg-muted/10 shadow-none" data-testid="card-onboarding">
       <CardContent className="p-5 sm:p-6">
         <div className="flex items-start justify-between gap-3 mb-5">
           <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-primary">
-              <Rocket className="h-5 w-5 text-primary-foreground" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-md border border-primary/30 bg-primary/10">
+              <Shield className="h-5 w-5 text-primary" />
             </div>
             <div>
               <h3 className="font-semibold text-lg">Getting Started</h3>
@@ -178,12 +178,12 @@ function OnboardingCard({ certifications, isPublicProfile, onDismiss }: { certif
           {steps.map((step) => (
             <div
               key={step.number}
-              className={`flex flex-col gap-2 rounded-md border p-4 ${step.completed ? "border-primary/30 bg-primary/5" : "border-border"}`}
+               className={`flex flex-col gap-2 border-l-2 p-4 ${step.completed ? "border-l-primary bg-primary/5" : "border-l-border bg-background/20"}`}
               data-testid={`onboarding-step-${step.number}`}
             >
               <div className="flex items-center gap-2">
                 {step.completed ? (
-                  <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary">
+                   <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary">
                     <Check className="h-3.5 w-3.5 text-primary-foreground" />
                   </div>
                 ) : (
@@ -274,9 +274,9 @@ export default function Dashboard() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "confirmed":
-        return <Badge variant="default" className="bg-chart-2 hover:bg-chart-2">Verified</Badge>;
+         return <Badge variant="default" className="bg-primary hover:bg-primary">Verified</Badge>;
       case "pending":
-        return <Badge variant="secondary">Pending</Badge>;
+         return <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300">Pending</Badge>;
       case "failed":
         return <Badge variant="destructive">Failed</Badge>;
       default:
@@ -305,6 +305,12 @@ export default function Dashboard() {
                 <span className="hidden sm:inline">Stats</span>
               </Link>
             </Button>
+            <Button asChild variant="ghost" size="sm" data-testid="fleet-overview-nav-link">
+              <Link href="/fleet/overview">
+                <Activity className="h-4 w-4 sm:mr-2" />
+                <span className="hidden sm:inline">Fleet</span>
+              </Link>
+            </Button>
             <Button asChild variant="ghost" size="sm" data-testid="button-settings">
               <Link href="/settings">
                 <SettingsIcon className="h-4 w-4 sm:mr-2" />
@@ -319,16 +325,17 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <div className="container mx-auto max-w-6xl px-4 sm:px-6 py-6 sm:py-12">
+       <main id="main-content" className="container mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
         {/* Welcome Section */}
         <div className="mb-6 sm:mb-8">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div>
-              <h1 className="mb-2 text-2xl sm:text-3xl font-bold tracking-tight">
-                Welcome back{user?.firstName ? `, ${user.firstName}` : ""}!
+               <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Account overview</p>
+               <h1 className="mb-2 text-2xl font-semibold tracking-tight sm:text-3xl">
+                 Your certification record{user?.firstName ? `, ${user.firstName}` : ""}
               </h1>
               <p className="text-sm sm:text-base text-muted-foreground">
-                Manage your blockchain certifications
+                 Review recorded files and create new verifiable certifications.
               </p>
             </div>
             {!shouldShowOnboarding && (
@@ -338,8 +345,7 @@ export default function Dashboard() {
                 onClick={handleReopenOnboarding}
                 data-testid="button-reopen-onboarding"
               >
-                <Sparkles className="mr-2 h-4 w-4" />
-                Getting Started
+                Resume setup
               </Button>
             )}
           </div>
@@ -349,30 +355,23 @@ export default function Dashboard() {
           <OnboardingCard certifications={certifications} isPublicProfile={user?.isPublicProfile || false} onDismiss={handleDismissOnboarding} />
         )}
 
-        {/* Stats Card */}
-        <div className="mb-8">
-          <Card className="max-w-xs">
-            <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">My certifications</CardTitle>
-              <FileText className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold" data-testid="text-total-certifications">
-                {certifications?.length || 0}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Action Section */}
-        <div className="mb-8">
-          <Button asChild size="lg" data-testid="button-certify-new">
+         <section className="mb-10 flex flex-col gap-5 border-y border-border/70 py-5 sm:flex-row sm:items-center sm:justify-between">
+           <div className="flex items-center gap-3">
+             <FileText className="h-5 w-5 text-muted-foreground" />
+             <div>
+               <p className="text-2xl font-semibold tabular-nums" data-testid="text-total-certifications">
+                 {certifications?.length || 0}
+               </p>
+               <p className="text-sm text-muted-foreground">certifications recorded</p>
+             </div>
+           </div>
+           <Button asChild size="lg" className="w-full sm:w-auto" data-testid="button-certify-new">
             <Link href="/certify">
               <Upload className="mr-2 h-5 w-5" />
               Certify a file
             </Link>
           </Button>
-        </div>
+         </section>
 
         {/* API Keys Section */}
         <div className="mb-8">
@@ -395,10 +394,10 @@ export default function Dashboard() {
           {certifications && certifications.length > 0 ? (
             <div className="space-y-4">
               {certifications.map((cert) => (
-                <Card key={cert.id} className="hover-elevate">
+                 <Card key={cert.id} className="border-border/70 bg-muted/10 shadow-none">
                   <CardContent className="p-4 sm:p-6">
                     <div className="flex flex-col gap-3">
-                      <div className="flex-1 min-w-0">
+                       <div className="min-w-0 flex-1">
                         <div className="mb-2 flex items-center gap-3 flex-wrap">
                           <h3 className="font-semibold truncate max-w-[200px] sm:max-w-none" data-testid={`text-filename-${cert.id}`}>
                             {cert.fileName}
@@ -420,7 +419,7 @@ export default function Dashboard() {
                               <Copy className="h-3 w-3" />
                             </Button>
                           </div>
-                          <p data-testid={`text-date-${cert.id}`}>
+                           <p data-testid={`text-date-${cert.id}`}>
                             {cert.createdAt ? format(new Date(cert.createdAt), "MM/dd/yyyy 'at' HH:mm") : "Unknown date"}
                           </p>
                         </div>
@@ -473,7 +472,7 @@ export default function Dashboard() {
               ))}
             </div>
           ) : (
-            <Card>
+             <Card className="border-border/70 bg-muted/10 shadow-none">
               <CardContent className="flex flex-col items-center justify-center py-16 text-center">
                 <Shield className="mb-4 h-16 w-16 text-muted-foreground/50" />
                 <h3 className="mb-2 text-lg font-semibold">No certifications</h3>
@@ -490,7 +489,7 @@ export default function Dashboard() {
             </Card>
           )}
         </div>
-      </div>
+      </main>
     </div>
   );
 }

@@ -1,4 +1,5 @@
-import { MoreHorizontal, Wallet } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Menu, MoreHorizontal, Wallet, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -27,16 +28,39 @@ export function PublicSiteHeader({
   onConnect,
   paper = false,
 }: PublicSiteHeaderProps) {
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const headerRef = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const existingTarget = document.getElementById("main-content");
+    const target = existingTarget
+      ?? document.querySelector("main")
+      ?? headerRef.current?.nextElementSibling;
+    if (!(target instanceof HTMLElement)) return;
+
+    const assignedId = !existingTarget;
+    const assignedTabIndex = !target.hasAttribute("tabindex");
+    if (assignedId) target.id = "main-content";
+    if (assignedTabIndex) target.tabIndex = -1;
+
+    return () => {
+      if (assignedId && target.id === "main-content") target.removeAttribute("id");
+      if (assignedTabIndex && target.tabIndex === -1) target.removeAttribute("tabindex");
+    };
+  }, []);
   const headerClass = paper
-    ? "border-[#d8d5cf] bg-[#f8f7f4]/95 text-[#0f0f0f]"
-    : "border-border bg-background/95 supports-[backdrop-filter]:bg-background/60";
+    ? "border-[hsl(40_13%_78%)] bg-[hsl(42_28%_94%)]/95 text-[hsl(42_18%_18%)]"
+    : "border-border/80 bg-background/95 supports-[backdrop-filter]:bg-background/80";
   const paperLinkClass = paper
-    ? "text-[#4a4a4a] hover:text-[#0f0f0f]"
+    ? "text-[hsl(40_9%_42%)] hover:text-[hsl(42_18%_18%)]"
     : primaryLinkClass;
+  const mobileLinkClass = `flex min-h-11 items-center rounded-md px-3 text-sm font-medium ${paperLinkClass}`;
 
   return (
-    <header className={`sticky top-0 z-50 border-b backdrop-blur ${headerClass}`}>
-      <div className="container flex h-16 items-center justify-between gap-4">
+    <>
+      <a href="#main-content" className="skip-link">Skip to content</a>
+      <header ref={headerRef} className={`sticky top-0 z-50 border-b backdrop-blur ${headerClass}`}>
+      <div className="container flex min-h-16 items-center justify-between gap-3">
         <a href="/" className="flex shrink-0 items-center gap-2" data-testid="link-logo-home">
           <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
         </a>
@@ -87,7 +111,7 @@ export function PublicSiteHeader({
         <div className="flex items-center gap-2 sm:gap-3">
           <a
             href={primaryActionHref}
-            className="rounded-md border border-primary/20 bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/20 md:hidden"
+            className="min-h-11 rounded-md border border-primary/25 bg-primary/10 px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/20 md:hidden"
             data-testid="link-nav-start-free-mobile"
           >
             {primaryActionLabel}
@@ -100,14 +124,47 @@ export function PublicSiteHeader({
             中文
           </a>
           {onConnect && (
-            <Button variant="ghost" size="sm" onClick={onConnect} data-testid="button-login">
+            <Button variant="ghost" size="sm" className="hidden sm:inline-flex" onClick={onConnect} data-testid="button-login">
               <Wallet className="mr-2 h-4 w-4" />
               Connect
             </Button>
           )}
+          <button
+            type="button"
+            className={`touch-target inline-flex items-center justify-center rounded-md border md:hidden ${paper ? "border-[hsl(40_13%_78%)]" : "border-border"}`}
+            aria-expanded={mobileOpen}
+            aria-controls="public-mobile-navigation"
+            aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"}
+            data-testid="button-mobile-menu"
+            onClick={() => setMobileOpen((open) => !open)}
+          >
+            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
         </div>
       </div>
-    </header>
+      {mobileOpen && (
+        <nav id="public-mobile-navigation" className={`border-t px-4 pb-4 pt-2 md:hidden ${paper ? "border-[hsl(40_13%_78%)]" : "border-border"}`} aria-label="Mobile navigation">
+          <div className="container grid gap-1">
+            <a href={howItWorksHref} className={mobileLinkClass} onClick={() => setMobileOpen(false)} data-testid="link-mobile-how-it-works">How it works</a>
+            <a href="/standard" className={mobileLinkClass} onClick={() => setMobileOpen(false)} data-testid="link-mobile-standard">Standard</a>
+            <div className={`mt-2 px-3 pb-1 font-mono text-[0.65rem] uppercase tracking-[0.16em] ${paper ? "text-[hsl(40_9%_42%)]" : "text-muted-foreground"}`}>Explore</div>
+            {[
+              ["/learn", "60-second overview"], ["/agents", "For AI Agents"], ["/leaderboard", "Trust Leaderboard"], ["/stats", "Metrics"],
+              ["/docs", "API Docs"], ["/agent-context", "Agent Context"], ["/mcp", "MCP Server"], ["/coherence", "Coherence"],
+              ["/founder", "About the founder"], ["/#faq", "FAQ"],
+            ].map(([href, label]) => (
+              <a key={href} href={href} className={mobileLinkClass} onClick={() => setMobileOpen(false)}>{label}</a>
+            ))}
+            {onConnect && (
+              <Button variant="ghost" className="mt-2 min-h-11 justify-start" onClick={onConnect} data-testid="button-mobile-login">
+                <Wallet className="mr-2 h-4 w-4" /> Connect
+              </Button>
+            )}
+          </div>
+        </nav>
+      )}
+      </header>
+    </>
   );
 }
 
@@ -117,7 +174,7 @@ export function PublicSiteFooter({ paper = false }: { paper?: boolean }) {
   const border = paper ? "border-[#d8d5cf] bg-[#f8f7f4]" : "border-border bg-background";
 
   return (
-    <footer className={`border-t py-12 ${border}`}>
+    <footer className={`border-t py-14 ${border}`}>
       <div className="container">
         <div className="mx-auto grid max-w-5xl gap-8 md:grid-cols-4">
           <div className="md:col-span-2">

@@ -3,6 +3,27 @@ import { PublicSiteFooter, PublicSiteHeader } from "@/components/public-site-chr
 
 const STYLES = `
   .pba-learn-root {
+    --paper: #f6f4ee;
+    --paper-strong: #fffdf8;
+    --ink: #17201b;
+    --muted: #657069;
+    --rule: #d4d8d1;
+    --code: #e9eee7;
+    --verified: #237a4b;
+    background: var(--paper);
+    color: var(--ink);
+  }
+  .pba-learn-root a:focus-visible {
+    outline: 2px solid var(--verified);
+    outline-offset: 4px;
+  }
+  .pba-learn-root .pba-learn-box { background: var(--paper-strong); border-color: #aeb8af; }
+  .pba-learn-root .pba-learn-box.proof,
+  .pba-learn-root .pba-learn-cta-primary { background: var(--ink); border-color: var(--ink); }
+  .pba-learn-root .pba-learn-invariant { background: var(--code); border-left-color: var(--verified); }
+  .pba-learn-root .pba-learn-rule,
+  .pba-learn-root .pba-learn-credit { border-color: var(--rule); }
+  .pba-learn-root {
     background: #f8f7f4;
     color: #0f0f0f;
     font-family: Georgia, 'Times New Roman', serif;
@@ -146,6 +167,9 @@ const STYLES = `
     line-height: 1.55;
     margin: 0 0 1.25rem;
     color: #0f0f0f;
+    max-width: 100%;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
   }
   .pba-learn-invariant .dim { color: #888; }
 
@@ -200,7 +224,26 @@ const STYLES = `
 
   @media (max-width: 600px) {
     .pba-learn-main { padding: 1.2rem 1.2rem 0.8rem; justify-content: flex-start; }
-    .pba-learn-flow { justify-content: flex-start; margin-left: -0.2rem; margin-right: -0.2rem; }
+    .pba-learn-flow {
+      width: 100%;
+      flex-direction: column;
+      align-items: stretch;
+      justify-content: flex-start;
+      gap: 0.35rem;
+      overflow: visible;
+      margin-left: 0;
+      margin-right: 0;
+      padding: 0.15rem 0 0.35rem;
+    }
+    .pba-learn-step { width: 100%; }
+    .pba-learn-box { width: 100%; min-width: 0; }
+    .pba-learn-arr {
+      align-self: center;
+      transform: rotate(90deg);
+      margin: -0.05rem 0;
+      padding-bottom: 0;
+      line-height: 1;
+    }
     .pba-learn-ctas { flex-direction: column; }
     .pba-learn-cta-primary, .pba-learn-cta-secondary { text-align: center; }
   }
@@ -238,7 +281,7 @@ export default function LearnPage() {
         <PublicSiteHeader paper />
 
         {/* ── Main ── */}
-        <main className="pba-learn-main">
+           <main id="main-content" className="pba-learn-main">
           <div className="pba-learn-badge">60-second overview</div>
           <h1 className="pba-learn-title">What did this agent decide,<br />and when did it decide it?</h1>
           <p className="pba-learn-tagline">A design pattern for accountable autonomous agents</p>

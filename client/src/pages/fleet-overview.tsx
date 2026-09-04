@@ -1,0 +1,262 @@
+import { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { Link, Redirect } from "wouter";
+import { Activity, AlertTriangle, Bot, Clock3, FileWarning, Loader2, ShieldCheck, Users } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
+import { useWalletAuth } from "@/hooks/useWalletAuth";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+
+type HealthStatus = "green" | "orange" | "red";
+
+interface ProofCounts {
+  total?: number;
+  confirmed?: number;
+  pending?: number;
+  failed?: number;
+}
+
+interface OperationalAgent {
+  agent_id: string | null;
+  name: string | null;
+  owner_account_id: string;
+  created_at: string | null;
+  last_seen_at: string | null;
+  health?: HealthStatus | { status?: HealthStatus; reasons?: string[] } | null;
+  health_status?: HealthStatus;
+  health_reasons?: string[];
+  reasons?: string[];
+  proof_counts?: ProofCounts;
+  proof_totals?: ProofCounts;
+  proofs?: ProofCounts;
+  total_proofs?: number;
+  pending_proofs?: number;
+  failed_proofs?: number;
+}
+
+interface FleetOverview {
+  agents?: OperationalAgent[];
+  summary?: {
+    total_agents?: number;
+    green?: number;
+    orange?: number;
+    red?: number;
+    green_count?: number;
+    orange_count?: number;
+    red_count?: number;
+    historical_unknown_count?: number;
+    historical_unattributed_proofs?: number;
+  };
+  total_agents?: number;
+  green_count?: number;
+  orange_count?: number;
+  red_count?: number;
+  historical_unknown_count?: number;
+  historical_unknown?: { certification_count?: number; count?: number } | null;
+  historical?: { certification_count?: number; count?: number } | null;
+}
+
+const healthStyles: Record<HealthStatus, string> = {
+  green: "border-[#8ef2bd]/40 bg-[#8ef2bd]/10 text-[#8ef2bd]",
+  orange: "border-amber-300/40 bg-amber-300/10 text-amber-200",
+  red: "border-red-300/40 bg-red-300/10 text-red-200",
+};
+
+function getHealth(agent: OperationalAgent): { status: HealthStatus; reasons: string[] } {
+  const health = agent.health;
+  const rawStatus = typeof health === "string" ? health : health?.status ?? agent.health_status;
+  const status = rawStatus === "red" || rawStatus === "orange" || rawStatus === "green" ? rawStatus : "orange";
+  const reasons = typeof health === "object" && health?.reasons
+    ? health.reasons
+    : agent.health_reasons ?? agent.reasons ?? [];
+  return { status, reasons };
+}
+
+function proofCount(agent: OperationalAgent, key: keyof ProofCounts, fallback?: number) {
+  return agent.proof_counts?.[key] ?? agent.proof_totals?.[key] ?? agent.proofs?.[key] ?? fallback ?? 0;
+}
+
+function relativeTime(value: string | null) {
+  if (!value) return "Not seen yet";
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? "Unknown" : formatDistanceToNow(parsed, { addSuffix: true });
+}
+
+function SummaryMetric({ label, value, tone = "text-[#e8ebe5]" }: { label: string; value: number; tone?: string }) {
+  return (
+    <div className="border border-[#303832] bg-[#111612] px-4 py-3">
+      <p className="text-xs text-[#a0ada3]">{label}</p>
+      <p className={`mt-1 text-2xl font-bold tabular-nums ${tone}`}>{value}</p>
+    </div>
+  );
+}
+
+export default function FleetOverviewPage() {
+  const { isAuthenticated, isLoading: authLoading } = useWalletAuth();
+
+  useEffect(() => {
+    document.title = "Fleet Operations | Prove Before Act";
+  }, []);
+
+  const { data, isLoading, error } = useQuery<FleetOverview>({
+    queryKey: ["/api/fleet/overview"],
+    enabled: isAuthenticated,
+    queryFn: async () => {
+      const response = await fetch("/api/fleet/overview", { credentials: "include" });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.message || "Unable to load fleet operations.");
+      return body;
+    },
+  });
+
+  if (!authLoading && !isAuthenticated) return <Redirect to="/" />;
+
+  const records = data?.agents ?? [];
+  const agents = records.filter((agent) => agent.agent_id !== null);
+  const summary = data?.summary;
+  const total = summary?.total_agents ?? data?.total_agents ?? agents.length;
+  const green = summary?.green ?? summary?.green_count ?? data?.green_count ?? agents.filter((agent) => getHealth(agent).status === "green").length;
+  const orange = summary?.orange ?? summary?.orange_count ?? data?.orange_count ?? agents.filter((agent) => getHealth(agent).status === "orange").length;
+  const red = summary?.red ?? summary?.red_count ?? data?.red_count ?? agents.filter((agent) => getHealth(agent).status === "red").length;
+  const historical = data?.historical_unknown ?? data?.historical;
+  const historicalRecord = records.find((agent) => agent.agent_id === null);
+  const historicalCount = summary?.historical_unknown_count ?? summary?.historical_unattributed_proofs ?? data?.historical_unknown_count ?? historical?.certification_count ?? historical?.count ?? historicalRecord?.proof_totals?.total ?? 0;
+
+  return (
+    <div className="min-h-screen bg-[#111612] text-[#e8ebe5]">
+      <header className="sticky top-0 z-50 border-b border-[#303832] bg-[#111612]/95 backdrop-blur">
+        <div className="container flex h-16 items-center justify-between gap-3 px-4">
+          <Link href="/dashboard" data-testid="fleet-overview-link-logo" className="flex items-center gap-2">
+            <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
+          </Link>
+          <nav aria-label="Operational navigation" className="flex items-center gap-1 sm:gap-2">
+            <Button asChild variant="ghost" size="sm" className="text-[#c4cec5] hover:bg-[#202b23] hover:text-[#e8ebe5]" data-testid="fleet-overview-link-dashboard">
+              <Link href="/dashboard">Dashboard</Link>
+            </Button>
+            <Button asChild variant="ghost" size="sm" className="text-[#c4cec5] hover:bg-[#202b23] hover:text-[#e8ebe5]" data-testid="fleet-overview-link-coherence">
+              <Link href="/fleet">Coherence</Link>
+            </Button>
+          </nav>
+        </div>
+      </header>
+
+      <main id="main-content" className="container mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
+        <section className="mb-8 border-b border-[#303832] pb-6">
+          <div className="mb-2 flex items-center gap-2">
+            <Activity className="h-6 w-6 text-[#8ef2bd]" aria-hidden="true" />
+            <p className="font-mono text-xs font-medium uppercase tracking-[0.16em] text-[#8ef2bd]">Read-only operations</p>
+          </div>
+          <h1 className="text-3xl font-bold tracking-tight">Fleet overview</h1>
+          <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[#a0ada3] sm:text-base">
+            Current agent health from observed proof activity. This view is informational only and does not change agents, proofs, or account settings.
+          </p>
+        </section>
+
+        {authLoading || isLoading ? (
+          <div className="flex items-center justify-center py-20" data-testid="fleet-overview-loading">
+            <Loader2 className="h-8 w-8 animate-spin text-[#8ef2bd]" aria-label="Loading fleet overview" />
+          </div>
+        ) : error instanceof Error ? (
+          <Card className="border-[#634f27] bg-[#211e16] text-[#e8ebe5] shadow-none" data-testid="fleet-overview-error">
+            <CardContent className="flex items-center gap-3 py-8">
+              <AlertTriangle className="h-6 w-6 shrink-0 text-amber-300" />
+              <p>{error.message}</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            <section className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label="Fleet health summary" data-testid="fleet-overview-summary">
+              <SummaryMetric label="Agents" value={total} />
+              <SummaryMetric label="Green" value={green} tone="text-[#8ef2bd]" />
+              <SummaryMetric label="Orange" value={orange} tone="text-amber-200" />
+              <SummaryMetric label="Red" value={red} tone="text-red-200" />
+            </section>
+
+            <section className="mb-8 border-l-2 border-[#8ef2bd] bg-[#171f19] p-5" aria-labelledby="fleet-overview-health-rules">
+              <div className="flex gap-3">
+                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#8ef2bd]" aria-hidden="true" />
+                <div>
+                  <h2 id="fleet-overview-health-rules" className="font-semibold">Health rules</h2>
+                  <p className="mt-1 text-sm leading-relaxed text-[#a0ada3]">
+                    Red: a failed proof in the trailing 24 hours. Orange: no last seen time, last seen more than 24 hours ago, or a pending proof older than 15 minutes. Green: otherwise. Red takes precedence over orange, then green.
+                  </p>
+                </div>
+              </div>
+            </section>
+
+            {historicalCount > 0 && (
+              <section className="mb-8 border border-dashed border-[#526158] bg-[#171f19] p-5" data-testid="fleet-overview-historical-unknown">
+                <div className="flex items-start gap-3">
+                  <FileWarning className="mt-0.5 h-5 w-5 shrink-0 text-[#a0ada3]" aria-hidden="true" />
+                  <div>
+                    <h2 className="font-semibold">Agent historique / attribution inconnue</h2>
+                    <p className="mt-1 text-sm text-[#a0ada3]">
+                      {historicalCount} historical {historicalCount === 1 ? "proof remains" : "proofs remain"} without an agent attribution. Historical certifications are never attributed using metadata, author, wallet, key name, or filename.
+                    </p>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            <section aria-labelledby="fleet-overview-agents-heading">
+              <div className="mb-4 flex items-center gap-2">
+                <Users className="h-5 w-5 text-[#8ef2bd]" aria-hidden="true" />
+                <h2 id="fleet-overview-agents-heading" className="text-xl font-semibold">Agents</h2>
+              </div>
+              {agents.length === 0 ? (
+                <Card className="border-[#303832] bg-[#171f19] text-[#e8ebe5] shadow-none" data-testid="fleet-overview-empty">
+                  <CardContent className="flex flex-col items-center py-14 text-center">
+                    <Bot className="mb-4 h-12 w-12 text-[#65716a]" aria-hidden="true" />
+                    <p className="font-medium text-[#c4cec5]">No operational agents recorded</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-4" data-testid="fleet-overview-agents">
+                  {agents.map((agent) => {
+                    const health = getHealth(agent);
+                    const totalProofs = proofCount(agent, "total", agent.total_proofs);
+                    const pendingProofs = proofCount(agent, "pending", agent.pending_proofs);
+                    const failedProofs = proofCount(agent, "failed", agent.failed_proofs);
+                    return (
+                      <Card key={agent.agent_id} className="border-[#303832] bg-[#171f19] text-[#e8ebe5] shadow-none" data-testid={`fleet-overview-agent-${agent.agent_id}`}>
+                        <CardContent className="p-5 sm:p-6">
+                          <div className="flex flex-col justify-between gap-5 md:flex-row md:items-start">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h3 className="font-semibold">{agent.name || "Unnamed agent"}</h3>
+                                <Badge className={`border ${healthStyles[health.status]}`} data-testid={`fleet-overview-health-${agent.agent_id}`}>
+                                  {health.status.charAt(0).toUpperCase() + health.status.slice(1)}
+                                </Badge>
+                              </div>
+                              <p className="mt-1 break-all font-mono text-xs text-[#a0ada3]">Agent ID: {agent.agent_id}</p>
+                              <p className="mt-1 break-all font-mono text-xs text-[#65716a]">Owner account: {agent.owner_account_id}</p>
+                              <div className="mt-4 flex items-start gap-2 text-sm text-[#c4cec5]">
+                                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[#a0ada3]" aria-hidden="true" />
+                                <div>
+                                  <p className="font-medium">Health reasons</p>
+                                  {health.reasons.length ? <ul className="mt-1 list-disc space-y-1 pl-4 text-[#a0ada3]">{health.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul> : <p className="mt-1 text-[#a0ada3]">No additional reason reported.</p>}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-x-6 gap-y-3 border-t border-[#303832] pt-4 text-sm md:min-w-64 md:border-l md:border-t-0 md:pl-6 md:pt-0">
+                              <div className="col-span-2 flex items-center gap-2 text-[#a0ada3]"><Clock3 className="h-4 w-4" /><span>Last seen {relativeTime(agent.last_seen_at)}</span></div>
+                              <div><p className="text-xs text-[#a0ada3]">Proofs</p><p className="font-semibold tabular-nums">{totalProofs}</p></div>
+                              <div><p className="text-xs text-[#a0ada3]">Pending</p><p className="font-semibold tabular-nums">{pendingProofs}</p></div>
+                              <div><p className="text-xs text-[#a0ada3]">Failed</p><p className="font-semibold tabular-nums">{failedProofs}</p></div>
+                              <div><p className="text-xs text-[#a0ada3]">Created</p><p className="text-xs text-[#c4cec5]">{relativeTime(agent.created_at)}</p></div>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          </>
+        )}
+      </main>
+    </div>
+  );
+}

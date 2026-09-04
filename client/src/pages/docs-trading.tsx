@@ -18,6 +18,14 @@ import {
 } from "lucide-react";
 
 const BASE = "https://provebeforeact.com";
+const DOC_STYLES = `
+  .pba-docs-root { --doc-rule: hsl(var(--border)); }
+  .pba-docs-root main { max-width: 72rem; }
+  .pba-docs-root p { max-width: 72ch; line-height: 1.65; }
+  .pba-docs-root section { scroll-margin-top: 6rem; }
+  .pba-docs-root pre { border: 1px solid var(--border); border-radius: .3rem; line-height: 1.65; }
+  .pba-docs-root a:focus-visible, .pba-docs-root button:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 3px; }
+`;
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -143,7 +151,9 @@ curl ${BASE}/api/proof/a3f2b1c4-7890-4def-abcd-1234567890ab`;
 
 export default function DocsTradingPage() {
   return (
-    <div className="min-h-screen bg-background">
+    <>
+      <style>{DOC_STYLES}</style>
+    <div className="pba-docs-root min-h-screen bg-background">
       <PublicSiteHeader />
 
       <div className="container py-10 max-w-3xl mx-auto">
@@ -209,7 +219,7 @@ export default function DocsTradingPage() {
               <Zap className="h-5 w-5 text-primary shrink-0" />
               <div>
                 <p className="text-sm font-medium">
-                  Going further — certify a <em>declared decision basis</em> before acting, never internal chain-of-thought, not just the output after.
+                  Going further — certify a <em>declared decision basis</em> before acting, never private internal reasoning, not just the output after.
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
                   The 4W workflow anchors WHO, WHAT, WHEN, and WHY for full auditability.{" "}
@@ -375,5 +385,6 @@ export default function DocsTradingPage() {
       </div>
       <PublicSiteFooter />
     </div>
+    </>
   );
 }

@@ -2,7 +2,7 @@ import { type Express } from "express";
 import crypto from "crypto";
 import { db, pool } from "../db";
 import { logger } from "../logger";
-import { certifications, users, apiKeys } from "@shared/schema";
+import { certifications, users, apiKeys, agents } from "@shared/schema";
 import { eq, and, sql, desc, ne } from "drizzle-orm";
 import { z } from "zod";
 import { isWalletAuthenticated } from "../walletAuth";
@@ -462,10 +462,19 @@ export function registerAgentsRoutes(app: Express) {
           ...(data.webhook_url ? { webhookUrl: data.webhook_url, webhookSecret: webhookSecretSeed } : {}),
         }).returning();
 
+        // A new account always receives its deterministic default logical
+        // agent. Its ID is deliberately the account ID, not a generated ID.
+        await tx.insert(agents).values({
+          id: newUser.id,
+          ownerAccountId: newUser.id,
+          name: data.agent_name,
+        });
+
         await tx.insert(apiKeys).values({
           keyHash,
           keyPrefix,
           userId: newUser.id,
+          agentId: newUser.id,
           name: `Trial: ${data.agent_name}`,
           isActive: true,
         });

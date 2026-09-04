@@ -2,13 +2,14 @@ import { type Express } from "express";
 import crypto from "crypto";
 import { db } from "../db";
 import { logger } from "../logger";
-import { certifications, users, apiKeys, sha256HexSchema } from "@shared/schema";
+import { certifications, users, apiKeys, agents, sha256HexSchema } from "@shared/schema";
 import { eq, desc, sql, and, count, ne } from "drizzle-orm";
 import { z } from "zod";
 import { isWalletAuthenticated } from "../walletAuth";
 import { getCertificationPriceEgld } from "../pricing";
 import { broadcastSignedTransaction, getTxExplorerUrl } from "../blockchain";
 import { tryDisplaceAcpReservation } from "./helpers";
+import { ensureDefaultAgent } from "../agent-identity";
 
 /**
  * Parses pipe-separated metadata from a certified tx data payload.
@@ -41,6 +42,7 @@ export function registerCertificationsRoutes(app: Express) {
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
+      const defaultAgent = await ensureDefaultAgent(user.id!);
 
       // Validate request body
       const schema = z.object({
@@ -241,6 +243,7 @@ export function registerCertificationsRoutes(app: Express) {
           .insert(certifications)
           .values({
             userId: user.id!,
+            agentId: defaultAgent.id,
             fileName: data.fileName,
             fileHash: data.fileHash,
             fileType: data.fileType || "unknown",
@@ -262,6 +265,7 @@ export function registerCertificationsRoutes(app: Express) {
       }
 
       const certificateUrl = `/api/certificates/${certification.id}.pdf`;
+      await db.update(agents).set({ lastSeenAt: new Date() }).where(eq(agents.id, defaultAgent.id));
 
       res.status(201).json({
         ...certification,
@@ -449,6 +453,7 @@ export function registerCertificationsRoutes(app: Express) {
         if (!user) {
           return res.status(404).json({ message: "User not found" });
         }
+        const defaultAgent = await ensureDefaultAgent(user.id!);
 
         // Validate certification data
         const schema = z.object({
@@ -592,6 +597,7 @@ export function registerCertificationsRoutes(app: Express) {
           .insert(certifications)
           .values({
             userId: user.id!,
+            agentId: defaultAgent.id,
             fileName: validatedData.fileName,
             fileHash: validatedData.fileHash,
             fileType: validatedData.fileType || "unknown",
@@ -605,6 +611,7 @@ export function registerCertificationsRoutes(app: Express) {
             authMethod: "web",
           })
           .returning();
+        await db.update(agents).set({ lastSeenAt: new Date() }).where(eq(agents.id, defaultAgent.id));
 
         res.json({
           success: true,

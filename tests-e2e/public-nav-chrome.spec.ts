@@ -268,7 +268,8 @@ for (const route of ["/standard", "/agents"] as const) {
 // If this test fails after a deliberate header change, update the constant and
 // the comment above to reflect the new order, then re-verify keyboard UX by
 // hand before committing.
-const EXPECTED_TABS_TO_MORE = 4;
+// Skip to content is intentionally first in the keyboard order.
+const EXPECTED_TABS_TO_MORE = 5;
 
 /** Returns the number of Tab presses needed to focus button-nav-more,
  *  or -1 when the element is not reached within `limit` presses. */

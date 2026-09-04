@@ -17,3 +17,4 @@
 - [GitHub Actions PostgreSQL CI](github-actions-postgres-ci.md) — service PostgreSQL needs a TCP driver, and lockfile tarballs must resolve through the public npm registry
 - [Immutable release sources](github-raw-cache-after-api-writes.md) — build release bundles from immutable source revisions, not mutable branch references
 - [PBA positioning and adoption](positioning-and-adoption.md) — lead with pre-execution accountability and independent adoption; use “decision basis” instead of “reasoning”
+- [Drizzle composite FK introspection](drizzle-composite-fk-introspection.md) — stable 0.31 can churn composite FKs; use generated ownership keys when push idempotence matters

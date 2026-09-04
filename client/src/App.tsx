@@ -36,6 +36,7 @@ const AgentContextZhPage = lazy(() => import("@/pages/agent-context-zh"));
 const CoherencePage = lazy(() => import("@/pages/coherence"));
 const FleetPage = lazy(() => import("@/pages/fleet"));
 const FleetManagePage = lazy(() => import("@/pages/fleet-manage"));
+const FleetOverviewPage = lazy(() => import("@/pages/fleet-overview"));
 const JasonPage = lazy(() => import("@/pages/jason"));
 const StandardPage = lazy(() => import("@/pages/standard"));
 const LearnPage = lazy(() => import("@/pages/learn"));
@@ -150,6 +151,7 @@ function Router() {
         <Route path="/learn" component={LearnPage} />
         <Route path="/fleet" component={FleetPage} />
         <Route path="/fleets" component={FleetManagePage} />
+        <Route path="/fleet/overview" component={FleetOverviewPage} />
         <Route path="/zh" component={LandingZh} />
         <Route component={NotFound} />
       </Switch>

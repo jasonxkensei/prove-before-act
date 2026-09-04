@@ -397,14 +397,15 @@ export default function Certify() {
           </div>
         </header>
 
-        <div className="container mx-auto max-w-3xl py-12">
-          <div className="text-center">
+        <main id="main-content" className="container mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
+          <div className="border-b border-border/70 pb-8 text-center">
             {txConfirmed ? (
               <>
                 <div className="mb-6 inline-flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
                   <CheckCircle className="h-10 w-10 text-primary" />
                 </div>
-                <h1 className="mb-4 text-3xl font-bold tracking-tight" data-testid="text-cert-title">Certification successful!</h1>
+                <p className="mb-3 text-xs font-medium uppercase tracking-[0.16em] text-primary">Verified</p>
+                <h1 className="mb-4 text-3xl font-semibold tracking-tight" data-testid="text-cert-title">Certification confirmed</h1>
                 <p className="mb-8 text-muted-foreground">
                   Your file has been certified on the MultiversX blockchain
                 </p>
@@ -418,7 +419,8 @@ export default function Certify() {
                 <div className="mb-6 inline-flex h-20 w-20 items-center justify-center rounded-full bg-muted">
                   <Loader2 className="h-10 w-10 text-muted-foreground animate-spin" />
                 </div>
-                <h1 className="mb-4 text-3xl font-bold tracking-tight" data-testid="text-cert-title">Certification submitted</h1>
+                <p className="mb-3 text-xs font-medium uppercase tracking-[0.16em] text-amber-700 dark:text-amber-300">Pending verification</p>
+                <h1 className="mb-4 text-3xl font-semibold tracking-tight" data-testid="text-cert-title">Certification submitted</h1>
                 <p className="mb-8 text-muted-foreground">
                   Your transaction has been sent — waiting for blockchain confirmation
                 </p>
@@ -430,8 +432,8 @@ export default function Certify() {
             )}
           </div>
 
-          <Card className="mb-6">
-            <CardHeader>
+          <Card className="mb-6 border-border/70 bg-muted/10 shadow-none">
+            <CardHeader className="border-b border-border/70 pb-4">
               <CardTitle>Certification details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -483,7 +485,7 @@ export default function Certify() {
             </CardContent>
           </Card>
 
-          <div className="flex gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row">
             <Button
               onClick={handleDownloadPDF}
               className="flex-1"
@@ -516,7 +518,7 @@ export default function Certify() {
               </Link>
             </Button>
           </div>
-        </div>
+        </main>
       </div>
     );
   }
@@ -544,15 +546,16 @@ export default function Certify() {
         </div>
       </header>
 
-      <div className="container mx-auto max-w-3xl py-12">
+      <main id="main-content" className="container mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12">
         <div className="mb-8">
-          <h1 className="mb-2 text-3xl font-bold tracking-tight">Certify your file</h1>
+          <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">New certification</p>
+          <h1 className="mb-2 text-3xl font-semibold tracking-tight">Certify a file</h1>
           <p className="text-muted-foreground">
-            Drop any file to create an immutable proof on the blockchain
+            Create a timestamped record that can be independently verified.
           </p>
         </div>
 
-        <Alert className="mb-6 border-primary/30 bg-primary/5" data-testid="notice-individual-certification">
+        <Alert className="mb-6 border-border/70 bg-muted/20" data-testid="notice-individual-certification">
           <AlertTitle>For individuals</AlertTitle>
           <AlertDescription>
             This upload and wallet-signing flow is for individual file certification. Integrating an agent?{" "}
@@ -593,8 +596,8 @@ export default function Certify() {
         />
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <Card>
-            <CardHeader>
+          <Card className="border-border/70 bg-muted/10 shadow-none">
+            <CardHeader className="border-b border-border/70 pb-4">
               <CardTitle>File selection</CardTitle>
             </CardHeader>
             <CardContent>
@@ -613,7 +616,7 @@ export default function Certify() {
                       (e.currentTarget.querySelector('input[type="file"]') as HTMLInputElement)?.click();
                     }
                   }}
-                  className={`relative flex flex-col items-center justify-center rounded-lg border-2 border-dashed p-12 transition-colors cursor-pointer ${
+                  className={`relative flex cursor-pointer flex-col items-center justify-center border-2 border-dashed p-8 transition-colors sm:p-12 ${
                     isDragging
                       ? "border-primary bg-primary/5"
                       : "border-border hover:border-primary/50"
@@ -641,7 +644,7 @@ export default function Certify() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  <div className="flex items-center gap-4 rounded-lg border bg-muted/30 p-4">
+                  <div className="flex items-center gap-4 border border-border/70 bg-background/30 p-4">
                     <File className="h-10 w-10 text-primary" />
                     <div className="flex-1 min-w-0">
                       <p className="font-medium truncate" data-testid="text-selected-filename">
@@ -669,7 +672,7 @@ export default function Certify() {
                   )}
 
                   {fileHash && !isHashing && (
-                    <div className="rounded-lg bg-muted/30 p-3">
+                    <div className="border-l-2 border-primary bg-muted/20 p-3">
                       <p className="mb-1 text-xs font-medium text-muted-foreground">File fingerprint</p>
                       <p className="break-all font-mono text-sm" data-testid="text-file-hash">
                         {fileHash}
@@ -696,8 +699,8 @@ export default function Certify() {
           </Card>
 
           {file && fileHash && (
-            <Card>
-              <CardHeader>
+            <Card className="border-border/70 bg-muted/10 shadow-none">
+              <CardHeader className="border-b border-border/70 pb-4">
                 <CardTitle>Author information</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -720,7 +723,7 @@ export default function Certify() {
           )}
 
           {file && fileHash && (
-            <div className="flex justify-end gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
               <Button
                 type="button"
                 variant="outline"
@@ -754,7 +757,7 @@ export default function Certify() {
             </div>
           )}
         </form>
-      </div>
+      </main>
     </div>
   );
 }

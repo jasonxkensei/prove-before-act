@@ -46,6 +46,14 @@ interface EndpointGroup {
 }
 
 const BASE = "https://provebeforeact.com";
+const DOC_STYLES = `
+  .pba-docs-root { --doc-ink: #17201b; --doc-muted: #657069; --doc-rule: #d4d8d1; }
+  .pba-docs-root main { max-width: 74rem; }
+  .pba-docs-root p { max-width: 72ch; line-height: 1.65; }
+  .pba-docs-root pre { border: 1px solid hsl(var(--border)); border-radius: .3rem; line-height: 1.65; }
+  .pba-docs-root section { scroll-margin-top: 6rem; }
+  .pba-docs-root a:focus-visible, .pba-docs-root button:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 3px; }
+`;
 
 const ENDPOINT_GROUPS: EndpointGroup[] = [
   {
@@ -441,7 +449,7 @@ const ENDPOINT_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/mcp → investigate_proof",
         auth: "x402 or Bearer pm_xxx",
-        description: "MCP tool: Reconstruct the full 4W audit trail for a contested agent action. Returns WHO (agent identity + SIGIL), WHAT (SHA-256 hash on-chain), WHEN (MultiversX block timestamp), WHY (declared decision basis anchored before acting, never internal chain-of-thought). Includes verification summary and session heartbeat. Requires x402 payment at the current quoted USDC rate on Base (see /api/pricing) or API key. Without payment, returns payment requirements.",
+        description: "MCP tool: Reconstruct the full 4W audit trail for a contested agent action. Returns WHO (agent identity + SIGIL), WHAT (SHA-256 hash on-chain), WHEN (MultiversX block timestamp), WHY (declared decision basis anchored before acting, never private internal reasoning). Includes verification summary and session heartbeat. Requires x402 payment at the current quoted USDC rate on Base (see /api/pricing) or API key. Without payment, returns payment requirements.",
         body: { proof_id: "UUID of any proof in the action pair (WHY, WHAT, or heartbeat)", wallet: "Agent wallet address (erd1...)" },
         response: `{ "agent": { "wallet": "erd1...", "name": "...", "sigil_id": "..." }, "verification": { "intent_preceded_execution": true, "why_certified": true, "what_certified": true, "session_anchored": true, "all_confirmed": true }, "timeline": [{ "role": "WHY", "proof_id": "uuid", "action_type": "comment_reasoning", ... }, { "role": "WHAT", ... }], "session": { "role": "heartbeat", "proof_id": "uuid", ... } }`,
         curl: `curl -X POST ${BASE}/mcp \\
@@ -630,7 +638,7 @@ assert hmac.compare_digest(expected, request.headers["X-ProveBeforeAct-Signature
         body: {
           "proof.version": '"1.0" (required)',
           "proof.agent_id": "string (required) — unique agent identifier",
-          "proof.instruction_hash": '"sha256:<64 hex chars>" (required) — hash of the declared decision basis or intent, never internal chain-of-thought',
+          "proof.instruction_hash": '"sha256:<64 hex chars>" (required) — hash of the declared decision basis or intent, never private internal reasoning',
           "proof.action_hash": '"sha256:<64 hex chars>" (required) — hash of the action executed',
           "proof.timestamp": "ISO 8601 UTC (required)",
           "proof.signature": '"hex:<128+ hex chars>" (required) — Ed25519 or ECDSA signature of canonical payload',
@@ -816,7 +824,9 @@ export default function DocsPage() {
   const totalEndpoints = ENDPOINT_GROUPS.reduce((sum, g) => sum + g.endpoints.length, 0);
 
   return (
-    <div className="min-h-screen bg-background">
+    <>
+      <style>{DOC_STYLES}</style>
+    <div className="pba-docs-root min-h-screen bg-background">
       <PublicSiteHeader primaryActionHref="/#free-trial" />
 
       <div className="container py-10 max-w-4xl mx-auto">
@@ -979,5 +989,6 @@ curl ${BASE}/api/proof/YOUR_PROOF_ID`}</pre>
 
       <PublicSiteFooter />
     </div>
+    </>
   );
 }

@@ -2,7 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import crypto from "crypto";
 import { db, pool } from "./db";
-import { certifications, apiKeys, users, agentOutcomes, coherenceChecks, MAX_ONCHAIN_FILENAME_LEN, MAX_ONCHAIN_AUTHOR_LEN, sha256HexSchema } from "@shared/schema";
+import { certifications, apiKeys, users, agents, agentOutcomes, coherenceChecks, MAX_ONCHAIN_FILENAME_LEN, MAX_ONCHAIN_AUTHOR_LEN, sha256HexSchema } from "@shared/schema";
 import { eq, sql, and, or, desc } from "drizzle-orm";
 import { recordOnBlockchain } from "./blockchain";
 import { getCertificationPriceUsd } from "./pricing";
@@ -21,10 +21,11 @@ import {
 import { pgCheckRateLimit } from "./pgRateLimit";
 import { buildCoherenceAnchor } from "./coherence-anchor";
 import { isMX8004Configured } from "./mx8004";
+import { ensureDefaultAgent, resolveAgentForApiKey } from "./agent-identity";
 
 interface McpContext {
   baseUrl: string;
-  auth: { valid: boolean; keyHash?: string; apiKeyId?: string; userId?: string };
+  auth: { valid: boolean; keyHash?: string; apiKeyId?: string; userId?: string; agentId?: string };
   xPaymentHeader?: string;
   host: string;
   clientIp: string;
@@ -81,6 +82,12 @@ export async function createMcpServer(ctx: McpContext) {
   });
 
   const { baseUrl, auth, xPaymentHeader, host, clientIp } = ctx;
+  // authenticateApiKey resolves this from the validated key. The fallback is
+  // retained for callers which construct an MCP context directly, and is
+  // deliberately account-deterministic rather than derived from tool inputs.
+  const agentId = auth.valid && auth.userId
+    ? auth.agentId ?? (await ensureDefaultAgent(auth.userId)).id
+    : undefined;
 
   // ── TOOL 1 : register_trial — START HERE, no key needed ──────────────────
   // Implemented directly in the McpServer (not at transport level) so it
@@ -391,6 +398,7 @@ export async function createMcpServer(ctx: McpContext) {
         try {
           [pendingCert] = await db.insert(certifications).values({
             userId: certUserId,
+            agentId,
             fileName: filename,
             fileHash: file_hash,
             fileType: filename.split(".").pop() || "unknown",
@@ -688,6 +696,7 @@ export async function createMcpServer(ctx: McpContext) {
         try {
           [cwcPendingCert] = await db.insert(certifications).values({
             userId: cwcCertUserId,
+            agentId,
             fileName: filename,
             fileHash: file_hash,
             fileType: filename.split(".").pop() || "unknown",
@@ -1205,6 +1214,9 @@ export async function createMcpServer(ctx: McpContext) {
         try {
           [mcpPending] = await db.insert(certifications).values({
             userId: auditCertUserId,
+            // params.agent_id is signed display/audit metadata, never the
+            // logical-agent foreign key.
+            agentId,
             fileName,
             fileHash,
             fileType: "json",
@@ -1893,6 +1905,7 @@ export async function createMcpServer(ctx: McpContext) {
         try {
           [pendingCert] = await db.insert(certifications).values({
             userId: auth.userId,
+            agentId,
             fileName: `coherence-check-${Date.now()}.json`,
             fileHash: coherenceAnchor,
             fileType: "json",
@@ -2108,7 +2121,7 @@ export async function createMcpServer(ctx: McpContext) {
   return server;
 }
 
-export async function authenticateApiKey(authHeader: string | undefined): Promise<{ valid: boolean; keyHash?: string; apiKeyId?: string; userId?: string }> {
+export async function authenticateApiKey(authHeader: string | undefined): Promise<{ valid: boolean; keyHash?: string; apiKeyId?: string; userId?: string; agentId?: string }> {
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     return { valid: false };
   }
@@ -2121,11 +2134,31 @@ export async function authenticateApiKey(authHeader: string | undefined): Promis
     return { valid: false };
   }
 
+  // Only the key's explicitly linked agent is accepted, and only when it
+  // belongs to this account. resolveAgentForApiKey otherwise creates/returns
+  // the account's deterministic default (id === userId).
+  const logicalAgent = await resolveAgentForApiKey(apiKey);
+
   db.update(apiKeys)
     .set({ lastUsedAt: new Date(), requestCount: sql`request_count + 1` })
     .where(eq(apiKeys.id, apiKey.id))
     .execute()
     .catch((err) => logger.error("Failed to update API key stats", { error: err.message }));
 
-  return { valid: true, keyHash, apiKeyId: apiKey.id, userId: apiKey.userId || undefined };
+  // A validated API key represents successful authenticated MCP activity.
+  // Do not make this telemetry write part of the request's response/error
+  // contract; failures are logged while the authenticated call continues.
+  await db.update(agents)
+    .set({ lastSeenAt: new Date() })
+    .where(eq(agents.id, logicalAgent.id))
+    .execute()
+    .catch((err) => logger.error("Failed to update MCP agent last seen time", { error: err.message }));
+
+  return {
+    valid: true,
+    keyHash,
+    apiKeyId: apiKey.id,
+    userId: apiKey.userId || undefined,
+    agentId: logicalAgent.id,
+  };
 }

@@ -20,6 +20,14 @@ import {
 } from "lucide-react";
 
 const BASE = "https://provebeforeact.com";
+const DOC_STYLES = `
+  .pba-docs-root { --doc-rule: hsl(var(--border)); }
+  .pba-docs-root main { max-width: 72rem; }
+  .pba-docs-root p { max-width: 72ch; line-height: 1.65; }
+  .pba-docs-root section { scroll-margin-top: 6rem; }
+  .pba-docs-root pre { border: 1px solid var(--border); border-radius: .3rem; line-height: 1.65; }
+  .pba-docs-root a:focus-visible, .pba-docs-root button:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 3px; }
+`;
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -76,7 +84,7 @@ const dualCertCode = `async function certifyAndAct(agent: AgentContext) {
     prompt_hash: sha256(agent.prompt),       // hash of the prompt, not the prompt itself
     trigger_content_hash: sha256(agent.trigger), // hash of what triggered this action
     declared_justification: 'Respond under the configured response policy',
-    // Do not include private step-by-step reasoning or chain-of-thought.
+    // Do not include private step-by-step reasoning.
     rules_applied: ['Max 2 paragraphs', 'Adopt commenter framing'],
     timestamp: new Date().toISOString(),
   };
@@ -262,7 +270,9 @@ const report = await fetch(
 
 export default function Docs4WPage() {
   return (
-    <div className="min-h-screen bg-background">
+    <>
+      <style>{DOC_STYLES}</style>
+    <div className="pba-docs-root min-h-screen bg-background">
       <PublicSiteHeader />
 
       <div className="container py-10 max-w-3xl mx-auto">
@@ -325,7 +335,7 @@ export default function Docs4WPage() {
                     </div>
                     <h3 className="text-sm font-semibold" data-testid="text-why-title">WHY</h3>
                   </div>
-                  <p className="text-xs text-muted-foreground">Declared decision basis — the chosen context, justification, and decision/intention, not internal chain-of-thought. Anchored <strong className="text-foreground">before acting</strong> — cryptographic proof that intent preceded execution.</p>
+                  <p className="text-xs text-muted-foreground">Declared decision basis — the chosen context, justification, and decision/intention, not private internal reasoning. Anchored <strong className="text-foreground">before acting</strong> — cryptographic proof that intent preceded execution.</p>
                 </CardContent>
               </Card>
               <Card className="border-primary/20">
@@ -467,7 +477,7 @@ export default function Docs4WPage() {
               <p className="text-muted-foreground">WHO : <span className="text-foreground">Prove Before Act-agent-verify-hpyhbs (MX-8004)</span></p>
               <p className="text-muted-foreground">WHAT: <span className="text-foreground">SHA-256 hash per action (Prove Before Act)</span></p>
               <p className="text-muted-foreground">WHEN: <span className="text-foreground">MultiversX block timestamp</span></p>
-              <p className="text-muted-foreground">WHY : <span className="text-foreground">Declared decision basis anchored before every action — never internal chain-of-thought</span></p>
+              <p className="text-muted-foreground">WHY : <span className="text-foreground">Declared decision basis anchored before every action — never private internal reasoning</span></p>
               <div className="border-t my-2 pt-2 border-border/50" />
               <p className="text-muted-foreground">comment_reasoning <a href="https://provebeforeact.com/proof/660bfd2b-4900-4a83-b60a-02bed8a07448" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">660bfd2b...</a></p>
               <p className="text-muted-foreground">comment <a href="https://provebeforeact.com/proof/8e1527ac-1fcd-41c8-8d3c-7a79e440fb2f" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">8e1527ac...</a></p>
@@ -477,7 +487,7 @@ export default function Docs4WPage() {
               <p className="text-muted-foreground">Leaderboard: <a href="https://provebeforeact.com/leaderboard" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">provebeforeact.com/leaderboard</a></p>
             </div>
             <p className="text-xs text-muted-foreground mt-3">
-               Every action proof above links a WHY (declared decision basis, never internal chain-of-thought) to a WHAT (output). The heartbeat aggregates all proof IDs into a single on-chain session anchor.
+               Every action proof above links a WHY (declared decision basis, never private internal reasoning) to a WHAT (output). The heartbeat aggregates all proof IDs into a single on-chain session anchor.
               Each certification contributes to the agent's Trust Score — consistency beats volume.
             </p>
             <div className="mt-3">
@@ -503,5 +513,6 @@ export default function Docs4WPage() {
       </div>
       <PublicSiteFooter />
     </div>
+    </>
   );
 }

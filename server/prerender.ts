@@ -1910,41 +1910,202 @@ function renderFleetPage(baseUrl: string): string {
     "Aggregate WHY→WHAT coherence across a fleet of AI agents. Enter an org wallet prefix or registered fleet slug to see per-agent coherence rates and the fleet-level score.",
     `${baseUrl}/fleet`,
   ) + `
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    min-width: 320px;
+    background: #0d1410;
+    color: #e4ebe5;
+    font-family: "DM Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 16px;
+    line-height: 1.65;
+  }
+  a { color: #91e7b5; }
+  a:hover { color: #c0f8d1; }
+  .fleet-shell { min-height: 100vh; }
+  .fleet-nav {
+    border-bottom: 1px solid #26352c;
+    background: #101a14;
+    padding: 0 1.25rem;
+  }
+  .fleet-nav-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    max-width: 1040px;
+    min-height: 64px;
+    margin: 0 auto;
+  }
+  .fleet-brand, .fleet-nav a { text-decoration: none; }
+  .fleet-brand {
+    color: #e4ebe5;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    white-space: nowrap;
+  }
+  .fleet-brand-mark { color: #91e7b5; margin-right: .45rem; }
+  .fleet-nav-links {
+    display: flex;
+    align-items: center;
+    gap: 1.15rem;
+    font-size: .88rem;
+  }
+  .fleet-nav-links a { color: #aebdb2; }
+  .fleet-nav-links a:hover { color: #c0f8d1; }
+  .fleet-main {
+    max-width: 1040px;
+    margin: 0 auto;
+    padding: 2.5rem 1.25rem 5rem;
+  }
+  .skip-link {
+    position: absolute;
+    left: 1rem;
+    top: -5rem;
+    z-index: 10;
+    padding: .65rem .9rem;
+    border-radius: 4px;
+    background: #91e7b5;
+    color: #102018;
+    font-weight: 700;
+    text-decoration: none;
+  }
+  .skip-link:focus { top: 1rem; }
+  .fleet-kicker {
+    margin: 0 0 .6rem;
+    color: #91e7b5;
+    font-family: "DM Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .72rem;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+  }
+  h1, h2, h3 { color: #f0f5f1; line-height: 1.18; }
+  h1 {
+    max-width: 760px;
+    margin: 0 0 .8rem;
+    font-size: clamp(2rem, 5vw, 3.45rem);
+    letter-spacing: -.045em;
+  }
+  h2 {
+    margin: 3.4rem 0 1rem;
+    padding-top: 1.45rem;
+    border-top: 1px solid #26352c;
+    font-size: clamp(1.25rem, 3vw, 1.65rem);
+    letter-spacing: -.025em;
+  }
+  h3 { margin: 2rem 0 .75rem; font-size: 1.05rem; }
+  p { max-width: 72ch; margin: 0 0 1.15rem; color: #b5c2b8; }
+  .fleet-lede { max-width: 68ch; color: #bdcabe; font-size: 1.08rem; }
+  .fleet-panel {
+    overflow: hidden;
+    margin: 1.4rem 0 1.5rem;
+    border: 1px solid #2a3b31;
+    border-radius: 5px;
+    background: #131e17;
+  }
+  .fleet-scroll { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  table { width: 100%; min-width: 620px; border-collapse: collapse; }
+  th {
+    color: #91e7b5;
+    background: #17251c;
+    font-family: "DM Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .72rem;
+    font-weight: 500;
+    letter-spacing: .08em;
+    text-align: left;
+    text-transform: uppercase;
+  }
+  th, td { padding: .8rem 1rem; border-bottom: 1px solid #2a3b31; vertical-align: top; }
+  tbody tr:last-child td { border-bottom: 0; }
+  td { color: #c5d0c7; }
+  td:first-child { color: #eef5ef; font-weight: 650; }
+  code, pre {
+    font-family: "DM Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  code {
+    color: #b5f0c9;
+    background: #19271e;
+    border: 1px solid #2a3b31;
+    border-radius: 3px;
+    padding: .12em .35em;
+    font-size: .88em;
+  }
+  .fleet-code {
+    max-width: 100%;
+    overflow-x: auto;
+    margin: 1.25rem 0 1.5rem;
+    padding: 1.1rem 1.2rem;
+    border: 1px solid #2a3b31;
+    border-left: 3px solid #91e7b5;
+    border-radius: 5px;
+    background: #101a14;
+    color: #c9d7cc;
+    font-size: .82rem;
+    line-height: 1.7;
+    white-space: pre;
+    -webkit-overflow-scrolling: touch;
+  }
+  .fleet-list { padding-left: 1.25rem; color: #b5c2b8; }
+  .fleet-list li { padding: .25rem 0; }
+  .fleet-list a { text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  .fleet-footnote { margin-top: 2.5rem; color: #849389; font-size: .88rem; }
+  :focus-visible { outline: 2px solid #91e7b5; outline-offset: 3px; }
+  @media (max-width: 600px) {
+    .fleet-nav { padding: 0 1rem; }
+    .fleet-nav-inner { min-height: 58px; }
+    .fleet-nav-links { gap: .75rem; font-size: .8rem; }
+    .fleet-main { padding: 2rem 1rem 3.5rem; }
+    h1 { font-size: 2.15rem; }
+    .fleet-lede { font-size: 1rem; }
+    th, td { padding: .7rem .75rem; }
+    .fleet-code { padding: .9rem; font-size: .76rem; }
+  }
+</style>
 <body>
-<main style="font-family:Inter,sans-serif;max-width:860px;margin:0 auto;padding:2rem 1.5rem;color:#111">
-<nav style="margin-bottom:2rem">
-  <a href="${escapeHtml(baseUrl)}" style="color:#10b981;text-decoration:none;font-weight:600">← Prove Before Act</a>
-  &nbsp;·&nbsp;
-  <a href="${escapeHtml(baseUrl)}/coherence" style="color:#10b981;text-decoration:none">Coherence Layer</a>
-</nav>
+<div class="fleet-shell">
+<a class="skip-link" href="#main-content">Skip to main content</a>
+<header class="fleet-nav">
+  <nav class="fleet-nav-inner" aria-label="Primary navigation">
+    <a class="fleet-brand" href="${escapeHtml(baseUrl)}"><span class="fleet-brand-mark">●</span>Prove Before Act</a>
+    <div class="fleet-nav-links">
+      <a href="${escapeHtml(baseUrl)}">Home</a>
+      <a href="${escapeHtml(baseUrl)}/coherence">Coherence</a>
+    </div>
+  </nav>
+</header>
 
-<h1 style="font-size:2rem;font-weight:700;margin-bottom:.5rem">Fleet Coherence — Coherence Artisan View</h1>
-<p style="color:#555;font-size:1.1rem;margin-bottom:2rem">When an organization runs a fleet of agents, who guarantees global alignment? The fleet coherence view aggregates WHY→WHAT coherence rates across all agents in your fleet and produces a single fleet-level score.</p>
+<main id="main-content" class="fleet-main">
+<p class="fleet-kicker">Operational evidence · fleet view</p>
+<h1>Fleet Coherence — Coherence Artisan View</h1>
+<p class="fleet-lede">When an organization runs a fleet of agents, who guarantees global alignment? The fleet coherence view aggregates WHY→WHAT coherence rates across all agents in your fleet and produces a single fleet-level score.</p>
 
 <h2>Two query modes</h2>
-<table style="width:100%;border-collapse:collapse;margin-bottom:1.5rem">
-<thead><tr style="background:#f3f4f6">
-  <th style="padding:.6rem 1rem;text-align:left;border:1px solid #e5e7eb">Mode</th>
-  <th style="padding:.6rem 1rem;text-align:left;border:1px solid #e5e7eb">Parameter</th>
-  <th style="padding:.6rem 1rem;text-align:left;border:1px solid #e5e7eb">Selects</th>
+<div class="fleet-panel"><div class="fleet-scroll"><table>
+<thead><tr>
+  <th>Mode</th>
+  <th>Parameter</th>
+  <th>Selects</th>
 </tr></thead>
 <tbody>
-  <tr><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">Wallet prefix</td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb"><code>?org=&lt;prefix&gt;</code></td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">Every public agent whose wallet address starts with the prefix (min 6 chars)</td></tr>
-  <tr><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">Registered fleet</td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb"><code>?fleet=&lt;slug&gt;</code></td><td style="padding:.5rem 1rem;border:1px solid #e5e7eb">The exact members added to a named fleet via <code>POST /api/fleets</code></td></tr>
+  <tr><td>Wallet prefix</td><td><code>?org=&lt;prefix&gt;</code></td><td>Every public agent whose wallet address starts with the prefix (min 6 chars)</td></tr>
+  <tr><td>Registered fleet</td><td><code>?fleet=&lt;slug&gt;</code></td><td>The exact members added to a named fleet via <code>POST /api/fleets</code></td></tr>
 </tbody>
-</table>
+</table></div></div>
 
 <p>Only agents with <code>is_public_profile = true</code> are included. Max 50 agents returned (capped). Private-profile agents are excluded from the public fleet view.</p>
 
 <h2>API — GET /api/fleet/coherence</h2>
-<pre style="background:#f9fafb;padding:1rem;border-radius:.5rem;overflow-x:auto;font-size:.85rem"><code># Org-prefix mode
+<pre class="fleet-code"><code># Org-prefix mode
 GET ${escapeHtml(baseUrl)}/api/fleet/coherence?org=erd1acme
 
 # Registered fleet mode
 GET ${escapeHtml(baseUrl)}/api/fleet/coherence?fleet=acme-agents</code></pre>
 
 <h3>Response shape</h3>
-<pre style="background:#f9fafb;padding:1rem;border-radius:.5rem;overflow-x:auto;font-size:.85rem"><code>{
+<pre class="fleet-code"><code>{
   "fleet_slug": "acme-agents",       // or "org_prefix" for prefix mode
   "fleet": {
     "agent_count": 12,
@@ -1978,7 +2139,7 @@ GET ${escapeHtml(baseUrl)}/api/fleet/coherence?fleet=acme-agents</code></pre>
 <p>Coherence rate (closing the loop at all) is weighted more than average score (how gracefully the loop was closed). A fleet with all agents reliably linking WHY→WHAT within 1 h earns full points on the dominant term.</p>
 
 <h2>Register a fleet</h2>
-<pre style="background:#f9fafb;padding:1rem;border-radius:.5rem;overflow-x:auto;font-size:.85rem"><code># Create a fleet (auth required)
+<pre class="fleet-code"><code># Create a fleet (auth required)
 POST ${escapeHtml(baseUrl)}/api/fleets
 Authorization: Bearer pm_YOUR_API_KEY
 { "name": "Acme Agents", "slug": "acme-agents" }
@@ -1989,14 +2150,15 @@ Authorization: Bearer pm_YOUR_API_KEY
 { "wallet_address": "erd1...", "proof": { "type": "owner_wallet" } }</code></pre>
 
 <h2>Resources</h2>
-<ul>
-  <li><a href="${escapeHtml(baseUrl)}/coherence" style="color:#10b981">Coherence Layer docs</a> — check_coherence, require_coherence_anchor, link API</li>
-  <li><a href="${escapeHtml(baseUrl)}/agent-context" style="color:#10b981">Agent context page</a> — full API reference</li>
-  <li><a href="${escapeHtml(baseUrl)}/llms.txt" style="color:#10b981">llms.txt</a> — MCP tool list</li>
-  <li><a href="${escapeHtml(baseUrl)}/.well-known/provebeforeact.md" style="color:#10b981">provebeforeact.md</a> — full specification</li>
+<ul class="fleet-list">
+  <li><a href="${escapeHtml(baseUrl)}/coherence">Coherence Layer docs</a> — check_coherence, require_coherence_anchor, link API</li>
+  <li><a href="${escapeHtml(baseUrl)}/agent-context">Agent context page</a> — full API reference</li>
+  <li><a href="${escapeHtml(baseUrl)}/llms.txt">llms.txt</a> — MCP tool list</li>
+  <li><a href="${escapeHtml(baseUrl)}/.well-known/provebeforeact.md">provebeforeact.md</a> — full specification</li>
 </ul>
-<p style="margin-top:2rem;color:#888;font-size:.875rem">Interactive fleet dashboard: <a href="${escapeHtml(baseUrl)}/fleet" style="color:#10b981">${escapeHtml(baseUrl)}/fleet</a> — enter a wallet prefix or fleet slug to load live per-agent coherence data.</p>
+<p class="fleet-footnote">Interactive fleet dashboard: <a href="${escapeHtml(baseUrl)}/fleet">${escapeHtml(baseUrl)}/fleet</a> — enter a wallet prefix or fleet slug to load live per-agent coherence data.</p>
 </main>
+</div>
 </body></html>`;
 }
 

@@ -27,6 +27,7 @@ import { registerStandardRoutes } from "./routes/standard";
 import { registerCalibrationRoutes } from "./routes/calibration";
 import { registerCoherenceRoutes } from "./routes/coherence";
 import { registerFleetsRoutes } from "./routes/fleets";
+import { registerFleetOverviewRoutes } from "./routes/fleet-overview";
 import { registerConversionRoutes } from "./routes/conversion";
 
 const recentVisits = new Map<string, number>();
@@ -125,6 +126,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerCalibrationRoutes(app);
   registerCoherenceRoutes(app);
   registerFleetsRoutes(app);
+  registerFleetOverviewRoutes(app);
 
   const httpServer = createServer(app);
 

@@ -3,6 +3,29 @@ import { PublicSiteFooter, PublicSiteHeader } from "@/components/public-site-chr
 
 const STYLES = `
   .pba-std-root {
+    --paper: #f6f4ee;
+    --paper-strong: #fffdf8;
+    --ink: #17201b;
+    --muted: #657069;
+    --rule: #d4d8d1;
+    --code: #e9eee7;
+    --verified: #237a4b;
+    background: var(--paper);
+    color: var(--ink);
+  }
+  .pba-std-root a:focus-visible {
+    outline: 2px solid var(--verified);
+    outline-offset: 4px;
+  }
+  .pba-std-root pre { background: var(--code); border-left-color: var(--verified); }
+  .pba-std-root .pba-std-flow,
+  .pba-std-root .pba-std-callout { background: var(--paper-strong); }
+  .pba-std-root .pba-std-flow-box.proof { background: var(--ink); border-color: var(--ink); }
+  .pba-std-root .pba-std-checklist li::before { color: var(--verified); }
+  .pba-std-root .pba-std-header,
+  .pba-std-root .pba-std-footer { border-color: var(--ink); background: var(--paper); }
+  .pba-std-root .pba-std-container { max-width: 740px; }
+  .pba-std-root {
     background: #f8f7f4;
     color: #0f0f0f;
     font-family: Georgia, 'Times New Roman', serif;
@@ -351,7 +374,7 @@ export default function StandardPage() {
           </div>
         </div>
 
-        <div className="pba-std-container">
+        <main id="main-content" className="pba-std-container">
           {/* ── TOC ── */}
           <div className="pba-std-toc">
             <div className="pba-std-toc-label">Contents</div>
@@ -561,7 +584,7 @@ interface ProveBeforeAct {
             <pre>{`{
   "who": "agent-id-v2.3.1",
   "why": "RSI below 30 threshold, risk/reward 1:3, within position limits",
-  // decision basis, not internal chain-of-thought
+  // declared decision basis, not private internal reasoning
   "what": "BUY BTC 0.5 at market",
   "when": null  // set by ledger, not by agent
 }`}</pre>
@@ -618,7 +641,7 @@ decision = agent.decide(signal)
 # Prove Before Act
 intent_proof = anchor({
   who: agent.id,
-  why: decision.rationale,   # decision basis, not internal chain-of-thought
+  why: decision.rationale,   # declared decision basis, not private internal reasoning
   what: f"BUY {decision.asset} {decision.amount}",
   when: null                 # ledger writes this
 })
@@ -718,8 +741,7 @@ if intent_proof.status == "confirmed":
             </div>
             <p>Contact: <a href="https://provebeforeact.com">provebeforeact.com</a> · <a href="https://x.com/ProveBeforeAct">@ProveBeforeAct</a> · <a href="https://www.malt.fr/profile/jasonpetitfourg">Malt</a></p>
           </section>
-        </div>
-
+        </main>
         <PublicSiteFooter paper />
       </div>
     </>

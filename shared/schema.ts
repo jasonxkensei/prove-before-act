@@ -2,8 +2,10 @@ import { sql } from 'drizzle-orm';
 import {
   bigint,
   check,
+  foreignKey,
   date,
   index,
+  unique,
   uniqueIndex,
   jsonb,
   pgTable,
@@ -60,10 +62,38 @@ export const users = pgTable("users", {
 
 export type User = typeof users.$inferSelect;
 
+// Logical agents belong to an account.  The account's default agent is
+// deterministic: its id is the owner_account_id (there is intentionally no
+// is_default column).
+export const agents = pgTable("agents", {
+  id: varchar("id").primaryKey(),
+  name: varchar("name").notNull(),
+  ownerAccountId: varchar("owner_account_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  // Internal, collision-safe account binding used as a stable ordinary FK
+  // target. Length prefixes prevent ambiguous concatenations.
+  ownershipKey: text("ownership_key").generatedAlwaysAs(
+    sql`char_length(id)::text || ':' || id || ':' || char_length(owner_account_id)::text || ':' || owner_account_id`,
+  ),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  lastSeenAt: timestamp("last_seen_at"),
+}, (table) => [
+  unique("agents_ownership_key_unique").on(table.ownershipKey),
+  index("idx_agents_owner_account").on(table.ownerAccountId),
+  index("idx_agents_owner_last_seen").on(table.ownerAccountId, table.lastSeenAt),
+]);
+
+export type Agent = typeof agents.$inferSelect;
+
 // Certifications table
 export const certifications = pgTable("certifications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  // NULL remains deliberately historical/unattributed; it is never inferred
+  // from a proof's metadata, author, wallet, API-key name, or filename.
+  agentId: varchar("agent_id"),
+  agentOwnershipKey: text("agent_ownership_key").generatedAlwaysAs(
+    sql`CASE WHEN agent_id IS NULL THEN NULL ELSE char_length(agent_id)::text || ':' || agent_id || ':' || char_length(user_id)::text || ':' || user_id END`,
+  ),
   fileName: text("file_name").notNull(),
   fileHash: text("file_hash").notNull().unique(),
   fileType: varchar("file_type"),
@@ -85,6 +115,13 @@ export const certifications = pgTable("certifications", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
+  // Agent assignment is optional for historical proofs. The generated key is
+  // NULL for those rows; otherwise it binds the agent id to this account.
+  foreignKey({
+    name: "certifications_agent_owner_fk",
+    columns: [table.agentOwnershipKey],
+    foreignColumns: [agents.ownershipKey],
+  }),
   // Partial unique index: a given on-chain transaction hash can only be used for one
   // certification. NULL transaction_hash is excluded so pending rows (which have no tx yet)
   // do not conflict with each other.
@@ -96,6 +133,7 @@ export const certifications = pgTable("certifications", {
   index("idx_certs_trust_lookup")
     .on(table.userId, table.createdAt)
     .where(sql`blockchain_status = 'confirmed' AND is_public = true`),
+  index("idx_certifications_agent_created").on(table.agentId, table.createdAt),
   // JSONB expression indexes backing metadata-keyed lookup endpoints.
   // These are partial indexes (WHERE clause) so they stay small.
   index("idx_cert_meta_decision_id")
@@ -309,6 +347,10 @@ export const apiKeys = pgTable("api_keys", {
   keyHash: varchar("key_hash").notNull().unique(),
   keyPrefix: varchar("key_prefix").notNull(), // First 8 chars for display (pm_xxx...)
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  agentId: varchar("agent_id"),
+  agentOwnershipKey: text("agent_ownership_key").generatedAlwaysAs(
+    sql`CASE WHEN agent_id IS NULL THEN NULL ELSE char_length(agent_id)::text || ':' || agent_id || ':' || char_length(user_id)::text || ':' || user_id END`,
+  ),
   name: varchar("name").notNull(),
   lastUsedAt: timestamp("last_used_at"),
   requestCount: integer("request_count").default(0),
@@ -316,7 +358,16 @@ export const apiKeys = pgTable("api_keys", {
   previousKeyHash: varchar("previous_key_hash"),
   previousKeyExpiresAt: timestamp("previous_key_expires_at"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  // NULL agent_id keeps legacy account keys valid; otherwise the generated key
+  // binds the assigned agent to the key's account.
+  foreignKey({
+    name: "api_keys_agent_owner_fk",
+    columns: [table.agentOwnershipKey],
+    foreignColumns: [agents.ownershipKey],
+  }),
+  index("idx_api_keys_agent").on(table.agentId),
+]);
 
 export type ApiKey = typeof apiKeys.$inferSelect;
 
