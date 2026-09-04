@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { fleetHealth } from "../server/routes/fleet-overview";
 import { defaultAgentName } from "../server/agent-identity";
+import { readFileSync } from "node:fs";
 
 describe("fleet overview health precedence", () => {
   const now = Date.parse("2025-01-02T12:00:00.000Z");
@@ -35,5 +36,29 @@ describe("default logical-agent name resolution", () => {
     expect(defaultAgentName({ agentName: "  Operator  ", companyName: "Company" })).toBe("Operator");
     expect(defaultAgentName({ agentName: " ", companyName: " Company " })).toBe("Company");
     expect(defaultAgentName({ agentName: null, companyName: null })).toBe("Default agent");
+  });
+});
+
+describe("fleet proof summary contract", () => {
+  const routeSource = readFileSync(new URL("../server/routes/fleet-overview.ts", import.meta.url), "utf8");
+  const uiSource = readFileSync(new URL("../client/src/pages/fleet-overview.tsx", import.meta.url), "utf8");
+
+  it("owner-isolates both the selected agent and its recent proofs", () => {
+    expect(routeSource).toContain("WHERE id = $2 AND owner_account_id = $1");
+    expect(routeSource).toContain("a.owner_account_id = $1");
+    expect(routeSource).toContain("c.user_id = a.owner_account_id");
+  });
+
+  it("keeps historical NULL attribution separate and explains it", () => {
+    expect(routeSource).toContain("WHERE user_id = $1 AND agent_id IS NULL");
+    expect(routeSource).toContain("These historical proofs have no agent attribution");
+  });
+
+  it("renders a responsive summary for desktop and mobile", () => {
+    expect(uiSource).toContain('data-testid="fleet-proof-summary-dialog"');
+    expect(uiSource).toContain("w-[calc(100vw-2rem)]");
+    expect(uiSource).toContain("sm:max-w-2xl");
+    expect(uiSource).toContain("grid-cols-2 gap-3 sm:grid-cols-4");
+    expect(uiSource).toContain("flex-col gap-1 py-3 text-sm sm:flex-row");
   });
 });

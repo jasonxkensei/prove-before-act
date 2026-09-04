@@ -1,12 +1,13 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, Redirect } from "wouter";
-import { Activity, AlertTriangle, Bot, Clock3, FileWarning, Loader2, ShieldCheck, Users } from "lucide-react";
+import { Activity, AlertTriangle, Bot, Clock3, ExternalLink, FileWarning, Loader2, ShieldCheck, Users } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useWalletAuth } from "@/hooks/useWalletAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type HealthStatus = "green" | "orange" | "red";
 
@@ -57,6 +58,20 @@ interface FleetOverview {
   historical?: { certification_count?: number; count?: number } | null;
 }
 
+interface ProofSummary {
+  agent: {
+    agent_id: string;
+    name: string | null;
+    last_seen_at: string | null;
+    health: HealthStatus;
+    reasons: string[];
+  };
+  counts: ProofCounts & { failed_within_24h: number; pending_over_15m: number };
+  historical_unattributed: ProofCounts & { total: number; explanation: string };
+  recent_proofs: Array<{ proof_id: string; status: string; created_at: string | null; updated_at: string | null }>;
+  privacy_note: string;
+}
+
 const healthStyles: Record<HealthStatus, string> = {
   green: "border-[#8ef2bd]/40 bg-[#8ef2bd]/10 text-[#8ef2bd]",
   orange: "border-amber-300/40 bg-amber-300/10 text-amber-200",
@@ -94,6 +109,7 @@ function SummaryMetric({ label, value, tone = "text-[#e8ebe5]" }: { label: strin
 
 export default function FleetOverviewPage() {
   const { isAuthenticated, isLoading: authLoading } = useWalletAuth();
+  const [selectedAgent, setSelectedAgent] = useState<OperationalAgent | null>(null);
 
   useEffect(() => {
     document.title = "Fleet Operations | Prove Before Act";
@@ -106,6 +122,16 @@ export default function FleetOverviewPage() {
       const response = await fetch("/api/fleet/overview", { credentials: "include" });
       const body = await response.json();
       if (!response.ok) throw new Error(body.message || "Unable to load fleet operations.");
+      return body;
+    },
+  });
+  const proofSummary = useQuery<ProofSummary>({
+    queryKey: ["/api/fleet/agents", selectedAgent?.agent_id, "proof-summary"],
+    enabled: Boolean(isAuthenticated && selectedAgent?.agent_id),
+    queryFn: async () => {
+      const response = await fetch(`/api/fleet/agents/${encodeURIComponent(selectedAgent!.agent_id!)}/proof-summary`, { credentials: "include" });
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.message || "Unable to load proof summary.");
       return body;
     },
   });
@@ -245,6 +271,16 @@ export default function FleetOverviewPage() {
                               <div><p className="text-xs text-[#a0ada3]">Pending</p><p className="font-semibold tabular-nums">{pendingProofs}</p></div>
                               <div><p className="text-xs text-[#a0ada3]">Failed</p><p className="font-semibold tabular-nums">{failedProofs}</p></div>
                               <div><p className="text-xs text-[#a0ada3]">Created</p><p className="text-xs text-[#c4cec5]">{relativeTime(agent.created_at)}</p></div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="col-span-2 mt-1 w-full border-[#526158] bg-transparent text-[#e8ebe5] hover:bg-[#202b23] hover:text-white"
+                                onClick={() => setSelectedAgent(agent)}
+                                data-testid={`fleet-overview-open-summary-${agent.agent_id}`}
+                              >
+                                Open proof summary <ExternalLink className="ml-2 h-4 w-4" aria-hidden="true" />
+                              </Button>
                             </div>
                           </div>
                         </CardContent>
@@ -254,6 +290,62 @@ export default function FleetOverviewPage() {
                 </div>
               )}
             </section>
+            <Dialog open={Boolean(selectedAgent)} onOpenChange={(open) => !open && setSelectedAgent(null)}>
+              <DialogContent className="max-h-[90vh] w-[calc(100vw-2rem)] overflow-y-auto border-[#303832] bg-[#111612] text-[#e8ebe5] sm:max-w-2xl" data-testid="fleet-proof-summary-dialog">
+                <DialogHeader>
+                  <DialogTitle>Proof summary: {selectedAgent?.name || "Unnamed agent"}</DialogTitle>
+                  <DialogDescription className="text-[#a0ada3]">
+                    Read-only evidence behind this agent’s current health.
+                  </DialogDescription>
+                </DialogHeader>
+                {proofSummary.isLoading ? (
+                  <div className="flex justify-center py-12"><Loader2 className="h-7 w-7 animate-spin text-[#8ef2bd]" aria-label="Loading proof summary" /></div>
+                ) : proofSummary.error instanceof Error ? (
+                  <p className="border border-amber-300/40 bg-amber-300/10 p-4 text-sm text-amber-200">{proofSummary.error.message}</p>
+                ) : proofSummary.data ? (
+                  <div className="space-y-5" data-testid="fleet-proof-summary-content">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge className={`border ${healthStyles[proofSummary.data.agent.health]}`}>
+                        {proofSummary.data.agent.health.charAt(0).toUpperCase() + proofSummary.data.agent.health.slice(1)}
+                      </Badge>
+                      <span className="text-sm text-[#a0ada3]">
+                        {proofSummary.data.agent.reasons.length ? proofSummary.data.agent.reasons.join(" · ") : "No health warnings"}
+                      </span>
+                    </div>
+                    <section aria-label="Proof status counts" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                      <SummaryMetric label="Confirmed" value={proofSummary.data.counts.confirmed ?? 0} tone="text-[#8ef2bd]" />
+                      <SummaryMetric label="Pending" value={proofSummary.data.counts.pending ?? 0} tone="text-amber-200" />
+                      <SummaryMetric label="Failed" value={proofSummary.data.counts.failed ?? 0} tone="text-red-200" />
+                      <SummaryMetric label="Total" value={proofSummary.data.counts.total ?? 0} />
+                    </section>
+                    <p className="text-sm leading-relaxed text-[#a0ada3]">
+                      Health evidence: {proofSummary.data.counts.failed_within_24h} failed in the trailing 24 hours and {proofSummary.data.counts.pending_over_15m} pending for more than 15 minutes. Red takes precedence over orange, then green.
+                    </p>
+                    <section className="border border-dashed border-[#526158] p-4" data-testid="fleet-proof-summary-historical">
+                      <h3 className="font-medium">Historical unattributed proofs: {proofSummary.data.historical_unattributed.total}</h3>
+                      <p className="mt-1 text-sm text-[#a0ada3]">{proofSummary.data.historical_unattributed.explanation}</p>
+                    </section>
+                    <section>
+                      <h3 className="mb-2 font-medium">Recent proofs</h3>
+                      {proofSummary.data.recent_proofs.length ? (
+                        <ul className="divide-y divide-[#303832] border-y border-[#303832]">
+                          {proofSummary.data.recent_proofs.map((proof) => (
+                            <li key={proof.proof_id} className="flex flex-col gap-1 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+                              <span className="break-all font-mono text-xs text-[#c4cec5]">{proof.proof_id}</span>
+                              <span className="flex shrink-0 items-center gap-3">
+                                <Badge variant="outline" className="border-[#526158] text-[#c4cec5]">{proof.status}</Badge>
+                                <span className="text-xs text-[#a0ada3]">{relativeTime(proof.created_at)}</span>
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : <p className="text-sm text-[#a0ada3]">No proofs recorded for this agent.</p>}
+                    </section>
+                    <p className="text-xs leading-relaxed text-[#65716a]">{proofSummary.data.privacy_note}</p>
+                  </div>
+                ) : null}
+              </DialogContent>
+            </Dialog>
           </>
         )}
       </main>

@@ -3,6 +3,7 @@ import { pool } from "../db";
 import { isWalletAuthenticated } from "../walletAuth";
 
 const HISTORICAL_LABEL = "Agent historique / attribution inconnue";
+const PROOF_SUMMARY_LIMIT = 20;
 
 function iso(value: unknown): string | null {
   return value ? new Date(value as string | Date).toISOString() : null;
@@ -175,6 +176,125 @@ export function registerFleetOverviewRoutes(app: Express) {
       });
     } catch (error) {
       return res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to load fleet overview" });
+    }
+  });
+
+  app.get("/api/fleet/agents/:agentId/proof-summary", isWalletAuthenticated, async (req: any, res) => {
+    try {
+      const ownerAccountId = await sessionAccountId(req);
+      if (!ownerAccountId) {
+        return res.status(401).json({ error: "UNAUTHORIZED", message: "No account for this session wallet" });
+      }
+
+      const result = await pool.query<any>(`
+        WITH owned_agent AS (
+          SELECT id, name, owner_account_id, created_at, last_seen_at
+          FROM agents
+          WHERE id = $2 AND owner_account_id = $1
+          UNION ALL
+          SELECT u.id,
+            COALESCE(NULLIF(BTRIM(u.agent_name), ''), NULLIF(BTRIM(u.company_name), ''), 'Default agent'),
+            u.id, u.created_at, NULL::timestamp
+          FROM users u
+          WHERE u.id = $1 AND u.id = $2
+            AND NOT EXISTS (SELECT 1 FROM agents a WHERE a.id = u.id)
+        ),
+        counts AS (
+          SELECT COUNT(*)::int AS total,
+            COUNT(*) FILTER (WHERE c.blockchain_status = 'pending')::int AS pending,
+            COUNT(*) FILTER (WHERE c.blockchain_status = 'confirmed')::int AS confirmed,
+            COUNT(*) FILTER (WHERE c.blockchain_status = 'failed')::int AS failed,
+            COUNT(*) FILTER (WHERE c.blockchain_status = 'failed'
+              AND c.created_at >= NOW() - INTERVAL '24 hours')::int AS failed_24h,
+            COUNT(*) FILTER (WHERE c.blockchain_status = 'pending'
+              AND c.created_at < NOW() - INTERVAL '15 minutes')::int AS pending_over_15m
+          FROM certifications c
+          INNER JOIN owned_agent a ON a.id = c.agent_id AND c.user_id = a.owner_account_id
+        ),
+        historical AS (
+          SELECT COUNT(*)::int AS total,
+            COUNT(*) FILTER (WHERE blockchain_status = 'pending')::int AS pending,
+            COUNT(*) FILTER (WHERE blockchain_status = 'confirmed')::int AS confirmed,
+            COUNT(*) FILTER (WHERE blockchain_status = 'failed')::int AS failed
+          FROM certifications
+          WHERE user_id = $1 AND agent_id IS NULL
+        )
+        SELECT a.*, counts.*, historical.total AS historical_total,
+          historical.pending AS historical_pending,
+          historical.confirmed AS historical_confirmed,
+          historical.failed AS historical_failed
+        FROM owned_agent a
+        CROSS JOIN counts
+        CROSS JOIN historical
+      `, [ownerAccountId, req.params.agentId]);
+
+      const agent = result.rows[0];
+      if (!agent) {
+        return res.status(404).json({ error: "NOT_FOUND", message: "Agent not found" });
+      }
+
+      const proofs = await pool.query<any>(`
+        WITH owned_agent AS (
+          SELECT id, owner_account_id
+          FROM agents
+          WHERE id = $2 AND owner_account_id = $1
+          UNION ALL
+          SELECT u.id, u.id
+          FROM users u
+          WHERE u.id = $1 AND u.id = $2
+            AND NOT EXISTS (SELECT 1 FROM agents a WHERE a.id = u.id)
+        )
+        SELECT c.id, c.blockchain_status, c.created_at, c.updated_at
+        FROM certifications c
+        INNER JOIN owned_agent a ON a.id = c.agent_id
+          AND a.owner_account_id = $1
+          AND c.user_id = a.owner_account_id
+        WHERE c.agent_id = $2
+        ORDER BY c.created_at DESC, c.id DESC
+        LIMIT $3
+      `, [ownerAccountId, req.params.agentId, PROOF_SUMMARY_LIMIT]);
+
+      const { health, reasons } = fleetHealth(
+        agent.last_seen_at,
+        Number(agent.failed_24h),
+        Number(agent.pending_over_15m),
+      );
+      res.set("Cache-Control", "private, no-store");
+      return res.json({
+        generated_at: new Date().toISOString(),
+        agent: {
+          agent_id: agent.id,
+          name: agent.name,
+          owner_account_id: agent.owner_account_id,
+          last_seen_at: iso(agent.last_seen_at),
+          health,
+          reasons,
+        },
+        counts: {
+          total: Number(agent.total),
+          pending: Number(agent.pending),
+          confirmed: Number(agent.confirmed),
+          failed: Number(agent.failed),
+          failed_within_24h: Number(agent.failed_24h),
+          pending_over_15m: Number(agent.pending_over_15m),
+        },
+        historical_unattributed: {
+          total: Number(agent.historical_total),
+          pending: Number(agent.historical_pending),
+          confirmed: Number(agent.historical_confirmed),
+          failed: Number(agent.historical_failed),
+          explanation: "These historical proofs have no agent attribution and are not assigned to this or any other agent.",
+        },
+        recent_proofs: proofs.rows.map((proof: any) => ({
+          proof_id: proof.id,
+          status: proof.blockchain_status,
+          created_at: iso(proof.created_at),
+          updated_at: iso(proof.updated_at),
+        })),
+        privacy_note: "This summary contains proof states and timestamps only. It does not expose private proof content or chain-of-thought.",
+      });
+    } catch (error) {
+      return res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to load proof summary" });
     }
   });
 }
