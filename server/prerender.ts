@@ -1798,23 +1798,97 @@ async function renderAgentProfilePage(baseUrl: string, walletAddress: string): P
     const cat = user.agentCategory ? ` (${user.agentCategory})` : "";
     const title = `${name} — ${trust.level} (${trust.score} pts)${cat} | Prove Before Act`;
     const desc = user.agentDescription || `${name} is a ${trust.level}-level AI agent with ${trust.certTotal} on-chain certifications and a ${trust.streakWeeks}-week activity streak on MultiversX.`;
+    const websiteHref = user.agentWebsite && /^https?:\/\//i.test(user.agentWebsite) ? user.agentWebsite : null;
+    const categoryLabel = user.agentCategory
+      ? user.agentCategory.charAt(0).toUpperCase() + user.agentCategory.slice(1)
+      : null;
 
     return `${commonHead(title, desc, `${baseUrl}/agent/${walletAddress}`, "profile")}
+<style>
+  :root { color-scheme: dark; }
+  *, *::before, *::after { box-sizing: border-box; }
+  html { background: #101612; }
+  body { margin: 0; min-width: 320px; overflow-x: hidden; background: #101612; color: #e7eee8; font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif; line-height: 1.55; }
+  a { color: #8eeeb8; }
+  .dossier-nav { border-bottom: 1px solid #2c3830; padding: 0 1.25rem; }
+  .dossier-nav-inner { display:flex; align-items:center; min-height:64px; max-width:1120px; margin:0 auto; }
+  .dossier-brand { color:#e7eee8; text-decoration:none; font-weight:600; letter-spacing:-.02em; }
+  .dossier-main { max-width:1120px; margin:0 auto; padding:2.75rem 1.25rem 5rem; }
+  .dossier-kicker, .dossier-label { color:#8eeeb8; font-family:"DM Mono", ui-monospace, monospace; font-size:.68rem; letter-spacing:.16em; text-transform:uppercase; }
+  .dossier-kicker { margin:0 0 .75rem; }
+  .dossier-label { color:#91a096; font-size:.62rem; }
+  .dossier-main h1, .dossier-main h2 { color:#f0f5f1; line-height:1.15; letter-spacing:-.04em; }
+  .dossier-main h1 { margin:0; font-size:clamp(2.35rem,6vw,4.8rem); font-weight:600; }
+  .dossier-main h2 { margin:0; font-size:1.2rem; }
+  .dossier-lede { max-width:680px; margin:1.1rem 0 0; color:#aebbb1; font-size:1.05rem; }
+  .dossier-hero { display:grid; grid-template-columns:minmax(0,1fr) 280px; border:1px solid #2c3830; background:#151d17; }
+  .dossier-identity, .dossier-posture { padding:2rem; min-width:0; }
+  .dossier-posture { border-left:1px solid #2c3830; background:#121a14; }
+  .dossier-tags { display:flex; flex-wrap:wrap; gap:.5rem; margin-top:1.25rem; }
+  .dossier-tag { display:inline-block; padding:.25rem .55rem; border:1px solid #385342; color:#a9cbb5; font: .7rem "DM Mono",monospace; text-transform:uppercase; letter-spacing:.08em; }
+  .dossier-wallet { margin-top:1.25rem; padding:.8rem 0; border-top:1px solid #2c3830; border-bottom:1px solid #2c3830; color:#aebbb1; font: .78rem "DM Mono",monospace; overflow-wrap:anywhere; }
+  .dossier-site { display:inline-block; margin-top:1rem; overflow-wrap:anywhere; }
+  .dossier-status { display:inline-block; padding:.35rem .65rem; border:1px solid #387652; background:#173021; color:#9af0bd; font-size:.8rem; font-weight:600; }
+  .dossier-score { margin:.9rem 0 0; color:#f0f5f1; font-size:2.7rem; font-weight:600; letter-spacing:-.05em; }
+  .dossier-score small { color:#91a096; font-size:.75rem; font-weight:400; letter-spacing:0; }
+  .dossier-posture p { color:#91a096; font-size:.78rem; }
+  .dossier-index { display:grid; grid-template-columns:repeat(4,1fr); margin-top:1rem; border:1px solid #2c3830; background:#151d17; }
+  .dossier-index div { min-width:0; padding:1rem 1.1rem; border-right:1px solid #2c3830; }
+  .dossier-index div:last-child { border-right:0; }
+  .dossier-value { display:block; margin-top:.3rem; color:#f0f5f1; font-size:1.35rem; font-weight:600; }
+  .dossier-section { margin-top:3rem; }
+  .dossier-section-head { display:flex; justify-content:space-between; gap:1rem; align-items:end; padding-bottom:.75rem; border-bottom:1px solid #2c3830; }
+  .dossier-note { color:#91a096; font-size:.9rem; }
+  .dossier-link { display:inline-block; margin-top:1.25rem; border:1px solid #385342; padding:.65rem .9rem; color:#9af0bd; text-decoration:none; }
+  .dossier-footer { border-top:1px solid #2c3830; padding:2rem 1.25rem; color:#829087; font-size:.85rem; }
+  .dossier-footer-inner { max-width:1120px; margin:0 auto; }
+  @media (max-width:700px) {
+    .dossier-main { padding:2rem 1rem 3.5rem; }
+    .dossier-hero { grid-template-columns:1fr; }
+    .dossier-posture { border-top:1px solid #2c3830; border-left:0; }
+    .dossier-identity, .dossier-posture { padding:1.4rem; }
+    .dossier-index { grid-template-columns:repeat(2,1fr); }
+    .dossier-index div:nth-child(2) { border-right:0; }
+    .dossier-index div:nth-child(-n+2) { border-bottom:1px solid #2c3830; }
+  }
+</style>
 <body>
-<header><nav><a href="${baseUrl}"><strong>Prove Before Act</strong></a></nav></header>
-<main>
-  <h1>${escapeHtml(name)}</h1>
-  <p>Trust level: ${trust.level} (${trust.score} pts)</p>
-  <p>${escapeHtml(desc)}</p>
-  <dl>
-    <dt>Certifications</dt><dd>${trust.certTotal} total, ${trust.certLast30d} this month</dd>
-    <dt>Streak</dt><dd>${trust.streakWeeks} consecutive weeks</dd>
-    <dt>Attestations</dt><dd>${trust.activeAttestations} active</dd>
-    <dt>Wallet</dt><dd>${walletAddress}</dd>
-  </dl>
-  <p><a href="${baseUrl}/leaderboard">View full leaderboard</a></p>
+<header class="dossier-nav"><nav class="dossier-nav-inner"><a class="dossier-brand" href="${escapeHtml(baseUrl)}">Prove Before Act</a></nav></header>
+<main class="dossier-main">
+  <p class="dossier-kicker">Public agent profile / live evidence</p>
+  <section class="dossier-hero">
+    <div class="dossier-identity">
+      <h1>${escapeHtml(name)}</h1>
+      <div class="dossier-tags">
+        ${categoryLabel ? `<span class="dossier-tag">${escapeHtml(categoryLabel)}</span>` : ""}
+        ${trust.activeAttestations > 0 ? `<span class="dossier-tag">${trust.activeAttestations} active attestation${trust.activeAttestations === 1 ? "" : "s"}</span>` : ""}
+        <span class="dossier-tag">Public record</span>
+      </div>
+      <p class="dossier-wallet">${escapeHtml(walletAddress)}</p>
+      ${websiteHref ? `<a class="dossier-site" href="${escapeHtml(websiteHref)}" rel="noopener noreferrer">${escapeHtml(websiteHref.replace(/^https?:\/\//i, ""))}</a>` : ""}
+      <p class="dossier-lede">${escapeHtml(desc)}</p>
+    </div>
+    <aside class="dossier-posture">
+      <span class="dossier-label">Verification posture</span>
+      <div style="margin-top:1rem"><span class="dossier-status">${escapeHtml(trust.level)}</span></div>
+      <div class="dossier-score">${trust.score}<small> trust pts</small></div>
+      <p>Composite signal from confirmed public proofs, activity, seniority, and attestations. Inspect the record below for the evidence behind it.</p>
+      <p><strong style="color:#e7eee8">Last active:</strong> ${trust.lastCertAt ? escapeHtml(new Date(trust.lastCertAt).toISOString()) : "No activity recorded"}</p>
+    </aside>
+  </section>
+  <section class="dossier-index" aria-label="Evidence summary">
+    <div><span class="dossier-label">Confirmed proofs</span><strong class="dossier-value">${trust.certTotal}</strong></div>
+    <div><span class="dossier-label">Last 30 days</span><strong class="dossier-value">${trust.certLast30d}</strong></div>
+    <div><span class="dossier-label">Active attestations</span><strong class="dossier-value">${trust.activeAttestations}</strong></div>
+    <div><span class="dossier-label">Activity streak</span><strong class="dossier-value">${trust.streakWeeks} weeks</strong></div>
+  </section>
+  <section class="dossier-section">
+    <div class="dossier-section-head"><div><p class="dossier-kicker">Evidence record</p><h2>Public proof activity</h2></div><span class="dossier-label">Live metrics</span></div>
+    <p class="dossier-note">${trust.certTotal} confirmed public certification${trust.certTotal === 1 ? "" : "s"} are attributed to this wallet. The interactive profile includes linked proof rows, history, attestations, and audit context.</p>
+    <a class="dossier-link" href="${baseUrl}/leaderboard">View the full trust leaderboard →</a>
+  </section>
 </main>
-<footer><p>&copy; ${new Date().getFullYear()} Prove Before Act. Powered by <a href="https://multiversx.com">MultiversX</a></p></footer>
+<footer class="dossier-footer"><div class="dossier-footer-inner">&copy; ${new Date().getFullYear()} Prove Before Act · Powered by <a href="https://multiversx.com">MultiversX</a></div></footer>
 
 <script type="application/ld+json">
 ${safeJsonLd({

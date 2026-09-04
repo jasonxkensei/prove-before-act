@@ -221,6 +221,17 @@ function DomainBadge({ domain }: { domain: string }) {
   );
 }
 
+function formatWalletAddress(address: string) {
+  if (address.length < 24) return address;
+  return `${address.slice(0, 12)}…${address.slice(-10)}`;
+}
+
+function formatAgentDate(value: string | null | undefined, fallback = "No activity recorded") {
+  if (!value) return fallback;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? fallback : formatDistanceToNow(date, { addSuffix: true });
+}
+
 interface TrustSnapshot {
   score: number;
   level: string;
@@ -1577,7 +1588,7 @@ export default function AgentProfilePage() {
   const [auditTimelineExpanded, setAuditTimelineExpanded] = useState(false);
   const [trustHistoryTableExpanded, setTrustHistoryTableExpanded] = useState(false);
 
-  const { data: agent, isLoading, isError } = useQuery<AgentProfile>({
+  const { data: agent, isLoading, isError, refetch: refetchAgent } = useQuery<AgentProfile>({
     queryKey: ["/api/agents", wallet],
     queryFn: () => fetch(`/api/agents/${wallet}`).then((r) => {
       if (!r.ok) throw new Error("Not found");
@@ -1640,39 +1651,62 @@ export default function AgentProfilePage() {
     <div className="min-h-screen bg-background">
       <PublicSiteHeader />
 
-      <div className="container mx-auto max-w-3xl py-12">
+      <main id="main-content" className="dossier-shell min-h-[calc(100dvh-4rem)]">
+      <div className="container mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-16">
         {isLoading && (
-          <div className="flex items-center justify-center py-20">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          <div className="mx-auto max-w-6xl py-8 sm:py-16" data-testid="agent-profile-loading">
+            <div className="mb-10 space-y-4">
+              <div className="skeleton-line h-3 w-40" />
+              <div className="skeleton-line h-12 w-3/4 max-w-xl" />
+              <div className="skeleton-line h-4 w-full max-w-lg" />
+            </div>
+            <div className="grid gap-4 lg:grid-cols-[1.4fr_.8fr]">
+              <div className="dossier-panel h-52 animate-pulse" />
+              <div className="dossier-panel h-52 animate-pulse" />
+            </div>
+            <p className="mt-5 dossier-label">Assembling public evidence…</p>
           </div>
         )}
 
         {(isError || (!isLoading && !agent)) && (
-          <Card>
-            <CardContent className="flex flex-col items-center gap-4 py-16">
-              <Shield className="h-12 w-12 text-muted-foreground/40" />
-              <div className="text-center">
-                <p className="font-semibold">Profile not found</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  This agent hasn't made their profile public, or doesn't exist on Prove Before Act.
-                </p>
+          <div className="mx-auto max-w-2xl py-8 sm:py-20">
+            <div className="dossier-panel p-7 sm:p-10" data-testid="agent-profile-not-found">
+              <p className="dossier-kicker">{isError ? "Public evidence dossier / connection interrupted" : "Public evidence dossier / unavailable"}</p>
+              <div className="mt-6 flex items-start gap-4">
+                <Shield className="mt-1 h-8 w-8 shrink-0 text-muted-foreground/60" />
+                <div>
+                  <p className="text-2xl font-semibold tracking-tight">{isError ? "Evidence record unavailable" : "Profile not found"}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {isError
+                      ? "The live profile could not be loaded. The public record may be temporarily unavailable."
+                      : "This agent hasn't made their profile public, or doesn't exist on Prove Before Act."}
+                  </p>
+                </div>
               </div>
-              <Button asChild variant="outline" data-testid="button-go-leaderboard">
-                <Link href="/leaderboard">View leaderboard</Link>
-              </Button>
-            </CardContent>
-          </Card>
+              <div className="mt-8 flex flex-wrap gap-3">
+                {isError && (
+                  <Button variant="default" onClick={() => refetchAgent()} data-testid="button-retry-agent-profile">
+                    Retry loading
+                  </Button>
+                )}
+                <Button asChild variant="outline" data-testid="button-go-leaderboard">
+                  <Link href="/leaderboard">View leaderboard</Link>
+                </Button>
+              </div>
+            </div>
+          </div>
         )}
 
         {agent && (
           <div className="space-y-6">
-            {/* Hero card */}
-            <Card data-testid="card-agent-hero">
-              <CardContent className="pt-6">
+            {/* Hero card — the identity record anchors the dossier before its analytics. */}
+            <section className="dossier-panel overflow-hidden" data-testid="card-agent-hero">
+              <CardContent className="p-6 sm:p-9">
+                <p className="dossier-kicker">Public agent profile / live evidence</p>
                 <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div className="space-y-2">
+                  <div className="min-w-0 flex-1 space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h1 className="text-2xl font-bold" data-testid="text-agent-name">
+                      <h1 className="break-words text-3xl font-semibold tracking-tight sm:text-4xl" data-testid="text-agent-name">
                         {agent.agentName || `Agent ${agent.walletAddress.slice(0, 10)}…`}
                       </h1>
                       {agent.agentCategory && (
@@ -1691,13 +1725,15 @@ export default function AgentProfilePage() {
                     <div className="flex items-center gap-2">
                       <span
                         data-testid="text-wallet-address"
-                        className="font-mono text-sm text-muted-foreground"
+                        className="min-w-0 break-all font-mono text-xs text-muted-foreground sm:text-sm"
+                        title={agent.walletAddress}
                       >
-                        {agent.walletAddress.slice(0, 12)}…{agent.walletAddress.slice(-8)}
+                        {agent.walletAddress}
                       </span>
                       <Button
-                        size="icon"
+                        size="sm"
                         variant="ghost"
+                        className="h-8 shrink-0 px-2"
                         onClick={copyWallet}
                         data-testid="button-copy-wallet"
                       >
@@ -1710,8 +1746,8 @@ export default function AgentProfilePage() {
                     </div>
 
                     {agent.agentDescription && (
-                      <p className="max-w-md text-sm text-muted-foreground" data-testid="text-agent-description">
-                        AI agent anchoring decisions on-chain before acting. WHY before WHAT. Every action certified on MultiversX.
+                      <p className="max-w-2xl break-words text-base leading-7 text-muted-foreground" data-testid="text-agent-description">
+                        {agent.agentDescription}
                       </p>
                     )}
 
@@ -1728,48 +1764,143 @@ export default function AgentProfilePage() {
                         <ExternalLink className="h-3 w-3 opacity-60" />
                       </a>
                     )}
+                    <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Clock className="h-3.5 w-3.5" />
+                      Last active {formatAgentDate(agent.lastCertAt)}
+                    </span>
                   </div>
 
-                  <div className="flex flex-col items-end gap-2">
+                  <div className="w-full border-t border-border/70 pt-5 sm:w-auto sm:min-w-[13rem] sm:border-l sm:border-t-0 sm:pl-6">
+                    <p className="dossier-label">Verification posture</p>
                     <div
                       data-testid="badge-trust-level"
-                      className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-semibold ${TRUST_LEVEL_STYLES[agent.level]?.badge ?? TRUST_LEVEL_STYLES.Newcomer.badge}`}
+                      className={`mt-3 inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm font-semibold ${TRUST_LEVEL_STYLES[agent.level]?.badge ?? TRUST_LEVEL_STYLES.Newcomer.badge}`}
                     >
                       {agent.level === "Verified" && <Shield className="h-4 w-4" />}
                       {agent.level}
                     </div>
-                    <span className="text-xs text-muted-foreground" data-testid="text-trust-score">
-                      Trust score: {agent.score}
-                    </span>
+                    <p className="mt-4 text-4xl font-semibold tracking-tight tabular-nums" data-testid="text-trust-score">
+                      {agent.score}<span className="ml-1 text-sm font-normal text-muted-foreground">trust pts</span>
+                    </p>
+                    <p className="mt-1 max-w-xs text-xs leading-5 text-muted-foreground">A composite signal — not a substitute for inspecting the underlying evidence.</p>
                     {agent.activeAttestations > 0 && (
-                      <span className="text-xs text-emerald-600 dark:text-emerald-400" data-testid="text-attestation-bonus">
+                      <span className="mt-3 block text-xs text-emerald-600 dark:text-emerald-400" data-testid="text-attestation-bonus">
                         +{agent.attestationBonus ?? Math.min(3, agent.activeAttestations) * 50} pts from attestations
                       </span>
                     )}
                     {agent.transparencyTier && agent.transparencyTier !== "Tier 1" && (
                       <Badge
                         variant="outline"
-                        className={
+                        className={`mt-3 ${
                           agent.transparencyTier === "Tier 3"
                             ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
                             : "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30"
-                        }
+                        }`}
                         data-testid="badge-header-transparency"
                       >
                         {agent.transparencyTier}
                       </Badge>
                     )}
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      Transparency: <span className="font-medium text-foreground">{agent.transparencyTier ?? "Tier 1"}</span>
+                    </p>
                   </div>
                 </div>
               </CardContent>
-            </Card>
+            </section>
+
+            {/* Proof posture and the latest public records are intentionally above analytics. */}
+            <section className="grid gap-4 lg:grid-cols-[.86fr_1.14fr]" aria-label="Evidence summary">
+              <div className="dossier-panel p-5 sm:p-6" data-testid="card-proof-posture">
+                <div className="dossier-section-heading">
+                  <div>
+                    <p className="dossier-kicker">Evidence summary</p>
+                    <h2 className="mt-1 text-lg font-semibold tracking-tight">Proof posture</h2>
+                  </div>
+                  <Shield className="h-5 w-5 text-primary" />
+                </div>
+                <div className="mt-5 space-y-4">
+                  <div className="flex items-start gap-3">
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">Public certification record</p>
+                      <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                        {agent.certTotal} confirmed certification{agent.certTotal === 1 ? "" : "s"} recorded on-chain.
+                      </p>
+                    </div>
+                    <span className="ml-auto shrink-0 font-mono text-sm tabular-nums">{agent.certTotal}</span>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <Activity className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">Recent activity</p>
+                      <p className="mt-0.5 text-xs leading-5 text-muted-foreground">Confirmed proofs in the last 30 days.</p>
+                    </div>
+                    <span className="ml-auto shrink-0 font-mono text-sm tabular-nums">{agent.certLast30d}</span>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">Independent attestations</p>
+                      <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                        {agent.activeAttestations > 0 ? "Issued by credentialed public issuers." : "No active issuer attestations recorded."}
+                      </p>
+                    </div>
+                    <span className="ml-auto shrink-0 font-mono text-sm tabular-nums">{agent.activeAttestations}</span>
+                  </div>
+                </div>
+                <div className="mt-5 border-t border-border/70 pt-4 text-xs text-muted-foreground">
+                  Last proof activity <span className="font-medium text-foreground">{formatAgentDate(agent.lastCertAt)}</span>
+                </div>
+              </div>
+
+              <div className="dossier-panel min-w-0 p-5 sm:p-6" data-testid="card-recent-certifications">
+                <div className="dossier-section-heading">
+                  <div>
+                    <p className="dossier-kicker">Chain activity</p>
+                    <h2 className="mt-1 text-lg font-semibold tracking-tight">Recent certifications</h2>
+                  </div>
+                  <span className="dossier-label">{agent.recentCertifications.length} shown</span>
+                </div>
+                {agent.recentCertifications.length === 0 ? (
+                  <div className="mt-5 border border-dashed border-border p-5" data-testid="text-recent-certifications-empty">
+                    <p className="text-sm font-medium">No recent proof records</p>
+                    <p className="mt-1 text-xs leading-5 text-muted-foreground">Public certification activity will appear here when this agent anchors a proof.</p>
+                  </div>
+                ) : (
+                  <div className="mt-3 divide-y divide-border/70">
+                    {agent.recentCertifications.map((cert) => (
+                      <Link
+                        key={cert.id}
+                        href={`/proof/${cert.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group flex min-w-0 items-center gap-3 py-3 first:pt-1 last:pb-1"
+                        data-testid={`row-recent-certification-${cert.id}`}
+                      >
+                        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded border border-border bg-background/60">
+                          <StatusIcon status={cert.blockchainStatus} />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block break-words text-sm font-medium group-hover:text-primary">{cert.fileName}</span>
+                          <span className="mt-0.5 block text-xs text-muted-foreground">
+                            {cert.blockchainStatus === "confirmed" ? "Confirmed on-chain" : cert.blockchainStatus || "Status pending"} · {formatAgentDate(cert.createdAt)}
+                          </span>
+                        </span>
+                        <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground group-hover:text-primary" />
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </section>
 
             {/* Trust Badge Embed */}
             <BadgeEmbedPanel wallet={wallet || ""} />
 
-            {/* Stats */}
-            <div className="grid gap-4 sm:grid-cols-4">
-              <Card data-testid="stat-cert-total">
+            {/* Stats — a compact index of the underlying record, not the headline. */}
+            <div className="metric-strip" data-testid="agent-proof-index">
+              <Card className="rounded-none border-0 bg-transparent shadow-none" data-testid="stat-cert-total">
                 <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
                   <CardTitle className="text-xs font-medium text-muted-foreground">Total certifications</CardTitle>
                   <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
@@ -1780,7 +1911,7 @@ export default function AgentProfilePage() {
                 </CardContent>
               </Card>
 
-              <Card data-testid="stat-cert-30d">
+              <Card className="rounded-none border-0 bg-transparent shadow-none" data-testid="stat-cert-30d">
                 <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
                   <CardTitle className="text-xs font-medium text-muted-foreground">This month</CardTitle>
                   <TrendingUp className="h-4 w-4 text-muted-foreground" />
@@ -1791,7 +1922,7 @@ export default function AgentProfilePage() {
                 </CardContent>
               </Card>
 
-              <Card data-testid="stat-confirmation-rate">
+              <Card className="rounded-none border-0 bg-transparent shadow-none" data-testid="stat-confirmation-rate">
                 <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
                   <CardTitle className="text-xs font-medium text-muted-foreground">Confirmation rate</CardTitle>
                   <Shield className="h-4 w-4 text-muted-foreground" />
@@ -1804,7 +1935,7 @@ export default function AgentProfilePage() {
                 </CardContent>
               </Card>
 
-              <Card data-testid="stat-streak">
+              <Card className="rounded-none border-0 bg-transparent shadow-none" data-testid="stat-streak">
                 <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
                   <CardTitle className="text-xs font-medium text-muted-foreground">Streak</CardTitle>
                   <Flame className="h-4 w-4 text-muted-foreground" />
@@ -1817,6 +1948,16 @@ export default function AgentProfilePage() {
                   <p className="text-xs text-muted-foreground">consecutive activity</p>
                 </CardContent>
               </Card>
+            </div>
+
+            <div className="grid items-start gap-6 lg:grid-cols-[1.08fr_.92fr]">
+              <div className="min-w-0 space-y-6">
+            <div className="dossier-section-heading">
+              <div>
+                <p className="dossier-kicker">Evidence analysis</p>
+                <h2 className="mt-1 text-xl font-semibold tracking-tight">How the posture is built</h2>
+              </div>
+              <span className="dossier-label">Declared basis / observed record</span>
             </div>
 
             {/* Score Breakdown */}
@@ -1889,6 +2030,16 @@ export default function AgentProfilePage() {
             {calibrationData && (
               <CalibrationCard data={calibrationData} wallet={wallet || ""} />
             )}
+
+              </div>
+              <div className="min-w-0 space-y-6">
+            <div className="dossier-section-heading">
+              <div>
+                <p className="dossier-kicker">Public record</p>
+                <h2 className="mt-1 text-xl font-semibold tracking-tight">Evidence over time</h2>
+              </div>
+              <span className="dossier-label">Inspectable events</span>
+            </div>
 
             {/* Trust Score History */}
             <Card data-testid="card-trust-history">
@@ -2287,9 +2438,12 @@ export default function AgentProfilePage() {
                 )}
               </CardContent>
             </Card>
+              </div>
+            </div>
           </div>
         )}
       </div>
+      </main>
       <PublicSiteFooter />
     </div>
   );

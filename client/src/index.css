@@ -119,6 +119,34 @@
   .evidence-rule { @apply border-l-2 border-primary bg-primary/5 px-4 py-3; }
   .state-panel { @apply rounded-md border border-border/80 bg-card/60 p-8 text-center; }
   .skeleton-line { @apply animate-pulse rounded-sm bg-muted; }
+  .dossier-shell {
+    position: relative;
+    isolation: isolate;
+    overflow-x: hidden;
+    background:
+      linear-gradient(hsl(var(--primary) / .035) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--primary) / .035) 1px, transparent 1px),
+      hsl(var(--background));
+    background-size: 48px 48px;
+  }
+  .dossier-shell::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background: radial-gradient(circle at 75% 0%, hsl(var(--primary) / .10), transparent 31rem);
+    opacity: .75;
+  }
+  .dossier-kicker { @apply font-mono text-[0.65rem] font-medium uppercase tracking-[0.18em] text-primary; }
+  .dossier-panel {
+    @apply rounded-md border border-card-border bg-card/90 shadow-sm;
+    box-shadow: 0 14px 42px hsl(var(--background) / .22);
+  }
+  .dossier-rule { @apply border-t border-border/80; }
+  .dossier-label { @apply font-mono text-[0.62rem] uppercase tracking-[0.16em] text-muted-foreground; }
+  .dossier-safe { @apply min-w-0 max-w-full break-words; }
+  .dossier-section-heading { @apply flex items-end justify-between gap-4 border-b border-border/70 pb-3; }
 }
 
 @layer utilities {
