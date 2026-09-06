@@ -33,6 +33,7 @@ import {
 import { WalletLoginModal } from "@/components/wallet-login-modal";
 import { PublicSiteFooter, PublicSiteHeader } from "@/components/public-site-chrome";
 import { trackAgentCta, useAgentCtaExposure } from "@/lib/conversionTracking";
+import { trackEvent } from "@/lib/analytics";
 import {
   Accordion,
   AccordionContent,
@@ -90,6 +91,7 @@ function QuickStartCode({ onGetKey }: { onGetKey: () => void }) {
 
   const handleCopy = () => {
     navigator.clipboard.writeText(code);
+    trackEvent("quickstart_code_copied", { language: lang });
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -101,7 +103,10 @@ function QuickStartCode({ onGetKey }: { onGetKey: () => void }) {
         {(["python", "typescript", "curl"] as const).map((l) => (
           <button
             key={l}
-            onClick={() => setLang(l)}
+            onClick={() => {
+              setLang(l);
+              trackEvent("quickstart_language_selected", { language: l });
+            }}
             className={`px-4 py-2 text-xs font-mono font-medium transition-colors ${
               lang === l
                 ? "text-foreground border-b-2 border-primary -mb-px"
@@ -174,9 +179,11 @@ export default function Landing() {
       setTrialKey(data.api_key);
       setTrialAgentName(name);
       setTrialError(null);
+      trackEvent("trial_registration_succeeded", { location: "landing" });
     },
     onError: (err: Error) => {
       setTrialError(err.message);
+      trackEvent("trial_registration_failed", { location: "landing" });
     },
   });
 
@@ -192,11 +199,13 @@ export default function Landing() {
   const handleCopyKey = () => {
     if (!trialKey) return;
     navigator.clipboard.writeText(trialKey);
+    trackEvent("trial_api_key_copied", { location: "landing" });
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
   const handleConnect = () => {
+    trackEvent("wallet_login_opened", { location: "landing" });
     setIsLoginModalOpen(true);
   };
 
@@ -245,9 +254,14 @@ export default function Landing() {
     onSuccess: (data) => {
       setProofResult(data);
       setProofError(null);
+      trackEvent("proof_submission_succeeded", {
+        location: "landing",
+        blockchain_anchored: Boolean(data.blockchain?.transaction_hash),
+      });
     },
     onError: (err: Error) => {
       setProofError(err.message);
+      trackEvent("proof_submission_failed", { location: "landing" });
     },
   });
 

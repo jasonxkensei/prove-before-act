@@ -22,6 +22,7 @@ import {
 import { formatDistanceToNow } from "date-fns";
 import { SHORTLIST_KEY, SHORTLIST_MAX, readShortlist, writeShortlist, clearShortlist, toggleWallet, shouldShowCompareBar, isCompareEnabled } from "@/lib/compare-shortlist";
 import { trackAgentCta, useAgentCtaExposure } from "@/lib/conversionTracking";
+import { trackEvent } from "@/lib/analytics";
 
 interface LeaderboardEntry {
   walletAddress: string;
@@ -169,8 +170,14 @@ export default function Leaderboard() {
       if (!res.ok) throw new Error(json.message || json.error || "Registration failed");
       return json;
     },
-    onSuccess: (data) => setRegResult(data),
-    onError: (err: Error) => toast({ title: "Registration failed", description: err.message, variant: "destructive" }),
+    onSuccess: (data) => {
+      setRegResult(data);
+      trackEvent("trial_registration_succeeded", { location: "leaderboard" });
+    },
+    onError: (err: Error) => {
+      trackEvent("trial_registration_failed", { location: "leaderboard" });
+      toast({ title: "Registration failed", description: err.message, variant: "destructive" });
+    },
   });
 
   function copyKey(key: string) {
