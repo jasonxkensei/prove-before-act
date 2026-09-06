@@ -23,7 +23,7 @@ const primaryLinkClass =
 
 export function PublicSiteHeader({
   howItWorksHref = "/#how-it-works",
-  primaryActionHref = "/agents",
+  primaryActionHref = "/#free-trial",
   primaryActionLabel = "Start free",
   onConnect,
   paper = false,
@@ -67,6 +67,13 @@ export function PublicSiteHeader({
     ? "text-[hsl(40_9%_42%)] hover:text-[hsl(42_18%_18%)]"
     : primaryLinkClass;
   const mobileLinkClass = `flex min-h-11 items-center rounded-md px-3 text-sm font-medium ${paperLinkClass}`;
+  const scrollPrimaryAnchorIntoView = () => {
+    const hash = primaryActionHref.startsWith("#") ? primaryActionHref.slice(1) : null;
+    if (!hash) return;
+    requestAnimationFrame(() => {
+      document.getElementById(hash)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
 
   return (
     <>
@@ -112,6 +119,7 @@ export function PublicSiteHeader({
           </DropdownMenu>
           <a
             href={primaryActionHref}
+            onClick={scrollPrimaryAnchorIntoView}
             className="rounded-md border border-primary/20 bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/20"
             data-testid="link-nav-start-free"
           >
@@ -122,6 +130,7 @@ export function PublicSiteHeader({
         <div className="flex items-center gap-2 sm:gap-3">
           <a
             href={primaryActionHref}
+            onClick={scrollPrimaryAnchorIntoView}
             className="min-h-11 rounded-md border border-primary/25 bg-primary/10 px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/20 md:hidden"
             data-testid="link-nav-start-free-mobile"
           >

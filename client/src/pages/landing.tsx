@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { hashFile } from "@/lib/hashUtils";
 import { Button } from "@/components/ui/button";
@@ -163,6 +163,17 @@ export default function Landing() {
   const [trialError, setTrialError] = useState<string | null>(null);
   const heroTrialCtaRef = useAgentCtaExposure<HTMLAnchorElement>("landing", "hero_free_trial");
   const trialRegisterCtaRef = useAgentCtaExposure<HTMLButtonElement>("landing", "trial_register");
+  const scrollToFreeTrial = () => {
+    requestAnimationFrame(() => {
+      document.getElementById("free-trial")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
+  useEffect(() => {
+    if (window.location.hash === "#free-trial") {
+      scrollToFreeTrial();
+    }
+  }, []);
 
   const registerMutation = useMutation({
     mutationFn: async (name: string) => {
@@ -295,9 +306,12 @@ export default function Landing() {
               data-testid="button-free-trial-hero"
             >
               <a
-                href="/agents"
+                href="#free-trial"
                 ref={heroTrialCtaRef}
-                onClick={() => trackAgentCta("cta_clicked", "landing", "hero_free_trial")}
+                onClick={() => {
+                  trackAgentCta("cta_clicked", "landing", "hero_free_trial");
+                  scrollToFreeTrial();
+                }}
               >
                 Run your first proof <ArrowRight className="ml-2 h-4 w-4" />
               </a>
@@ -380,8 +394,11 @@ export default function Landing() {
                   data-testid="button-why-now-first-proof"
                 >
                   <a
-                    href="/agents"
-                    onClick={() => trackAgentCta("cta_clicked", "landing", "why_now_first_proof")}
+                    href="#free-trial"
+                    onClick={() => {
+                      trackAgentCta("cta_clicked", "landing", "why_now_first_proof");
+                      scrollToFreeTrial();
+                    }}
                   >
                     Run your first proof <ArrowRight className="ml-2 h-4 w-4" />
                   </a>
@@ -722,10 +739,7 @@ export default function Landing() {
             </div>
 
             {/* Tab selector + code block */}
-            <QuickStartCode onGetKey={() => {
-              const el = document.getElementById("free-trial");
-              if (el) el.scrollIntoView({ behavior: "smooth" });
-            }} />
+            <QuickStartCode onGetKey={scrollToFreeTrial} />
 
             {/* Three integration paths */}
             <div className="mt-6 grid gap-3 md:grid-cols-3">
