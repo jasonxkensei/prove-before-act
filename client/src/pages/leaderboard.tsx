@@ -182,6 +182,7 @@ export default function Leaderboard() {
 
   function copyKey(key: string) {
     navigator.clipboard.writeText(key).catch(() => {});
+    trackEvent("trial_api_key_copied", { location: "leaderboard" });
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
@@ -769,7 +770,10 @@ export default function Leaderboard() {
                   size="sm"
                   data-testid="button-reg-submit"
                   disabled={!regName.trim() || registerMutation.isPending}
-                  onClick={() => registerMutation.mutate()}
+                  onClick={() => {
+                    trackEvent("trial_registration_started", { location: "leaderboard" });
+                    registerMutation.mutate();
+                  }}
                 >
                   {registerMutation.isPending ? (
                     <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Registering…</>

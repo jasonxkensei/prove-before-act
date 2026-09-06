@@ -204,6 +204,7 @@ export default function Landing() {
     const name = agentName.trim();
     if (name.length < 2 || registerMutation.isPending) return;
     trackAgentCta("cta_clicked", "landing", "trial_register");
+    trackEvent("trial_registration_started", { location: "landing" });
     registerMutation.mutate(name);
   };
 
@@ -310,6 +311,7 @@ export default function Landing() {
                 ref={heroTrialCtaRef}
                 onClick={() => {
                   trackAgentCta("cta_clicked", "landing", "hero_free_trial");
+                  trackEvent("free_trial_cta_clicked", { location: "hero" });
                   scrollToFreeTrial();
                 }}
               >
@@ -397,6 +399,7 @@ export default function Landing() {
                     href="#free-trial"
                     onClick={() => {
                       trackAgentCta("cta_clicked", "landing", "why_now_first_proof");
+                      trackEvent("free_trial_cta_clicked", { location: "why_now" });
                       scrollToFreeTrial();
                     }}
                   >
@@ -590,7 +593,10 @@ export default function Landing() {
                     {proofFile && !isHashing && (
                       <Button
                         className="w-full mt-3"
-                        onClick={() => submitProofMutation.mutate({ hash: proofHash, filename: proofFile.name })}
+                        onClick={() => {
+                          trackEvent("proof_submission_started", { location: "landing" });
+                          submitProofMutation.mutate({ hash: proofHash, filename: proofFile.name });
+                        }}
                         disabled={submitProofMutation.isPending}
                         data-testid="button-anchor-proof"
                       >
@@ -739,7 +745,10 @@ export default function Landing() {
             </div>
 
             {/* Tab selector + code block */}
-            <QuickStartCode onGetKey={scrollToFreeTrial} />
+            <QuickStartCode onGetKey={() => {
+              trackEvent("quickstart_get_key_clicked", { location: "landing" });
+              scrollToFreeTrial();
+            }} />
 
             {/* Three integration paths */}
             <div className="mt-6 grid gap-3 md:grid-cols-3">
