@@ -3,7 +3,7 @@ import rateLimit from "express-rate-limit";
 import { pool } from "./db";
 import { PgRateLimitStore } from "./pgRateLimit";
 import { getMetrics, getLatencyPercentiles } from "./metrics";
-import { isMX8004Configured } from "./mx8004";
+import { isMX8004Configured, MX8004_LOW_BALANCE_EGLD } from "./mx8004";
 import { isMultiversXConfigured } from "./blockchain";
 import { execSync } from "child_process";
 import { logger } from "./logger";
@@ -389,6 +389,7 @@ export async function healthCheck(_req: Request, res: Response) {
   }
 
   const gatewayUrl = process.env.MULTIVERSX_GATEWAY_URL || "https://gateway.multiversx.com";
+  const apiUrl = process.env.MULTIVERSX_API_URL || "https://api.multiversx.com";
   const gwStart = Date.now();
   try {
     const controller = new AbortController();
@@ -420,14 +421,14 @@ export async function healthCheck(_req: Request, res: Response) {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 5000);
-      const balResp = await fetch(`https://api.multiversx.com/accounts/${signerAddress}?fields=balance,nonce`, { signal: controller.signal });
+      const balResp = await fetch(`${apiUrl}/accounts/${signerAddress}?fields=balance,nonce`, { signal: controller.signal });
       clearTimeout(timeout);
       if (balResp.ok) {
         const balData = await balResp.json() as { balance?: string; nonce?: number };
         const balanceRaw = BigInt(balData.balance ?? "0");
         const balanceEgld = Number(balanceRaw) / 1e18;
-        const LOW_EGLD_WARN = 0.3;   // warn below 0.3 EGLD (~3 000 txs)
-        const LOW_EGLD_CRIT = 0.1;   // critical below 0.1 EGLD (~1 000 txs)
+        const LOW_EGLD_WARN = MX8004_LOW_BALANCE_EGLD;
+        const LOW_EGLD_CRIT = Math.min(0.1, LOW_EGLD_WARN / 2);
         const balStatus = balanceEgld < LOW_EGLD_CRIT ? "critical_low_balance" : balanceEgld < LOW_EGLD_WARN ? "low_balance" : "ok";
         checks.signer_balance = {
           status: balStatus,

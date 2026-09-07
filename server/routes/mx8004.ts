@@ -1,12 +1,19 @@
 import { type Express } from "express";
 import { safeErrMsg } from "./helpers";
 import { logger } from "../logger";
-import { isMX8004Configured, getReputationScore, getAgentDetails, getContractAddresses, getJobData, getValidationStatus, hasGivenFeedback, getAgentResponse, readFeedback, getAgentsExplorerUrl } from "../mx8004";
+import { isMX8004Configured, getReputationScore, getAgentDetails, getContractAddresses, getJobData, getValidationStatus, hasGivenFeedback, getAgentResponse, readFeedback, getAgentsExplorerUrl, getMx8004SignerBalance, getMx8004SignerBalanceReport } from "../mx8004";
 import { publicReadRateLimiter } from "../reliability";
 
 export function registerMx8004Routes(app: Express) {
-  app.get("/api/mx8004/status", (req, res) => {
+  app.get("/api/mx8004/status", async (req, res) => {
     const baseUrl = `https://${req.get("host")}`;
+    const signerBalance = await getMx8004SignerBalance();
+    const signerBalanceReport = getMx8004SignerBalanceReport(signerBalance);
+    const balanceFields = {
+      signer_balance: signerBalanceReport,
+      signer_balance_egld: signerBalanceReport.balance_egld,
+      low_balance: signerBalanceReport.low_balance,
+    };
     
     if (!isMX8004Configured()) {
       return res.status(503).json({
@@ -18,6 +25,7 @@ export function registerMx8004Routes(app: Express) {
         message: "MX-8004 support is available but not active in this environment. Set MX8004_* environment variables to enable it.",
         documentation: "https://github.com/sasurobert/mx-8004",
         agents_explorer: "https://agents.multiversx.com",
+        ...balanceFields,
       });
     }
 
@@ -30,6 +38,7 @@ export function registerMx8004Routes(app: Express) {
       active: true,
       status: "active",
       role: "validation_oracle",
+      ...balanceFields,
       description: "Prove Before Act acts as a validation oracle: each certification is registered as a validated job in the MX-8004 Validation Registry, with the configured validation loop (init_job → submit_proof → validation_request → validation_response → append_response).",
       contracts,
       capabilities: {

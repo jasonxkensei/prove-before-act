@@ -10,6 +10,7 @@ import { computeTrustScoreByWallet, runLeaderboardRefreshCycle, runTrustRefreshC
 import { getAlertConfig, getRateLimitAlertConfig, getViolationQueueAlertConfig } from "../alerts";
 import { getMetrics } from "../metrics";
 import { getTxQueueStats } from "../txQueue";
+import { getMx8004SignerBalance, getMx8004SignerBalanceReport, isMX8004Configured } from "../mx8004";
 import { requireAdmin, EXCLUDED_IP_HASHES, getClientIp, safeErrMsg } from "./helpers";
 import { reconstructAuditTrail } from "../audit-trail";
 import { publicStatsRateLimiter } from "../reliability";
@@ -639,6 +640,7 @@ export function registerAdminRoutes(app: Express) {
 
   app.get("/api/admin/stats", isWalletAuthenticated, requireAdmin, async (req: any, res) => {
     try {
+      const mx8004SignerBalance = await getMx8004SignerBalance();
       const now = new Date();
       const h24 = new Date(now.getTime() - 24 * 60 * 60 * 1000);
       const d7 = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -739,6 +741,11 @@ export function registerAdminRoutes(app: Express) {
           total_failed: metrics.transactions.total_failed,
           last_success_at: metrics.transactions.last_success_at,
           last_failed_at: metrics.transactions.last_failed_at,
+        },
+        mx8004: {
+          configured: isMX8004Configured(),
+          signer_balance: getMx8004SignerBalanceReport(mx8004SignerBalance),
+          low_balance: mx8004SignerBalance.lowBalance,
         },
         txAlerts: getAlertConfig(),
         rateLimitFailOpen: {

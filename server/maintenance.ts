@@ -9,6 +9,41 @@ import { computeTrustScore } from "./trust";
 import { purgeExpiredRateLimitRows } from "./pgRateLimit";
 import { checkAndAlertViolationQueue } from "./alerts";
 import { logger } from "./logger";
+import { getMx8004SignerBalance, isMX8004Configured } from "./mx8004";
+
+let lastMx8004LowBalanceWarningAt = 0;
+
+/**
+ * Refresh the MX-8004 signer balance independently from the daily database
+ * maintenance. This runs on a short interval because a depleted signer wallet
+ * otherwise leaves validation jobs queued while certifications still succeed.
+ */
+export async function checkMx8004WalletBalance() {
+  if (!isMX8004Configured()) return null;
+
+  const balance = await getMx8004SignerBalance({ forceRefresh: true });
+  if (balance.error) {
+    logger.warn("MX-8004 signer wallet balance check failed", {
+      component: "maintenance",
+      address: balance.address,
+      error: balance.error,
+    });
+    return balance;
+  }
+
+  if (balance.lowBalance && Date.now() - lastMx8004LowBalanceWarningAt >= 60 * 60 * 1000) {
+    lastMx8004LowBalanceWarningAt = Date.now();
+    logger.warn("MX-8004 signer wallet balance is low", {
+      component: "maintenance",
+      address: balance.address,
+      balanceEgld: balance.balanceEgld,
+      thresholdEgld: balance.thresholdEgld,
+      message: "Top up the signer wallet before MX-8004 validation jobs stall.",
+    });
+  }
+
+  return balance;
+}
 
 export async function runDailyMaintenance() {
   try {

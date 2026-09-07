@@ -14,6 +14,25 @@ const GATEWAY_URL = process.env.MULTIVERSX_GATEWAY_URL || "https://gateway.multi
 const API_URL = process.env.MULTIVERSX_API_URL || "https://api.multiversx.com";
 const CHAIN_ID = process.env.MULTIVERSX_CHAIN_ID || "1";
 
+// The validation loop currently submits five transactions with a combined
+// default gas limit of 75M. At the protocol minimum gas price (1 EGLD/Gas),
+// 50 complete loops require 3.75 EGLD. Keep this configurable because the
+// network's gas economics can change independently of the application.
+const VALIDATION_LOOP_GAS_LIMIT = 75_000_000n;
+const VALIDATION_LOOP_COUNT_WARNING = 50n;
+const MINIMUM_GAS_PRICE_ATTO_EGLD = 1_000_000_000n;
+const DEFAULT_LOW_BALANCE_EGLD =
+  Number(VALIDATION_LOOP_GAS_LIMIT * VALIDATION_LOOP_COUNT_WARNING * MINIMUM_GAS_PRICE_ATTO_EGLD) / 1e18;
+const configuredLowBalanceEgld = Number(process.env.MX8004_LOW_BALANCE_EGLD);
+
+export const MX8004_LOW_BALANCE_EGLD =
+  Number.isFinite(configuredLowBalanceEgld) && configuredLowBalanceEgld > 0
+    ? configuredLowBalanceEgld
+    : DEFAULT_LOW_BALANCE_EGLD;
+
+const BALANCE_CACHE_TTL_MS = 5 * 60 * 1000;
+const BALANCE_REQUEST_TIMEOUT_MS = 10_000;
+
 const IDENTITY_REGISTRY = process.env.MX8004_IDENTITY_REGISTRY;
 const VALIDATION_REGISTRY = process.env.MX8004_VALIDATION_REGISTRY;
 const REPUTATION_REGISTRY = process.env.MX8004_REPUTATION_REGISTRY;
@@ -21,6 +40,124 @@ const XPROOF_AGENT_NONCE = process.env.MX8004_XPROOF_AGENT_NONCE;
 
 export function isMX8004Configured(): boolean {
   return !!(PRIVATE_KEY && SENDER_ADDRESS && IDENTITY_REGISTRY && VALIDATION_REGISTRY && REPUTATION_REGISTRY && XPROOF_AGENT_NONCE);
+}
+
+export interface Mx8004SignerBalance {
+  address: string | null;
+  balanceRaw: string | null;
+  balanceEgld: number | null;
+  nonce: number | null;
+  lowBalance: boolean;
+  thresholdEgld: number;
+  checkedAt: string | null;
+  error?: string;
+}
+
+let signerBalanceCache: Mx8004SignerBalance | null = null;
+let signerBalanceRequest: Promise<Mx8004SignerBalance> | null = null;
+
+function unavailableSignerBalance(error?: string): Mx8004SignerBalance {
+  return {
+    address: SENDER_ADDRESS || null,
+    balanceRaw: null,
+    balanceEgld: null,
+    nonce: null,
+    lowBalance: false,
+    thresholdEgld: MX8004_LOW_BALANCE_EGLD,
+    checkedAt: null,
+    ...(error ? { error } : {}),
+  };
+}
+
+/**
+ * Read and cache the MX-8004 signer wallet's EGLD balance.
+ *
+ * The cache prevents the public status endpoint from turning every poll into
+ * an upstream API request. Maintenance calls this with forceRefresh so the
+ * operator-facing status remains current even when nobody is polling it.
+ */
+export async function getMx8004SignerBalance(
+  options: { forceRefresh?: boolean } = {},
+): Promise<Mx8004SignerBalance> {
+  if (!SENDER_ADDRESS) {
+    const unavailable = unavailableSignerBalance();
+    signerBalanceCache = unavailable;
+    return unavailable;
+  }
+
+  const cachedBalance = signerBalanceCache;
+  const cacheIsFresh =
+    cachedBalance?.checkedAt &&
+    Date.now() - new Date(cachedBalance.checkedAt).getTime() < BALANCE_CACHE_TTL_MS;
+  if (!options.forceRefresh && cachedBalance && cacheIsFresh) {
+    return { ...cachedBalance };
+  }
+  if (signerBalanceRequest) {
+    return signerBalanceRequest;
+  }
+
+  signerBalanceRequest = (async () => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), BALANCE_REQUEST_TIMEOUT_MS);
+    try {
+      const response = await fetch(`${API_URL}/accounts/${SENDER_ADDRESS}?fields=balance,nonce`, {
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        throw new Error(`MultiversX API returned ${response.status}`);
+      }
+
+      const data = await response.json() as { balance?: string; nonce?: number };
+      const balanceRaw = data.balance ?? "0";
+      const balanceEgld = Number(BigInt(balanceRaw)) / 1e18;
+      const snapshot: Mx8004SignerBalance = {
+        address: SENDER_ADDRESS,
+        balanceRaw,
+        balanceEgld: Math.round(balanceEgld * 1e6) / 1e6,
+        nonce: typeof data.nonce === "number" ? data.nonce : null,
+        lowBalance: balanceEgld < MX8004_LOW_BALANCE_EGLD,
+        thresholdEgld: MX8004_LOW_BALANCE_EGLD,
+        checkedAt: new Date().toISOString(),
+      };
+      signerBalanceCache = snapshot;
+      return { ...snapshot };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Balance request failed";
+      const failure: Mx8004SignerBalance = {
+        ...(signerBalanceCache ?? unavailableSignerBalance()),
+        address: SENDER_ADDRESS,
+        error: message,
+      };
+      signerBalanceCache = failure;
+      return { ...failure };
+    } finally {
+      clearTimeout(timeout);
+      signerBalanceRequest = null;
+    }
+  })();
+
+  return signerBalanceRequest;
+}
+
+export function getMx8004SignerBalanceReport(balance: Mx8004SignerBalance | null = signerBalanceCache) {
+  const current = balance ?? unavailableSignerBalance();
+  return {
+    address: current.address,
+    balance_egld: current.balanceEgld,
+    balance_raw: current.balanceRaw,
+    nonce: current.nonce,
+    low_balance: current.lowBalance,
+    threshold_egld: current.thresholdEgld,
+    checked_at: current.checkedAt,
+    status: current.error
+      ? "unknown"
+      : current.balanceEgld === null
+        ? "not_available"
+        : current.lowBalance
+          ? "low_balance"
+          : "ok",
+    ...(current.error ? { error: current.error } : {}),
+  };
 }
 
 function toHex(str: string): string {

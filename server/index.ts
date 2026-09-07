@@ -30,6 +30,7 @@ import {
   purgeOnboardingCertifications,
   sweepExpiredAcpReservations,
   migrateConversionEventsTable,
+  checkMx8004WalletBalance,
 } from "./maintenance";
 
 setupProcessErrorHandlers();
@@ -271,6 +272,8 @@ app.use((req, res, next) => {
       });
     runDailyMaintenance().catch((err) => Sentry.captureException(err, { tags: { component: "daily-maintenance" } }));
     setInterval(() => runDailyMaintenance().catch((err) => Sentry.captureException(err, { tags: { component: "daily-maintenance" } })), 24 * 60 * 60 * 1000);
+    checkMx8004WalletBalance().catch((err) => Sentry.captureException(err, { tags: { component: "mx8004-balance" } }));
+    setInterval(() => checkMx8004WalletBalance().catch((err) => Sentry.captureException(err, { tags: { component: "mx8004-balance" } })), 5 * 60 * 1000);
     sweepExpiredAcpReservations().catch((err) => Sentry.captureException(err, { tags: { component: "acp-sweep" } }));
     setInterval(() => sweepExpiredAcpReservations().catch((err) => Sentry.captureException(err, { tags: { component: "acp-sweep" } })), 5 * 60 * 1000);
   });
