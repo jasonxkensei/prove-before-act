@@ -8,3 +8,9 @@ The server claims and persists a MultiversX wallet nonce before it broadcasts a 
 **Why:** Repeated failed proof attempts then create nonce gaps. Topping up the wallet alone may not restore processing; future transactions can be sent with a too-high nonce, while failed MX-8004 validation jobs stay terminal.
 
 **How to apply:** During a signer-funding or network-migration recovery, compare the persisted wallet nonce with the active chain's account nonce, resync the persisted value after definitively rejected broadcasts, then retry only the affected background jobs after the signer is funded. Keep the MX-8004 agent nonce configuration separate: it identifies the validation agent and does not own API keys.
+
+**Mainnet nonce semantics:** The MultiversX account API exposes the last consumed nonce; a new transaction must use that value plus one. Persisted `wallet_nonces.nonce` stores the next nonce to claim, not the chain's reported account nonce.
+
+**Why:** Treating the account value as the next nonce causes `lowerNonceInTx` rejection at the exact current account value, and an asynchronous resync can otherwise restore the same bad value repeatedly.
+
+**How to apply:** Add one when seeding or resyncing the persisted next-nonce marker. If several broadcasts remain pending, inspect the gateway transaction states and account nonce before attempting replacement; do not create a nonce gap.

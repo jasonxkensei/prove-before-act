@@ -31,11 +31,13 @@ export async function claimNextNonce(address: string): Promise<bigint> {
     return BigInt(result.rows[0].claimed as string);
   }
 
-  const chainNonce = await fetchChainNonce(address);
+  // MultiversX account nonce is the last consumed nonce. A new transaction
+  // must use the following nonce.
+  const nextNonce = (await fetchChainNonce(address)) + BigInt(1);
 
   try {
     await db.execute(
-      sql`INSERT INTO wallet_nonces (address, nonce) VALUES (${address}, ${chainNonce})`
+      sql`INSERT INTO wallet_nonces (address, nonce) VALUES (${address}, ${nextNonce})`
     );
   } catch {
     // Another instance beat us to INSERT — that's fine, proceed to UPDATE
@@ -59,10 +61,11 @@ export async function claimNextNonce(address: string): Promise<bigint> {
 export async function resyncNonceFromChain(address: string): Promise<void> {
   try {
     const chainNonce = await fetchChainNonce(address);
+    const nextNonce = chainNonce + BigInt(1);
     await db.execute(
-      sql`UPDATE wallet_nonces SET nonce = ${chainNonce} WHERE address = ${address}`
+      sql`UPDATE wallet_nonces SET nonce = ${nextNonce} WHERE address = ${address}`
     );
-    logger.info("Nonce resynced from chain", { component: "nonce", address, chainNonce: chainNonce.toString() });
+    logger.info("Nonce resynced from chain", { component: "nonce", address, chainNonce: chainNonce.toString(), nextNonce: nextNonce.toString() });
   } catch (err: any) {
     logger.error("Failed to resync nonce", { component: "nonce", address, error: err.message });
   }
