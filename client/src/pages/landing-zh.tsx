@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { hashFile } from "@/lib/hashUtils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +17,9 @@ import {
   Copy,
   Loader2,
   Key,
+  File,
+  ExternalLink,
+  Upload,
   Zap,
   Play,
   Network,
@@ -51,6 +55,18 @@ export default function LandingZh() {
   const [trialAgentName, setTrialAgentName] = useState<string>("");
   const [copied, setCopied] = useState(false);
   const [trialError, setTrialError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [proofHash, setProofHash] = useState("");
+  const [isHashing, setIsHashing] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [proofResult, setProofResult] = useState<{
+    proof_id?: string | number;
+    verify_url?: string;
+    blockchain?: { transaction_hash?: string; explorer_url?: string };
+    trial?: { remaining?: number };
+  } | null>(null);
+  const [proofError, setProofError] = useState<string | null>(null);
   const heroTrialCtaRef = useAgentCtaExposure<HTMLAnchorElement>("landing_zh", "hero_free_trial");
   const trialRegisterCtaRef = useAgentCtaExposure<HTMLButtonElement>("landing_zh", "trial_register");
 
@@ -92,8 +108,43 @@ export default function LandingZh() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleFileSelect = async (file: File) => {
+    setProofFile(file);
+    setProofResult(null);
+    setProofError(null);
+    setIsHashing(true);
+    try {
+      setProofHash(await hashFile(file));
+    } finally {
+      setIsHashing(false);
+    }
+  };
+
+  const submitProofMutation = useMutation({
+    mutationFn: async ({ hash, filename }: { hash: string; filename: string }) => {
+      const res = await fetch("/api/proof", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${trialKey}`,
+        },
+        body: JSON.stringify({ file_hash: hash, filename }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || data.error || "存证失败，请重试。");
+      return data;
+    },
+    onSuccess: (data) => {
+      setProofResult(data);
+      setProofError(null);
+    },
+    onError: (err: Error) => {
+      setProofError(err.message);
+    },
+  });
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-[100dvh] min-w-0 max-w-full overflow-x-hidden bg-background">
       {/* Header */}
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container flex h-16 items-center justify-between">
@@ -666,9 +717,129 @@ GET /api/agents/{wallet}/incident-report
                   </Button>
                 </div>
                 <p className="text-sm text-muted-foreground mb-5">
-                  您的密钥已就绪 — <strong>{trialAgentName}</strong> 享有 10 次免费存证。
+                  您的密钥已就绪 — <strong>{trialAgentName}</strong> 享有 10 次免费存证。现在就试一次：
                 </p>
-                <pre className="text-left text-xs font-mono bg-[#0d1117] rounded-md p-4 text-[#e6edf3] overflow-x-auto leading-relaxed">
+                {!proofResult ? (
+                  <>
+                    <div
+                      data-testid="dropzone-proof-zh"
+                      className={`border-2 border-dashed rounded-md p-7 text-center cursor-pointer transition-colors select-none ${isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/30 hover:border-primary/40"}`}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={proofFile ? `重新选择文件。当前文件：${proofFile.name}` : "选择要存证的文件"}
+                      onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                      onDragLeave={() => setIsDragging(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setIsDragging(false);
+                        const file = e.dataTransfer.files[0];
+                        if (file) handleFileSelect(file);
+                      }}
+                      onClick={() => fileInputRef.current?.click()}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          fileInputRef.current?.click();
+                        }
+                      }}
+                    >
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        className="hidden"
+                        data-testid="input-proof-file-zh"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleFileSelect(file);
+                        }}
+                      />
+                      {!proofFile ? (
+                        <>
+                          <Upload className="h-7 w-7 text-muted-foreground/50 mx-auto mb-3" />
+                          <p className="text-sm font-medium text-muted-foreground">选择输出、决策日志、数据快照或构建产物</p>
+                          <p className="text-xs text-muted-foreground/60 mt-1">仅传输 SHA-256 哈希，源文件留在当前运行环境</p>
+                        </>
+                      ) : (
+                        <div className="flex items-center gap-3 justify-center">
+                          <File className="h-6 w-6 text-primary shrink-0" />
+                          <div className="text-left min-w-0">
+                            <p className="text-sm font-medium truncate max-w-xs">{proofFile.name}</p>
+                            {isHashing ? (
+                              <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                正在计算 SHA-256 哈希…
+                              </p>
+                            ) : (
+                              <p className="text-xs text-muted-foreground font-mono mt-0.5">{proofHash.slice(0, 20)}…</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {proofFile && !isHashing && (
+                      <Button
+                        className="w-full mt-3"
+                        onClick={() => submitProofMutation.mutate({ hash: proofHash, filename: proofFile.name })}
+                        disabled={submitProofMutation.isPending}
+                        data-testid="button-anchor-proof-zh"
+                      >
+                        {submitProofMutation.isPending ? (
+                          <><Loader2 className="mr-2 h-4 w-4 animate-spin" />正在提交链上存证…</>
+                        ) : (
+                          <> <Shield className="mr-2 h-4 w-4" />提交存证</>
+                        )}
+                      </Button>
+                    )}
+
+                    {proofError && (
+                      <p className="mt-2 text-sm text-destructive text-left" data-testid="text-proof-error-zh">{proofError}</p>
+                    )}
+                  </>
+                ) : (
+                  <div className="rounded-md bg-primary/10 border border-primary/20 p-5 text-left" data-testid="card-proof-result-zh">
+                    <div className="flex items-center gap-2 mb-3">
+                      <CheckCircle className="h-5 w-5 text-primary shrink-0" />
+                      <p className="text-sm font-semibold text-primary">已在 MultiversX 上完成存证！</p>
+                    </div>
+                    <div className="space-y-1 mb-4">
+                      <p className="text-xs text-muted-foreground">
+                        文件：<span className="font-medium text-foreground">{proofFile?.name}</span>
+                      </p>
+                      <p className="text-xs text-muted-foreground font-mono">
+                        SHA-256：{proofHash.slice(0, 24)}…
+                      </p>
+                      {proofResult.proof_id && (
+                        <p className="text-xs text-muted-foreground">
+                          存证 ID：<span className="font-mono">{proofResult.proof_id}</span>
+                        </p>
+                      )}
+                      {proofResult.blockchain?.transaction_hash && (
+                        <p className="text-xs text-muted-foreground font-mono">
+                          交易：{proofResult.blockchain.transaction_hash.slice(0, 20)}…
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button asChild size="sm" variant="outline" data-testid="button-view-proof-zh">
+                        <a
+                          href={proofResult.verify_url || `/proof/${proofResult.proof_id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                          查看验证页面
+                        </a>
+                      </Button>
+                      {proofResult.trial?.remaining !== undefined && (
+                        <span className="text-xs text-muted-foreground">
+                          剩余免费次数：{proofResult.trial.remaining}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+                <pre className="mt-4 text-left text-xs font-mono bg-[#0d1117] rounded-md p-4 text-[#e6edf3] overflow-x-auto leading-relaxed">
 {`import xproof, hashlib, json
 
 client = xproof.Client(api_key="${trialKey}")
