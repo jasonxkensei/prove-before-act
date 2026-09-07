@@ -244,14 +244,17 @@ app.use((req, res, next) => {
     startTxQueueWorker();
     migrateSystemUserCertifications();
     migrateAgentViolationsTable();
-    migrateAgentOutcomesTable();
     purgeStaleSnapshotAttestationCounts();
     purgeOnboardingCertifications();
-    // Schema migration must complete before the refresh scheduler reads snapshots.
-    // Sequence: schema → warm caches from existing snapshots (zero compute) →
-    // start background scheduler (runs first cycle with jitter, then every 5 min).
+    // Schema migrations must complete before the refresh scheduler reads any
+    // trust-related tables. In particular, the leaderboard's calibration
+    // subquery reads agent_outcomes; starting both migrations independently
+    // made the first refresh race CREATE TABLE on a fresh/older deployment.
+    // Sequence: snapshot schema → outcomes schema → warm caches from existing
+    // snapshots (zero compute) → start background scheduler.
     // Daily maintenance continues to run independently once per day.
     migrateTrustSnapshotSchema()
+      .then(() => migrateAgentOutcomesTable())
       .then(() => warmCachesFromSnapshots())
       .then(() => startTrustRefreshScheduler())
       .catch((err) => {

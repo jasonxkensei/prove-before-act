@@ -887,6 +887,29 @@ const SCHEDULER_STARTUP_JITTER   = 20_000;          // 0-20 s startup jitter
 let _trustRefreshRunning       = false;
 let _leaderboardRefreshRunning = false;
 
+function databaseErrorDetails(error: unknown): Record<string, string> {
+  const details: Record<string, string> = {};
+  let current = error as Record<string, unknown> | null;
+  let depth = 0;
+
+  // Drizzle wraps driver errors. Walk the short cause chain so the log keeps
+  // PostgreSQL's useful code/detail/hint instead of only "Failed query".
+  while (current && depth < 4) {
+    if (typeof current.message === "string" && !details.message) {
+      details.message = current.message;
+    }
+    for (const key of ["code", "detail", "hint", "position", "schema", "table", "column", "constraint", "routine"]) {
+      const value = current[key];
+      if (value != null && !details[key]) details[key] = String(value);
+    }
+    current = (current.cause as Record<string, unknown> | undefined) ?? null;
+    depth++;
+  }
+
+  if (!details.message) details.message = String(error);
+  return details;
+}
+
 export async function runTrustRefreshCycle(): Promise<void> {
   if (_trustRefreshRunning) {
     logger.debug("Trust refresh cycle already running, skipping", { component: "trust-scheduler" });
@@ -984,7 +1007,7 @@ export async function runLeaderboardRefreshCycle(): Promise<void> {
   } catch (err: any) {
     logger.error("Leaderboard refresh cycle error", {
       component: "trust-scheduler",
-      error: err?.message ?? String(err),
+      ...databaseErrorDetails(err),
       durationMs: Date.now() - cycleStart,
     });
   } finally { _leaderboardRefreshRunning = false; }
@@ -1154,7 +1177,10 @@ async function computeCalibrationLabelBatch(): Promise<Map<string, CalibrationLa
       ])
     );
   } catch (err: any) {
-    logger.error("[leaderboard] calibration batch failed", { error: err?.message });
+    logger.error("[leaderboard] calibration batch failed", {
+      component: "trust-scheduler",
+      ...databaseErrorDetails(err),
+    });
     return new Map();
   }
 }
