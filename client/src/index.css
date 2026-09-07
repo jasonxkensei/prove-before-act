@@ -86,6 +86,25 @@
 }
 
 @layer components {
+  /* Shared by the React chrome and server-rendered crawler chrome. Keep
+     layout-neutral so page-specific public surfaces can opt into paper/dark
+     treatments without duplicating brand tokens. */
+  .public-site-header {
+    --public-header-border: hsl(var(--border) / .8);
+    --public-header-background: hsl(var(--background) / .95);
+    --public-header-foreground: hsl(var(--foreground));
+    border-color: var(--public-header-border);
+    background-color: var(--public-header-background);
+    color: var(--public-header-foreground);
+  }
+  .public-site-header--paper {
+    --public-header-border: hsl(40 13% 78%);
+    --public-header-background: hsl(42 28% 94% / .95);
+    --public-header-foreground: hsl(42 18% 18%);
+  }
+  .public-site-footer {
+    color: hsl(var(--muted-foreground));
+  }
   .page-shell { @apply min-h-[100dvh] bg-background text-foreground; }
   .page-container { @apply container mx-auto w-full; }
   .panel { @apply rounded-md border border-card-border bg-card shadow-sm; }

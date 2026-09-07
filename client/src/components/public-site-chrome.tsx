@@ -10,6 +10,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  PUBLIC_FOOTER_COLUMNS,
+  PUBLIC_MORE_NAV,
+  PUBLIC_PRIMARY_NAV,
+  PUBLIC_SITE_NAME,
+} from "@shared/public-site";
 
 type PublicSiteHeaderProps = {
   howItWorksHref?: string;
@@ -84,19 +90,23 @@ export function PublicSiteHeader({
   return (
     <>
       <a href="#main-content" className="skip-link">Skip to content</a>
-      <header ref={headerRef} className={`sticky top-0 z-50 border-b backdrop-blur ${headerClass}`}>
+      <header ref={headerRef} className={`public-site-header ${paper ? "public-site-header--paper" : ""} sticky top-0 z-50 border-b backdrop-blur ${headerClass}`}>
       <div className="container flex min-h-16 items-center justify-between gap-3">
         <a href="/" className="flex shrink-0 items-center gap-2" data-testid="link-logo-home">
-          <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
+          <img src="/pba-logo.svg" alt={PUBLIC_SITE_NAME} className="h-8 w-auto" />
         </a>
 
         <nav className="hidden items-center gap-6 md:flex" aria-label="Primary navigation">
-          <a href={howItWorksHref} className={paperLinkClass} data-testid="link-nav-how-it-works">
-            How it works
-          </a>
-          <a href="/standard" className={paperLinkClass} data-testid="link-nav-standard">
-            Standard
-          </a>
+          {PUBLIC_PRIMARY_NAV.map(({ href, label }, index) => (
+            <a
+              key={href}
+              href={index === 0 ? howItWorksHref : href}
+              className={paperLinkClass}
+              data-testid={index === 0 ? "link-nav-how-it-works" : "link-nav-standard"}
+            >
+              {label}
+            </a>
+          ))}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -109,18 +119,19 @@ export function PublicSiteHeader({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
               <DropdownMenuLabel>Explore</DropdownMenuLabel>
-              <DropdownMenuItem asChild><a href="/learn">60-second overview</a></DropdownMenuItem>
-              <DropdownMenuItem asChild><a href="/agents">For AI Agents</a></DropdownMenuItem>
-              <DropdownMenuItem asChild><a href="/leaderboard">Trust Leaderboard</a></DropdownMenuItem>
-              <DropdownMenuItem asChild><a href="/stats">Metrics</a></DropdownMenuItem>
+               {PUBLIC_MORE_NAV.slice(0, 4).map(({ href, label }) => (
+                 <DropdownMenuItem key={href} asChild><a href={href}>{label}</a></DropdownMenuItem>
+               ))}
               <DropdownMenuSeparator />
               <DropdownMenuLabel>Developers</DropdownMenuLabel>
-              <DropdownMenuItem asChild><a href="/docs">API Docs</a></DropdownMenuItem>
-              <DropdownMenuItem asChild><a href="/agent-context">Agent Context</a></DropdownMenuItem>
-              <DropdownMenuItem asChild><a href="/coherence">Coherence</a></DropdownMenuItem>
+               {PUBLIC_MORE_NAV.slice(4, 7).map(({ href, label }) => (
+                 <DropdownMenuItem key={href} asChild><a href={href}>{label}</a></DropdownMenuItem>
+               ))}
               <DropdownMenuSeparator />
-              <DropdownMenuItem asChild><a href="/founder">About the founder</a></DropdownMenuItem>
-              <DropdownMenuItem asChild><a href="/#faq">FAQ</a></DropdownMenuItem>
+               <DropdownMenuLabel>About</DropdownMenuLabel>
+               {PUBLIC_MORE_NAV.slice(7).map(({ href, label }) => (
+                 <DropdownMenuItem key={href} asChild><a href={href}>{label}</a></DropdownMenuItem>
+               ))}
             </DropdownMenuContent>
           </DropdownMenu>
           <a
@@ -172,14 +183,19 @@ export function PublicSiteHeader({
       {mobileOpen && (
         <nav id="public-mobile-navigation" className={`border-t px-4 pb-4 pt-2 md:hidden ${paper ? "border-[hsl(40_13%_78%)]" : "border-border"}`} aria-label="Mobile navigation">
           <div className="container grid gap-1">
-            <a href={howItWorksHref} className={mobileLinkClass} onClick={() => setMobileOpen(false)} data-testid="link-mobile-how-it-works">How it works</a>
-            <a href="/standard" className={mobileLinkClass} onClick={() => setMobileOpen(false)} data-testid="link-mobile-standard">Standard</a>
+            {PUBLIC_PRIMARY_NAV.map(({ href, label }, index) => (
+              <a
+                key={href}
+                href={index === 0 ? howItWorksHref : href}
+                className={mobileLinkClass}
+                onClick={() => setMobileOpen(false)}
+                data-testid={index === 0 ? "link-mobile-how-it-works" : "link-mobile-standard"}
+              >
+                {label}
+              </a>
+            ))}
             <div className={`mt-2 px-3 pb-1 font-mono text-[0.65rem] uppercase tracking-[0.16em] ${paper ? "text-[hsl(40_9%_42%)]" : "text-muted-foreground"}`}>Explore</div>
-            {[
-              ["/learn", "60-second overview"], ["/agents", "For AI Agents"], ["/leaderboard", "Trust Leaderboard"], ["/stats", "Metrics"],
-               ["/docs", "API Docs"], ["/agent-context", "Agent Context"], ["/coherence", "Coherence"],
-              ["/founder", "About the founder"], ["/#faq", "FAQ"],
-            ].map(([href, label]) => (
+            {PUBLIC_MORE_NAV.map(({ href, label }) => (
               <a key={href} href={href} className={mobileLinkClass} onClick={() => setMobileOpen(false)}>{label}</a>
             ))}
             {onConnect && (
@@ -201,36 +217,27 @@ export function PublicSiteFooter({ paper = false }: { paper?: boolean }) {
   const border = paper ? "border-[#d8d5cf] bg-[#f8f7f4]" : "border-border bg-background";
 
   return (
-    <footer className={`border-t py-14 ${border}`}>
+    <footer className={`public-site-footer border-t py-14 ${border}`}>
       <div className="container">
         <div className="mx-auto grid max-w-5xl gap-8 md:grid-cols-4">
           <div className="md:col-span-2">
             <a href="/" className="mb-4 inline-flex">
-              <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
+              <img src="/pba-logo.svg" alt={PUBLIC_SITE_NAME} className="h-8 w-auto" />
             </a>
             <p className={`max-w-xs text-sm ${muted}`}>
               The accountability pattern for agents that act in the world.
             </p>
           </div>
-          <div>
-            <h2 className={`mb-4 text-sm font-semibold ${heading}`}>Explore</h2>
-            <ul className={`space-y-2 text-sm ${muted}`}>
-              <li><a href="/learn" className="transition-colors hover:text-primary">60-second overview</a></li>
-              <li><a href="/standard" className="transition-colors hover:text-primary">PBA Standard</a></li>
-              <li><a href="/agents" className="transition-colors hover:text-primary">For AI Agents</a></li>
-              <li><a href="/leaderboard" className="transition-colors hover:text-primary">Trust Leaderboard</a></li>
-              <li><a href="/stats" className="transition-colors hover:text-primary">Metrics</a></li>
-            </ul>
-          </div>
-          <div>
-            <h2 className={`mb-4 text-sm font-semibold ${heading}`}>Developers</h2>
-            <ul className={`space-y-2 text-sm ${muted}`}>
-              <li><a href="/docs" className="transition-colors hover:text-primary">API Docs</a></li>
-              <li><a href="/agent-context" className="transition-colors hover:text-primary">Agent Context</a></li>
-              <li><a href="/legal/privacy" className="transition-colors hover:text-primary">Privacy</a></li>
-              <li><a href="/legal/terms" className="transition-colors hover:text-primary">Terms</a></li>
-            </ul>
-          </div>
+          {PUBLIC_FOOTER_COLUMNS.map(({ heading: columnHeading, links }) => (
+            <div key={columnHeading}>
+              <h2 className={`mb-4 text-sm font-semibold ${heading}`}>{columnHeading}</h2>
+              <ul className={`space-y-2 text-sm ${muted}`}>
+                {links.map(({ href, label }) => (
+                  <li key={href}><a href={href} className="transition-colors hover:text-primary">{label}</a></li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </div>
         <div className={`mx-auto mt-10 flex max-w-5xl flex-col items-center justify-between gap-3 border-t pt-6 text-sm sm:flex-row ${muted} ${paper ? "border-[#d8d5cf]" : "border-border"}`}>
           <span>© {new Date().getFullYear()} Prove Before Act</span>

@@ -8,6 +8,12 @@ import { getLeaderboard, computeTrustScoreByWallet, getTrustLevel } from "./trus
 import { publicReadRateLimiter } from "./reliability";
 import { getTxExplorerUrl } from "./blockchain";
 import { CANONICAL_PUBLIC_ORIGIN } from "./publicOrigin";
+import {
+  PUBLIC_FOOTER_COLUMNS,
+  PUBLIC_MORE_NAV,
+  PUBLIC_PRIMARY_NAV,
+  PUBLIC_SITE_NAME,
+} from "@shared/public-site";
 
 const CRAWLER_USER_AGENTS = [
   "ChatGPT", "GPTBot", "Googlebot", "Bingbot", "Twitterbot",
@@ -129,6 +135,137 @@ function shouldSkip(path: string): boolean {
   return SKIP_PATHS.some(skip => path.startsWith(skip));
 }
 
+function publicHref(baseUrl: string, path: string): string {
+  return `${baseUrl}${path}`;
+}
+
+function renderPublicHeader(baseUrl: string, { paper = false }: { paper?: boolean } = {}): string {
+  const primaryLinks = PUBLIC_PRIMARY_NAV.map(({ href, label }) =>
+    `<a href="${escapeHtml(publicHref(baseUrl, href))}">${escapeHtml(label)}</a>`,
+  ).join("");
+  const moreLinks = PUBLIC_MORE_NAV.map(({ href, label }) =>
+    `<a href="${escapeHtml(publicHref(baseUrl, href))}">${escapeHtml(label)}</a>`,
+  ).join("");
+
+  return `<header class="public-site-header${paper ? " public-site-header--paper" : ""}">
+  <div class="public-site-header-inner">
+    <a class="public-site-brand" href="${escapeHtml(baseUrl)}">
+      <img src="${escapeHtml(publicHref(baseUrl, "/pba-logo.svg"))}" alt="${PUBLIC_SITE_NAME}" />
+    </a>
+    <nav class="public-site-nav" aria-label="Primary navigation">
+      ${primaryLinks}
+      <details class="public-site-more">
+        <summary>More</summary>
+        <div class="public-site-more-menu">${moreLinks}</div>
+      </details>
+      <a class="public-site-cta" href="${escapeHtml(publicHref(baseUrl, "/#free-trial"))}">Start free</a>
+    </nav>
+    <div class="public-site-actions">
+      <a class="public-site-language" href="${escapeHtml(publicHref(baseUrl, "/zh"))}">中文</a>
+    </div>
+  </div>
+</header>`;
+}
+
+function renderPublicFooter(baseUrl: string, { paper = false }: { paper?: boolean } = {}): string {
+  const columns = PUBLIC_FOOTER_COLUMNS.map(({ heading, links }) => `
+    <div>
+      <h2>${escapeHtml(heading)}</h2>
+      <ul>${links.map(({ href, label }) =>
+        `<li><a href="${escapeHtml(publicHref(baseUrl, href))}">${escapeHtml(label)}</a></li>`,
+      ).join("")}</ul>
+    </div>`).join("");
+
+  return `<footer class="public-site-footer${paper ? " public-site-footer--paper" : ""}">
+  <div class="public-site-footer-inner">
+    <div class="public-site-footer-grid">
+      <div class="public-site-footer-about">
+        <a href="${escapeHtml(baseUrl)}"><img src="${escapeHtml(publicHref(baseUrl, "/pba-logo.svg"))}" alt="${PUBLIC_SITE_NAME}" /></a>
+        <p>The accountability pattern for agents that act in the world.</p>
+      </div>
+      ${columns}
+    </div>
+    <div class="public-site-footer-bottom">
+      <span>© ${new Date().getFullYear()} ${PUBLIC_SITE_NAME}</span>
+      <span>Powered by <a href="https://multiversx.com">MultiversX</a></span>
+    </div>
+  </div>
+</footer>`;
+}
+
+const PUBLIC_SITE_CHROME_STYLES = `
+  .public-site-header, .public-site-footer {
+    --public-bg: hsl(150 17% 7%);
+    --public-fg: hsl(82 18% 92%);
+    --public-muted: hsl(143 10% 64%);
+    --public-border: hsl(150 10% 22%);
+    --public-primary: hsl(143 52% 58%);
+    box-sizing: border-box;
+    font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  }
+  .public-site-header *, .public-site-footer * { box-sizing: border-box; }
+  .public-site-header {
+    position: sticky; top: 0; z-index: 50; border-bottom: 1px solid var(--public-border);
+    background: color-mix(in srgb, var(--public-bg) 95%, transparent); color: var(--public-fg);
+    backdrop-filter: blur(12px);
+  }
+  .public-site-header--paper {
+    --public-bg: hsl(42 28% 94%);
+    --public-fg: hsl(42 18% 18%);
+    --public-muted: hsl(40 9% 42%);
+    --public-border: hsl(40 13% 78%);
+    --public-primary: hsl(42 18% 18%);
+  }
+  .public-site-header-inner {
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+    max-width: 1200px; min-height: 64px; margin: 0 auto; padding: 0 1.5rem;
+  }
+  .public-site-brand { display: inline-flex; align-items: center; flex-shrink: 0; }
+  .public-site-brand img, .public-site-footer-about img { display: block; width: auto; height: 32px; }
+  .public-site-nav { display: flex; align-items: center; gap: 1.5rem; font-size: .875rem; }
+  .public-site-nav a, .public-site-more summary, .public-site-language {
+    color: var(--public-muted); text-decoration: none; cursor: pointer;
+  }
+  .public-site-nav a:hover, .public-site-more summary:hover, .public-site-language:hover { color: var(--public-fg); }
+  .public-site-more { position: relative; }
+  .public-site-more summary { list-style: none; }
+  .public-site-more summary::-webkit-details-marker { display: none; }
+  .public-site-more-menu {
+    position: absolute; right: 0; top: 1.8rem; z-index: 2; display: grid; min-width: 12rem;
+    gap: .15rem; padding: .5rem; border: 1px solid var(--public-border);
+    background: var(--public-bg); box-shadow: 0 12px 30px rgb(0 0 0 / .24);
+  }
+  .public-site-more-menu a { padding: .45rem .6rem; white-space: nowrap; }
+  .public-site-cta {
+    border: 1px solid color-mix(in srgb, var(--public-primary) 35%, transparent);
+    border-radius: 6px; padding: .4rem .75rem; color: var(--public-primary) !important;
+    background: color-mix(in srgb, var(--public-primary) 10%, transparent);
+  }
+  .public-site-actions { display: flex; align-items: center; gap: .75rem; }
+  .public-site-language {
+    border: 1px solid var(--public-border); border-radius: 6px; padding: .35rem .6rem;
+    font-family: "DM Mono", ui-monospace, monospace; font-size: .75rem;
+  }
+  .public-site-footer { border-top: 1px solid var(--public-border); padding: 3.5rem 1.5rem 1.5rem; background: var(--public-bg); color: var(--public-muted); }
+  .public-site-footer-inner { max-width: 1200px; margin: 0 auto; }
+  .public-site-footer-grid { display: grid; grid-template-columns: 2fr repeat(2, 1fr); gap: 2rem; }
+  .public-site-footer-about p { max-width: 18rem; font-size: .875rem; }
+  .public-site-footer h2 { margin: 0 0 1rem; color: var(--public-fg); font-size: .875rem; }
+  .public-site-footer ul { display: grid; gap: .5rem; list-style: none; margin: 0; padding: 0; font-size: .875rem; }
+  .public-site-footer a { color: inherit; text-decoration: none; }
+  .public-site-footer a:hover { color: var(--public-primary); }
+  .public-site-footer-bottom { display: flex; justify-content: space-between; gap: 1rem; margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--public-border); font-size: .875rem; }
+  @media (max-width: 760px) {
+    .public-site-header-inner { padding: 0 1rem; }
+    .public-site-nav { gap: .75rem; }
+    .public-site-nav > a:not(.public-site-cta), .public-site-more { display: none; }
+    .public-site-footer { padding-inline: 1rem; }
+    .public-site-footer-grid { grid-template-columns: 1fr 1fr; }
+    .public-site-footer-about { grid-column: 1 / -1; }
+    .public-site-footer-bottom { flex-direction: column; }
+  }
+`;
+
 function commonHead(title: string, description: string, canonicalUrl: string, ogType: string = "website") {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -169,7 +306,8 @@ function commonHead(title: string, description: string, canonicalUrl: string, og
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+<style id="public-site-chrome-tokens">${PUBLIC_SITE_CHROME_STYLES}</style>
 </head>`;
 }
 
@@ -215,16 +353,7 @@ async function renderHomePage(baseUrl: string): Promise<string> {
 
   return `${commonHead(title, description, baseUrl)}
 <body>
-<header>
-  <nav>
-    <a href="${baseUrl}"><strong>Prove Before Act</strong></a> |
-    <a href="${baseUrl}/agents">For AI Agents</a> |
-    <a href="${baseUrl}/certify">Certify a file (for individuals)</a> |
-    <a href="${baseUrl}/mcp">MCP Server</a> |
-    <a href="${baseUrl}/docs">API Docs</a> |
-    <a href="${baseUrl}/standard">The Standard</a>
-  </nav>
-</header>
+${renderPublicHeader(baseUrl)}
 
 <main>
   <section>
@@ -315,17 +444,7 @@ async function renderHomePage(baseUrl: string): Promise<string> {
   </section>
 </main>
 
-<footer>
-  <p>&copy; ${new Date().getFullYear()} Prove Before Act. All rights reserved.</p>
-  <p>Powered by <a href="https://multiversx.com">MultiversX</a></p>
-  <nav>
-    <a href="${baseUrl}/agents">For AI Agents</a> |
-    <a href="${baseUrl}/mcp">MCP Server</a> |
-    <a href="${baseUrl}/legal/mentions">Legal notices</a> |
-    <a href="${baseUrl}/legal/privacy">Privacy policy</a> |
-    <a href="${baseUrl}/legal/terms">Terms</a>
-  </nav>
-</footer>
+${renderPublicFooter(baseUrl)}
 
 <script type="application/ld+json">
 ${safeJsonLd({
@@ -494,11 +613,7 @@ function renderLearnPage(baseUrl: string): string {
   @media(max-width:600px){ main { padding:1.2rem 1.2rem .8rem; justify-content:flex-start; } .flow { justify-content:flex-start; } }
 </style>
 <body>
-<nav>
-  <a href="${baseUrl}" class="brand">Prove Before Act</a>
-  <span class="spacer"></span>
-  <a href="${baseUrl}/standard" class="spec-link">Full specification →</a>
-</nav>
+${renderPublicHeader(baseUrl, { paper: true })}
 <main>
   <div class="badge">60-second overview</div>
   <h1>What did this agent decide,<br>and when did it decide it?</h1>
@@ -523,9 +638,7 @@ function renderLearnPage(baseUrl: string): string {
     <a href="${baseUrl}" class="cta-s">Explore xProof, the reference implementation →</a>
   </div>
 </main>
-<footer>
-  <a href="${baseUrl}/standard">provebeforeact.com/standard</a> · reference implementation: xProof
-</footer>
+${renderPublicFooter(baseUrl, { paper: true })}
 <script type="application/ld+json">
 ${safeJsonLd({
   "@context": "https://schema.org",
@@ -597,6 +710,7 @@ function renderStandardPage(baseUrl: string): string {
   @media(max-width:600px){.toc ol{columns:1}.flow-row{flex-direction:column;gap:.5rem}h2{font-size:1.3rem}}
 </style>
 <body>
+${renderPublicHeader(baseUrl, { paper: true })}
 <div class="hd">
   <div class="wrap">
     <div class="hd-meta">Technical Specification · Draft v0.1 · August 2026 · Status: Draft</div>
@@ -607,13 +721,6 @@ function renderStandardPage(baseUrl: string): string {
   </div>
 </div>
 <div class="wrap">
-  <nav style="padding:1.5rem 0;font-size:.9rem;border-bottom:1px solid #d8d5cf;margin-bottom:1rem">
-    <a href="${baseUrl}"><strong>Prove Before Act</strong></a>
-    <a href="${baseUrl}/agents">For Agents</a>
-    <a href="${baseUrl}/agent-context">Agent Context</a>
-    <a href="${baseUrl}/founder">Jason</a>
-  </nav>
-
   <div class="toc">
     <div class="toc-lbl">Contents</div>
     <ol>
@@ -896,12 +1003,7 @@ if intent_proof.status == "confirmed":
     <p>Contact: <a href="${baseUrl}">provebeforeact.com</a> · <a href="https://x.com/ProveBeforeAct">@ProveBeforeAct</a></p>
   </section>
 </div>
-<footer>
-  <div class="wrap">
-    <div class="ft-logo">Prove Before Act</div>
-    <div class="ft-sub">Draft v0.1 · August 2026 · provebeforeact.com/standard</div>
-  </div>
-</footer>
+${renderPublicFooter(baseUrl, { paper: true })}
 <script type="application/ld+json">
 ${safeJsonLd({
   "@context": "https://schema.org",
@@ -957,14 +1059,7 @@ function renderJasonPage(baseUrl: string): string {
 
   return `${commonHead(title, description, `${baseUrl}/founder`, "profile")}
 <body>
-<header>
-  <nav>
-    <a href="${baseUrl}"><strong>Prove Before Act</strong></a> |
-    <a href="${baseUrl}/agents">For AI Agents</a> |
-    <a href="${baseUrl}/agent-context">Agent Context</a> |
-    <a href="${baseUrl}/docs">API Docs</a>
-  </nav>
-</header>
+${renderPublicHeader(baseUrl)}
 <main>
   <h1>Jason Petitfourg — AI Product Builder</h1>
   <p>I turn emerging AI infrastructure opportunities into working products, integrations, and verifiable proof systems.</p>
@@ -1001,7 +1096,7 @@ function renderJasonPage(baseUrl: string): string {
 
   <p><a href="${baseUrl}/agents">Integrate an agent</a> · <a href="${baseUrl}/coherence">Explore the accountability loop</a></p>
 </main>
-<footer><p>&copy; ${new Date().getFullYear()} Prove Before Act. Built on <a href="https://multiversx.com">MultiversX</a></p></footer>
+${renderPublicFooter(baseUrl)}
 <script type="application/ld+json">
 ${safeJsonLd({
   "@context": "https://schema.org",
@@ -1027,11 +1122,7 @@ function renderCertifyPage(baseUrl: string): string {
 
   return `${commonHead(title, description, `${baseUrl}/certify`)}
 <body>
-<header>
-  <nav>
-    <a href="${baseUrl}"><strong>Prove Before Act</strong></a>
-  </nav>
-</header>
+${renderPublicHeader(baseUrl)}
 
 <main>
   <h1>Certify a file</h1>
@@ -1052,9 +1143,7 @@ function renderCertifyPage(baseUrl: string): string {
   <p><a href="${baseUrl}">Back to home</a></p>
 </main>
 
-<footer>
-  <p>&copy; ${new Date().getFullYear()} Prove Before Act. Powered by <a href="https://multiversx.com">MultiversX</a></p>
-</footer>
+${renderPublicFooter(baseUrl)}
 </body>
 </html>`;
 }
@@ -1067,11 +1156,7 @@ function renderProofPage(baseUrl: string, cert: any): string {
 
   return `${commonHead(title, description, proofUrl, "article")}
 <body>
-<header>
-  <nav>
-    <a href="${baseUrl}"><strong>Prove Before Act</strong></a>
-  </nav>
-</header>
+${renderPublicHeader(baseUrl)}
 
 <main>
   <h1>${escapeHtml(cert.fileName)} - Blockchain Proof</h1>
@@ -1106,9 +1191,7 @@ function renderProofPage(baseUrl: string, cert: any): string {
   <p><a href="${baseUrl}">Certify your files on Prove Before Act</a></p>
 </main>
 
-<footer>
-  <p>&copy; ${new Date().getFullYear()} Prove Before Act. Powered by <a href="https://multiversx.com">MultiversX</a></p>
-</footer>
+${renderPublicFooter(baseUrl)}
 
 <script type="application/ld+json">
 ${safeJsonLd({
@@ -1136,11 +1219,7 @@ function renderProofNotFound(baseUrl: string): string {
 
   return `${commonHead(title, description, baseUrl)}
 <body>
-<header>
-  <nav>
-    <a href="${baseUrl}"><strong>Prove Before Act</strong></a>
-  </nav>
-</header>
+${renderPublicHeader(baseUrl)}
 
 <main>
   <h1>Proof not found</h1>
@@ -1148,9 +1227,7 @@ function renderProofNotFound(baseUrl: string): string {
   <p><a href="${baseUrl}">Back to home</a> | <a href="${baseUrl}/certify">Certify a file</a></p>
 </main>
 
-<footer>
-  <p>&copy; ${new Date().getFullYear()} Prove Before Act. Powered by <a href="https://multiversx.com">MultiversX</a></p>
-</footer>
+${renderPublicFooter(baseUrl)}
 </body>
 </html>`;
 }
@@ -1162,15 +1239,7 @@ async function renderAgentsPage(baseUrl: string): Promise<string> {
 
   return `${commonHead(title, description, `${baseUrl}/agents`)}
 <body>
-<header>
-  <nav>
-    <a href="${baseUrl}"><strong>Prove Before Act</strong></a> |
-    <a href="${baseUrl}/agent-context">Agent Context</a> |
-    <a href="${baseUrl}/docs">API Docs</a> |
-    <a href="${baseUrl}/mcp">MCP Server</a> |
-    <a href="${baseUrl}/leaderboard">Leaderboard</a>
-  </nav>
-</header>
+${renderPublicHeader(baseUrl)}
 
 <main>
   <h1>The accountability pattern for autonomous agents</h1>
@@ -1309,10 +1378,7 @@ resp = requests.post("${baseUrl}/api/batch",
   </section>
 </main>
 
-<footer>
-  <p>&copy; ${new Date().getFullYear()} Prove Before Act. Built on <a href="https://multiversx.com">MultiversX</a> | <a href="${baseUrl}/agent-context">Full agent guide</a> | <a href="${baseUrl}/leaderboard">Agent leaderboard</a></p>
-  <p><a href="${baseUrl}/legal/mentions">Legal notices</a> | <a href="${baseUrl}/legal/privacy">Privacy policy</a> | <a href="${baseUrl}/legal/terms">Terms</a></p>
-</footer>
+${renderPublicFooter(baseUrl)}
 </body>
 </html>`;
 }
@@ -1324,14 +1390,7 @@ async function renderAgentsPageZh(baseUrl: string): Promise<string> {
 
   return `${commonHead(title, description, `${baseUrl}/agents/zh`)}
 <body>
-<header>
-  <nav>
-    <a href="${baseUrl}"><strong>Prove Before Act</strong></a> |
-    <a href="${baseUrl}/agent-context/zh">智能体接入指南</a> |
-    <a href="${baseUrl}/leaderboard">信任排行榜</a> |
-    <a href="${baseUrl}/agents">English</a>
-  </nav>
-</header>
+${renderPublicHeader(baseUrl)}
 
 <main>
   <h1>Prove Before Act：自主智能体的执行前问责模式</h1>
@@ -1468,9 +1527,7 @@ resp = requests.post("${baseUrl}/api/batch",
   </section>
 </main>
 
-<footer>
-  <p>&copy; ${new Date().getFullYear()} Prove Before Act. Built on <a href="https://multiversx.com">MultiversX</a> | <a href="${baseUrl}/agent-context/zh">智能体接入指南</a> | <a href="${baseUrl}/leaderboard">信任排行榜</a></p>
-</footer>
+${renderPublicFooter(baseUrl)}
 </body>
 </html>`;
 }
@@ -1486,7 +1543,7 @@ async function renderAgentContextPage(baseUrl: string): Promise<string> {
 
   return `${commonHead(title, description, `${baseUrl}/agent-context`)}
 <body>
-<header><nav><a href="${baseUrl}"><strong>Prove Before Act</strong></a> | <a href="${baseUrl}/standard">The PBA Specification</a> | <a href="${baseUrl}/agent-context.md">Machine-readable (.md)</a></nav></header>
+${renderPublicHeader(baseUrl)}
 <main>
   <h1>Prove Before Act Agent Context</h1>
   <p><strong>Anchor a declared decision basis before execution.</strong> Prove Before Act is the pattern; xProof is the reference implementation. Hash locally → certify on MultiversX → proceed with <code>proof_id</code>. Production reference: ${referenceMetrics} <a href="${baseUrl}/agent/${REFERENCE_AGENT_WALLET}">Moltbook public profile</a>. <a href="${baseUrl}/founder">Jason Petitfourg is the AI Product Builder behind Prove Before Act</a>.</p>
@@ -1811,7 +1868,7 @@ Content-Type: application/json
     </ul>
   </section>
 </main>
-<footer><p>&copy; ${new Date().getFullYear()} Prove Before Act. Built on <a href="https://multiversx.com">MultiversX</a></p></footer>
+${renderPublicFooter(baseUrl)}
 </body></html>`;
 }
 
@@ -1830,14 +1887,14 @@ async function renderLeaderboardPage(baseUrl: string): Promise<string> {
 
   return `${commonHead(title, description, `${baseUrl}/leaderboard`)}
 <body>
-<header><nav><a href="${baseUrl}"><strong>Prove Before Act</strong></a></nav></header>
+${renderPublicHeader(baseUrl)}
 <main>
   <h1>Agent Trust Leaderboard</h1>
   <p>${agentCount} AI agents ranked by on-chain certification history. Trust scores computed from confirmed certifications, activity streaks, seniority, and domain attestations.</p>
   <p>Trust levels: Newcomer (0-99), Active (100-299), Trusted (300-699), Verified (700+)</p>
   <p><a href="${baseUrl}/settings">Add my agent to the leaderboard</a></p>
 </main>
-<footer><p>&copy; ${new Date().getFullYear()} Prove Before Act. Powered by <a href="https://multiversx.com">MultiversX</a></p></footer>
+${renderPublicFooter(baseUrl)}
 </body></html>`;
 }
 
@@ -1863,7 +1920,7 @@ async function renderAgentProfilePage(baseUrl: string, walletAddress: string): P
   :root { color-scheme: dark; }
   *, *::before, *::after { box-sizing: border-box; }
   html { background: #101612; }
-  body { margin: 0; min-width: 320px; overflow-x: hidden; background: #101612; color: #e7eee8; font-family: "Space Grotesk", ui-sans-serif, system-ui, sans-serif; line-height: 1.55; }
+  body { margin: 0; min-width: 320px; overflow-x: hidden; background: #101612; color: #e7eee8; font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif; line-height: 1.55; }
   a { color: #8eeeb8; }
   .dossier-nav { border-bottom: 1px solid #2c3830; padding: 0 1.25rem; }
   .dossier-nav-inner { display:flex; align-items:center; min-height:64px; max-width:1120px; margin:0 auto; }
@@ -1908,7 +1965,7 @@ async function renderAgentProfilePage(baseUrl: string, walletAddress: string): P
   }
 </style>
 <body>
-<header class="dossier-nav"><nav class="dossier-nav-inner"><a class="dossier-brand" href="${escapeHtml(baseUrl)}">Prove Before Act</a></nav></header>
+${renderPublicHeader(baseUrl)}
 <main class="dossier-main">
   <p class="dossier-kicker">Public agent profile / live evidence</p>
   <section class="dossier-hero">
@@ -1943,7 +2000,7 @@ async function renderAgentProfilePage(baseUrl: string, walletAddress: string): P
     <a class="dossier-link" href="${baseUrl}/leaderboard">View the full trust leaderboard →</a>
   </section>
 </main>
-<footer class="dossier-footer"><div class="dossier-footer-inner">&copy; ${new Date().getFullYear()} Prove Before Act · Powered by <a href="https://multiversx.com">MultiversX</a></div></footer>
+${renderPublicFooter(baseUrl)}
 
 <script type="application/ld+json">
 ${safeJsonLd({
@@ -2006,16 +2063,7 @@ function renderCoherencePage(baseUrl: string, priceUsd: number): string {
 <body>
 <div class="coherence-shell">
 <a class="coherence-skip" href="#main-content">Skip to main content</a>
-<header class="coherence-header">
-  <nav class="coherence-nav" aria-label="Primary navigation">
-    <a class="coherence-brand" href="${escapeHtml(baseUrl)}"><span class="coherence-brand-mark">●</span>Prove Before Act</a>
-    <div class="coherence-links">
-      <a href="${escapeHtml(baseUrl)}/agent-context">For agents</a>
-      <a href="${escapeHtml(baseUrl)}/docs">Docs</a>
-      <a href="${escapeHtml(baseUrl)}/leaderboard">Leaderboard</a>
-    </div>
-  </nav>
-</header>
+${renderPublicHeader(baseUrl)}
 <main id="main-content" class="coherence-main" tabindex="-1">
 <p class="coherence-kicker">Pre-execution evidence · coherence layer</p>
 
@@ -2080,17 +2128,7 @@ GET ${escapeHtml(baseUrl)}/api/fleet/coherence?fleet=&lt;slug&gt;</code></pre>
   <li><a href="${escapeHtml(baseUrl)}/fleet" style="color:#10b981">Fleet view</a> — interactive fleet coherence dashboard</li>
 </ul>
 </main>
-<footer class="coherence-footer">
-  <div class="coherence-footer-inner">
-    <p>&copy; ${new Date().getFullYear()} Prove Before Act. All rights reserved.</p>
-    <p>Powered by <a href="https://multiversx.com">MultiversX</a></p>
-    <nav aria-label="Legal">
-      <a href="${escapeHtml(baseUrl)}/legal/mentions">Legal notices</a> ·
-      <a href="${escapeHtml(baseUrl)}/legal/privacy">Privacy policy</a> ·
-      <a href="${escapeHtml(baseUrl)}/legal/terms">Terms</a>
-    </nav>
-  </div>
-</footer>
+${renderPublicFooter(baseUrl)}
 </div>
 </body></html>`;
 }
@@ -2261,15 +2299,7 @@ function renderFleetPage(baseUrl: string): string {
 <body>
 <div class="fleet-shell">
 <a class="skip-link" href="#main-content">Skip to main content</a>
-<header class="fleet-nav">
-  <nav class="fleet-nav-inner" aria-label="Primary navigation">
-    <a class="fleet-brand" href="${escapeHtml(baseUrl)}"><span class="fleet-brand-mark">●</span>Prove Before Act</a>
-    <div class="fleet-nav-links">
-      <a href="${escapeHtml(baseUrl)}">Home</a>
-      <a href="${escapeHtml(baseUrl)}/coherence">Coherence</a>
-    </div>
-  </nav>
-</header>
+${renderPublicHeader(baseUrl)}
 
 <main id="main-content" class="fleet-main">
 <p class="fleet-kicker">Operational evidence · fleet view</p>
@@ -2352,15 +2382,7 @@ Authorization: Bearer pm_YOUR_API_KEY
 </ul>
 <p class="fleet-footnote">Interactive fleet dashboard: <a href="${escapeHtml(baseUrl)}/fleet">${escapeHtml(baseUrl)}/fleet</a> — enter a wallet prefix or fleet slug to load live per-agent coherence data.</p>
 </main>
-<footer class="fleet-footer">
-  <p>&copy; ${new Date().getFullYear()} Prove Before Act. All rights reserved.</p>
-  <p>Powered by <a href="https://multiversx.com">MultiversX</a></p>
-  <nav aria-label="Legal">
-    <a href="${escapeHtml(baseUrl)}/legal/mentions">Legal notices</a> ·
-    <a href="${escapeHtml(baseUrl)}/legal/privacy">Privacy policy</a> ·
-    <a href="${escapeHtml(baseUrl)}/legal/terms">Terms</a>
-  </nav>
-</footer>
+${renderPublicFooter(baseUrl)}
 </div>
 </body></html>`;
 }
