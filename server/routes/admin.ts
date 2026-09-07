@@ -126,7 +126,10 @@ function buildActivationAnalysis(
   const comparableDrops = stageRows
     .filter((row) => row.drop_off !== null && row.drop_off_rate !== null && row.from_previous !== null && row.from_previous > 0)
     .sort((a, b) => (b.drop_off_rate! - a.drop_off_rate!) || (b.drop_off! - a.drop_off!));
-  const largestDropOff = comparableDrops[0] ?? null;
+  // API-only traffic can have registrations or proofs without ever entering
+  // the browser funnel. Keep its stage counts visible, but do not turn those
+  // missing top-of-funnel stages into a product recommendation.
+  const largestDropOff = stages.scenario_selected > 0 ? (comparableDrops[0] ?? null) : null;
 
   return {
     traffic_segment: trafficSegment,
@@ -570,12 +573,13 @@ export function registerAdminRoutes(app: Express) {
         },
         traffic_segment: String(row.traffic_segment),
       }));
-      const overallStages = segmentAnalysis.reduce((totals, segment) => {
+       const comparableSegments = segmentAnalysis.filter((segment) => segment.stages.scenario_selected > 0);
+       const overallStages = comparableSegments.reduce((totals, segment) => {
         for (const stage of ACTIVATION_STAGE_ORDER) totals[stage] += segment.stages[stage];
         return totals;
       }, emptyStages());
       const overallAnalysis = buildActivationAnalysis(overallStages, "all");
-      const largestSegmentDropOff = segmentAnalysis
+       const largestSegmentDropOff = comparableSegments
         .map((segment) => buildActivationAnalysis(segment.stages, segment.traffic_segment))
         .filter((segment) => segment.largest_drop_off !== null)
         .sort((a, b) => (

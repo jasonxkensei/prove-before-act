@@ -71,6 +71,52 @@ afterAll(async () => {
 });
 
 describe("GET /api/admin/conversion-funnel", () => {
+  function stubActivationQueries(
+    segments: Array<Record<string, string>>,
+    totals: Record<string, string> = {
+      events: "20",
+      visitors: "10",
+      cta_views: "10",
+      cta_clicks: "5",
+      scenario_engagements: "5",
+      registrations: "4",
+      successful_proofs: "3",
+    },
+    proofActivation: Record<string, string> = {
+      first_proof_visitors: "3",
+      repeat_proof_visitors: "2",
+    },
+  ) {
+    const executeSpy = vi.spyOn(db, "execute") as any;
+    executeSpy
+      .mockResolvedValueOnce({
+        rows: [{
+          day: "2026-09-06",
+          stage: "cta",
+          outcome: "clicked",
+          http_class: "0xx",
+          traffic_segment: "human_browser",
+          events: "5",
+          visitors: "5",
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [totals] })
+      .mockResolvedValueOnce({ rows: segments })
+      .mockResolvedValueOnce({ rows: [proofActivation] })
+      .mockResolvedValueOnce({
+        rows: [{ registrations: "1", successful_proofs: "1" }],
+      });
+    return executeSpy;
+  }
+
+  async function getAuthorizedFunnel() {
+    const response = await fetch(`${baseUrl}/api/admin/conversion-funnel`, {
+      headers: { Cookie: cookie },
+    });
+    expect(response.status).toBe(200);
+    return response.json();
+  }
+
   it("rejects a request without an authenticated admin session", async () => {
     const response = await fetch(`${baseUrl}/api/admin/conversion-funnel`);
     expect(response.status).toBe(401);
@@ -243,6 +289,154 @@ describe("GET /api/admin/conversion-funnel", () => {
     } finally {
       executeSpy.mockRestore();
       telemetryHealthSpy.mockRestore();
+    }
+  });
+
+  it("does not recommend a drop for zero-denominator or API-only activity", async () => {
+    const executeSpy = stubActivationQueries([
+      {
+        traffic_segment: "api_client",
+        scenario_selected: "0",
+        primary_cta_clicked: "0",
+        registered: "4",
+        first_proof: "4",
+        second_proof: "2",
+      },
+      {
+        traffic_segment: "human_browser",
+        scenario_selected: "0",
+        primary_cta_clicked: "0",
+        registered: "0",
+        first_proof: "0",
+        second_proof: "0",
+      },
+    ]);
+
+    try {
+      const body = await getAuthorizedFunnel();
+      expect(body.activation_review.largest_segment_drop_off).toBeNull();
+      expect(body.activation_review.overall.largest_drop_off).toBeNull();
+      expect(body.activation_review.recommendation.hypothesis).toBeNull();
+      expect(body.activation_review.by_traffic_segment).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          traffic_segment: "api_client",
+          stages: expect.arrayContaining([
+            expect.objectContaining({ stage: "registered", visitors: 4 }),
+            expect.objectContaining({ stage: "first_proof", visitors: 4 }),
+            expect.objectContaining({ stage: "second_proof", visitors: 2 }),
+          ]),
+          largest_drop_off: null,
+        }),
+      ]));
+    } finally {
+      executeSpy.mockRestore();
+    }
+  });
+
+  it("prioritizes relative drop rate, then absolute visitor loss for ties", async () => {
+    const executeSpy = stubActivationQueries([
+      {
+        traffic_segment: "human_browser",
+        scenario_selected: "100",
+        primary_cta_clicked: "20",
+        registered: "0",
+        first_proof: "0",
+        second_proof: "0",
+      },
+      {
+        traffic_segment: "declared_agent",
+        scenario_selected: "100",
+        primary_cta_clicked: "50",
+        registered: "25",
+        first_proof: "25",
+        second_proof: "25",
+      },
+    ]);
+
+    try {
+      const body = await getAuthorizedFunnel();
+      expect(body.activation_review.largest_segment_drop_off).toMatchObject({
+        traffic_segment: "human_browser",
+        largest_drop_off: {
+          from_stage: "primary_cta_clicked",
+          to_stage: "registered",
+          lost_visitors: 20,
+          drop_off_rate: 100,
+        },
+      });
+      expect(body.activation_review.by_traffic_segment).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          traffic_segment: "declared_agent",
+          largest_drop_off: expect.objectContaining({
+            from_stage: "scenario_selected",
+            to_stage: "primary_cta_clicked",
+            lost_visitors: 50,
+            drop_off_rate: 50,
+          }),
+        }),
+      ]));
+    } finally {
+      executeSpy.mockRestore();
+    }
+  });
+
+  it("returns first- and second-proof visitor counts for every traffic segment", async () => {
+    const executeSpy = stubActivationQueries([
+      {
+        traffic_segment: "api_client",
+        scenario_selected: "0",
+        primary_cta_clicked: "0",
+        registered: "2",
+        first_proof: "2",
+        second_proof: "1",
+      },
+      {
+        traffic_segment: "human_browser",
+        scenario_selected: "10",
+        primary_cta_clicked: "8",
+        registered: "5",
+        first_proof: "3",
+        second_proof: "2",
+      },
+    ], {
+      events: "30",
+      visitors: "15",
+      cta_views: "10",
+      cta_clicks: "8",
+      scenario_engagements: "10",
+      registrations: "7",
+      successful_proofs: "5",
+    }, {
+      first_proof_visitors: "5",
+      repeat_proof_visitors: "3",
+    });
+
+    try {
+      const body = await getAuthorizedFunnel();
+      const segments = new Map(
+        body.activation_review.by_traffic_segment.map((segment: any) => [
+          segment.traffic_segment,
+          new Map(segment.stages.map((stage: any) => [stage.stage, stage.visitors])),
+        ]),
+      );
+      expect(segments.get("api_client")).toEqual(new Map([
+        ["scenario_selected", 0],
+        ["primary_cta_clicked", 0],
+        ["registered", 2],
+        ["first_proof", 2],
+        ["second_proof", 1],
+      ]));
+      expect(segments.get("human_browser")).toEqual(new Map([
+        ["scenario_selected", 10],
+        ["primary_cta_clicked", 8],
+        ["registered", 5],
+        ["first_proof", 3],
+        ["second_proof", 2],
+      ]));
+      expect(body.totals.first_proof_visitors).toBe(5);
+      expect(body.totals.repeat_proof_visitors).toBe(3);
+    } finally {
+      executeSpy.mockRestore();
     }
   });
 });
