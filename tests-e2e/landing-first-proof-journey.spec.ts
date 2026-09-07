@@ -31,6 +31,49 @@ async function expectChineseFreeTrialInViewport(page: Page) {
   await expect(page.getByTestId("input-trial-agent-name-zh")).toBeVisible();
 }
 
+async function completeFirstProof(page: Page) {
+  const agentNameInput = page.getByTestId("input-trial-agent-name");
+  await agentNameInput.focus();
+  await page.keyboard.type("keyboard-first-proof-agent");
+  await page.keyboard.press("Tab");
+  await expect(page.getByTestId("button-register-trial")).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("text-trial-key")).toHaveText("pm_e2e_keyboard_trial_key");
+
+  const dropzone = page.getByTestId("dropzone-proof");
+  await dropzone.focus();
+  await expect(dropzone).toBeFocused();
+
+  const fileChooserPromise = page.waitForEvent("filechooser");
+  await page.keyboard.press("Enter");
+  const fileChooser = await fileChooserPromise;
+  await fileChooser.setFiles({
+    name: "decision-log.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from("# Decision basis\nPayment approved after review.\n"),
+  });
+
+  await expect(page.getByTestId("button-anchor-proof")).toBeVisible();
+  await page.getByTestId("button-anchor-proof").focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("card-proof-result")).toBeVisible();
+}
+
+async function expectUsableProofLinkAndGuidance(page: Page) {
+  const viewProof = page.getByTestId("button-view-proof");
+  await expect(viewProof).toBeVisible();
+  await expect(viewProof).toHaveAttribute("href", "/proof/e2e-proof-id");
+  await expect(viewProof).toHaveAttribute("target", "_blank");
+
+  const popupPromise = page.waitForEvent("popup");
+  await viewProof.click();
+  const popup = await popupPromise;
+  await expect(popup).toHaveURL(/\/proof\/e2e-proof-id$/);
+  await popup.close();
+
+  await expect(page.getByTestId("button-trial-fleet-docs")).toBeVisible();
+}
+
 async function mockTrialApis(page: Page) {
   let registrationRequests = 0;
   let proofRequests = 0;
@@ -80,6 +123,22 @@ test.describe("landing first-proof journey — desktop", () => {
 
     await page.getByRole("link", { name: "Payment approval" }).click();
     await expectFreeTrialInViewport(page);
+  });
+
+  test("keyboard-only registration shows a usable proof link and integration guidance", async ({
+    page,
+  }) => {
+    const { registrationRequestCount, proofRequestCount } = await mockTrialApis(page);
+    await page.goto("/");
+
+    await page.getByRole("link", { name: "Agent delegation" }).click();
+    await expectFreeTrialInViewport(page);
+    await completeFirstProof(page);
+    await expect(page.getByText("Proof anchored on MultiversX!")).toBeVisible();
+    await expectUsableProofLinkAndGuidance(page);
+
+    expect(registrationRequestCount()).toBe(1);
+    expect(proofRequestCount()).toBe(1);
   });
 });
 
@@ -133,6 +192,7 @@ test.describe("landing first-proof journey — mobile", () => {
 
     await expect(page.getByTestId("card-proof-result")).toBeVisible();
     await expect(page.getByText("Proof anchored on MultiversX!")).toBeVisible();
+    await expectUsableProofLinkAndGuidance(page);
     expect(registrationRequestCount()).toBe(1);
     expect(proofRequestCount()).toBe(1);
   });

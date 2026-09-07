@@ -84,6 +84,25 @@ curl -s -X POST https://provebeforeact.com/api/proof \\
 # → "https://provebeforeact.com/proof/prf_..."`,
 };
 
+type ProofResult = {
+  proof_id?: string | number;
+  verify_url?: string;
+  blockchain?: { transaction_hash?: string; explorer_url?: string };
+  trial?: { remaining?: number };
+};
+
+function getProofVerificationUrl(result: ProofResult): string | null {
+  if (typeof result.verify_url === "string" && result.verify_url.trim()) {
+    return result.verify_url;
+  }
+
+  if (result.proof_id !== undefined && result.proof_id !== null) {
+    return `/proof/${encodeURIComponent(String(result.proof_id))}`;
+  }
+
+  return null;
+}
+
 function QuickStartCode({ onGetKey }: { onGetKey: () => void }) {
   const [lang, setLang] = useState<"python" | "typescript" | "curl">("python");
   const [copied, setCopied] = useState(false);
@@ -228,12 +247,7 @@ export default function Landing() {
   const [proofHash, setProofHash] = useState<string>("");
   const [isHashing, setIsHashing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [proofResult, setProofResult] = useState<{
-    proof_id?: string | number;
-    verify_url?: string;
-    blockchain?: { transaction_hash?: string; explorer_url?: string };
-    trial?: { remaining?: number };
-  } | null>(null);
+  const [proofResult, setProofResult] = useState<ProofResult | null>(null);
   const [proofError, setProofError] = useState<string | null>(null);
   const [caseVerified, setCaseVerified] = useState(false);
 
@@ -260,8 +274,11 @@ export default function Landing() {
         },
         body: JSON.stringify({ file_hash: hash, filename }),
       });
-      const data = await res.json();
+      const data = await res.json() as ProofResult & { message?: string; error?: string };
       if (!res.ok) throw new Error(data.message || data.error || "Proof submission failed. Please try again.");
+      if (!getProofVerificationUrl(data)) {
+        throw new Error("Proof was created without a verification link. Please try again.");
+      }
       return data;
     },
     onSuccess: (data) => {
@@ -277,6 +294,8 @@ export default function Landing() {
       trackEvent("proof_submission_failed", { location: "landing" });
     },
   });
+
+  const proofVerificationUrl = proofResult ? getProofVerificationUrl(proofResult) : null;
 
   return (
     <div className="min-h-[100dvh] min-w-0 max-w-full overflow-x-hidden bg-[#111612] text-[#e8ebe5]">
@@ -667,29 +686,31 @@ export default function Landing() {
                         )}
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <Button
-                          asChild
-                          size="sm"
-                          variant="outline"
-                          data-testid="button-view-proof"
-                        >
-                          <a
-                            href={proofResult.verify_url || `/proof/${proofResult.proof_id}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                        {proofVerificationUrl && (
+                          <Button
+                            asChild
+                            size="sm"
+                            variant="outline"
+                            data-testid="button-view-proof"
                           >
-                            <ExternalLink className="mr-1.5 h-3 w-3" />
-                            View proof
-                          </a>
-                        </Button>
+                            <a
+                              href={proofVerificationUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <ExternalLink className="mr-1.5 h-3 w-3" />
+                              View proof
+                            </a>
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => {
-                            const url = proofResult.verify_url
-                              ? `https://provebeforeact.com${proofResult.verify_url.startsWith("/") ? "" : "/"}${proofResult.verify_url}`
-                              : `https://provebeforeact.com/proof/${proofResult.proof_id}`;
-                            navigator.clipboard.writeText(url);
+                            if (!proofVerificationUrl) return;
+                            navigator.clipboard.writeText(
+                              new URL(proofVerificationUrl, window.location.origin).toString(),
+                            );
                           }}
                           data-testid="button-copy-proof-url"
                         >
