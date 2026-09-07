@@ -893,7 +893,7 @@ if intent_proof.status == "confirmed":
       <p>The goal is not for xProof to be the only implementation. The goal is for <em>Prove Before Act</em> to become the vocabulary developers reach for when they need to answer: <strong>what did this agent decide, and when did it decide it?</strong></p>
       <p style="margin-top:1rem;margin-bottom:0">The day someone writes in their README <em>"This agent implements the Prove Before Act pattern"</em> without using xProof, the category will have arrived.</p>
     </div>
-    <p>Contact: <a href="${baseUrl}">provebeforeact.com</a> · <a href="https://x.com/JasonxProof">@JasonxProof</a></p>
+    <p>Contact: <a href="${baseUrl}">provebeforeact.com</a> · <a href="https://x.com/ProveBeforeAct">@ProveBeforeAct</a></p>
   </section>
 </div>
 <footer>

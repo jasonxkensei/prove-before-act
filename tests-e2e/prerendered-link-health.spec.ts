@@ -136,6 +136,11 @@ test.describe("/standard — crawler metadata and structured data", () => {
     expect(html).toContain('<meta property="og:url" content="https://provebeforeact.com/standard">');
   });
 
+  test("uses the canonical ProveBeforeAct social handle", async () => {
+    expect(html).toContain('href="https://x.com/ProveBeforeAct">@ProveBeforeAct</a>');
+    expect(html).not.toContain("@JasonxProof");
+  });
+
   test("includes Article and Technical Specification breadcrumb JSON-LD", async () => {
     const jsonLd = extractJsonLd(html);
     const article = jsonLd.find(
