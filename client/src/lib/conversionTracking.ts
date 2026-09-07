@@ -28,17 +28,24 @@ export function trackAgentCta(event: CtaEvent, page: CtaPage, cta: CtaName) {
   if (event === "cta_seen" && wasTrackedThisSession(key)) return;
 
   const body = JSON.stringify({ event, page, cta });
+  const params = new URLSearchParams(
+    typeof window === "undefined" ? "" : window.location.search,
+  );
+  const utmSource = params.get("utm_source")?.slice(0, 128);
+  const endpoint = utmSource
+    ? `/api/conversion-events?${new URLSearchParams({ utm_source: utmSource })}`
+    : "/api/conversion-events";
   try {
     if (navigator.sendBeacon) {
       const accepted = navigator.sendBeacon(
-        "/api/conversion-events",
+        endpoint,
         new Blob([body], { type: "application/json" }),
       );
       // A false return means the browser rejected the beacon from its queue.
       // Fall through to fetch so an exposure/click does not silently vanish.
       if (accepted) return;
     }
-    void fetch("/api/conversion-events", {
+    void fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body,

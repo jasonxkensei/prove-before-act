@@ -85,6 +85,8 @@ function labelForReferrerHost(host: string): string {
 const STATS_CACHE_TTL_MS = 60_000;
 const TRAFFIC_SOURCES_WINDOW_DAYS = 30;
 const ACTIVATION_FUNNEL_WINDOW_DAYS = 30;
+const CAMPAIGN_RECOMMENDATION_MIN_ENTRY_VISITORS = 10;
+const DIRECT_UNKNOWN_CAMPAIGN = "direct / unknown";
 let statsCache: { body: object; cachedAt: number } | null = null;
 let statsInflight: Promise<object> | null = null;
 
@@ -511,6 +513,61 @@ export function registerAdminRoutes(app: Express) {
         GROUP BY traffic_segment
         ORDER BY traffic_segment
       `);
+      const campaignResult = await db.execute(sql`
+        WITH window_events AS (
+          SELECT *
+          FROM conversion_events
+          WHERE created_at >= NOW() - INTERVAL '30 days'
+            AND traffic_segment IN ('human_browser', 'declared_agent')
+        ),
+        first_touch_source AS (
+          SELECT DISTINCT ON (ip_hash)
+            ip_hash,
+            NULLIF(BTRIM(utm_source), '') AS utm_source
+          FROM window_events
+          WHERE NULLIF(BTRIM(utm_source), '') IS NOT NULL
+          ORDER BY ip_hash, created_at ASC
+        ),
+        visitor_metrics AS (
+          SELECT
+            COALESCE(first_touch_source.utm_source, ${DIRECT_UNKNOWN_CAMPAIGN}) AS campaign_source,
+            window_events.ip_hash,
+            BOOL_OR(
+              stage = 'cta'
+              AND outcome = 'clicked'
+              AND event_type LIKE '%:scenario_%'
+            ) AS scenario_selected,
+            BOOL_OR(
+              stage = 'cta'
+              AND outcome = 'clicked'
+              AND event_type NOT LIKE '%:scenario_%'
+            ) AS primary_cta_clicked,
+            BOOL_OR(
+              stage = 'registration'
+              AND outcome = 'success'
+              AND http_class = '2xx'
+            ) AS registered,
+            COUNT(*) FILTER (
+              WHERE stage = 'proof'
+                AND outcome = 'success'
+                AND http_status = 201
+            )::int AS successful_proofs
+          FROM window_events
+          LEFT JOIN first_touch_source USING (ip_hash)
+          GROUP BY campaign_source, window_events.ip_hash
+        )
+        SELECT
+          campaign_source,
+          COUNT(*) FILTER (WHERE scenario_selected OR primary_cta_clicked)::int AS entry_visitors,
+          COUNT(*) FILTER (WHERE scenario_selected)::int AS scenario_selected,
+          COUNT(*) FILTER (WHERE primary_cta_clicked)::int AS primary_cta_clicked,
+          COUNT(*) FILTER (WHERE registered)::int AS registered,
+          COUNT(*) FILTER (WHERE successful_proofs >= 1)::int AS first_proof,
+          COUNT(*) FILTER (WHERE successful_proofs >= 2)::int AS second_proof
+        FROM visitor_metrics
+        GROUP BY campaign_source
+        ORDER BY campaign_source
+      `);
       const proofActivationResult = await db.execute(sql`
         SELECT
           COUNT(*) FILTER (WHERE successful_proofs >= 1)::int AS first_proof_visitors,
@@ -544,6 +601,7 @@ export function registerAdminRoutes(app: Express) {
       const proofActivationRow = proofActivationResult.rows[0] as Record<string, string | number> | undefined;
       const lastSevenDays = lastSevenDaysResult.rows[0] as Record<string, string | number> | undefined;
       const segmentRows = segmentResult.rows as Array<Record<string, string | number>>;
+      const campaignRows = campaignResult.rows as Array<Record<string, string | number>>;
       const registrations7d = parseCount(lastSevenDays, "registrations");
       const successfulProofs7d = parseCount(lastSevenDays, "successful_proofs");
       const alerts = [];
@@ -589,27 +647,58 @@ export function registerAdminRoutes(app: Express) {
         },
         traffic_segment: String(row.traffic_segment),
       }));
-       const comparableSegments = segmentAnalysis.filter((segment) =>
-         isComparableActivationSegment(segment.traffic_segment, segment.stages)
-       );
-       const overallStages = comparableSegments.reduce((totals, segment) => {
+      const comparableSegments = segmentAnalysis.filter((segment) =>
+        isComparableActivationSegment(segment.traffic_segment, segment.stages)
+      );
+      const overallStages = comparableSegments.reduce((totals, segment) => {
         for (const stage of ACTIVATION_STAGE_ORDER) totals[stage] += segment.stages[stage];
         return totals;
       }, emptyStages());
       const overallAnalysis = buildActivationAnalysis(overallStages, "all");
-       const largestSegmentDropOff = comparableSegments
+      const largestSegmentDropOff = comparableSegments
         .map((segment) => buildActivationAnalysis(segment.stages, segment.traffic_segment))
         .filter((segment) => segment.largest_drop_off !== null)
-         .sort((a, b) => {
-           const aDrop = a.largest_drop_off!;
-           const bDrop = b.largest_drop_off!;
-           const exactRateDelta = (
-             bDrop.lost_visitors! / bDrop.from_visitors!
-           ) - (
-             aDrop.lost_visitors! / aDrop.from_visitors!
-           );
-           return exactRateDelta || (bDrop.lost_visitors! - aDrop.lost_visitors!);
-         })[0] ?? null;
+        .sort((a, b) => {
+          const aDrop = a.largest_drop_off!;
+          const bDrop = b.largest_drop_off!;
+          const exactRateDelta = (
+            bDrop.lost_visitors! / bDrop.from_visitors!
+          ) - (
+            aDrop.lost_visitors! / aDrop.from_visitors!
+          );
+          return exactRateDelta || (bDrop.lost_visitors! - aDrop.lost_visitors!);
+        })[0] ?? null;
+      const campaignAnalysis = campaignRows.map((row) => {
+        const stages: ActivationStageCounts = {
+          scenario_selected: parseCount(row, "scenario_selected"),
+          primary_cta_clicked: parseCount(row, "primary_cta_clicked"),
+          registered: parseCount(row, "registered"),
+          first_proof: parseCount(row, "first_proof"),
+          second_proof: parseCount(row, "second_proof"),
+        };
+        const entryVisitors = parseCount(row, "entry_visitors");
+        const recommendationEligible = entryVisitors >= CAMPAIGN_RECOMMENDATION_MIN_ENTRY_VISITORS;
+        const analysis = buildActivationAnalysis(stages, "campaign");
+        return {
+          campaign_source: String(row.campaign_source || DIRECT_UNKNOWN_CAMPAIGN),
+          entry_visitors: entryVisitors,
+          recommendation_eligible: recommendationEligible,
+          stages: analysis.stages,
+          largest_drop_off: recommendationEligible ? analysis.largest_drop_off : null,
+        };
+      });
+      const largestCampaignDropOff = campaignAnalysis
+        .filter((campaign) => campaign.largest_drop_off !== null)
+        .sort((a, b) => {
+          const aDrop = a.largest_drop_off!;
+          const bDrop = b.largest_drop_off!;
+          const exactRateDelta = (
+            bDrop.lost_visitors! / bDrop.from_visitors!
+          ) - (
+            aDrop.lost_visitors! / aDrop.from_visitors!
+          );
+          return exactRateDelta || (bDrop.lost_visitors! - aDrop.lost_visitors!);
+        })[0] ?? null;
       const totalEvents = parseCount(totalsRow, "events");
       const funnelReview = {
         status: totalEvents > 0 ? "ready" : "awaiting_traffic",
@@ -670,6 +759,13 @@ export function registerAdminRoutes(app: Express) {
             buildActivationAnalysis(segment.stages, segment.traffic_segment),
           ),
           largest_segment_drop_off: largestSegmentDropOff,
+          campaign_attribution: {
+            model: "first_touch_30d",
+            missing_source_label: DIRECT_UNKNOWN_CAMPAIGN,
+            minimum_entry_visitors: CAMPAIGN_RECOMMENDATION_MIN_ENTRY_VISITORS,
+          },
+          by_utm_source: campaignAnalysis,
+          largest_campaign_drop_off: largestCampaignDropOff,
           recommendation: funnelReview,
         },
         alerts,

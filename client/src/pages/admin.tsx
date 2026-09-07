@@ -219,6 +219,13 @@ interface ConversionFunnelData {
     overall: ActivationReviewSegment;
     by_traffic_segment: ActivationReviewSegment[];
     largest_segment_drop_off: ActivationReviewSegment | null;
+    campaign_attribution: {
+      model: "first_touch_30d";
+      missing_source_label: string;
+      minimum_entry_visitors: number;
+    };
+    by_utm_source: CampaignActivationReview[];
+    largest_campaign_drop_off: CampaignActivationReview | null;
     recommendation: {
       status: "ready" | "awaiting_traffic";
       message: string;
@@ -247,6 +254,14 @@ interface ActivationReviewSegment {
     lost_visitors: number | null;
     drop_off_rate: number | null;
   } | null;
+}
+
+interface CampaignActivationReview {
+  campaign_source: string;
+  entry_visitors: number;
+  recommendation_eligible: boolean;
+  stages: ActivationReviewSegment["stages"];
+  largest_drop_off: ActivationReviewSegment["largest_drop_off"];
 }
 
 const ACTIVATION_STAGE_LABELS: Record<string, string> = {
@@ -849,6 +864,81 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
               </table>
             </div>
           )}
+          <div className="mt-4 border-t pt-4" data-testid="campaign-activation-review">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="text-sm font-medium">Campaign source comparison</p>
+                <p className="text-xs text-muted-foreground">
+                  First known UTM source in this {review.window_days}-day window; missing values are{" "}
+                  <span className="font-medium">{review.campaign_attribution.missing_source_label}</span>.
+                </p>
+              </div>
+              <Badge variant="outline">
+                min. {review.campaign_attribution.minimum_entry_visitors} entry visitors
+              </Badge>
+            </div>
+            {review.largest_campaign_drop_off?.largest_drop_off ? (
+              <p className="mt-3 text-sm" data-testid="largest-campaign-dropoff">
+                <span className="font-medium">Largest qualifying campaign drop: </span>
+                {review.largest_campaign_drop_off.campaign_source} —{" "}
+                {ACTIVATION_STAGE_LABELS[review.largest_campaign_drop_off.largest_drop_off.from_stage]
+                  ?? review.largest_campaign_drop_off.largest_drop_off.from_stage}{" "}
+                →{" "}
+                {ACTIVATION_STAGE_LABELS[review.largest_campaign_drop_off.largest_drop_off.to_stage]
+                  ?? review.largest_campaign_drop_off.largest_drop_off.to_stage}{" "}
+                ({review.largest_campaign_drop_off.largest_drop_off.lost_visitors ?? 0} visitors,{" "}
+                {review.largest_campaign_drop_off.largest_drop_off.drop_off_rate ?? 0}%)
+              </p>
+            ) : (
+              <p className="mt-3 text-xs text-muted-foreground">
+                No campaign source has enough entry visitors for a recommendation yet.
+              </p>
+            )}
+            {review.by_utm_source.length > 0 && (
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full min-w-[720px] text-xs">
+                  <thead>
+                    <tr className="border-b text-left text-muted-foreground">
+                      <th className="pb-2 pr-3 font-medium">UTM source</th>
+                      <th className="pb-2 px-2 font-medium text-right">Scenario</th>
+                      <th className="pb-2 px-2 font-medium text-right">Primary CTA</th>
+                      <th className="pb-2 px-2 font-medium text-right">Registered</th>
+                      <th className="pb-2 px-2 font-medium text-right">First proof</th>
+                      <th className="pb-2 px-2 font-medium text-right">Second proof</th>
+                      <th className="pb-2 pl-2 font-medium">Largest drop</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {review.by_utm_source.map((campaign) => {
+                      const stageValue = (stage: string) =>
+                        campaign.stages.find((entry) => entry.stage === stage)?.visitors ?? 0;
+                      return (
+                        <tr key={campaign.campaign_source} className="border-b last:border-0">
+                          <td className="py-2 pr-3 font-medium">{campaign.campaign_source}</td>
+                          <td className="py-2 px-2 text-right tabular-nums">{stageValue("scenario_selected")}</td>
+                          <td className="py-2 px-2 text-right tabular-nums">{stageValue("primary_cta_clicked")}</td>
+                          <td className="py-2 px-2 text-right tabular-nums">{stageValue("registered")}</td>
+                          <td className="py-2 px-2 text-right tabular-nums">{stageValue("first_proof")}</td>
+                          <td className="py-2 px-2 text-right tabular-nums">{stageValue("second_proof")}</td>
+                          <td className="py-2 pl-2">
+                            {!campaign.recommendation_eligible
+                              ? `Insufficient sample (${campaign.entry_visitors})`
+                              : campaign.largest_drop_off
+                                ? `${ACTIVATION_STAGE_LABELS[campaign.largest_drop_off.from_stage]
+                                  ?? campaign.largest_drop_off.from_stage} → ${
+                                  ACTIVATION_STAGE_LABELS[campaign.largest_drop_off.to_stage]
+                                  ?? campaign.largest_drop_off.to_stage
+                                } (${campaign.largest_drop_off.drop_off_rate ?? 0}%)`
+                                : "—"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
 
         {lastSevenDays.length === 0 ? (

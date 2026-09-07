@@ -91,6 +91,23 @@ describe("trackAgentCta", () => {
     });
   });
 
+  it("forwards only the privacy-safe UTM source with the CTA event", () => {
+    vi.stubGlobal("window", {
+      location: {
+        search: "?utm_source=product%20hunt&utm_medium=social&email=private%40example.com",
+      },
+    });
+
+    trackAgentCta("cta_clicked", "landing", "hero_free_trial");
+
+    expect(beaconCalls).toHaveLength(1);
+    expect(beaconCalls[0].url).toBe(
+      "/api/conversion-events?utm_source=product+hunt",
+    );
+    expect(beaconCalls[0].url).not.toContain("utm_medium");
+    expect(beaconCalls[0].url).not.toContain("email");
+  });
+
   it("falls back to fetch keepalive when sendBeacon is unavailable", async () => {
     const fetchSpy = vi.fn().mockResolvedValue(new Response(null, { status: 202 }));
     vi.stubGlobal("navigator", {});

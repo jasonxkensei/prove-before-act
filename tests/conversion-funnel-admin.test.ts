@@ -86,6 +86,7 @@ describe("GET /api/admin/conversion-funnel", () => {
       first_proof_visitors: "3",
       repeat_proof_visitors: "2",
     },
+    campaigns: Array<Record<string, string>> = [],
   ) {
     const executeSpy = vi.spyOn(db, "execute") as any;
     executeSpy
@@ -102,6 +103,7 @@ describe("GET /api/admin/conversion-funnel", () => {
       })
       .mockResolvedValueOnce({ rows: [totals] })
       .mockResolvedValueOnce({ rows: segments })
+      .mockResolvedValueOnce({ rows: campaigns })
       .mockResolvedValueOnce({ rows: [proofActivation] })
       .mockResolvedValueOnce({
         rows: [{ registrations: "1", successful_proofs: "1" }],
@@ -170,9 +172,47 @@ describe("GET /api/admin/conversion-funnel", () => {
     ]));
   });
 
+  it("attributes later activation stages to the visitor's first known UTM source", async () => {
+    const run = crypto.randomBytes(8).toString("hex");
+    const source = `integration-${run}`;
+    const hash = crypto.createHash("sha256")
+      .update(`conversion-campaign-${run}`)
+      .digest("hex");
+    seededTelemetryHashes.push(hash);
+    await pool.query(
+      `INSERT INTO conversion_events
+         (event_type, stage, outcome, http_status, http_class, traffic_segment, ip_hash, utm_source)
+       VALUES
+         ('landing:scenario_payment', 'cta', 'clicked', NULL, '0xx', 'human_browser', $1, $2),
+         ('registration_request', 'registration', 'success', 202, '2xx', 'human_browser', $1, NULL),
+         ('proof_request', 'proof', 'success', 201, '2xx', 'human_browser', $1, NULL),
+         ('proof_request', 'proof', 'success', 201, '2xx', 'human_browser', $1, NULL)`,
+      [hash, source],
+    );
+
+    const body = await getAuthorizedFunnel();
+    const campaign = body.activation_review.by_utm_source.find(
+      (entry: { campaign_source: string }) => entry.campaign_source === source,
+    );
+    expect(campaign).toMatchObject({
+      campaign_source: source,
+      entry_visitors: 1,
+      recommendation_eligible: false,
+      largest_drop_off: null,
+    });
+    expect(campaign.stages).toEqual([
+      expect.objectContaining({ stage: "scenario_selected", visitors: 1 }),
+      expect.objectContaining({ stage: "primary_cta_clicked", visitors: 0 }),
+      expect.objectContaining({ stage: "registered", visitors: 1 }),
+      expect.objectContaining({ stage: "first_proof", visitors: 1 }),
+      expect.objectContaining({ stage: "second_proof", visitors: 1 }),
+    ]);
+  });
+
   it("returns daily totals and zero-conversion alerts to an authorized admin", async () => {
-    // The route issues exactly five aggregate queries: daily rows, 30-day
-    // totals, per-segment activation, proof activation, then the last seven complete days. Stubbing those query results
+    // The route issues exactly six aggregate queries: daily rows, 30-day
+    // totals, per-segment activation, campaign activation, proof activation,
+    // then the last seven complete days. Stubbing those query results
     // makes alert coverage independent from any shared test-database history.
     const executeSpy = vi.spyOn(db, "execute") as any;
     const telemetryHealthSpy = vi.spyOn(metrics, "getConversionTelemetryWriteFailureStats")
@@ -214,6 +254,7 @@ describe("GET /api/admin/conversion-funnel", () => {
           second_proof: "0",
         }],
       })
+      .mockResolvedValueOnce({ rows: [] })
       .mockResolvedValueOnce({
         rows: [{ first_proof_visitors: "0", repeat_proof_visitors: "0" }],
       })
@@ -285,7 +326,7 @@ describe("GET /api/admin/conversion-funnel", () => {
           message: expect.stringContaining("failed to write 2 time(s)"),
         }),
       ]));
-      expect(executeSpy).toHaveBeenCalledTimes(5);
+      expect(executeSpy).toHaveBeenCalledTimes(6);
     } finally {
       executeSpy.mockRestore();
       telemetryHealthSpy.mockRestore();
@@ -524,6 +565,89 @@ describe("GET /api/admin/conversion-funnel", () => {
       ]));
       expect(body.totals.first_proof_visitors).toBe(5);
       expect(body.totals.repeat_proof_visitors).toBe(3);
+    } finally {
+      executeSpy.mockRestore();
+    }
+  });
+
+  it("groups activation by UTM source and suppresses recommendations for small samples", async () => {
+    const executeSpy = stubActivationQueries([
+      {
+        traffic_segment: "human_browser",
+        scenario_selected: "22",
+        primary_cta_clicked: "18",
+        registered: "14",
+        first_proof: "12",
+        second_proof: "9",
+      },
+    ], undefined, undefined, [
+      {
+        campaign_source: "direct / unknown",
+        entry_visitors: "12",
+        scenario_selected: "12",
+        primary_cta_clicked: "10",
+        registered: "8",
+        first_proof: "7",
+        second_proof: "6",
+      },
+      {
+        campaign_source: "tiny-launch",
+        entry_visitors: "9",
+        scenario_selected: "9",
+        primary_cta_clicked: "0",
+        registered: "0",
+        first_proof: "0",
+        second_proof: "0",
+      },
+      {
+        campaign_source: "newsletter",
+        entry_visitors: "10",
+        scenario_selected: "10",
+        primary_cta_clicked: "8",
+        registered: "4",
+        first_proof: "3",
+        second_proof: "2",
+      },
+    ]);
+
+    try {
+      const body = await getAuthorizedFunnel();
+      expect(body.activation_review.campaign_attribution).toEqual({
+        model: "first_touch_30d",
+        missing_source_label: "direct / unknown",
+        minimum_entry_visitors: 10,
+      });
+      expect(body.activation_review.by_utm_source).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          campaign_source: "direct / unknown",
+          entry_visitors: 12,
+          recommendation_eligible: true,
+        }),
+        expect.objectContaining({
+          campaign_source: "tiny-launch",
+          entry_visitors: 9,
+          recommendation_eligible: false,
+          largest_drop_off: null,
+        }),
+        expect.objectContaining({
+          campaign_source: "newsletter",
+          entry_visitors: 10,
+          recommendation_eligible: true,
+          stages: expect.arrayContaining([
+            expect.objectContaining({ stage: "first_proof", visitors: 3 }),
+            expect.objectContaining({ stage: "second_proof", visitors: 2 }),
+          ]),
+        }),
+      ]));
+      expect(body.activation_review.largest_campaign_drop_off).toMatchObject({
+        campaign_source: "newsletter",
+        largest_drop_off: {
+          from_stage: "primary_cta_clicked",
+          to_stage: "registered",
+          lost_visitors: 4,
+          drop_off_rate: 50,
+        },
+      });
     } finally {
       executeSpy.mockRestore();
     }
