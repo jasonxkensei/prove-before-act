@@ -1,10 +1,11 @@
 import { test, expect } from "@playwright/test";
 
 /**
- * Link-health tests for the three server-prerendered pages:
+ * Link-health tests for the server-prerendered pages:
  *   /agent-context  — renderAgentContextPage()
  *   /fleet          — renderFleetPage()
  *   /coherence      — renderCoherencePage()
+ *   /agents         — renderAgentsPage()
  *
  * These pages are served as static HTML by prerenderMiddleware() when the
  * request comes from a crawler.  All navigational and resource links are
@@ -397,7 +398,68 @@ test.describe("/coherence — prerendered link health", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 4. Cross-page consistency — mutual references between the three pages
+// 4. /agents
+// ---------------------------------------------------------------------------
+
+test.describe("/agents — prerendered link health", () => {
+  let html = "";
+
+  test.beforeAll(async ({ request }) => {
+    const res = await request.get("/agents", {
+      headers: {
+        "user-agent": "Googlebot/2.1 (+http://www.google.com/bot.html)",
+        accept: "text/html",
+      },
+    });
+    expect(res.status()).toBe(200);
+    html = await res.text();
+  });
+
+  test("HTTP 200 and non-empty crawler body", async () => {
+    expect(html.length).toBeGreaterThan(500);
+    expect(html).toContain("The accountability pattern for autonomous agents");
+  });
+
+  const EXPECTED_LINKS = [
+    { location: "nav", path: "/agent-context" },
+    { location: "nav", path: "/docs" },
+    { location: "nav", path: "/mcp" },
+    { location: "nav", path: "/leaderboard" },
+    { location: "resources", path: "/skill.md" },
+    { location: "footer", path: "/legal/mentions" },
+    { location: "footer", path: "/legal/privacy" },
+    { location: "footer", path: "/legal/terms" },
+  ];
+
+  for (const { location, path } of EXPECTED_LINKS) {
+    test(`${location} link ${path} is present and resolves to HTTP 200`, async ({ request }) => {
+      const paths = extractInternalPaths(html);
+      expect(paths, `/agents should contain a ${location} link to ${path}`).toContain(path);
+
+      const res = await request.get(path);
+      expect(res.status(), `${location} link ${path} should return 200`).toBe(200);
+    });
+  }
+
+  test("all collected internal links resolve to HTTP 200", async ({ request }) => {
+    const paths = extractInternalPaths(html).filter((path) => !shouldSkip(path));
+    expect(
+      paths.length,
+      `Expected at least one internal path from /agents, got: ${JSON.stringify(paths)}`,
+    ).toBeGreaterThan(0);
+
+    for (const path of paths) {
+      const res = await request.get(path);
+      expect(
+        res.status(),
+        `Expected /agents link ${path} to return 200, got ${res.status()}`,
+      ).toBe(200);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5. Cross-page consistency — mutual references between the prerendered pages
 // ---------------------------------------------------------------------------
 
 test.describe("cross-page consistency — prerendered pages", () => {

@@ -1166,8 +1166,9 @@ async function renderAgentsPage(baseUrl: string): Promise<string> {
   <nav>
     <a href="${baseUrl}"><strong>Prove Before Act</strong></a> |
     <a href="${baseUrl}/agent-context">Agent Context</a> |
+    <a href="${baseUrl}/docs">API Docs</a> |
+    <a href="${baseUrl}/mcp">MCP Server</a> |
     <a href="${baseUrl}/leaderboard">Leaderboard</a>
-    | <a href="${baseUrl}/mcp">MCP Server</a>
   </nav>
 </header>
 
@@ -1300,6 +1301,7 @@ resp = requests.post("${baseUrl}/api/batch",
     <p>
       <a href="${baseUrl}/agent-context">Full agent guide</a> ·
       <a href="${baseUrl}/agent-context.md">agent-context.md (machine-readable)</a> ·
+      <a href="${baseUrl}/skill.md">skill.md (one-file integration guide)</a> ·
       <a href="${baseUrl}/.well-known/mcp.json">mcp.json</a> ·
       <a href="${baseUrl}/api/acp/openapi.json">openapi.json</a> ·
       <a href="${baseUrl}/llms.txt">llms.txt</a>
@@ -1309,6 +1311,7 @@ resp = requests.post("${baseUrl}/api/batch",
 
 <footer>
   <p>&copy; ${new Date().getFullYear()} Prove Before Act. Built on <a href="https://multiversx.com">MultiversX</a> | <a href="${baseUrl}/agent-context">Full agent guide</a> | <a href="${baseUrl}/leaderboard">Agent leaderboard</a></p>
+  <p><a href="${baseUrl}/legal/mentions">Legal notices</a> | <a href="${baseUrl}/legal/privacy">Privacy policy</a> | <a href="${baseUrl}/legal/terms">Terms</a></p>
 </footer>
 </body>
 </html>`;
