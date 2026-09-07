@@ -14,6 +14,7 @@ import type { Server } from "http";
 import { db, pool } from "../server/db";
 import { getSession } from "../server/replitAuth";
 import { registerAdminRoutes } from "../server/routes/admin";
+import * as metrics from "../server/metrics";
 
 const ADMIN_WALLET = `erd1conversionadmintest${crypto.randomBytes(10).toString("hex")}`;
 let server: Server;
@@ -128,6 +129,12 @@ describe("GET /api/admin/conversion-funnel", () => {
     // totals, per-segment activation, proof activation, then the last seven complete days. Stubbing those query results
     // makes alert coverage independent from any shared test-database history.
     const executeSpy = vi.spyOn(db, "execute") as any;
+    const telemetryHealthSpy = vi.spyOn(metrics, "getConversionTelemetryWriteFailureStats")
+      .mockReturnValue({
+        recent_failures: 2,
+        last_failure_at: "2026-09-07T21:00:00.000Z",
+        window_minutes: 15,
+      });
     executeSpy
       .mockResolvedValueOnce({
         rows: [{
@@ -203,6 +210,12 @@ describe("GET /api/admin/conversion-funnel", () => {
           confirmed: true,
           events_in_window: 8,
           events_last_24h: 0,
+          telemetry_write_health: {
+            status: "warning",
+            recent_failures: 2,
+            last_failure_at: "2026-09-07T21:00:00.000Z",
+            window_minutes: 15,
+          },
         },
         activation_review: {
           recommendation: { status: "ready" },
@@ -220,10 +233,16 @@ describe("GET /api/admin/conversion-funnel", () => {
       expect(body.alerts).toEqual(expect.arrayContaining([
         expect.objectContaining({ condition: "no_registration_7d", severity: "warning" }),
         expect.objectContaining({ condition: "no_successful_proof_7d", severity: "warning" }),
+        expect.objectContaining({
+          condition: "conversion_telemetry_write_failures",
+          severity: "warning",
+          message: expect.stringContaining("failed to write 2 time(s)"),
+        }),
       ]));
       expect(executeSpy).toHaveBeenCalledTimes(5);
     } finally {
       executeSpy.mockRestore();
+      telemetryHealthSpy.mockRestore();
     }
   });
 });

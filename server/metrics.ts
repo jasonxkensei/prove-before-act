@@ -44,6 +44,54 @@ const rateLimitFailOpenEvents: RateLimitFailOpenEvent[] = [];
 const FAIL_OPEN_EVENTS_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour is plenty for any alert window
 const FAIL_OPEN_EVENTS_SAFETY_CAP = 10000;
 
+// ── Conversion telemetry write-failure tracking ─────────────────────────────
+// Keep only timestamps. This lets operators distinguish a recent storage
+// outage from an old blip without retaining any request or event data.
+export const CONVERSION_TELEMETRY_FAILURE_HEALTH_WINDOW_MS = 15 * 60 * 1000;
+const CONVERSION_TELEMETRY_FAILURE_EVENTS_MAX_AGE_MS = 60 * 60 * 1000;
+const CONVERSION_TELEMETRY_FAILURE_EVENTS_SAFETY_CAP = 10000;
+const conversionTelemetryWriteFailureEvents: number[] = [];
+
+export function recordConversionTelemetryWriteFailure(): void {
+  const now = Date.now();
+  conversionTelemetryWriteFailureEvents.push(now);
+
+  const cutoff = now - CONVERSION_TELEMETRY_FAILURE_EVENTS_MAX_AGE_MS;
+  while (
+    conversionTelemetryWriteFailureEvents.length > 0
+    && conversionTelemetryWriteFailureEvents[0] < cutoff
+  ) {
+    conversionTelemetryWriteFailureEvents.shift();
+  }
+  if (conversionTelemetryWriteFailureEvents.length > CONVERSION_TELEMETRY_FAILURE_EVENTS_SAFETY_CAP) {
+    conversionTelemetryWriteFailureEvents.splice(
+      0,
+      conversionTelemetryWriteFailureEvents.length - CONVERSION_TELEMETRY_FAILURE_EVENTS_SAFETY_CAP / 2,
+    );
+  }
+}
+
+export function getConversionTelemetryWriteFailureStats(
+  windowMs = CONVERSION_TELEMETRY_FAILURE_HEALTH_WINDOW_MS,
+): {
+  recent_failures: number;
+  last_failure_at: string | null;
+  window_minutes: number;
+} {
+  const cutoff = Date.now() - windowMs;
+  let recentFailures = 0;
+  for (let i = conversionTelemetryWriteFailureEvents.length - 1; i >= 0; i--) {
+    if (conversionTelemetryWriteFailureEvents[i] < cutoff) break;
+    recentFailures++;
+  }
+  const lastFailure = conversionTelemetryWriteFailureEvents.at(-1);
+  return {
+    recent_failures: recentFailures,
+    last_failure_at: lastFailure ? new Date(lastFailure).toISOString() : null,
+    window_minutes: Math.ceil(windowMs / 60_000),
+  };
+}
+
 export function recordRateLimitFailOpen(op: RateLimitFailOpenOp): void {
   rateLimitFailOpenCounts[op]++;
   lastRateLimitFailOpenAt = Date.now();
@@ -185,6 +233,7 @@ export function getMetrics() {
       queue_size: mx8004QueueSize,
     },
     rate_limit_fail_open: getRateLimitFailOpenStats(),
+    conversion_telemetry: getConversionTelemetryWriteFailureStats(),
   };
 }
 

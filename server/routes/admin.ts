@@ -8,7 +8,11 @@ import { eq, desc, sql, and, gte, gt, count, ne } from "drizzle-orm";
 import { isWalletAuthenticated } from "../walletAuth";
 import { computeTrustScoreByWallet, runLeaderboardRefreshCycle, runTrustRefreshCycle } from "../trust";
 import { getAlertConfig, getRateLimitAlertConfig, getViolationQueueAlertConfig } from "../alerts";
-import { getMetrics } from "../metrics";
+import {
+  getMetrics,
+  getConversionTelemetryWriteFailureStats,
+  CONVERSION_TELEMETRY_FAILURE_HEALTH_WINDOW_MS,
+} from "../metrics";
 import { getTxQueueStats } from "../txQueue";
 import { getMx8004SignerBalance, getMx8004SignerBalanceReport, isMX8004Configured } from "../mx8004";
 import { requireAdmin, EXCLUDED_IP_HASHES, getClientIp, safeErrMsg } from "./helpers";
@@ -538,6 +542,16 @@ export function registerAdminRoutes(app: Express) {
           message: "No new proof (HTTP 201) in the last 7 complete days.",
         });
       }
+      const telemetryWriteHealth = getConversionTelemetryWriteFailureStats(
+        CONVERSION_TELEMETRY_FAILURE_HEALTH_WINDOW_MS,
+      );
+      if (telemetryWriteHealth.recent_failures > 0) {
+        alerts.push({
+          severity: "warning",
+          condition: "conversion_telemetry_write_failures",
+          message: `Conversion telemetry failed to write ${telemetryWriteHealth.recent_failures} time(s) in the last ${telemetryWriteHealth.window_minutes} minutes. Funnel data may be incomplete.`,
+        });
+      }
 
       const emptyStages = (): Record<ActivationStage, number> => ({
         scenario_selected: 0,
@@ -614,6 +628,12 @@ export function registerAdminRoutes(app: Express) {
           events_last_24h: parseCount(totalsRow, "events_last_24h"),
           first_event_at: totalsRow?.first_event_at ?? null,
           last_event_at: totalsRow?.last_event_at ?? null,
+          telemetry_write_health: {
+            status: telemetryWriteHealth.recent_failures > 0 ? "warning" : "healthy",
+            recent_failures: telemetryWriteHealth.recent_failures,
+            last_failure_at: telemetryWriteHealth.last_failure_at,
+            window_minutes: telemetryWriteHealth.window_minutes,
+          },
         },
         activation_review: {
           window_days: ACTIVATION_FUNNEL_WINDOW_DAYS,

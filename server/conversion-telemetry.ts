@@ -4,6 +4,8 @@ import { db } from "./db";
 import { conversionEvents } from "@shared/schema";
 import { getClientIp } from "./routes/helpers";
 import { logger } from "./logger";
+import { recordConversionTelemetryWriteFailure } from "./metrics";
+import { checkAndAlertConversionTelemetry } from "./conversionTelemetryAlerts";
 
 export const CTA_EVENT_NAMES = ["cta_seen", "cta_clicked"] as const;
 export const CTA_PAGES = ["landing", "landing_zh", "leaderboard"] as const;
@@ -112,11 +114,12 @@ export function recordConversionEvent(
     referrerHost: getReferrerHost(req),
     utmSource,
   }).catch((error: unknown) => {
+    recordConversionTelemetryWriteFailure();
     logger.warn("Conversion telemetry write failed", {
       component: "conversion-telemetry",
-      eventType: event.eventType,
       error: error instanceof Error ? error.message : String(error),
     });
+    checkAndAlertConversionTelemetry().catch(() => {});
   });
 }
 
