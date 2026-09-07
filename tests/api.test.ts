@@ -107,6 +107,46 @@ describe("Prove Before Act API", () => {
       const body = await res.json();
       expect(body.specification_url).toBe("https://provebeforeact.com/standard");
     });
+
+    it("keeps the canonical specification link consistent across discovery manifests", async () => {
+      const canonicalSpecificationUrl = "https://provebeforeact.com/standard";
+      const manifests: Array<{
+        path: string;
+        readSpecificationUrl: (body: Record<string, any>) => unknown;
+      }> = [
+        {
+          path: "/.well-known/provebeforeact.json",
+          readSpecificationUrl: (body) => body.specification_url,
+        },
+        {
+          path: "/.well-known/ai-plugin.json",
+          readSpecificationUrl: (body) => body.specification_url,
+        },
+        {
+          path: "/.well-known/agent.json",
+          readSpecificationUrl: (body) => body.specification_url,
+        },
+        {
+          path: "/.well-known/mcp.json",
+          readSpecificationUrl: (body) => body.specification_url,
+        },
+      ];
+
+      const responses = await Promise.all(
+        manifests.map(async ({ path, readSpecificationUrl }) => {
+          const res = await fetch(`${BASE_URL}${path}`);
+          expect(res.status, `${path} should return a discovery manifest`).toBe(200);
+          return { path, readSpecificationUrl, body: await res.json() as Record<string, any> };
+        }),
+      );
+
+      for (const { path, readSpecificationUrl, body } of responses) {
+        expect(
+          readSpecificationUrl(body),
+          `${path} must expose the canonical specification URL`,
+        ).toBe(canonicalSpecificationUrl);
+      }
+    });
   });
 
   describe("POST /api/proof (auth required)", () => {

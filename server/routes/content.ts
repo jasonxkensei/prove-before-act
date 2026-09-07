@@ -11,6 +11,8 @@ import { TRIAL_QUOTA, getNetworkLabel, buildCanonicalId } from "./helpers";
 import { getTxExplorerUrl } from "../blockchain";
 import { CANONICAL_PUBLIC_ORIGIN } from "../publicOrigin";
 
+const CANONICAL_SPECIFICATION_URL = `${CANONICAL_PUBLIC_ORIGIN}/standard`;
+
 export function registerContentRoutes(app: Express) {
   const GENESIS_CERTIFICATION = {
     canonical_id: "xproof:mvx:mainnet:tx:f376c0809d5c8fd91f854d39cf6f9f83ac3d80231477538a1b423db0537aad7e",
@@ -2018,7 +2020,7 @@ ${urls}
       schema_version: "v1",
       name_for_human: "Prove Before Act",
       name_for_model: "Prove Before Act",
-      specification_url: "https://provebeforeact.com/standard",
+      specification_url: CANONICAL_SPECIFICATION_URL,
       description_for_human: "Create immutable blockchain proofs of file ownership. Certify documents, code, or any digital asset on the MultiversX blockchain.",
       description_for_model: `Prove Before Act is the accountability pattern for autonomous agents; xProof is the reference implementation. Before any significant action, commit a declared decision basis — intended action, context, and justification — then anchor the actual result after execution. Never send internal chain-of-thought. START HERE (MCP): call register_trial with {"agent_name":"my-agent"} for a pm_ key and 10 free certifications. START HERE (REST): POST /api/agent/register with {"agent_name":"my-agent"}. x402 payments: POST /api/proof without credentials → receive HTTP 402 for $${priceUsd} USDC on Base (eip155:8453) → sign payment → resend with X-PAYMENT → receive proof_id. Core workflow: (1) hash the declared decision basis locally, (2) POST /api/proof or /api/audit with the hash and metadata, (3) receive proof_id + verify_url, (4) apply the operator's action policy after the proof attempt. Source data stays in the agent runtime; only its SHA-256 hash is anchored. For the WHY→WHAT evidence trail, call check_coherence before acting, then certify_file and POST /api/coherence/link after execution. Full docs: https://provebeforeact.com/coherence. Context: https://provebeforeact.com/agent-context`,
       auth: {
@@ -2048,6 +2050,7 @@ ${urls}
       schema_version: "1.0",
       name: "Prove Before Act",
       version: "1.5.0",
+      specification_url: CANONICAL_SPECIFICATION_URL,
       description: "Prove Before Act is the accountability pattern for autonomous agents; xProof is the reference MCP implementation. Before a significant action, anchor a declared decision basis — intended action, context, and justification — then anchor the verified outcome after execution. Do not submit internal chain-of-thought. Send JSON-RPC MCP requests to POST /mcp; GET /mcp serves connection documentation. Free trial: 10 free certifications via register_trial MCP tool (no auth required), no wallet, no card.",
       homepage: baseUrl,
       endpoint: `${baseUrl}/mcp`,
@@ -4266,6 +4269,7 @@ export const xproofAuditPlugin: Plugin = {
       name: "Prove Before Act",
       description: "Prove Before Act is the accountability pattern for autonomous agents; xProof is the reference implementation. Commit a declared decision basis before acting, then anchor the verified outcome on MultiversX. Never submit internal chain-of-thought.",
       url: baseUrl,
+      specification_url: CANONICAL_SPECIFICATION_URL,
       version: "1.2.0",
       capabilities: ["file-certification", "batch-certification", "proof-verification", "blockchain-anchoring", "webhook-notifications", "verification-badges", "mx8004-validation", "agent-audit-log"],
       protocols: {
@@ -4333,7 +4337,7 @@ export const xproofAuditPlugin: Plugin = {
       },
       documentation: {
         agent_context: `${baseUrl}/agent-context.md`,
-        specification: `${baseUrl}/.well-known/provebeforeact.md`,
+        specification: CANONICAL_SPECIFICATION_URL,
         api_guide: `${baseUrl}/learn/api.md`,
         verification: `${baseUrl}/learn/verification.md`,
         agents_page: `${baseUrl}/agents`,
