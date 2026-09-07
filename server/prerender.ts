@@ -2392,17 +2392,6 @@ export function prerenderMiddleware() {
         .send(await renderAgentsPageZh(baseUrl));
     }
 
-    // /fleet is the fleet coherence docs page — the React SPA renders an empty
-    // state without ?org= or ?fleet= params (Grok renders JS and sees nothing).
-    // Always serve prerendered HTML to every visitor so crawlers see full content.
-    if (path === "/fleet") {
-      return res.status(200)
-        .set("Content-Type", "text/html; charset=utf-8")
-        .set("Cache-Control", "public, max-age=300")
-        .set("Link", agentLinksHeader)
-        .send(renderFleetPage(baseUrl));
-    }
-
     // /coherence is the Coherence Layer docs page — always serve prerendered HTML
     // for the same reason as /fleet (React SPA content is richer but crawlers
     // benefit from the canonical static form).
@@ -2418,6 +2407,16 @@ export function prerenderMiddleware() {
     const userAgent = req.get("user-agent") || "";
     if (!isCrawler(userAgent, req)) {
       return next();
+    }
+
+    // /fleet has an interactive React lookup for human visitors, but crawlers
+    // and link previews still need the complete static documentation.
+    if (path === "/fleet") {
+      return res.status(200)
+        .set("Content-Type", "text/html; charset=utf-8")
+        .set("Cache-Control", "public, max-age=300")
+        .set("Link", agentLinksHeader)
+        .send(renderFleetPage(baseUrl));
     }
 
     const accept = req.get("accept") || "";
