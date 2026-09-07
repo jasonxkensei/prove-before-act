@@ -333,6 +333,50 @@ describe("GET /api/admin/conversion-funnel", () => {
     }
   });
 
+  it("keeps a primary-CTA-only human journey eligible without a scenario selection", async () => {
+    const executeSpy = stubActivationQueries([
+      {
+        traffic_segment: "human_browser",
+        scenario_selected: "0",
+        primary_cta_clicked: "10",
+        registered: "4",
+        first_proof: "3",
+        second_proof: "2",
+      },
+      {
+        traffic_segment: "api_client",
+        scenario_selected: "0",
+        primary_cta_clicked: "0",
+        registered: "8",
+        first_proof: "8",
+        second_proof: "0",
+      },
+    ]);
+
+    try {
+      const body = await getAuthorizedFunnel();
+      expect(body.activation_review.largest_segment_drop_off).toMatchObject({
+        traffic_segment: "human_browser",
+        largest_drop_off: {
+          from_stage: "primary_cta_clicked",
+          to_stage: "registered",
+          from_visitors: 10,
+          to_visitors: 4,
+          lost_visitors: 6,
+          drop_off_rate: 60,
+        },
+      });
+      expect(body.activation_review.by_traffic_segment).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          traffic_segment: "api_client",
+          largest_drop_off: null,
+        }),
+      ]));
+    } finally {
+      executeSpy.mockRestore();
+    }
+  });
+
   it("prioritizes relative drop rate, then absolute visitor loss for ties", async () => {
     const executeSpy = stubActivationQueries([
       {
@@ -372,6 +416,51 @@ describe("GET /api/admin/conversion-funnel", () => {
             to_stage: "primary_cta_clicked",
             lost_visitors: 50,
             drop_off_rate: 50,
+          }),
+        }),
+      ]));
+    } finally {
+      executeSpy.mockRestore();
+    }
+  });
+
+  it("uses exact rates when distinct drops round to the same display percentage", async () => {
+    const executeSpy = stubActivationQueries([
+      {
+        traffic_segment: "human_browser",
+        scenario_selected: "1000",
+        primary_cta_clicked: "501",
+        registered: "501",
+        first_proof: "501",
+        second_proof: "501",
+      },
+      {
+        traffic_segment: "declared_agent",
+        scenario_selected: "501",
+        primary_cta_clicked: "251",
+        registered: "251",
+        first_proof: "251",
+        second_proof: "251",
+      },
+    ]);
+
+    try {
+      const body = await getAuthorizedFunnel();
+      expect(body.activation_review.largest_segment_drop_off).toMatchObject({
+        traffic_segment: "declared_agent",
+        largest_drop_off: {
+          from_stage: "scenario_selected",
+          to_stage: "primary_cta_clicked",
+          lost_visitors: 250,
+          drop_off_rate: 49.9,
+        },
+      });
+      expect(body.activation_review.by_traffic_segment).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          traffic_segment: "human_browser",
+          largest_drop_off: expect.objectContaining({
+            lost_visitors: 499,
+            drop_off_rate: 49.9,
           }),
         }),
       ]));

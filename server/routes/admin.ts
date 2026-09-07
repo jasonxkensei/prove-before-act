@@ -96,13 +96,24 @@ const ACTIVATION_STAGE_ORDER = [
   "second_proof",
 ] as const;
 type ActivationStage = typeof ACTIVATION_STAGE_ORDER[number];
+type ActivationStageCounts = Record<ActivationStage, number>;
+
+const NON_BROWSER_ACTIVATION_SEGMENTS = new Set(["api_client", "crawler_scanner"]);
+
+function isComparableActivationSegment(
+  trafficSegment: string,
+  stages: ActivationStageCounts,
+): boolean {
+  return !NON_BROWSER_ACTIVATION_SEGMENTS.has(trafficSegment)
+    && (stages.scenario_selected > 0 || stages.primary_cta_clicked > 0);
+}
 
 function roundPercentage(value: number | null): number | null {
   return value === null ? null : Math.round(value * 1000) / 10;
 }
 
 function buildActivationAnalysis(
-  stages: Record<ActivationStage, number>,
+  stages: ActivationStageCounts,
   trafficSegment: string,
 ) {
   const stageRows = ACTIVATION_STAGE_ORDER.map((key, index) => {
@@ -125,11 +136,16 @@ function buildActivationAnalysis(
   });
   const comparableDrops = stageRows
     .filter((row) => row.drop_off !== null && row.drop_off_rate !== null && row.from_previous !== null && row.from_previous > 0)
-    .sort((a, b) => (b.drop_off_rate! - a.drop_off_rate!) || (b.drop_off! - a.drop_off!));
-  // API-only traffic can have registrations or proofs without ever entering
-  // the browser funnel. Keep its stage counts visible, but do not turn those
-  // missing top-of-funnel stages into a product recommendation.
-  const largestDropOff = stages.scenario_selected > 0 ? (comparableDrops[0] ?? null) : null;
+    .sort((a, b) => {
+      const exactRateDelta = (b.drop_off! / b.from_previous!) - (a.drop_off! / a.from_previous!);
+      return exactRateDelta || (b.drop_off! - a.drop_off!);
+    });
+  // Non-browser traffic can have registrations or proofs without entering the
+  // activation page. Keep its counts visible, but do not recommend product
+  // changes from that incomparable population.
+  const largestDropOff = isComparableActivationSegment(trafficSegment, stages)
+    ? (comparableDrops[0] ?? null)
+    : null;
 
   return {
     traffic_segment: trafficSegment,
@@ -573,7 +589,9 @@ export function registerAdminRoutes(app: Express) {
         },
         traffic_segment: String(row.traffic_segment),
       }));
-       const comparableSegments = segmentAnalysis.filter((segment) => segment.stages.scenario_selected > 0);
+       const comparableSegments = segmentAnalysis.filter((segment) =>
+         isComparableActivationSegment(segment.traffic_segment, segment.stages)
+       );
        const overallStages = comparableSegments.reduce((totals, segment) => {
         for (const stage of ACTIVATION_STAGE_ORDER) totals[stage] += segment.stages[stage];
         return totals;
@@ -582,11 +600,16 @@ export function registerAdminRoutes(app: Express) {
        const largestSegmentDropOff = comparableSegments
         .map((segment) => buildActivationAnalysis(segment.stages, segment.traffic_segment))
         .filter((segment) => segment.largest_drop_off !== null)
-        .sort((a, b) => (
-          (b.largest_drop_off?.drop_off_rate ?? -1) - (a.largest_drop_off?.drop_off_rate ?? -1)
-        ) || (
-          (b.largest_drop_off?.lost_visitors ?? -1) - (a.largest_drop_off?.lost_visitors ?? -1)
-        ))[0] ?? null;
+         .sort((a, b) => {
+           const aDrop = a.largest_drop_off!;
+           const bDrop = b.largest_drop_off!;
+           const exactRateDelta = (
+             bDrop.lost_visitors! / bDrop.from_visitors!
+           ) - (
+             aDrop.lost_visitors! / aDrop.from_visitors!
+           );
+           return exactRateDelta || (bDrop.lost_visitors! - aDrop.lost_visitors!);
+         })[0] ?? null;
       const totalEvents = parseCount(totalsRow, "events");
       const funnelReview = {
         status: totalEvents > 0 ? "ready" : "awaiting_traffic",
