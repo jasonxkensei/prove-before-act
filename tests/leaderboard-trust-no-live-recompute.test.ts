@@ -34,9 +34,11 @@ function makeTestWallet(prefix: string): string {
 
 const TRUST_WALLET = makeTestWallet("norecomputetrust");
 const LEADERBOARD_WALLET = makeTestWallet("norecomputelb");
+const READ_THROUGH_WALLET = makeTestWallet("readthroughtrust");
 
 let trustUserId = "";
 let leaderboardUserId = "";
+let readThroughUserId = "";
 let hadExistingLeaderboardSnapshot = false;
 let originalLeaderboardSnapshot: { entries: unknown; computed_at: string } | null = null;
 
@@ -59,6 +61,24 @@ beforeAll(async () => {
     [TRUST_WALLET],
   );
   trustUserId = trustRow.rows[0].id;
+
+  const readThroughRow = await pool.query<{ id: string }>(
+    `INSERT INTO users (wallet_address, is_public_profile)
+     VALUES ($1, TRUE)
+     RETURNING id`,
+    [READ_THROUGH_WALLET],
+  );
+  readThroughUserId = readThroughRow.rows[0].id;
+  await pool.query(
+    `INSERT INTO certifications
+       (user_id, file_name, file_hash, blockchain_status, is_public, metadata)
+     VALUES ($1, 'first-proof.json', $2, 'confirmed', TRUE, $3::jsonb)`,
+    [
+      readThroughUserId,
+      crypto.randomBytes(32).toString("hex"),
+      JSON.stringify({ model_hash: "read-through-model-hash" }),
+    ],
+  );
 
   const fakeTrustData = {
     score: IMPOSSIBLE_SCORE,
@@ -156,7 +176,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await pool.query(`DELETE FROM trust_score_snapshots WHERE wallet_address = $1`, [TRUST_WALLET]);
-  await pool.query(`DELETE FROM users WHERE id = ANY($1)`, [[trustUserId, leaderboardUserId]]);
+  await pool.query(`DELETE FROM trust_score_snapshots WHERE wallet_address = $1`, [READ_THROUGH_WALLET]);
+  await pool.query(`DELETE FROM users WHERE id = ANY($1)`, [[trustUserId, leaderboardUserId, readThroughUserId]]);
 
   // Restore the leaderboard_snapshot single row to whatever it was before
   // this test ran, since it is a shared table the real running server also
@@ -220,6 +241,51 @@ describe("computeTrustScoreByWallet() never live-recomputes on a cold cache", ()
        WHERE wallet_address = $1`,
       [TRUST_WALLET, IMPOSSIBLE_SCORE],
     );
+  });
+});
+
+describe("computeTrustScoreByWallet() snapshots a newly visible public wallet", () => {
+  it("computes once on the first read and persists the score for subsequent reads", async () => {
+    await pool.query(`DELETE FROM trust_score_snapshots WHERE wallet_address = $1`, [READ_THROUGH_WALLET]);
+    _resetTrustCacheForTesting(READ_THROUGH_WALLET);
+
+    const [first, concurrent] = await Promise.all([
+      computeTrustScoreByWallet(READ_THROUGH_WALLET),
+      computeTrustScoreByWallet(READ_THROUGH_WALLET),
+    ]);
+
+    expect(first).not.toBeNull();
+    expect(first!.certTotal).toBe(1);
+    expect(concurrent).toEqual(first);
+
+    const persisted = await pool.query<{
+      score: number;
+      full_trust_data: Record<string, unknown>;
+    }>(
+      `SELECT score, full_trust_data
+       FROM trust_score_snapshots
+       WHERE wallet_address = $1 AND snapshot_date = CURRENT_DATE`,
+      [READ_THROUGH_WALLET],
+    );
+    expect(persisted.rows).toHaveLength(1);
+    expect(persisted.rows[0].score).toBe(first!.score);
+    expect(persisted.rows[0].full_trust_data).toMatchObject({
+      score: first!.score,
+      certTotal: 1,
+    });
+
+    // A cold in-memory read now comes from the newly written snapshot rather
+    // than recomputing from the certification data.
+    await pool.query(
+      `UPDATE trust_score_snapshots
+       SET score = 321,
+           full_trust_data = jsonb_set(full_trust_data, '{score}', '321')
+       WHERE wallet_address = $1 AND snapshot_date = CURRENT_DATE`,
+      [READ_THROUGH_WALLET],
+    );
+    _resetTrustCacheForTesting(READ_THROUGH_WALLET);
+    const fromSnapshot = await computeTrustScoreByWallet(READ_THROUGH_WALLET);
+    expect(fromSnapshot!.score).toBe(321);
   });
 });
 

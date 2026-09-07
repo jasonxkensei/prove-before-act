@@ -618,14 +618,15 @@ export async function computeTrustScore(userId: string): Promise<TrustScore> {
 
 // ─── Per-wallet trust score read-through cache ───────────────────────────────
 //
-// Security guarantee: public read paths NEVER trigger live trust recomputation.
-// The cache is populated ONLY by the scheduled background refresh worker.
-// Public reads go: in-memory cache → trust_score_snapshots.full_trust_data → null.
-// A null response means the wallet has not yet been indexed; it will appear after
-// the next scheduled refresh cycle.
+// Security guarantee: public read paths never perform more than one bounded,
+// single-wallet trust computation for a wallet that has no snapshot. The cache
+// is populated by the scheduled refresh worker or this first-read fallback.
+// Public reads go: in-memory cache → trust_score_snapshots.full_trust_data →
+// one read-through computation for a known public wallet.
 //
 const TRUST_CACHE_MAX_ENTRIES = 5000;
 const trustCache = new Map<string, { value: TrustScore | null; cachedAt: number }>();
+const trustReadThroughInFlight = new Map<string, Promise<TrustScore | null>>();
 
 function setTrustCache(key: string, value: TrustScore | null) {
   if (trustCache.size >= TRUST_CACHE_MAX_ENTRIES) {
@@ -635,8 +636,57 @@ function setTrustCache(key: string, value: TrustScore | null) {
   trustCache.set(key, { value, cachedAt: Date.now() });
 }
 
-// Public read — bounded: in-memory cache first, then single indexed snapshot row.
-// NO live computation is ever triggered from this function.
+async function computeAndSnapshotTrustScoreByWallet(walletAddress: string): Promise<TrustScore | null> {
+  const [user] = await db
+    .select({ id: users.id, isPublicProfile: users.isPublicProfile })
+    .from(users)
+    .where(eq(users.walletAddress, walletAddress));
+
+  // Do not compute or persist trust data for unknown/private wallets. This
+  // preserves the visibility gate used by all public profile and partner reads.
+  if (!user?.isPublicProfile) {
+    return null;
+  }
+
+  const trust = await computeTrustScore(user.id);
+
+  try {
+    await pool.query(
+      `INSERT INTO trust_score_snapshots
+         (wallet_address, score, level, cert_total, active_attestations, rank, snapshot_date, full_trust_data)
+       VALUES ($1, $2, $3, $4, $5, 0, CURRENT_DATE, $6::jsonb)
+       ON CONFLICT (wallet_address, snapshot_date) DO UPDATE SET
+         score               = EXCLUDED.score,
+         level               = EXCLUDED.level,
+         cert_total          = EXCLUDED.cert_total,
+         active_attestations = EXCLUDED.active_attestations,
+         full_trust_data     = EXCLUDED.full_trust_data`,
+      [
+        walletAddress,
+        trust.score,
+        trust.level,
+        trust.certTotal,
+        trust.activeAttestations ?? 0,
+        JSON.stringify(trust),
+      ],
+    );
+  } catch (error: any) {
+    // The score is still useful for this request and is cached to prevent a
+    // database write failure from turning every public read into a recompute.
+    logger.warn("Trust read-through snapshot write failed", {
+      component: "trust-read-through",
+      wallet: walletAddress,
+      error: error?.message ?? String(error),
+    });
+  }
+
+  setTrustCache(walletAddress, trust);
+  return trust;
+}
+
+// Public read — bounded: in-memory cache first, then one indexed snapshot row.
+// If the wallet is a known public profile but has not been indexed yet, perform
+// exactly one single-wallet computation and persist it for subsequent reads.
 export async function computeTrustScoreByWallet(walletAddress: string): Promise<TrustScore | null> {
   const cached = trustCache.get(walletAddress);
   if (cached) return cached.value;
@@ -658,8 +708,25 @@ export async function computeTrustScoreByWallet(walletAddress: string): Promise<
     }
   } catch { /* snapshot read failure is non-fatal; return null below */ }
 
-  // Wallet not yet indexed.  The scheduled refresh will populate it.
-  return null;
+  const inFlight = trustReadThroughInFlight.get(walletAddress);
+  if (inFlight) return inFlight;
+
+  const computation = computeAndSnapshotTrustScoreByWallet(walletAddress).catch((error) => {
+    logger.warn("Trust read-through computation failed", {
+      component: "trust-read-through",
+      wallet: walletAddress,
+      error: error?.message ?? String(error),
+    });
+    return null;
+  });
+  trustReadThroughInFlight.set(walletAddress, computation);
+  try {
+    return await computation;
+  } finally {
+    if (trustReadThroughInFlight.get(walletAddress) === computation) {
+      trustReadThroughInFlight.delete(walletAddress);
+    }
+  }
 }
 
 export type CalibrationLabel = "calibrated" | "overconfident" | "underconfident";
@@ -1406,8 +1473,10 @@ export function _resetLeaderboardCacheForTesting(): void {
 export function _resetTrustCacheForTesting(walletAddress?: string): void {
   if (walletAddress) {
     trustCache.delete(walletAddress);
+    trustReadThroughInFlight.delete(walletAddress);
   } else {
     trustCache.clear();
+    trustReadThroughInFlight.clear();
   }
 }
 
