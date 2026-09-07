@@ -905,10 +905,11 @@ if intent_proof.status == "confirmed":
 <script type="application/ld+json">
 ${safeJsonLd({
   "@context": "https://schema.org",
-  "@type": "TechArticle",
-  "headline": "Prove Before Act — A Design Pattern for Accountable Autonomous Agents",
-  "description": "Technical specification for the Prove Before Act design pattern. Definitions, threat model, core invariant, four primitives, 4W audit trail, and reference implementation.",
+  "@type": "Article",
+  "headline": title,
+  "description": description,
   "url": canonical,
+  "mainEntityOfPage": canonical,
   "author": {
     "@type": "Person",
     "name": "Jason Petitfourg",
@@ -922,6 +923,26 @@ ${safeJsonLd({
   "version": "0.1",
   "datePublished": "2026-08-21",
   "keywords": ["AI agent accountability", "autonomous agent verification", "agent decision provenance", "cryptographic proof", "agent audit trail"]
+}, null, 2)}
+</script>
+<script type="application/ld+json">
+${safeJsonLd({
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": baseUrl
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "Technical Specification",
+      "item": canonical
+    }
+  ]
 }, null, 2)}
 </script>
 </body>

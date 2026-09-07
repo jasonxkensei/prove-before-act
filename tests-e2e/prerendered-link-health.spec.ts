@@ -92,6 +92,84 @@ function shouldSkip(path: string): boolean {
   return false;
 }
 
+/**
+ * Parse JSON-LD blocks from a prerendered page so crawler-facing structured
+ * data is tested as data, not only as a string fragment.
+ */
+function extractJsonLd(html: string): unknown[] {
+  const scripts = [...html.matchAll(/<script\s+type="application\/ld\+json">\s*([\s\S]*?)\s*<\/script>/gi)];
+  return scripts.map((match) => JSON.parse(match[1]));
+}
+
+// ---------------------------------------------------------------------------
+// 0. /standard
+// ---------------------------------------------------------------------------
+
+test.describe("/standard — crawler metadata and structured data", () => {
+  let html = "";
+
+  test.beforeAll(async ({ request }) => {
+    const res = await request.get("/standard", {
+      headers: {
+        "user-agent": "Googlebot/2.1 (+http://www.google.com/bot.html)",
+        accept: "text/html",
+      },
+    });
+    expect(res.status()).toBe(200);
+    html = await res.text();
+  });
+
+  test("exposes the specification preview metadata to crawlers", async () => {
+    expect(html).toContain(
+      "<title>Prove Before Act — A Design Pattern for Accountable Autonomous Agents</title>",
+    );
+    expect(html).toContain(
+      '<meta name="description" content="The Prove Before Act technical specification: definitions, threat model, core invariant, four primitives, 4W audit trail, and reference implementation. Draft v0.1.">',
+    );
+    expect(html).toContain('<link rel="canonical" href="https://provebeforeact.com/standard">');
+    expect(html).toContain(
+      '<meta property="og:title" content="Prove Before Act — A Design Pattern for Accountable Autonomous Agents">',
+    );
+    expect(html).toContain(
+      '<meta property="og:description" content="The Prove Before Act technical specification: definitions, threat model, core invariant, four primitives, 4W audit trail, and reference implementation. Draft v0.1.">',
+    );
+    expect(html).toContain('<meta property="og:url" content="https://provebeforeact.com/standard">');
+  });
+
+  test("includes Article and Technical Specification breadcrumb JSON-LD", async () => {
+    const jsonLd = extractJsonLd(html);
+    const article = jsonLd.find(
+      (entry): entry is Record<string, unknown> =>
+        typeof entry === "object" && entry !== null && (entry as Record<string, unknown>)["@type"] === "Article",
+    );
+    const breadcrumb = jsonLd.find(
+      (entry): entry is Record<string, unknown> =>
+        typeof entry === "object" &&
+        entry !== null &&
+        (entry as Record<string, unknown>)["@type"] === "BreadcrumbList",
+    );
+
+    expect(article).toMatchObject({
+      "@context": "https://schema.org",
+      headline: "Prove Before Act — A Design Pattern for Accountable Autonomous Agents",
+      url: "https://provebeforeact.com/standard",
+      mainEntityOfPage: "https://provebeforeact.com/standard",
+    });
+    expect(breadcrumb).toMatchObject({
+      "@context": "https://schema.org",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: "Home", item: "https://provebeforeact.com" },
+        {
+          "@type": "ListItem",
+          position: 2,
+          name: "Technical Specification",
+          item: "https://provebeforeact.com/standard",
+        },
+      ],
+    });
+  });
+});
+
 // ---------------------------------------------------------------------------
 // 1. /agent-context
 // ---------------------------------------------------------------------------
