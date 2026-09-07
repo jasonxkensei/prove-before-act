@@ -27,6 +27,14 @@ When updating PBA terminology, treat package READMEs, published legacy skill cop
 
 **How to apply:** Search all distribution directories for developer-facing guidance and update terminology together. Preserve documented compatibility vocabulary, but explain it as declared decision-basis metadata rather than private reasoning.
 
+## Activation signal
+
+Treat the first proof as the start of activation and the second proof as the first strong signal of recurring value. Measure the path from concrete risk recognition through CTA, registration, first proof, and second proof.
+
+**Why:** Registrations and even one proof can reflect curiosity. A repeat proof shows that a developer understood the utility well enough to use it again.
+
+**How to apply:** Keep activation experiments isolated from simultaneous SEO, pricing, infrastructure, or feature changes. Lead with concrete agent risks, then observe where the funnel drops before changing the product more deeply.
+
 ## Hash-only documentation must be literal
 
 When public guidance says a declared decision basis is hashed locally, request examples must send only the hash plus minimal, intentionally public classification metadata—not the basis object, its `why`/rationale, prompts, source lists, tickets, policy details, or a spread of the local object.

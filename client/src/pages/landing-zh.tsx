@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { WalletLoginModal } from "@/components/wallet-login-modal";
 import { trackAgentCta, useAgentCtaExposure } from "@/lib/conversionTracking";
+import { trackEvent } from "@/lib/analytics";
 import {
   Accordion,
   AccordionContent,
@@ -50,7 +51,8 @@ export default function LandingZh() {
   const [trialAgentName, setTrialAgentName] = useState<string>("");
   const [copied, setCopied] = useState(false);
   const [trialError, setTrialError] = useState<string | null>(null);
-  const heroTrialCtaRef = useAgentCtaExposure<HTMLButtonElement>("landing_zh", "trial_register");
+  const heroTrialCtaRef = useAgentCtaExposure<HTMLAnchorElement>("landing_zh", "hero_free_trial");
+  const trialRegisterCtaRef = useAgentCtaExposure<HTMLButtonElement>("landing_zh", "trial_register");
 
   // Single entry point for trial registration so the button click and the
   // Enter key record the same conversion telemetry before submitting.
@@ -151,50 +153,60 @@ export default function LandingZh() {
           </div>
 
           <h1 className="mb-6 text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-tight">
-            Prove Before Act：
+            你的智能体可以行动。
             <br />
-            <span className="text-primary">自主智能体的问责模式。</span>
+            <span className="text-primary">它能证明为何行动吗？</span>
           </h1>
 
           <p className="mx-auto mb-5 max-w-2xl text-lg md:text-xl text-muted-foreground leading-relaxed">
-            Prove Before Act 是自主智能体的问责模式，<strong className="text-foreground">xProof 是其参考实现</strong>——
-            执行前锚定可声明、可独立验证的决策依据（而非内部思维链），执行后锚定实际结果，构建完整的<strong className="text-foreground">风控留痕与审计追溯链</strong>。
+            当智能体付款、修改生产环境、签署法律承诺或委托另一个智能体时，审计轨迹不能等到事故后才开始。
+            <strong className="text-foreground">执行前提交决策依据，留下任何审查者都能验证的证据。</strong>
           </p>
 
-          <div className="mb-8 flex justify-center">
-            <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-4 py-1.5 text-sm" data-testid="badge-x402-hero-zh">
-              <Zap className="h-3.5 w-3.5 text-primary shrink-0" />
-              <span className="text-muted-foreground">
-                无需注册 — 通过 <strong className="text-foreground">x402</strong> 协议直接支付 · 一次HTTP请求 · Base链USDC
-              </span>
-            </div>
+          <div className="mx-auto mb-8 grid max-w-2xl grid-cols-2 gap-2 text-left text-xs text-muted-foreground sm:grid-cols-4" data-testid="hero-risk-scenarios-zh">
+            {[
+              ["付款授权", "scenario_payment"],
+              ["生产部署", "scenario_devops"],
+              ["法律承诺", "scenario_legal"],
+              ["智能体委托", "scenario_multi_agent"],
+            ].map(([label, cta]) => (
+              <a
+                key={cta}
+                href="#free-trial"
+                className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-center transition-colors hover:border-primary/40 hover:text-foreground"
+                onClick={() => {
+                  trackAgentCta("cta_clicked", "landing_zh", cta as "scenario_payment" | "scenario_devops" | "scenario_legal" | "scenario_multi_agent");
+                  trackEvent("risk_scenario_selected", { scenario: cta.replace("scenario_", ""), language: "zh" });
+                }}
+              >
+                {label}
+              </a>
+            ))}
           </div>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button
-              size="lg"
-              className="text-base h-12 px-8"
-              onClick={() => setIsLoginModalOpen(true)}
-              data-testid="button-submit-proof-zh"
-            >
-              <Shield className="mr-2 h-5 w-5" />
-              提交存证
-            </Button>
-            <Button
               asChild
-              variant="outline"
               size="lg"
               className="text-base h-12 px-8"
               data-testid="button-free-trial-zh"
             >
-              <a href="#free-trial">
+              <a
+                href="#free-trial"
+                ref={heroTrialCtaRef}
+                onClick={() => {
+                  trackAgentCta("cta_clicked", "landing_zh", "hero_free_trial");
+                  trackEvent("free_trial_cta_clicked", { location: "hero_zh" });
+                }}
+              >
                 <Bot className="mr-2 h-4 w-4" />
-                免费体验 10 次
+                证明第一个智能体决策
               </a>
             </Button>
           </div>
 
-          <p className="mt-4 text-sm text-muted-foreground">{price} / 次 · 不限量</p>
+          <p className="mt-4 text-sm text-muted-foreground">10 次免费证明 · 无需钱包 · 无需信用卡</p>
+          <p className="mt-3 text-xs text-muted-foreground">Prove Before Act 是公开问责模式，xProof 是参考实现。之后按 {price} 的实时费率计费。</p>
         </div>
       </section>
 
@@ -618,7 +630,7 @@ GET /api/agents/{wallet}/incident-report
                     className="flex-1"
                   />
                   <Button
-                    ref={heroTrialCtaRef}
+                    ref={trialRegisterCtaRef}
                     onClick={submitTrialRegistration}
                     disabled={agentName.trim().length < 2 || registerMutation.isPending}
                     data-testid="button-register-trial-zh"

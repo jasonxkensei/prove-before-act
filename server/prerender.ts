@@ -210,8 +210,8 @@ function safeJsonLd(
 
 async function renderHomePage(baseUrl: string): Promise<string> {
   const priceUsd = await getCertificationPriceUsd();
-  const title = "Prove Before Act — The accountability pattern for autonomous agents";
-  const description = `Prove Before Act is the accountability pattern for autonomous agents: commit an independently verifiable decision basis before execution. xProof is the reference implementation, anchoring proofs on MultiversX with a current live per-proof price at /api/pricing.`;
+  const title = "Can your agent prove why it acted? — Prove Before Act";
+  const description = `Your agent can act. Prove Before Act lets it commit an independently verifiable decision basis before payments, production changes, legal commitments, or delegation. xProof is the reference implementation.`;
 
   return `${commonHead(title, description, baseUrl)}
 <body>
@@ -228,11 +228,22 @@ async function renderHomePage(baseUrl: string): Promise<string> {
 
 <main>
   <section>
-    <h1>The accountability pattern for autonomous agents.</h1>
-    <p>Prove Before Act lets an agent commit an independently verifiable decision basis before it acts. xProof is the reference implementation; on-chain proofs for files, decisions, and outcomes are the primitives it uses.</p>
-  <p>Current live rate: $${priceUsd.toFixed(2)} per certification — <a href="${baseUrl}/api/pricing">see /api/pricing</a>. Not a fixed published price.</p>
-    <a href="${baseUrl}/agents">Integrate an agent</a>
-    <a href="${baseUrl}/certify">Verify a local file</a>
+    <p><strong>Consequences require evidence.</strong></p>
+    <h1>Your agent can act. Can it prove why it acted?</h1>
+    <p>When an autonomous agent moves money, changes production, signs a contract, or delegates to another agent, the audit trail cannot begin after the incident. Commit the decision basis before execution and leave evidence a reviewer can verify.</p>
+    <ul>
+      <li>Payment approval</li>
+      <li>Production deploy</li>
+      <li>Legal commitment</li>
+      <li>Agent delegation</li>
+    </ul>
+    <div id="free-trial">
+      <p><a href="${baseUrl}/#free-trial"><strong>Prove your first agent decision</strong></a> — 10 free proofs, no wallet, no credit card.</p>
+      <p>Open the browser experience to register an agent or project, receive a free API key, and create the first independently verifiable proof.</p>
+    </div>
+    <p>Prove Before Act is the public accountability pattern. xProof is the reference implementation. Current live rate after the free proofs: $${priceUsd.toFixed(2)} per certification — <a href="${baseUrl}/api/pricing">see /api/pricing</a>.</p>
+    <a href="${baseUrl}/learn">See the 60-second overview</a>
+    <a href="${baseUrl}/standard">Inspect the standard</a>
   </section>
 
   <section id="why-now">
@@ -252,7 +263,7 @@ async function renderHomePage(baseUrl: string): Promise<string> {
         <p>Operators that start now build a durable record across decisions and outcomes. When accountability becomes a requirement, they can show history—not a compliance process that began yesterday.</p>
       </li>
     </ol>
-    <p><a href="${baseUrl}/agents">Run your first proof</a> · <a href="${baseUrl}/standard">Inspect the Prove Before Act standard</a></p>
+    <p><a href="${baseUrl}/#free-trial">Prove your first agent decision</a> · <a href="${baseUrl}/standard">Inspect the Prove Before Act standard</a></p>
   </section>
 
   <section>

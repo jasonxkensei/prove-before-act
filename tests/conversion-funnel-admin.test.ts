@@ -106,6 +106,7 @@ describe("GET /api/admin/conversion-funnel", () => {
     expect(after.totals.cta_views).toBe(before.totals.cta_views + 1);
     expect(after.totals.registrations).toBe(before.totals.registrations + 1);
     expect(after.totals.successful_proofs).toBe(before.totals.successful_proofs + 1);
+    expect(after.totals.first_proof_visitors).toBe(before.totals.first_proof_visitors + 1);
     expect(after.rows).toEqual(expect.arrayContaining([
       expect.objectContaining({
         stage: "registration",
@@ -123,8 +124,8 @@ describe("GET /api/admin/conversion-funnel", () => {
   });
 
   it("returns daily totals and zero-conversion alerts to an authorized admin", async () => {
-    // The route issues exactly three aggregate queries: daily rows, 30-day
-    // totals, then the last seven complete days. Stubbing those query results
+    // The route issues exactly four aggregate queries: daily rows, 30-day
+    // totals, proof activation, then the last seven complete days. Stubbing those query results
     // makes alert coverage independent from any shared test-database history.
     const executeSpy = vi.spyOn(db, "execute") as any;
     executeSpy
@@ -145,9 +146,13 @@ describe("GET /api/admin/conversion-funnel", () => {
           visitors: "3",
           cta_views: "2",
           cta_clicks: "1",
+          scenario_engagements: "1",
           registrations: "0",
           successful_proofs: "0",
         }],
+      })
+      .mockResolvedValueOnce({
+        rows: [{ first_proof_visitors: "0", repeat_proof_visitors: "0" }],
       })
       .mockResolvedValueOnce({
         rows: [{ registrations: "0", successful_proofs: "0" }],
@@ -177,8 +182,11 @@ describe("GET /api/admin/conversion-funnel", () => {
           visitors: 3,
           cta_views: 2,
           cta_clicks: 1,
+          scenario_engagements: 1,
           registrations: 0,
           successful_proofs: 0,
+          first_proof_visitors: 0,
+          repeat_proof_visitors: 0,
         },
         last_7_complete_days: { registrations: 0, successful_proofs: 0 },
       });
@@ -186,7 +194,7 @@ describe("GET /api/admin/conversion-funnel", () => {
         expect.objectContaining({ condition: "no_registration_7d", severity: "warning" }),
         expect.objectContaining({ condition: "no_successful_proof_7d", severity: "warning" }),
       ]));
-      expect(executeSpy).toHaveBeenCalledTimes(3);
+      expect(executeSpy).toHaveBeenCalledTimes(4);
     } finally {
       executeSpy.mockRestore();
     }

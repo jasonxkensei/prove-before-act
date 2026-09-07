@@ -162,6 +162,7 @@ export default function Landing() {
   const [copied, setCopied] = useState(false);
   const [trialError, setTrialError] = useState<string | null>(null);
   const heroTrialCtaRef = useAgentCtaExposure<HTMLAnchorElement>("landing", "hero_free_trial");
+  const heroScenariosRef = useAgentCtaExposure<HTMLDivElement>("landing", "hero_scenarios");
   const trialRegisterCtaRef = useAgentCtaExposure<HTMLButtonElement>("landing", "trial_register");
   const scrollToFreeTrial = () => {
     requestAnimationFrame(() => {
@@ -282,23 +283,45 @@ export default function Landing() {
       <PublicSiteHeader
         howItWorksHref="#how-it-works"
         primaryActionHref="#free-trial"
+        primaryActionLabel="Prove a decision"
         onConnect={handleConnect}
       />
       {/* Hero — thesis and evidence case file */}
       <main id="main-content" className="min-w-0 max-w-full overflow-x-hidden">
-      <section className="border-b border-[#303832] bg-[radial-gradient(ellipse_at_80%_45%,#1b2a21_0%,#111612_42%)] px-5 py-16 md:px-12 md:py-24 lg:px-[9vw]">
-        <div className="mx-auto grid max-w-6xl items-center gap-16 lg:grid-cols-[1.02fr_.98fr]">
+      <section className="border-b border-[#303832] bg-[radial-gradient(ellipse_at_80%_45%,#1b2a21_0%,#111612_42%)] px-5 py-10 md:px-12 md:py-14 lg:px-[9vw]">
+        <div className="mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-[1.02fr_.98fr]">
           <div>
-            <div className="mb-6 flex items-center gap-2 font-mono text-[10px] font-medium tracking-[.14em] text-[#8ef2bd]" data-testid="badge-prove-before-act">
-              <span className="h-2 w-2 rounded-full bg-[#8ef2bd]" />
-              PUBLIC ACCOUNTABILITY FOR AUTONOMOUS AGENTS
+            <div className="mb-6 flex items-center gap-2 font-mono text-[10px] font-medium tracking-[.14em] text-[#ffbe78]" data-testid="badge-prove-before-act">
+              <span className="h-2 w-2 rounded-full bg-[#ffbe78] shadow-[0_0_0_4px_rgba(255,190,120,.08)]" />
+              CONSEQUENCES REQUIRE EVIDENCE
             </div>
-            <h1 className="mb-7 max-w-3xl text-[clamp(3.25rem,6vw,5.4rem)] font-semibold leading-[.96] tracking-[-.06em]">
-              Accountability starts<br /><span className="font-serif font-normal italic text-[#8ef2bd]">before the action.</span>
+            <h1 className="mb-5 max-w-3xl text-[clamp(2.9rem,5vw,4.6rem)] font-semibold leading-[.96] tracking-[-.06em]">
+              Your agent can act.<br /><span className="font-serif font-normal italic text-[#8ef2bd]">Can it prove why it acted?</span>
             </h1>
-            <p className="mb-8 max-w-xl text-base leading-7 text-[#aeb7af]" data-testid="text-hero-positioning">
-              Prove Before Act is the open accountability pattern for agents that make consequential decisions. Commit the declared decision basis first. Execute second. Leave evidence anyone can verify. <span className="text-[#e8ebe5]">{price}/proof · 10 free certs · no wallet needed.</span>
+            <p className="mb-5 max-w-xl text-base leading-7 text-[#aeb7af]" data-testid="text-hero-positioning">
+              When an autonomous agent moves money, changes production, signs a contract, or delegates to another agent, the audit trail cannot begin after the incident. Commit the decision basis before execution and leave evidence a reviewer can verify. <span className="text-[#e8ebe5]">10 free proofs · no wallet needed.</span>
             </p>
+            <div ref={heroScenariosRef} className="mb-5 grid max-w-xl grid-cols-1 border-y border-[#303832] py-2 font-mono text-[10px] uppercase tracking-[.1em] text-[#7f8d82] sm:grid-cols-2" data-testid="hero-risk-scenarios">
+              {[
+                ["01", "Payment approval", "scenario_payment"],
+                ["02", "Production deploy", "scenario_devops"],
+                ["03", "Legal commitment", "scenario_legal"],
+                ["04", "Agent delegation", "scenario_multi_agent"],
+              ].map(([number, label, cta]) => (
+                <a
+                  key={cta}
+                  href="#free-trial"
+                  className="group flex min-h-9 items-center rounded-sm px-2 transition-colors hover:bg-[#1b241d] hover:text-[#e8ebe5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8ef2bd]"
+                  onClick={() => {
+                    trackAgentCta("cta_clicked", "landing", cta as "scenario_payment" | "scenario_devops" | "scenario_legal" | "scenario_multi_agent");
+                    trackEvent("risk_scenario_selected", { scenario: cta.replace("scenario_", "") });
+                    scrollToFreeTrial();
+                  }}
+                >
+                  <b className="mr-2 text-[#ffbe78] transition-colors group-hover:text-[#8ef2bd]">{number}</b> {label}
+                </a>
+              ))}
+            </div>
             <div className="flex flex-col gap-3 sm:flex-row">
             <Button
               asChild
@@ -315,7 +338,7 @@ export default function Landing() {
                   scrollToFreeTrial();
                 }}
               >
-                Run your first proof <ArrowRight className="ml-2 h-4 w-4" />
+                Prove your first agent decision <ArrowRight className="ml-2 h-4 w-4" />
               </a>
             </Button>
             <Button
@@ -326,12 +349,12 @@ export default function Landing() {
               data-testid="button-certify-file"
             >
               <a href="/certify">
-                See the accountability loop <ArrowRight className="ml-2 h-4 w-4" />
+                See how the loop works <ArrowRight className="ml-2 h-4 w-4" />
               </a>
             </Button>
             </div>
             <p className="mt-6 flex flex-wrap gap-3 font-mono text-[10px] text-[#79847b]">
-              <span>T(intent_proof) &lt; T(action)</span><span>·</span><span>xProof is the reference implementation</span>
+              <span className="text-[#ffbe78]">BEFORE THE ACTION</span><span>·</span><span>public pattern, reference implementation below</span>
             </p>
             <p className="mt-4 text-sm text-[#79847b]">
               New to Prove Before Act? <a href="/learn" className="text-[#e8ebe5] underline underline-offset-2" data-testid="link-hero-learn">60-second overview →</a>
@@ -340,28 +363,24 @@ export default function Landing() {
               <span data-testid="text-hero-reference-implementation">xProof is the reference implementation of the </span>
               <a href="/standard" className="text-[#e8ebe5] underline underline-offset-2" data-testid="link-hero-standard">Prove Before Act specification</a>
             </p>
-            <div className="mt-5 flex items-center gap-2 text-xs text-[#9ba49c]" data-testid="badge-x402-hero">
-              <Zap className="h-3.5 w-3.5 text-[#8ef2bd]" />
-              <span>No API key needed — anchor + pay via <strong className="text-[#e8ebe5]">x402</strong> · one HTTP request · USDC on Base</span>
-            </div>
           </div>
           <div className="relative">
             <div className="rotate-[1deg] bg-[#e3e6dd] p-5 text-[#142019] shadow-[16px_18px_0_#1a251e] md:p-7" data-testid="card-evidence-case-file">
               <div className="flex items-center justify-between font-mono text-[10px] tracking-[.07em]">
-                <span>LIVE EVIDENCE / PRF_7A91</span><span className="flex items-center gap-1 text-[#197449]"><CheckCircle className="h-3.5 w-3.5" /> VERIFIED</span>
+                <span>DECISION RECORD / PRF_7A91</span><span className="flex items-center gap-1 text-[#197449]"><CheckCircle className="h-3.5 w-3.5" /> VERIFIED</span>
               </div>
               <div className="my-8 text-2xl font-semibold tracking-[-.04em]">Rebalance treasury exposure</div>
               <div className="space-y-0 text-[11px]">
                 <div className="flex flex-col gap-1 border-t border-[#bac3b8] py-3 sm:flex-row sm:justify-between"><span className="font-mono text-[10px] text-[#65716a]">DECLARED DECISION BASIS</span><strong>RSI 38 · risk approved</strong></div>
                 <div className="flex flex-col gap-1 border-t border-[#bac3b8] py-3 sm:flex-row sm:justify-between"><span className="font-mono text-[10px] text-[#65716a]">COMMITMENT TIMESTAMP</span><strong className="font-mono font-normal">2025-06-18 14:32:07 UTC</strong></div>
-                <div className="flex flex-col gap-1 border-t border-[#bac3b8] py-3 sm:flex-row sm:justify-between"><span className="font-mono text-[10px] text-[#65716a]">ACTOR / ISSUER</span><strong>treasury-agent · xProof</strong></div>
+                <div className="flex flex-col gap-1 border-t border-[#bac3b8] py-3 sm:flex-row sm:justify-between"><span className="font-mono text-[10px] text-[#65716a]">ACTOR / RECORD</span><strong>treasury-agent · public proof</strong></div>
               </div>
               <div className="my-2 border-t border-dashed border-[#8b978d]" />
               <div className="flex items-center justify-between text-[11px]"><span className="flex items-center gap-2 font-mono text-[10px] text-[#65716a]"><span className="h-4 w-1 bg-[#38bd7a]" /> OUTCOME RECORDED</span><strong>Action completed · +0.8% USDC</strong></div>
               <button className="mt-5 flex items-center gap-2 border-0 bg-transparent p-0 text-[11px] text-[#17764b]" onClick={() => setCaseVerified(!caseVerified)} data-testid="button-case-file-verify">
                 {caseVerified ? "Hide verification fields" : "Inspect verification fields"} <ExternalLink className="h-3 w-3" />
               </button>
-              {caseVerified && <div className="mt-3 flex items-center gap-2 bg-[#d2ebda] p-2 text-[11px] text-[#18633f]"><CheckCircle className="h-4 w-4" /> Verification checks this hash against the MultiversX commitment</div>}
+              {caseVerified && <div className="mt-3 flex items-center gap-2 bg-[#d2ebda] p-2 text-[11px] text-[#18633f]"><CheckCircle className="h-4 w-4" /> Verification checks the record against its public commitment</div>}
             </div>
             <p className="mt-8 font-mono text-[10px] text-[#6e786f]"><span className="mr-3 text-[#8ef2bd]">01</span>The evidence is the product.</p>
           </div>
@@ -403,7 +422,7 @@ export default function Landing() {
                       scrollToFreeTrial();
                     }}
                   >
-                    Run your first proof <ArrowRight className="ml-2 h-4 w-4" />
+                    Prove your first agent decision <ArrowRight className="ml-2 h-4 w-4" />
                   </a>
                 </Button>
                 <Button
@@ -545,6 +564,9 @@ export default function Landing() {
                     <div
                       data-testid="dropzone-proof"
                       className={`border-2 border-dashed rounded-md p-7 text-center cursor-pointer transition-colors select-none ${isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/30 hover:border-primary/40"}`}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={proofFile ? `Choose a different file. Current file: ${proofFile.name}` : "Choose a file to prove"}
                       onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                       onDragLeave={() => setIsDragging(false)}
                       onDrop={(e) => {
@@ -554,6 +576,12 @@ export default function Landing() {
                         if (f) handleFileSelect(f);
                       }}
                       onClick={() => fileInputRef.current?.click()}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          fileInputRef.current?.click();
+                        }
+                      }}
                     >
                       <input
                         ref={fileInputRef}

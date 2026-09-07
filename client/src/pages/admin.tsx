@@ -195,8 +195,11 @@ interface ConversionFunnelData {
     visitors: number;
     cta_views: number;
     cta_clicks: number;
+    scenario_engagements: number;
     registrations: number;
     successful_proofs: number;
+    first_proof_visitors: number;
+    repeat_proof_visitors: number;
   };
   last_7_complete_days: {
     registrations: number;
@@ -703,12 +706,14 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
         )}
       </CardHeader>
       <CardContent className="space-y-5">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {[
             ["CTA seen", data.totals.cta_views],
+            ["Scenario selected", data.totals.scenario_engagements],
             ["CTA clicked", data.totals.cta_clicks],
             ["Registered", data.totals.registrations],
-            ["New proofs", data.totals.successful_proofs],
+            ["First proof", data.totals.first_proof_visitors],
+            ["Second proof", data.totals.repeat_proof_visitors],
           ].map(([label, value]) => (
             <div key={label as string} className="rounded-md border p-3">
               <p className="text-xs text-muted-foreground">{label}</p>
@@ -748,7 +753,7 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
           </div>
         )}
         <p className="text-xs text-muted-foreground">
-          API outcomes include 2xx, 4xx, 429 and 5xx responses; “New proofs” counts HTTP 201 only.
+          API outcomes include 2xx, 4xx, 429 and 5xx responses. “First proof” counts visitors with at least one HTTP 201; “Second proof” counts those with at least two.
         </p>
       </CardContent>
     </Card>

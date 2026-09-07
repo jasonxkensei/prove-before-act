@@ -369,6 +369,11 @@ export function registerAdminRoutes(app: Express) {
             WHERE stage = 'cta' AND outcome = 'clicked'
           )::int AS cta_clicks,
           COUNT(DISTINCT ip_hash) FILTER (
+            WHERE stage = 'cta'
+              AND outcome = 'clicked'
+              AND event_type LIKE '%:scenario_%'
+          )::int AS scenario_engagements,
+          COUNT(DISTINCT ip_hash) FILTER (
             WHERE stage = 'registration' AND outcome = 'success' AND http_class = '2xx'
           )::int AS registrations,
           COUNT(DISTINCT ip_hash) FILTER (
@@ -376,6 +381,20 @@ export function registerAdminRoutes(app: Express) {
           )::int AS successful_proofs
         FROM conversion_events
         WHERE created_at >= NOW() - INTERVAL '30 days'
+      `);
+      const proofActivationResult = await db.execute(sql`
+        SELECT
+          COUNT(*) FILTER (WHERE successful_proofs >= 1)::int AS first_proof_visitors,
+          COUNT(*) FILTER (WHERE successful_proofs >= 2)::int AS repeat_proof_visitors
+        FROM (
+          SELECT ip_hash, COUNT(*)::int AS successful_proofs
+          FROM conversion_events
+          WHERE created_at >= NOW() - INTERVAL '30 days'
+            AND stage = 'proof'
+            AND outcome = 'success'
+            AND http_status = 201
+          GROUP BY ip_hash
+        ) proof_visitors
       `);
       const lastSevenDaysResult = await db.execute(sql`
         SELECT
@@ -393,6 +412,7 @@ export function registerAdminRoutes(app: Express) {
       const parseCount = (row: Record<string, string | number> | undefined, key: string) =>
         Number(row?.[key] || 0);
       const totalsRow = totalsResult.rows[0] as Record<string, string | number> | undefined;
+      const proofActivationRow = proofActivationResult.rows[0] as Record<string, string | number> | undefined;
       const lastSevenDays = lastSevenDaysResult.rows[0] as Record<string, string | number> | undefined;
       const registrations7d = parseCount(lastSevenDays, "registrations");
       const successfulProofs7d = parseCount(lastSevenDays, "successful_proofs");
@@ -429,8 +449,11 @@ export function registerAdminRoutes(app: Express) {
           visitors: parseCount(totalsRow, "visitors"),
           cta_views: parseCount(totalsRow, "cta_views"),
           cta_clicks: parseCount(totalsRow, "cta_clicks"),
+          scenario_engagements: parseCount(totalsRow, "scenario_engagements"),
           registrations: parseCount(totalsRow, "registrations"),
           successful_proofs: parseCount(totalsRow, "successful_proofs"),
+          first_proof_visitors: parseCount(proofActivationRow, "first_proof_visitors"),
+          repeat_proof_visitors: parseCount(proofActivationRow, "repeat_proof_visitors"),
         },
         last_7_complete_days: {
           registrations: registrations7d,

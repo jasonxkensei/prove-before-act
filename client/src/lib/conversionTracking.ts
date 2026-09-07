@@ -1,7 +1,16 @@
 import { useEffect, useRef } from "react";
 
 type CtaPage = "landing" | "landing_zh" | "leaderboard";
-type CtaName = "hero_free_trial" | "why_now_first_proof" | "trial_register" | "leaderboard_register";
+type CtaName =
+  | "hero_free_trial"
+  | "hero_scenarios"
+  | "scenario_payment"
+  | "scenario_devops"
+  | "scenario_legal"
+  | "scenario_multi_agent"
+  | "why_now_first_proof"
+  | "trial_register"
+  | "leaderboard_register";
 type CtaEvent = "cta_seen" | "cta_clicked";
 
 function wasTrackedThisSession(key: string): boolean {
