@@ -259,11 +259,12 @@ for (const route of ["/standard", "/agents"] as const) {
 // inserted before the nav, the count will change and this test will fail loudly,
 // alerting the author to check and update EXPECTED_TABS_TO_MORE below.
 //
-// Current focus order on a desktop 1280 px viewport (no optional elements):
-//   Tab 1 → logo anchor           (link-logo-home)
-//   Tab 2 → How it works anchor   (link-nav-how-it-works)
-//   Tab 3 → Standard anchor       (link-nav-standard)
-//   Tab 4 → More button           (button-nav-more)
+// Current focus order on a desktop 1280 px viewport:
+//   Tab 1 → Skip to content link
+//   Tab 2 → logo anchor           (link-logo-home)
+//   Tab 3 → How it works anchor   (link-nav-how-it-works)
+//   Tab 4 → Standard anchor       (link-nav-standard)
+//   Tab 5 → More button           (button-nav-more)
 //
 // If this test fails after a deliberate header change, update the constant and
 // the comment above to reflect the new order, then re-verify keyboard UX by
@@ -287,10 +288,29 @@ async function countTabsToMoreButton(page: Page, limit = 20): Promise<number> {
 test.describe("public-site chrome — exact Tab count to More button", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
+  test("first Tab reaches the skip link and activating it focuses main content", async ({ page }) => {
+    await page.goto("/");
+
+    const skipLink = page.getByRole("link", { name: "Skip to content" });
+    const mainContent = page.locator("#main-content");
+
+    // WebKit can accept Tab presses while the React shell is still restoring
+    // the session, before the shared header has mounted.
+    await expect(skipLink).toBeVisible();
+    await page.keyboard.press("Tab");
+    await expect(skipLink).toBeFocused();
+    await expect(skipLink).toHaveAttribute("href", "#main-content");
+    await expect(mainContent).toHaveAttribute("tabindex", "-1");
+
+    await page.keyboard.press("Enter");
+    await expect(mainContent).toBeFocused();
+  });
+
   test(
     `More button is reached in exactly ${EXPECTED_TABS_TO_MORE} Tab presses from document start`,
     async ({ page }) => {
       await page.goto("/");
+      await expect(page.getByRole("link", { name: "Skip to content" })).toBeVisible();
       const count = await countTabsToMoreButton(page);
       expect(
         count,
