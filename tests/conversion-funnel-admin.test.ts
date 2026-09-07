@@ -124,8 +124,8 @@ describe("GET /api/admin/conversion-funnel", () => {
   });
 
   it("returns daily totals and zero-conversion alerts to an authorized admin", async () => {
-    // The route issues exactly four aggregate queries: daily rows, 30-day
-    // totals, proof activation, then the last seven complete days. Stubbing those query results
+    // The route issues exactly five aggregate queries: daily rows, 30-day
+    // totals, per-segment activation, proof activation, then the last seven complete days. Stubbing those query results
     // makes alert coverage independent from any shared test-database history.
     const executeSpy = vi.spyOn(db, "execute") as any;
     executeSpy
@@ -149,6 +149,16 @@ describe("GET /api/admin/conversion-funnel", () => {
           scenario_engagements: "1",
           registrations: "0",
           successful_proofs: "0",
+        }],
+      })
+      .mockResolvedValueOnce({
+        rows: [{
+          traffic_segment: "human_browser",
+          scenario_selected: "1",
+          primary_cta_clicked: "1",
+          registered: "1",
+          first_proof: "1",
+          second_proof: "0",
         }],
       })
       .mockResolvedValueOnce({
@@ -189,12 +199,29 @@ describe("GET /api/admin/conversion-funnel", () => {
           repeat_proof_visitors: 0,
         },
         last_7_complete_days: { registrations: 0, successful_proofs: 0 },
+        collection: {
+          confirmed: true,
+          events_in_window: 8,
+          events_last_24h: 0,
+        },
+        activation_review: {
+          recommendation: { status: "ready" },
+          by_traffic_segment: [
+            expect.objectContaining({
+              traffic_segment: "human_browser",
+              largest_drop_off: expect.objectContaining({
+                from_stage: "first_proof",
+                to_stage: "second_proof",
+              }),
+            }),
+          ],
+        },
       });
       expect(body.alerts).toEqual(expect.arrayContaining([
         expect.objectContaining({ condition: "no_registration_7d", severity: "warning" }),
         expect.objectContaining({ condition: "no_successful_proof_7d", severity: "warning" }),
       ]));
-      expect(executeSpy).toHaveBeenCalledTimes(4);
+      expect(executeSpy).toHaveBeenCalledTimes(5);
     } finally {
       executeSpy.mockRestore();
     }

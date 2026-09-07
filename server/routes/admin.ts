@@ -79,8 +79,65 @@ function labelForReferrerHost(host: string): string {
 // and fold concurrent first-fetches into a single in-flight promise.
 const STATS_CACHE_TTL_MS = 60_000;
 const TRAFFIC_SOURCES_WINDOW_DAYS = 30;
+const ACTIVATION_FUNNEL_WINDOW_DAYS = 30;
 let statsCache: { body: object; cachedAt: number } | null = null;
 let statsInflight: Promise<object> | null = null;
+
+const ACTIVATION_STAGE_ORDER = [
+  "scenario_selected",
+  "primary_cta_clicked",
+  "registered",
+  "first_proof",
+  "second_proof",
+] as const;
+type ActivationStage = typeof ACTIVATION_STAGE_ORDER[number];
+
+function roundPercentage(value: number | null): number | null {
+  return value === null ? null : Math.round(value * 1000) / 10;
+}
+
+function buildActivationAnalysis(
+  stages: Record<ActivationStage, number>,
+  trafficSegment: string,
+) {
+  const stageRows = ACTIVATION_STAGE_ORDER.map((key, index) => {
+    const visitors = stages[key];
+    const previousKey = index > 0 ? ACTIVATION_STAGE_ORDER[index - 1] : null;
+    const previousVisitors = previousKey ? stages[previousKey] : null;
+    const dropOff = previousVisitors === null ? null : Math.max(0, previousVisitors - visitors);
+    return {
+      stage: key,
+      visitors,
+      from_previous: previousVisitors,
+      conversion_rate: previousVisitors && previousVisitors > 0
+        ? roundPercentage(visitors / previousVisitors)
+        : null,
+      drop_off: dropOff,
+      drop_off_rate: previousVisitors && previousVisitors > 0 && dropOff !== null
+        ? roundPercentage(dropOff / previousVisitors)
+        : null,
+    };
+  });
+  const comparableDrops = stageRows
+    .filter((row) => row.drop_off !== null && row.drop_off_rate !== null && row.from_previous !== null && row.from_previous > 0)
+    .sort((a, b) => (b.drop_off_rate! - a.drop_off_rate!) || (b.drop_off! - a.drop_off!));
+  const largestDropOff = comparableDrops[0] ?? null;
+
+  return {
+    traffic_segment: trafficSegment,
+    stages: stageRows,
+    largest_drop_off: largestDropOff
+      ? {
+          from_stage: ACTIVATION_STAGE_ORDER[stageRows.indexOf(largestDropOff) - 1],
+          to_stage: largestDropOff.stage,
+          from_visitors: largestDropOff.from_previous,
+          to_visitors: largestDropOff.visitors,
+          lost_visitors: largestDropOff.drop_off,
+          drop_off_rate: largestDropOff.drop_off_rate,
+        }
+      : null,
+  };
+}
 
 export function registerAdminRoutes(app: Express) {
   app.get("/api/stats", publicStatsRateLimiter, async (req: any, res) => {
@@ -362,12 +419,20 @@ export function registerAdminRoutes(app: Express) {
         SELECT
           COUNT(*)::int AS events,
           COUNT(DISTINCT ip_hash)::int AS visitors,
+          MIN(created_at) AS first_event_at,
+          MAX(created_at) AS last_event_at,
+          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours')::int AS events_last_24h,
           COUNT(DISTINCT ip_hash) FILTER (
             WHERE stage = 'cta' AND outcome = 'seen'
           )::int AS cta_views,
           COUNT(DISTINCT ip_hash) FILTER (
             WHERE stage = 'cta' AND outcome = 'clicked'
           )::int AS cta_clicks,
+          COUNT(DISTINCT ip_hash) FILTER (
+            WHERE stage = 'cta'
+              AND outcome = 'clicked'
+              AND event_type NOT LIKE '%:scenario_%'
+          )::int AS primary_cta_clicks,
           COUNT(DISTINCT ip_hash) FILTER (
             WHERE stage = 'cta'
               AND outcome = 'clicked'
@@ -381,6 +446,46 @@ export function registerAdminRoutes(app: Express) {
           )::int AS successful_proofs
         FROM conversion_events
         WHERE created_at >= NOW() - INTERVAL '30 days'
+      `);
+      const segmentResult = await db.execute(sql`
+        WITH visitor_metrics AS (
+          SELECT
+            traffic_segment,
+            ip_hash,
+            BOOL_OR(
+              stage = 'cta'
+              AND outcome = 'clicked'
+              AND event_type LIKE '%:scenario_%'
+            ) AS scenario_selected,
+            BOOL_OR(
+              stage = 'cta'
+              AND outcome = 'clicked'
+              AND event_type NOT LIKE '%:scenario_%'
+            ) AS primary_cta_clicked,
+            BOOL_OR(
+              stage = 'registration'
+              AND outcome = 'success'
+              AND http_class = '2xx'
+            ) AS registered,
+            COUNT(*) FILTER (
+              WHERE stage = 'proof'
+                AND outcome = 'success'
+                AND http_status = 201
+            )::int AS successful_proofs
+          FROM conversion_events
+          WHERE created_at >= NOW() - INTERVAL '30 days'
+          GROUP BY traffic_segment, ip_hash
+        )
+        SELECT
+          traffic_segment,
+          COUNT(*) FILTER (WHERE scenario_selected)::int AS scenario_selected,
+          COUNT(*) FILTER (WHERE primary_cta_clicked)::int AS primary_cta_clicked,
+          COUNT(*) FILTER (WHERE registered)::int AS registered,
+          COUNT(*) FILTER (WHERE successful_proofs >= 1)::int AS first_proof,
+          COUNT(*) FILTER (WHERE successful_proofs >= 2)::int AS second_proof
+        FROM visitor_metrics
+        GROUP BY traffic_segment
+        ORDER BY traffic_segment
       `);
       const proofActivationResult = await db.execute(sql`
         SELECT
@@ -414,6 +519,7 @@ export function registerAdminRoutes(app: Express) {
       const totalsRow = totalsResult.rows[0] as Record<string, string | number> | undefined;
       const proofActivationRow = proofActivationResult.rows[0] as Record<string, string | number> | undefined;
       const lastSevenDays = lastSevenDaysResult.rows[0] as Record<string, string | number> | undefined;
+      const segmentRows = segmentResult.rows as Array<Record<string, string | number>>;
       const registrations7d = parseCount(lastSevenDays, "registrations");
       const successfulProofs7d = parseCount(lastSevenDays, "successful_proofs");
       const alerts = [];
@@ -432,9 +538,50 @@ export function registerAdminRoutes(app: Express) {
         });
       }
 
+      const emptyStages = (): Record<ActivationStage, number> => ({
+        scenario_selected: 0,
+        primary_cta_clicked: 0,
+        registered: 0,
+        first_proof: 0,
+        second_proof: 0,
+      });
+      const segmentAnalysis = segmentRows.map((row) => ({
+        stages: {
+          scenario_selected: parseCount(row, "scenario_selected"),
+          primary_cta_clicked: parseCount(row, "primary_cta_clicked"),
+          registered: parseCount(row, "registered"),
+          first_proof: parseCount(row, "first_proof"),
+          second_proof: parseCount(row, "second_proof"),
+        },
+        traffic_segment: String(row.traffic_segment),
+      }));
+      const overallStages = segmentAnalysis.reduce((totals, segment) => {
+        for (const stage of ACTIVATION_STAGE_ORDER) totals[stage] += segment.stages[stage];
+        return totals;
+      }, emptyStages());
+      const overallAnalysis = buildActivationAnalysis(overallStages, "all");
+      const largestSegmentDropOff = segmentAnalysis
+        .map((segment) => buildActivationAnalysis(segment.stages, segment.traffic_segment))
+        .filter((segment) => segment.largest_drop_off !== null)
+        .sort((a, b) => (
+          (b.largest_drop_off?.drop_off_rate ?? -1) - (a.largest_drop_off?.drop_off_rate ?? -1)
+        ) || (
+          (b.largest_drop_off?.lost_visitors ?? -1) - (a.largest_drop_off?.lost_visitors ?? -1)
+        ))[0] ?? null;
+      const totalEvents = parseCount(totalsRow, "events");
+      const funnelReview = {
+        status: totalEvents > 0 ? "ready" : "awaiting_traffic",
+        message: totalEvents > 0
+          ? "Review the largest transition drop before changing the product."
+          : "No published conversion traffic is recorded in this window. Republish with analytics enabled, then review after at least 7 complete days.",
+        hypothesis: largestSegmentDropOff?.largest_drop_off
+          ? `Test only the ${largestSegmentDropOff.traffic_segment} ${largestSegmentDropOff.largest_drop_off.from_stage} → ${largestSegmentDropOff.largest_drop_off.to_stage} transition; keep SEO, pricing, branding, and feature scope unchanged.`
+          : null,
+      };
+
       res.json({
         timezone: "UTC",
-        window_days: 30,
+        window_days: ACTIVATION_FUNNEL_WINDOW_DAYS,
         rows: (rowsResult.rows as Array<Record<string, string | number>>).map((row) => ({
           date: row.day,
           stage: row.stage,
@@ -449,6 +596,7 @@ export function registerAdminRoutes(app: Express) {
           visitors: parseCount(totalsRow, "visitors"),
           cta_views: parseCount(totalsRow, "cta_views"),
           cta_clicks: parseCount(totalsRow, "cta_clicks"),
+          primary_cta_clicks: parseCount(totalsRow, "primary_cta_clicks"),
           scenario_engagements: parseCount(totalsRow, "scenario_engagements"),
           registrations: parseCount(totalsRow, "registrations"),
           successful_proofs: parseCount(totalsRow, "successful_proofs"),
@@ -458,6 +606,23 @@ export function registerAdminRoutes(app: Express) {
         last_7_complete_days: {
           registrations: registrations7d,
           successful_proofs: successfulProofs7d,
+        },
+        collection: {
+          confirmed: totalEvents > 0,
+          events_in_window: totalEvents,
+          events_last_24h: parseCount(totalsRow, "events_last_24h"),
+          first_event_at: totalsRow?.first_event_at ?? null,
+          last_event_at: totalsRow?.last_event_at ?? null,
+        },
+        activation_review: {
+          window_days: ACTIVATION_FUNNEL_WINDOW_DAYS,
+          stage_order: ACTIVATION_STAGE_ORDER,
+          overall: overallAnalysis,
+          by_traffic_segment: segmentAnalysis.map((segment) =>
+            buildActivationAnalysis(segment.stages, segment.traffic_segment),
+          ),
+          largest_segment_drop_off: largestSegmentDropOff,
+          recommendation: funnelReview,
         },
         alerts,
         generated_at: new Date().toISOString(),

@@ -195,6 +195,7 @@ interface ConversionFunnelData {
     visitors: number;
     cta_views: number;
     cta_clicks: number;
+    primary_cta_clicks: number;
     scenario_engagements: number;
     registrations: number;
     successful_proofs: number;
@@ -205,9 +206,56 @@ interface ConversionFunnelData {
     registrations: number;
     successful_proofs: number;
   };
+  collection: {
+    confirmed: boolean;
+    events_in_window: number;
+    events_last_24h: number;
+    first_event_at: string | null;
+    last_event_at: string | null;
+  };
+  activation_review: {
+    window_days: number;
+    stage_order: Array<"scenario_selected" | "primary_cta_clicked" | "registered" | "first_proof" | "second_proof">;
+    overall: ActivationReviewSegment;
+    by_traffic_segment: ActivationReviewSegment[];
+    largest_segment_drop_off: ActivationReviewSegment | null;
+    recommendation: {
+      status: "ready" | "awaiting_traffic";
+      message: string;
+      hypothesis: string | null;
+    };
+  };
   alerts: Array<{ severity: "warning"; condition: string; message: string }>;
   generated_at: string;
 }
+
+interface ActivationReviewSegment {
+  traffic_segment: string;
+  stages: Array<{
+    stage: "scenario_selected" | "primary_cta_clicked" | "registered" | "first_proof" | "second_proof";
+    visitors: number;
+    from_previous: number | null;
+    conversion_rate: number | null;
+    drop_off: number | null;
+    drop_off_rate: number | null;
+  }>;
+  largest_drop_off: {
+    from_stage: string;
+    to_stage: string;
+    from_visitors: number | null;
+    to_visitors: number;
+    lost_visitors: number | null;
+    drop_off_rate: number | null;
+  } | null;
+}
+
+const ACTIVATION_STAGE_LABELS: Record<string, string> = {
+  scenario_selected: "Scenario",
+  primary_cta_clicked: "Primary CTA",
+  registered: "Registered",
+  first_proof: "First proof",
+  second_proof: "Second proof",
+};
 
 interface ProposedViolation {
   id: string;
@@ -683,6 +731,8 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
     1,
     ...lastSevenDays.map(([, day]) => Math.max(day.views, day.clicks, day.registrations, day.proofs)),
   );
+  const review = data.activation_review;
+  const largestDropOff = review.largest_segment_drop_off?.largest_drop_off;
 
   return (
     <Card data-testid="card-conversion-funnel">
@@ -692,7 +742,12 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
             <CardTitle className="text-sm font-medium">First Proof Funnel</CardTitle>
             <Badge variant="secondary">last {data.window_days}d</Badge>
           </div>
-          <span className="text-xs text-muted-foreground">Server-derived, no request data retained</span>
+            <div className="flex flex-wrap items-center justify-end gap-2 text-xs">
+              <Badge variant={data.collection.confirmed ? "default" : "outline"} data-testid="badge-funnel-collection">
+                {data.collection.confirmed ? "Collection confirmed" : "Awaiting published traffic"}
+              </Badge>
+              <span className="text-muted-foreground">Server-derived, no request data retained</span>
+            </div>
         </div>
         {data.alerts.length > 0 && (
           <div className="space-y-1">
@@ -710,7 +765,7 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
           {[
             ["CTA seen", data.totals.cta_views],
             ["Scenario selected", data.totals.scenario_engagements],
-            ["CTA clicked", data.totals.cta_clicks],
+            ["Primary CTA clicked", data.totals.primary_cta_clicks],
             ["Registered", data.totals.registrations],
             ["First proof", data.totals.first_proof_visitors],
             ["Second proof", data.totals.repeat_proof_visitors],
@@ -720,6 +775,80 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
               <p className="mt-1 text-lg font-semibold tabular-nums">{(value as number).toLocaleString()}</p>
             </div>
           ))}
+        </div>
+
+        <div className="rounded-md border bg-muted/20 p-4" data-testid="activation-review">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-sm font-medium">Activation review</p>
+              <p className="text-xs text-muted-foreground">
+                {data.collection.confirmed
+                  ? `Largest relative drop across the ${review.window_days}-day window`
+                  : "A decision will be available after the published app receives traffic"}
+              </p>
+            </div>
+            <Badge variant={review.recommendation.status === "ready" ? "secondary" : "outline"}>
+              {review.recommendation.status === "ready" ? "Review ready" : "Awaiting traffic"}
+            </Badge>
+          </div>
+          <p className="mt-3 text-sm text-muted-foreground">{review.recommendation.message}</p>
+          {largestDropOff && review.largest_segment_drop_off && (
+            <div className="mt-3 rounded border bg-background p-3 text-sm" data-testid="largest-funnel-dropoff">
+              <span className="font-medium">Largest segment drop-off: </span>
+              <span>
+                {review.largest_segment_drop_off.traffic_segment} —{" "}
+                {ACTIVATION_STAGE_LABELS[largestDropOff.from_stage] ?? largestDropOff.from_stage} →{" "}
+                {ACTIVATION_STAGE_LABELS[largestDropOff.to_stage] ?? largestDropOff.to_stage}
+              </span>
+              <span className="ml-2 text-muted-foreground">
+                ({largestDropOff.lost_visitors ?? 0} visitors, {largestDropOff.drop_off_rate ?? 0}%)
+              </span>
+            </div>
+          )}
+          {review.recommendation.hypothesis && (
+            <p className="mt-3 text-xs text-muted-foreground" data-testid="funnel-hypothesis">
+              Next experiment: {review.recommendation.hypothesis}
+            </p>
+          )}
+          {review.by_traffic_segment.length > 0 && (
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full min-w-[680px] text-xs">
+                <thead>
+                  <tr className="border-b text-left text-muted-foreground">
+                    <th className="pb-2 pr-3 font-medium">Traffic segment</th>
+                    <th className="pb-2 px-2 font-medium text-right">Scenario</th>
+                    <th className="pb-2 px-2 font-medium text-right">Primary CTA</th>
+                    <th className="pb-2 px-2 font-medium text-right">Registered</th>
+                    <th className="pb-2 px-2 font-medium text-right">First proof</th>
+                    <th className="pb-2 px-2 font-medium text-right">Second proof</th>
+                    <th className="pb-2 pl-2 font-medium">Largest drop</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {review.by_traffic_segment.map((segment) => {
+                    const stageValue = (stage: string) =>
+                      segment.stages.find((entry) => entry.stage === stage)?.visitors ?? 0;
+                    const drop = segment.largest_drop_off;
+                    return (
+                      <tr key={segment.traffic_segment} className="border-b last:border-0">
+                        <td className="py-2 pr-3 font-medium">{segment.traffic_segment}</td>
+                        <td className="py-2 px-2 text-right tabular-nums">{stageValue("scenario_selected")}</td>
+                        <td className="py-2 px-2 text-right tabular-nums">{stageValue("primary_cta_clicked")}</td>
+                        <td className="py-2 px-2 text-right tabular-nums">{stageValue("registered")}</td>
+                        <td className="py-2 px-2 text-right tabular-nums">{stageValue("first_proof")}</td>
+                        <td className="py-2 px-2 text-right tabular-nums">{stageValue("second_proof")}</td>
+                        <td className="py-2 pl-2">
+                          {drop
+                            ? `${ACTIVATION_STAGE_LABELS[drop.from_stage] ?? drop.from_stage} → ${ACTIVATION_STAGE_LABELS[drop.to_stage] ?? drop.to_stage} (${drop.drop_off_rate ?? 0}%)`
+                            : "—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
 
         {lastSevenDays.length === 0 ? (
@@ -753,7 +882,7 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
           </div>
         )}
         <p className="text-xs text-muted-foreground">
-          API outcomes include 2xx, 4xx, 429 and 5xx responses. “First proof” counts visitors with at least one HTTP 201; “Second proof” counts those with at least two.
+          API outcomes include 2xx, 4xx, 429 and 5xx responses. “First proof” counts visitors with at least one HTTP 201; “Second proof” counts those with at least two. Collection is confirmed when this first-party funnel receives an event from the published app.
         </p>
       </CardContent>
     </Card>
