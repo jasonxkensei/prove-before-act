@@ -105,7 +105,7 @@ export default function ProofPage() {
               <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">Proof case file</h1>
               <p className="mt-2 max-w-2xl text-muted-foreground">A recorded file commitment with its issuer and independent verification status.</p>
             </div>
-            <div className={`flex shrink-0 items-center gap-2 border px-3 py-2 text-sm font-medium ${isVerified ? "border-chart-2/30 bg-chart-2/10 text-chart-2" : "border-border bg-muted/40 text-muted-foreground"}`}>
+            <div className={`flex shrink-0 items-center gap-2 border px-3 py-2 text-sm font-medium ${isVerified ? "status-verified border-current/30 bg-current/10" : "status-pending border-border bg-muted/40"}`}>
               {isVerified ? <CheckCircle className="h-4 w-4" /> : <Shield className="h-4 w-4" />}
               <span>{isVerified ? "Independently verified" : "Anchoring in progress"}</span>
             </div>

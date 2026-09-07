@@ -274,11 +274,11 @@ export default function Dashboard() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "confirmed":
-         return <Badge variant="default" className="bg-primary hover:bg-primary">Verified</Badge>;
+         return <Badge variant="outline" className="status-verified border-current/40 bg-current/10">Verified</Badge>;
       case "pending":
-         return <Badge variant="outline" className="border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300">Pending</Badge>;
+         return <Badge variant="outline" className="status-pending border-current/40 bg-current/10">Pending</Badge>;
       case "failed":
-        return <Badge variant="destructive">Failed</Badge>;
+        return <Badge variant="outline" className="status-failed border-current/40 bg-current/10">Failed</Badge>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }

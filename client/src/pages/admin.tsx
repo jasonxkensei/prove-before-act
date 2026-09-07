@@ -580,7 +580,7 @@ function StatusIndicator({ status }: { status: string }) {
     case "healthy":
       return <Badge variant="outline" className="bg-emerald-500/15 text-emerald-500 border-emerald-500/25"><CheckCircle2 className="h-3 w-3 mr-1" /> {status === "healthy" ? "Healthy" : "OK"}</Badge>;
     case "degraded":
-      return <Badge variant="secondary"><AlertTriangle className="h-3 w-3 mr-1" /> Degraded</Badge>;
+      return <Badge variant="secondary" className="status-warning"><AlertTriangle className="h-3 w-3 mr-1" /> Degraded</Badge>;
     case "down":
       return <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" /> Down</Badge>;
     default:
@@ -1484,21 +1484,21 @@ export default function AdminDashboard() {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground flex items-center gap-2">
-                        <CheckCircle2 className="h-3 w-3 text-chart-2" /> Verified
+                        <CheckCircle2 className="status-verified h-3 w-3" /> Verified
                       </span>
-                      <span className="font-medium text-chart-2">{stats.certifications.by_status.confirmed || 0}</span>
+                      <span className="status-verified font-medium">{stats.certifications.by_status.confirmed || 0}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground flex items-center gap-2">
-                        <Clock className="h-3 w-3 text-yellow-500" /> Pending
+                        <Clock className="status-pending h-3 w-3" /> Pending
                       </span>
-                      <span className="font-medium">{stats.certifications.by_status.pending || 0}</span>
+                      <span className="status-pending font-medium">{stats.certifications.by_status.pending || 0}</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground flex items-center gap-2">
-                        <XCircle className="h-3 w-3 text-destructive" /> Failed
+                        <XCircle className="status-failed h-3 w-3" /> Failed
                       </span>
-                      <span className="font-medium text-destructive">{stats.certifications.by_status.failed || 0}</span>
+                      <span className="status-failed font-medium">{stats.certifications.by_status.failed || 0}</span>
                     </div>
                   </div>
                 </CardContent>

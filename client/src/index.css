@@ -46,6 +46,14 @@
   --chart-4: 18 62% 64%;
   --chart-5: 3 58% 58%;
 
+  /* State colors are intentionally independent from chart tokens. These
+     values are readable on the dark operational canvas; paper-page below
+     supplies the corresponding light-surface values. */
+  --status-verified: 143 52% 70%;
+  --status-pending: 38 92% 70%;
+  --status-warning: 24 90% 70%;
+  --status-failed: 0 84% 72%;
+
   --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
   --font-serif: "Instrument Serif", Georgia, serif;
   --font-mono: "DM Mono", ui-monospace, monospace;
@@ -121,9 +129,10 @@
   .eyebrow { @apply font-mono text-[0.68rem] font-medium uppercase tracking-[0.16em] text-primary; }
   .section-space { @apply py-16 sm:py-20 lg:py-28; }
   .status-recorded { @apply inline-flex items-center gap-1.5 text-sm text-muted-foreground; }
-  .status-verified { @apply inline-flex items-center gap-1.5 text-sm font-medium text-primary; }
-  .status-pending { @apply inline-flex items-center gap-1.5 text-sm font-medium text-amber-300; }
-  .status-failed { @apply inline-flex items-center gap-1.5 text-sm font-medium text-red-300; }
+  .status-verified { @apply inline-flex items-center gap-1.5 text-sm font-medium; color: hsl(var(--status-verified)) !important; }
+  .status-pending { @apply inline-flex items-center gap-1.5 text-sm font-medium; color: hsl(var(--status-pending)) !important; }
+  .status-warning { @apply inline-flex items-center gap-1.5 text-sm font-medium; color: hsl(var(--status-warning)) !important; }
+  .status-failed { @apply inline-flex items-center gap-1.5 text-sm font-medium; color: hsl(var(--status-failed)) !important; }
   .contained-code {
     @apply max-w-full overflow-x-auto rounded-md border border-border/70 bg-background/75 p-4 font-mono text-xs leading-relaxed text-muted-foreground;
   }
@@ -212,4 +221,8 @@
   --muted-foreground: 40 9% 42%;
   --popover: 42 24% 91%;
   --popover-foreground: 42 18% 18%;
+  --status-verified: 142 72% 29%;
+  --status-pending: 32 81% 29%;
+  --status-warning: 24 75% 32%;
+  --status-failed: 0 72% 35%;
 }
