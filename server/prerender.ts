@@ -2079,8 +2079,13 @@ GET ${escapeHtml(baseUrl)}/api/fleet/coherence?fleet=&lt;slug&gt;</code></pre>
 </main>
 <footer class="coherence-footer">
   <div class="coherence-footer-inner">
-    Prove Before Act · independently verifiable evidence for autonomous agents ·
-    <a href="${escapeHtml(baseUrl)}/standard">Read the standard</a>
+    <p>&copy; ${new Date().getFullYear()} Prove Before Act. All rights reserved.</p>
+    <p>Powered by <a href="https://multiversx.com">MultiversX</a></p>
+    <nav aria-label="Legal">
+      <a href="${escapeHtml(baseUrl)}/legal/mentions">Legal notices</a> ·
+      <a href="${escapeHtml(baseUrl)}/legal/privacy">Privacy policy</a> ·
+      <a href="${escapeHtml(baseUrl)}/legal/terms">Terms</a>
+    </nav>
   </div>
 </footer>
 </div>
@@ -2235,6 +2240,9 @@ function renderFleetPage(baseUrl: string): string {
   .fleet-list li { padding: .25rem 0; }
   .fleet-list a { text-decoration-thickness: 1px; text-underline-offset: 3px; }
   .fleet-footnote { margin-top: 2.5rem; color: #849389; font-size: .88rem; }
+  .fleet-footer { border-top: 1px solid #26352c; max-width: 1040px; margin: 0 auto; padding: 2rem 1.25rem; color: #849389; font-size: .88rem; }
+  .fleet-footer p { margin: 0 0 .65rem; color: inherit; }
+  .fleet-footer nav { display: flex; flex-wrap: wrap; gap: .35rem; }
   :focus-visible { outline: 2px solid #91e7b5; outline-offset: 3px; }
   @media (max-width: 600px) {
     .fleet-nav { padding: 0 1rem; }
@@ -2341,6 +2349,15 @@ Authorization: Bearer pm_YOUR_API_KEY
 </ul>
 <p class="fleet-footnote">Interactive fleet dashboard: <a href="${escapeHtml(baseUrl)}/fleet">${escapeHtml(baseUrl)}/fleet</a> — enter a wallet prefix or fleet slug to load live per-agent coherence data.</p>
 </main>
+<footer class="fleet-footer">
+  <p>&copy; ${new Date().getFullYear()} Prove Before Act. All rights reserved.</p>
+  <p>Powered by <a href="https://multiversx.com">MultiversX</a></p>
+  <nav aria-label="Legal">
+    <a href="${escapeHtml(baseUrl)}/legal/mentions">Legal notices</a> ·
+    <a href="${escapeHtml(baseUrl)}/legal/privacy">Privacy policy</a> ·
+    <a href="${escapeHtml(baseUrl)}/legal/terms">Terms</a>
+  </nav>
+</footer>
 </div>
 </body></html>`;
 }
