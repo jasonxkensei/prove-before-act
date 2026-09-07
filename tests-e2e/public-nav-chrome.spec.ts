@@ -308,6 +308,32 @@ test.describe("public-site chrome — exact Tab count to More button", () => {
 
 // ── 4. Mobile viewport — primary action and language link accessible ─────────
 
+// This test pins the first mobile-only primary action so that a skip link,
+// banner, or other future header element cannot silently change keyboard order.
+//
+// Current focus order on a 390 px viewport:
+//   Tab 1 → Skip to content link
+//   Tab 2 → logo anchor                 (link-logo-home)
+//   Tab 3 → Start free CTA              (link-nav-start-free-mobile)
+//
+// If this test fails after a deliberate header change, update the constant and
+// the comment above to reflect the new order, then re-verify keyboard UX by
+// hand before committing.
+const EXPECTED_TABS_TO_MOBILE_START_FREE = 3;
+
+/** Returns the number of Tab presses needed to focus the mobile Start free CTA,
+ * or -1 when the element is not reached within `limit` presses. */
+async function countTabsToMobileStartFree(page: Page, limit = 20): Promise<number> {
+  for (let count = 1; count <= limit; count++) {
+    await page.keyboard.press("Tab");
+    const active = await page.evaluate(() =>
+      document.activeElement?.getAttribute("data-testid"),
+    );
+    if (active === "link-nav-start-free-mobile") return count;
+  }
+  return -1;
+}
+
 test.describe("public-site chrome — mobile viewport", () => {
   test.use({ viewport: { width: 390, height: 844 } }); // iPhone 14
 
@@ -317,6 +343,24 @@ test.describe("public-site chrome — mobile viewport", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/standard");
   });
+
+  test(
+    `mobile Start free CTA is reached in exactly ${EXPECTED_TABS_TO_MOBILE_START_FREE} Tab presses from document start`,
+    async ({ page }) => {
+      await expect(page.getByTestId("link-nav-start-free-mobile")).toBeVisible();
+      const count = await countTabsToMobileStartFree(page);
+      expect(
+        count,
+        `Expected exactly ${EXPECTED_TABS_TO_MOBILE_START_FREE} Tab presses to reach ` +
+          `link-nav-start-free-mobile but got ${count === -1 ? "not found within 20 presses" : count}. ` +
+          `A focusable element was likely added or removed before the mobile CTA in ` +
+          `client/src/components/public-site-chrome.tsx. ` +
+          `Update EXPECTED_TABS_TO_MOBILE_START_FREE in tests-e2e/public-nav-chrome.spec.ts ` +
+          `to match the new count (currently ${EXPECTED_TABS_TO_MOBILE_START_FREE}) and ` +
+          `verify the mobile keyboard focus order is still correct before committing.`,
+      ).toBe(EXPECTED_TABS_TO_MOBILE_START_FREE);
+    },
+  );
 
   test("mobile Start free CTA is visible", async ({ page }) => {
     const link = page.getByTestId("link-nav-start-free-mobile");
