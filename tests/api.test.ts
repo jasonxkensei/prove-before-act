@@ -66,6 +66,9 @@ describe("Prove Before Act API", () => {
       const text = await res.text();
       expect(text).toContain("urlset");
       expect(text).toContain("<?xml");
+      expect(text).toMatch(
+        /<loc>https?:\/\/[^<]+\/standard<\/loc>\s*<changefreq>monthly<\/changefreq>\s*<priority>0\.9<\/priority>/,
+      );
     });
 
     it("GET /.well-known/mcp.json should return MCP manifest", async () => {
