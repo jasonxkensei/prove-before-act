@@ -381,7 +381,7 @@ function RateLimitActivityCard({ data, isError }: { data: RateLimitStats | undef
                 </table>
               </div>
               <p className="mt-3 text-xs text-muted-foreground">
-                Showing top {data.top_n_per_namespace} per namespace · auto-refreshes every 30s · as of {new Date(data.generated_at).toLocaleTimeString()}
+                Showing top {data.top_n_per_namespace} per namespace · as of {new Date(data.generated_at).toLocaleTimeString()}
               </p>
             </>
           )}
@@ -456,7 +456,7 @@ function TrafficSourcesCard({ data }: { data: TrafficSources | undefined }) {
                 </table>
               </div>
               <p className="mt-3 text-xs text-muted-foreground">
-                Top {rows.length} referrers · last {data.window_days} days · auto-refreshes every 60s · as of {new Date(data.generated_at).toLocaleTimeString()}
+                Top {rows.length} referrers · last {data.window_days} days · as of {new Date(data.generated_at).toLocaleTimeString()}
               </p>
             </>
           )}
@@ -549,7 +549,7 @@ function UtmCampaignCard({ data }: { data: UtmStats | undefined }) {
                 </table>
               </div>
               <p className="mt-3 text-xs text-muted-foreground">
-                Top {rows.length} campaigns · auto-refreshes every 60s · as of {new Date(data.generated_at).toLocaleTimeString()}
+                Top {rows.length} campaigns · as of {new Date(data.generated_at).toLocaleTimeString()}
               </p>
             </>
           )}
@@ -1191,7 +1191,7 @@ function ProposedViolationsCard({ data, isAdmin }: { data: ProposedViolationsDat
                 </table>
               </div>
               <p className="mt-3 text-xs text-muted-foreground">
-                Sorted oldest-first · confirm applies a trust penalty · reject marks as false positive · auto-refreshes every 30s
+                Sorted oldest-first · confirm applies a trust penalty · reject marks as false positive
               </p>
             </>
           )}
@@ -1223,12 +1223,10 @@ export default function AdminDashboard() {
 
   const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useQuery<PublicStats>({
     queryKey: ["/api/stats"],
-    refetchInterval: 30000,
   });
 
-  const { data: health, isLoading: healthLoading } = useQuery<HealthData>({
+  const { data: health, isLoading: healthLoading, refetch: refetchHealth } = useQuery<HealthData>({
     queryKey: ["/api/health"],
-    refetchInterval: 15000,
   });
 
   const { data: authData } = useQuery<{ isAdmin?: boolean }>({
@@ -1238,44 +1236,38 @@ export default function AdminDashboard() {
 
   const isAdmin = isAuthenticated && !!authData?.isAdmin;
 
-  const { data: trafficSources } = useQuery<TrafficSources>({
+  const { data: trafficSources, refetch: refetchTrafficSources } = useQuery<TrafficSources>({
     queryKey: ["/api/admin/traffic-sources"],
-    refetchInterval: 60000,
     retry: false,
     enabled: isAdmin,
   });
 
-  const { data: utmStats } = useQuery<UtmStats>({
+  const { data: utmStats, refetch: refetchUtmStats } = useQuery<UtmStats>({
     queryKey: ["/api/admin/utm-stats"],
-    refetchInterval: 60000,
     retry: false,
     enabled: isAdmin,
   });
 
-  const { data: adminStats } = useQuery<AdminStats>({
+  const { data: adminStats, refetch: refetchAdminStats } = useQuery<AdminStats>({
     queryKey: ["/api/admin/stats"],
-    refetchInterval: 30000,
     retry: false,
     enabled: isAdmin,
   });
 
   const { data: conversionFunnel, refetch: refetchConversionFunnel } = useQuery<ConversionFunnelData>({
     queryKey: ["/api/admin/conversion-funnel"],
-    refetchInterval: 30000,
     retry: false,
     enabled: isAdmin,
   });
 
-  const { data: rateLimitStats, isError: rateLimitError } = useQuery<RateLimitStats>({
+  const { data: rateLimitStats, isError: rateLimitError, refetch: refetchRateLimitStats } = useQuery<RateLimitStats>({
     queryKey: ["/api/admin/rate-limit-stats?top=10"],
-    refetchInterval: 30000,
     retry: false,
     enabled: isAdmin,
   });
 
-  const { data: proposedViolations } = useQuery<ProposedViolationsData>({
+  const { data: proposedViolations, refetch: refetchProposedViolations } = useQuery<ProposedViolationsData>({
     queryKey: ["/api/admin/violations/proposed"],
-    refetchInterval: 30000,
     retry: false,
     enabled: isAdmin,
   });
@@ -1321,8 +1313,16 @@ export default function AdminDashboard() {
             )}
             <Button
               onClick={() => {
-                refetchStats();
-                refetchConversionFunnel();
+                void Promise.all([
+                  refetchStats(),
+                  refetchHealth(),
+                  refetchTrafficSources(),
+                  refetchUtmStats(),
+                  refetchAdminStats(),
+                  refetchConversionFunnel(),
+                  refetchRateLimitStats(),
+                  refetchProposedViolations(),
+                ]);
               }}
               data-testid="button-refresh-stats"
             >
