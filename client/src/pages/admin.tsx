@@ -1221,11 +1221,11 @@ function TrendIndicator({ current, previous }: { current: number; previous: numb
 export default function AdminDashboard() {
   const { isAuthenticated } = useWalletAuth();
 
-  const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useQuery<PublicStats>({
+  const { data: stats, isLoading: statsLoading } = useQuery<PublicStats>({
     queryKey: ["/api/stats"],
   });
 
-  const { data: health, isLoading: healthLoading, refetch: refetchHealth } = useQuery<HealthData>({
+  const { data: health, isLoading: healthLoading } = useQuery<HealthData>({
     queryKey: ["/api/health"],
   });
 
@@ -1236,37 +1236,37 @@ export default function AdminDashboard() {
 
   const isAdmin = isAuthenticated && !!authData?.isAdmin;
 
-  const { data: trafficSources, refetch: refetchTrafficSources } = useQuery<TrafficSources>({
+  const { data: trafficSources } = useQuery<TrafficSources>({
     queryKey: ["/api/admin/traffic-sources"],
     retry: false,
     enabled: isAdmin,
   });
 
-  const { data: utmStats, refetch: refetchUtmStats } = useQuery<UtmStats>({
+  const { data: utmStats } = useQuery<UtmStats>({
     queryKey: ["/api/admin/utm-stats"],
     retry: false,
     enabled: isAdmin,
   });
 
-  const { data: adminStats, refetch: refetchAdminStats } = useQuery<AdminStats>({
+  const { data: adminStats } = useQuery<AdminStats>({
     queryKey: ["/api/admin/stats"],
     retry: false,
     enabled: isAdmin,
   });
 
-  const { data: conversionFunnel, refetch: refetchConversionFunnel } = useQuery<ConversionFunnelData>({
+  const { data: conversionFunnel } = useQuery<ConversionFunnelData>({
     queryKey: ["/api/admin/conversion-funnel"],
     retry: false,
     enabled: isAdmin,
   });
 
-  const { data: rateLimitStats, isError: rateLimitError, refetch: refetchRateLimitStats } = useQuery<RateLimitStats>({
+  const { data: rateLimitStats, isError: rateLimitError } = useQuery<RateLimitStats>({
     queryKey: ["/api/admin/rate-limit-stats?top=10"],
     retry: false,
     enabled: isAdmin,
   });
 
-  const { data: proposedViolations, refetch: refetchProposedViolations } = useQuery<ProposedViolationsData>({
+  const { data: proposedViolations } = useQuery<ProposedViolationsData>({
     queryKey: ["/api/admin/violations/proposed"],
     retry: false,
     enabled: isAdmin,
@@ -1311,24 +1311,6 @@ export default function AdminDashboard() {
                 </span>
               </div>
             )}
-            <Button
-              onClick={() => {
-                void Promise.all([
-                  refetchStats(),
-                  refetchHealth(),
-                  refetchTrafficSources(),
-                  refetchUtmStats(),
-                  refetchAdminStats(),
-                  refetchConversionFunnel(),
-                  refetchRateLimitStats(),
-                  refetchProposedViolations(),
-                ]);
-              }}
-              data-testid="button-refresh-stats"
-            >
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Refresh data
-            </Button>
           </div>
         </header>
 

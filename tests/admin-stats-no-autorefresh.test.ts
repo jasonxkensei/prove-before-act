@@ -13,15 +13,8 @@ describe("admin statistics refresh behavior", () => {
     expect(adminPage).not.toContain("auto-refreshes every");
   });
 
-  it("keeps one explicit manual refresh action for the displayed data", () => {
-    expect(adminPage).toContain('data-testid="button-refresh-stats"');
-    expect(adminPage).toMatch(/refetchStats\(\)/);
-    expect(adminPage).toMatch(/refetchHealth\(\)/);
-    expect(adminPage).toMatch(/refetchTrafficSources\(\)/);
-    expect(adminPage).toMatch(/refetchUtmStats\(\)/);
-    expect(adminPage).toMatch(/refetchAdminStats\(\)/);
-    expect(adminPage).toMatch(/refetchConversionFunnel\(\)/);
-    expect(adminPage).toMatch(/refetchRateLimitStats\(\)/);
-    expect(adminPage).toMatch(/refetchProposedViolations\(\)/);
+  it("does not show a manual refresh control on the stats page", () => {
+    expect(adminPage).not.toContain('data-testid="button-refresh-stats"');
+    expect(adminPage).not.toContain("Refresh data");
   });
 });
