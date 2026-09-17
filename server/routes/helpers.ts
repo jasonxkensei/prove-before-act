@@ -85,6 +85,28 @@ export async function tryDisplaceAcpReservation(
 
 export const TRIAL_QUOTA = 10;
 
+export function buildAgentTrialOnboarding() {
+  return {
+    message: `No API key? Register in 1 call and get ${TRIAL_QUOTA} free proofs — no wallet, no credit card.`,
+    trial: {
+      free_proofs: TRIAL_QUOTA,
+      wallet_required: false,
+      credit_card_required: false,
+    },
+    mcp: {
+      endpoint: "/mcp",
+      tool: "register_trial",
+      arguments: { agent_name: "my-agent" },
+    },
+    rest: {
+      method: "POST",
+      endpoint: "/api/agent/register",
+      body: { agent_name: "my-agent" },
+    },
+    after_registration: "Use the returned api_key as: Authorization: Bearer <api_key>",
+  };
+}
+
 /**
  * Extract the real client IP from the request.
  *

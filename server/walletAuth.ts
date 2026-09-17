@@ -1,4 +1,5 @@
 import { RequestHandler } from "express";
+import { buildAgentTrialOnboarding } from "./routes/helpers";
 
 export interface WalletSession {
   walletAddress: string;
@@ -6,7 +7,11 @@ export interface WalletSession {
 
 export const isWalletAuthenticated: RequestHandler = (req: any, res, next) => {
   if (!req.session || !req.session.walletAddress) {
-    return res.status(401).json({ message: "Unauthorized" });
+    return res.status(401).json({
+      error: "AUTH_REQUIRED",
+      message: "No wallet session. Agents can register without a wallet or API key.",
+      agent_onboarding: buildAgentTrialOnboarding(),
+    });
   }
   req.walletAddress = req.session.walletAddress;
   next();

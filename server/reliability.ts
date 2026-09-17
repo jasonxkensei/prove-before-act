@@ -7,7 +7,7 @@ import { isMX8004Configured, MX8004_LOW_BALANCE_EGLD } from "./mx8004";
 import { isMultiversXConfigured } from "./blockchain";
 import { execSync } from "child_process";
 import { logger } from "./logger";
-import { getClientIp } from "./routes/helpers";
+import { buildAgentTrialOnboarding, getClientIp } from "./routes/helpers";
 import { Sentry } from "./instrument";
 
 // SECURITY: All IP-based rate limiters MUST key on getClientIp() rather than
@@ -478,6 +478,7 @@ export async function healthCheck(_req: Request, res: Response) {
     },
     transactions: metrics.transactions,
     mx8004_queue: metrics.mx8004,
+    agent_onboarding: buildAgentTrialOnboarding(),
   };
 
   healthCache = { body, status: httpStatus, cachedAt: Date.now() };
