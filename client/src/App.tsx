@@ -39,6 +39,7 @@ const FleetOverviewPage = lazy(() => import("@/pages/fleet-overview"));
 const JasonPage = lazy(() => import("@/pages/jason"));
 const StandardPage = lazy(() => import("@/pages/standard"));
 const LearnPage = lazy(() => import("@/pages/learn"));
+const CreditsPage = lazy(() => import("@/pages/credits"));
 
 function Router() {
   const { isAuthenticated, isLoading } = useWalletAuth();
@@ -107,6 +108,7 @@ function Router() {
            <Route path="/dashboard"><Redirect to="/" /></Route>
            <Route path="/certify"><Redirect to="/" /></Route>
            <Route path="/settings"><Redirect to="/" /></Route>
+            <Route path="/credits"><Redirect to="/" /></Route>
            <Route path="/fleet/overview"><Redirect to="/" /></Route>
           {/* /stats shows public platform metrics (unauthenticated /api/stats endpoint).
               Accessible without login — admin-only sections are protected server-side via
@@ -129,6 +131,7 @@ function Router() {
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/certify" component={Certify} />
         <Route path="/settings" component={Settings} />
+        <Route path="/credits" component={CreditsPage} />
         <Route path="/stats" component={AdminDashboard} />
         <Route path="/admin" component={AdminDashboard} />
         <Route path="/proof/:id" component={ProofPage} />

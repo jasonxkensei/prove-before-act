@@ -5,7 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Shield, Upload, FileText, ExternalLink, Download, Copy, LogOut, Settings as SettingsIcon, Activity, Check, ArrowRight, X, Trophy, Code2 } from "lucide-react";
+import { Shield, Upload, FileText, ExternalLink, Download, Copy, LogOut, Settings as SettingsIcon, Activity, Check, ArrowRight, X, Trophy, Code2, CreditCard } from "lucide-react";
 import { formatHash, copyToClipboard } from "@/lib/hashUtils";
 import { format } from "date-fns";
 import { Link } from "wouter";
@@ -371,6 +371,12 @@ export default function Dashboard() {
               Certify a file
             </Link>
           </Button>
+           <Button asChild variant="outline" size="lg" className="w-full sm:w-auto" data-testid="button-buy-credits">
+             <Link href="/credits">
+               <CreditCard className="mr-2 h-5 w-5" />
+               Buy credits
+             </Link>
+           </Button>
          </section>
 
         {/* API Keys Section */}

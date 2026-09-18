@@ -1837,7 +1837,9 @@ Content-Type: application/json
           <li>Business: 10,000 certs / $${(priceUsd * 10000).toFixed(2)} ($${priceUsd.toFixed(2)}/cert)</li>
         </ul>
       </li>
-      <li>Payment: API key (Authorization: Bearer pm_...) or x402 (USDC on Base, no account)</li>
+      <li>Pack payment options: hosted Stripe Checkout (additional option, useful for non-crypto buyers including the Chinese market) or USDC on Base.</li>
+      <li>Stripe flow: POST /api/credits/stripe/checkout → open checkout_url → GET /api/credits/stripe/status/{session_id}. Credits are granted only by the signed Stripe webhook.</li>
+      <li>Pay-per-proof: x402 (USDC on Base, no account). ACP/EGLD remains available for agent commerce.</li>
     </ul>
   </section>
 

@@ -540,6 +540,63 @@ Discover available products for AI agent purchase.
 
 ---
 
+## Stripe Checkout for prepaid credit packs
+
+Stripe is an additional payment option for Starter, Pro, and Business packs. It
+does not replace USDC/Base, x402, ACP, or EGLD. Pack prices are calculated from
+the live certification rate at checkout time.
+
+### POST /api/credits/stripe/checkout
+
+Create a hosted, one-time Stripe Checkout Session.
+
+**Auth:** wallet session or API key Bearer token.
+
+```bash
+curl -X POST https://provebeforeact.com/api/credits/stripe/checkout \
+  -H "Authorization: Bearer pm_your_key" \
+  -H "Content-Type: application/json" \
+  -d '{"package_id":"starter"}'
+```
+
+```json
+{
+  "status": "checkout_created",
+  "checkout_url": "https://checkout.stripe.com/c/pay/cs_...",
+  "session_id": "cs_...",
+  "order_id": "uuid",
+  "package": { "id": "starter", "certs": 100 },
+  "payment": { "provider": "stripe", "currency": "usd", "amount": "1.00" }
+}
+```
+
+Open `checkout_url` to pay. The response locks the current live price into the
+order. If Stripe is unavailable, the endpoint returns `503
+STRIPE_CHECKOUT_UNAVAILABLE`; the crypto payment rails remain operational.
+
+### GET /api/credits/stripe/status/{session_id}
+
+Returns `pending` until the signed Stripe webhook is received, then `paid` with
+the updated `credit_balance`. Authentication must identify the order owner.
+
+### Fulfillment and retries
+
+`POST /api/webhooks/stripe` accepts Stripe webhooks only. It requires the
+`Stripe-Signature` header and the untouched raw request body. There is no user
+Authorization header on this endpoint.
+
+Only paid `checkout.session.completed` and
+`checkout.session.async_payment_succeeded` events can fulfill an order. Package,
+owner, currency, amount, internal order ID, and Checkout Session ID are verified
+against the server-side order. The `pending → paid` transition, purchase ledger
+entry, and balance increment occur in one database transaction. Duplicate or
+concurrent webhook deliveries therefore do not add credits twice.
+
+The browser success URL never grants credits. If a customer returns before the
+webhook arrives, poll the status endpoint until it reports `paid`.
+
+---
+
 ### POST /api/acp/checkout
 
 Start an ACP checkout session. Creates a payment request with a 30-minute expiry.

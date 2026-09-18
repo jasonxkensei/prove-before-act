@@ -580,15 +580,36 @@ assert hmac.compare_digest(expected, request.headers["X-ProveBeforeAct-Signature
     id: "credits",
     title: "Credits & Payments",
     icon: CreditCard,
-    description: "Prepaid credits and USDC on Base payment flow",
+    description: "Prepaid credits via Stripe Checkout or USDC on Base",
     endpoints: [
       {
         method: "GET",
         path: "/api/credits/packages",
         auth: "None",
         description: "List available prepaid proof packages with pricing.",
-        response: `{ "packages": [{ "id": "pack-100", "certs": 100, "price_usdc": "5.00" }, ...], "payment": { "network": "eip155:8453", "asset": "USDC" } }`,
+        response: `{ "packages": [{ "id": "starter", "certs": 100, "price_usdc": "..." }, ...], "payment_methods": [{ "provider": "stripe" }, { "provider": "usdc_base" }] }`,
         curl: `curl ${BASE}/api/credits/packages`,
+      },
+      {
+        method: "POST",
+        path: "/api/credits/stripe/checkout",
+        auth: "Wallet session or Bearer pm_xxx",
+        description: "Create a hosted Stripe Checkout Session for a pack. Stripe is an additional option; USDC/Base remains available.",
+        body: { package_id: "string (required: starter, pro, or business)" },
+        response: `{ "status": "checkout_created", "checkout_url": "https://checkout.stripe.com/...", "session_id": "cs_...", "fulfillment": "Credits are added only after Stripe's signed payment webhook confirms payment." }`,
+        curl: `curl -X POST ${BASE}/api/credits/stripe/checkout \\
+  -H "Authorization: Bearer pm_xxx" \\
+  -H "Content-Type: application/json" \\
+  -d '{"package_id": "starter"}'`,
+      },
+      {
+        method: "GET",
+        path: "/api/credits/stripe/status/:sessionId",
+        auth: "Wallet session or Bearer pm_xxx",
+        description: "Read checkout fulfillment status. A browser redirect never grants credits; only the signed Stripe webhook does.",
+        response: `{ "status": "paid", "packageId": "starter", "credits": 100, "credit_balance": 150 }`,
+        curl: `curl ${BASE}/api/credits/stripe/status/cs_test_... \\
+  -H "Authorization: Bearer pm_xxx"`,
       },
       {
         method: "POST",

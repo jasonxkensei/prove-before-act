@@ -18,6 +18,7 @@ import { startCoherenceDivergenceScheduler } from "./coherence-divergence";
 import { requestIdMiddleware, logger } from "./logger";
 import { x402PriceConfigWarning, x402NetworkConfigWarning } from "./routes/helpers";
 import { conversionOutcomeMiddleware } from "./conversion-telemetry";
+import { initializeStripe } from "./stripe";
 import { getCanonicalPublicUrl, isLegacyPublicHost } from "./publicOrigin";
 import {
   runDailyMaintenance,
@@ -235,6 +236,14 @@ app.use((req, res, next) => {
   // present. This idempotent migration is non-destructive and is mirrored in
   // shared/schema.ts for publish-time schema reconciliation.
   await migrateConversionEventsTable();
+  try {
+    await initializeStripe();
+  } catch (error) {
+    logger.error("Stripe initialization failed; non-Stripe payment rails remain available", {
+      component: "stripe",
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 
   server.listen({
     port,

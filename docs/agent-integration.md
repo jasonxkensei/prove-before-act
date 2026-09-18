@@ -11,6 +11,18 @@ Prove Before Act provides blockchain-anchored file certification on MultiversX. 
 
 Each certification costs a low flat rate (current price served at /api/pricing) and produces a permanent, publicly verifiable record on the MultiversX blockchain.
 
+## Prepaid credit packs: Stripe and USDC/Base
+
+API-key accounts can purchase Starter, Pro, and Business credit packs via hosted
+Stripe Checkout (`POST /api/credits/stripe/checkout`) or the existing USDC/Base
+purchase and confirmation flow. Stripe is an additional payment option; it does
+not replace x402, ACP, or EGLD.
+
+The Checkout response contains a `checkout_url` and `session_id`. Open the URL,
+then poll `GET /api/credits/stripe/status/{session_id}` until its status becomes
+`paid`. Only a signed Stripe webhook can grant credits; the browser return URL
+never changes an account balance.
+
 ### Accountability terminology
 
 **Prove Before Act is the accountability pattern for autonomous agents; xProof is its reference implementation.** Before executing, create and anchor a declared decision basis (WHY): the intended action, relevant context, and any authorization or policy basis needed for an audit. Do not submit private step-by-step reasoning or internal chain-of-thought. Existing API and SDK field names such as `why`, `why_proof_id`, and `XProofClient` remain unchanged for compatibility.

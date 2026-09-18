@@ -183,7 +183,7 @@ interface ConversionFunnelData {
   window_days: number;
   rows: Array<{
     date: string;
-    stage: "cta" | "registration" | "proof";
+    stage: "cta" | "registration" | "proof" | "purchase";
     outcome: "seen" | "clicked" | "started" | "success" | "failure";
     http_class: "0xx" | "2xx" | "3xx" | "4xx" | "5xx";
     traffic_segment: "human_browser" | "declared_agent" | "crawler_scanner" | "api_client";

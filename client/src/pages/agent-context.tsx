@@ -439,7 +439,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
             </ul>
           </div>
           <p className="text-xs text-muted-foreground">
-            <strong>Payment methods:</strong> EGLD on MultiversX (via ACP/wallet) or USDC on Base (via x402 — no account needed). Prepaid credits available via dashboard.
+            <strong>Payment methods:</strong> EGLD on MultiversX (via ACP/wallet), USDC on Base (via x402 — no account needed), or prepaid packs through Stripe Checkout or USDC/Base. Stripe is an additional option available from the dashboard.
           </p>
         </div>
       ),

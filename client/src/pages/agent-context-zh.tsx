@@ -1027,9 +1027,17 @@ print(f"交易已执行。存证链接: https://provebeforeact.com{outcome['veri
                 <div className="flex justify-between"><span>单次认证延迟</span><span className="font-mono text-foreground">~1–2秒（典型值）</span></div>
                 <div className="flex justify-between"><span>3文件批量</span><span className="font-mono text-foreground">~2秒（典型值）</span></div>
                 <div className="flex justify-between"><span>链上确认</span><span className="font-mono text-foreground">~6秒</span></div>
-                <div className="flex justify-between"><span>每次存证费用</span><span className="font-mono text-foreground">{priceStr} USDC（实时）</span></div>
+                <div className="flex justify-between"><span>每次存证费用</span><span className="font-mono text-foreground">{priceStr} USD（实时）</span></div>
               </div>
             </div>
+          </div>
+          <div className="rounded-md border bg-muted/30 p-3 space-y-2">
+            <p className="text-xs font-semibold">支付方式</p>
+            <p className="text-xs text-muted-foreground">
+              预付认证积分包可通过 Stripe 托管结账或 USDC/Base 购买。Stripe 是新增选项，
+              特别适合不使用加密货币的中国客户，不会取代 x402、ACP 或 EGLD。
+              只有签名验证通过的 Stripe webhook 才会增加积分，浏览器跳转不能增加积分。
+            </p>
           </div>
           <div className="rounded-md border bg-muted/30 p-3 space-y-2">
             <p className="text-xs font-semibold">智能体锚定的内容</p>

@@ -419,6 +419,32 @@ export const creditPurchases = pgTable("credit_purchases", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Stripe-hosted checkout orders for prepaid certification packs. Stripe remains
+// an additional payment rail; USDC/Base purchases continue to use
+// credit_purchase_intents above. Credits are granted only by a verified webhook.
+export const stripeCreditCheckouts = pgTable("stripe_credit_checkouts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  packageId: varchar("package_id").notNull(),
+  credits: integer("credits").notNull(),
+  amountUsdCents: integer("amount_usd_cents").notNull(),
+  currency: varchar("currency", { length: 3 }).default("usd").notNull(),
+  status: varchar("status", { length: 16 }).default("pending").notNull(),
+  stripeSessionId: varchar("stripe_session_id").unique(),
+  stripePaymentIntentId: varchar("stripe_payment_intent_id").unique(),
+  fulfilledAt: timestamp("fulfilled_at", { withTimezone: true }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("idx_stripe_credit_checkouts_user_created").on(table.userId, table.createdAt),
+  check("stripe_credit_checkouts_status_check", sql`status IN ('pending', 'paid', 'expired')`),
+  check("stripe_credit_checkouts_currency_check", sql`currency = 'usd'`),
+  check("stripe_credit_checkouts_amount_check", sql`amount_usd_cents > 0`),
+  check("stripe_credit_checkouts_credits_check", sql`credits > 0`),
+]);
+
+export type StripeCreditCheckout = typeof stripeCreditCheckouts.$inferSelect;
+
 // Privacy-safe, append-only conversion telemetry. This deliberately stores no
 // request body, credential, wallet address, cookie, raw IP, or full referrer.
 // The application only ever inserts these rows; no update/delete routes exist.
@@ -439,7 +465,7 @@ export const conversionEvents = pgTable("conversion_events", {
   index("idx_conversion_events_day_segment").on(table.createdAt, table.trafficSegment),
   index("idx_conversion_events_day_http").on(table.createdAt, table.httpClass),
   index("idx_conversion_events_ip_time").on(table.ipHash, table.createdAt),
-  check("conversion_events_stage_check", sql`stage IN ('cta', 'registration', 'proof')`),
+  check("conversion_events_stage_check", sql`stage IN ('cta', 'registration', 'proof', 'purchase')`),
   check("conversion_events_outcome_check", sql`outcome IN ('seen', 'clicked', 'started', 'success', 'failure')`),
   check("conversion_events_http_class_check", sql`http_class IN ('0xx', '2xx', '3xx', '4xx', '5xx')`),
   check("conversion_events_http_status_check", sql`http_status IS NULL OR http_status BETWEEN 100 AND 599`),

@@ -256,6 +256,17 @@ When a proof is anchored on-chain, Prove Before Act sends a POST to your `webhoo
 
 Generate API keys from the [Settings](https://provebeforeact.com/settings) page after connecting your wallet. Keys use the `pm_` prefix and support per-key rate limiting.
 
+### Prepaid packs: Stripe or USDC
+
+Starter, Pro, and Business certification packs can be purchased through hosted
+Stripe Checkout with `POST /api/credits/stripe/checkout`. This is an additional
+payment option, particularly useful for buyers who do not use crypto. The existing
+USDC/Base flow (`/api/credits/purchase` then `/api/credits/confirm`) remains available.
+
+Stripe credits are granted only after the signed Stripe webhook confirms payment;
+the browser success redirect cannot add credits. See
+[`docs/api-reference.md`](docs/api-reference.md#stripe-checkout-for-prepaid-credit-packs).
+
 ---
 
 ## For Agents

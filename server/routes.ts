@@ -29,6 +29,7 @@ import { registerCoherenceRoutes } from "./routes/coherence";
 import { registerFleetsRoutes } from "./routes/fleets";
 import { registerFleetOverviewRoutes } from "./routes/fleet-overview";
 import { registerConversionRoutes } from "./routes/conversion";
+import { registerStripeCreditsRoutes } from "./routes/stripe-credits";
 
 const recentVisits = new Map<string, number>();
 setInterval(() => {
@@ -111,6 +112,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerPricingRoutes(app);
   registerKeysRoutes(app);
   registerCreditsRoutes(app);
+  registerStripeCreditsRoutes(app);
   registerAgentsRoutes(app);
   registerProofWriteRoutes(app);
   app.use("/api/acp", validateApiKey);

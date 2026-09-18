@@ -2393,7 +2393,7 @@ The badge links to the MultiversX Explorer transaction for on-chain verification
 Certified agents can prove originality, timestamp, and integrity. Non-certified agents cannot.
 
 ## Pricing
-Flat $${priceUsd} per certification — no tiers, no promo. Prepaid packs: 100/$${(priceUsd * 100).toFixed(0)}, 1,000/$${(priceUsd * 1000).toFixed(0)}, 10,000/$${(priceUsd * 10000).toFixed(0)} USDC on Base. Current pricing: https://provebeforeact.com/api/pricing
+Flat $${priceUsd} per certification — no tiers, no promo. Prepaid packs: 100/$${(priceUsd * 100).toFixed(0)}, 1,000/$${(priceUsd * 1000).toFixed(0)}, 10,000/$${(priceUsd * 10000).toFixed(0)}. Buy packs with Stripe Checkout or USDC on Base; Stripe is an additional option and does not replace x402, ACP, or EGLD. Current pricing: https://provebeforeact.com/api/pricing
 
 ## Agent Context Document
 Dedicated document answering the 10 exact questions agents ask when evaluating Prove Before Act (x402 flow, latency, retry policy, cost per 1000 anchors, comparison vs Arweave/Ceramic/Sign Protocol, MCP integration, 4W audit trail, privacy risks, fleet monitoring, Prove Before Act workflow):
@@ -2687,7 +2687,7 @@ Include \`webhook_url\` in your request to receive a POST callback when the proo
 - Authenticated endpoints: /api/proof, /api/acp/checkout, /api/acp/confirm
 
 ## Pricing
-Flat $${priceUsd} per certification — no tiers, no promo. Prepaid packs: 100/$${(priceUsd * 100).toFixed(0)}, 1,000/$${(priceUsd * 1000).toFixed(0)}, 10,000/$${(priceUsd * 10000).toFixed(0)} USDC on Base. Current pricing: ${baseUrl}/api/pricing
+Flat $${priceUsd} per certification — no tiers, no promo. Prepaid packs: 100/$${(priceUsd * 100).toFixed(0)}, 1,000/$${(priceUsd * 1000).toFixed(0)}, 10,000/$${(priceUsd * 10000).toFixed(0)}. Buy packs with Stripe Checkout or USDC on Base. Stripe is an additional option, especially useful for non-crypto buyers. Current pricing: ${baseUrl}/api/pricing
 
 ## Why certify?
 Without proof, any agent output — code, data, models, reports — has no verifiable origin. Prove Before Act creates immutable, on-chain evidence of what was produced, by whom, and when. Certified agents can prove originality and integrity. Non-certified agents cannot.
@@ -2925,7 +2925,8 @@ Prove Before Act supports the x402 payment protocol as an alternative to API key
 
 ### Pricing
 - Flat $${priceUsd} per certification in USDC — no tiers, no promo
-- Prepaid packs: 100/$${(priceUsd * 100).toFixed(0)}, 1,000/$${(priceUsd * 1000).toFixed(0)}, 10,000/$${(priceUsd * 10000).toFixed(0)} USDC on Base
+- Prepaid packs: 100/$${(priceUsd * 100).toFixed(0)}, 1,000/$${(priceUsd * 1000).toFixed(0)}, 10,000/$${(priceUsd * 10000).toFixed(0)} via Stripe Checkout or USDC on Base
+- Stripe pack flow: POST /api/credits/stripe/checkout → open checkout_url → poll GET /api/credits/stripe/status/{session_id}; only the signed Stripe webhook grants credits
 - Current pricing: ${baseUrl}/api/pricing
 - Network: Base (eip155:8453) for mainnet, Base Sepolia (eip155:84532) for testnet
 
@@ -4240,7 +4241,7 @@ export const xproofAuditPlugin: Plugin = {
       pricing: {
         current: `$${priceUsd} per certification`,
         model: "per-use",
-        payment: ["EGLD (MultiversX ACP)", "USDC on Base (x402)"],
+        payment: ["Stripe Checkout (prepaid packs)", "EGLD (MultiversX ACP)", "USDC on Base (x402 or prepaid packs)"],
       },
       protocols: {
         rest: `${baseUrl}/api/proof`,
@@ -4333,7 +4334,7 @@ export const xproofAuditPlugin: Plugin = {
         model: "per-use",
         amount: priceUsd.toString(),
         currency: "USD",
-        payment_methods: ["EGLD (MultiversX)", "USDC (Base via x402)"],
+        payment_methods: ["Stripe Checkout (prepaid packs)", "EGLD (MultiversX)", "USDC (Base via x402 or prepaid packs)"],
       },
       documentation: {
         agent_context: `${baseUrl}/agent-context.md`,

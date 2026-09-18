@@ -21,7 +21,7 @@ export const CTA_NAMES = [
   "leaderboard_register",
 ] as const;
 
-type ConversionStage = "cta" | "registration" | "proof";
+type ConversionStage = "cta" | "registration" | "proof" | "purchase";
 type ConversionOutcome = "seen" | "clicked" | "started" | "success" | "failure";
 
 const SCANNER_UA_PATTERNS = [
@@ -126,21 +126,31 @@ export function recordConversionEvent(
 // This must be mounted before body parsing, global API limiting, and request
 // timeouts so their early 4xx/429/5xx responses remain visible in the funnel.
 export function conversionOutcomeMiddleware(req: Request, res: Response, next: NextFunction) {
-  const stage = req.method === "POST" && req.path === "/api/agent/register"
+  const isPost = req.method === "POST";
+  const stage: ConversionStage | null = isPost && req.path === "/api/agent/register"
     ? "registration"
-    : req.method === "POST" && req.path === "/api/proof"
+    : isPost && req.path === "/api/proof"
       ? "proof"
-      : null;
+      : isPost && (
+        req.path === "/api/credits/stripe/checkout"
+        || req.path === "/api/credits/purchase"
+        || req.path === "/api/credits/confirm"
+      )
+        ? "purchase"
+        : null;
   if (!stage) return next();
+  const eventType = stage === "purchase"
+    ? `${req.path.split("/").filter(Boolean).slice(-2).join("_")}_request`
+    : `${stage}_request`;
 
   recordConversionEvent(req, {
-    eventType: `${stage}_request`,
+    eventType,
     stage,
     outcome: "started",
   });
   res.once("finish", () => {
     recordConversionEvent(req, {
-      eventType: `${stage}_request`,
+      eventType,
       stage,
       outcome: res.statusCode >= 200 && res.statusCode < 300 ? "success" : "failure",
       httpStatus: res.statusCode,

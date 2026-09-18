@@ -432,11 +432,17 @@ export async function migrateConversionEventsTable() {
         referrer_host VARCHAR(128),
         utm_source VARCHAR(128),
         created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
-        CONSTRAINT conversion_events_stage_check CHECK (stage IN ('cta', 'registration', 'proof')),
+        CONSTRAINT conversion_events_stage_check CHECK (stage IN ('cta', 'registration', 'proof', 'purchase')),
         CONSTRAINT conversion_events_outcome_check CHECK (outcome IN ('seen', 'clicked', 'started', 'success', 'failure')),
         CONSTRAINT conversion_events_http_class_check CHECK (http_class IN ('0xx', '2xx', '3xx', '4xx', '5xx')),
         CONSTRAINT conversion_events_http_status_check CHECK (http_status IS NULL OR http_status BETWEEN 100 AND 599)
       )
+    `);
+    // Existing deployments may still have the original three-stage constraint.
+    await pool.query(`
+      ALTER TABLE conversion_events DROP CONSTRAINT IF EXISTS conversion_events_stage_check;
+      ALTER TABLE conversion_events ADD CONSTRAINT conversion_events_stage_check
+        CHECK (stage IN ('cta', 'registration', 'proof', 'purchase'))
     `);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_conversion_events_day_funnel ON conversion_events (created_at, stage, outcome)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_conversion_events_day_segment ON conversion_events (created_at, traffic_segment)`);

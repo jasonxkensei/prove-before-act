@@ -256,8 +256,19 @@ curl -X POST https://provebeforeact.com/api/agent/register \
 |------|------|------|
 | 免费试用 | 免费 | 10次，无需钱包 |
 | 按需付费 | 当前实时价格（见 /api/pricing） | 预充积分，不限量 |
+| Stripe积分包 | 当前实时价格（见 /api/pricing） | Stripe托管结账，适合不使用加密货币的中国及国际客户 |
 | x402协议 | 当前实时价格（见 /api/pricing） | USDC on Base，无需账号 |
 | 批量API | 当前实时价格（见 /api/pricing） | 无批量溢价 |
+
+### 通过 Stripe 购买积分包
+
+Stripe 是新增的支付选项，不会取代 USDC/Base、x402、ACP 或 EGLD。使用 API
+密钥调用 `POST /api/credits/stripe/checkout`，请求体为
+`{"package_id":"starter"}`，然后打开返回的 `checkout_url`。
+
+支付完成后，只有经过签名验证的 Stripe webhook 才会增加积分；浏览器成功
+跳转本身不能增加积分。可调用
+`GET /api/credits/stripe/status/{session_id}` 查询到账状态。
 
 ---
 
