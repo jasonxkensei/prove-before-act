@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Shield, ArrowLeft, ExternalLink, Trophy, Award, BadgeCheck, Trash2, Plus, TrendingUp, Zap, Flame, Star, KeyRound, CheckCircle2, ChevronDown, LayoutDashboard } from "lucide-react";
+import { Shield, ArrowLeft, ExternalLink, Trophy, Award, BadgeCheck, Trash2, Plus, TrendingUp, Zap, Flame, Star, KeyRound, CheckCircle2, ChevronDown, LayoutDashboard, CreditCard } from "lucide-react";
 import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -354,6 +354,31 @@ export default function Settings() {
                   : "Not provided"}
               </p>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Billing and prepaid credits */}
+        <Card className="mb-6 border-primary/25 bg-primary/5 shadow-none" data-testid="card-billing">
+          <CardHeader className="border-b border-primary/15 pb-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <CreditCard className="h-5 w-5 text-primary" />
+                  Billing and credits
+                </CardTitle>
+                <CardDescription className="mt-1">
+                  Buy prepaid certification packs with Stripe. USDC on Base remains available for API purchases.
+                </CardDescription>
+              </div>
+              <Button asChild size="sm" data-testid="button-open-billing">
+                <Link href="/billing">View packs</Link>
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-4">
+            <p className="text-sm text-muted-foreground">
+              Stripe checkout is hosted securely and credits are added only after the signed payment confirmation is verified.
+            </p>
           </CardContent>
         </Card>
 
