@@ -368,7 +368,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
               <li>• 50个智能体 × 20次操作 × 30天 = <strong className="text-foreground">每月30,000次锚定</strong></li>
               <li>• 按{priceStr}/次计算 = <strong className="text-foreground">{perMonth30k}</strong></li>
               <li>• 每个智能体：<strong className="text-foreground">{formatLiveCost(600, "/月")}</strong> — 基于每个智能体每天20次操作的实时估算</li>
-              <li>• 批量模式（每次调用最多100个文件）：同等价格，减少API开销</li>
+              <li>• 批量模式（每次调用最多50个文件）：同等价格，减少API开销</li>
             </ul>
           </div>
           <p className="text-xs text-muted-foreground">
@@ -434,7 +434,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
       content: (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Prove Before Act在 <code className="font-mono bg-muted px-1 rounded text-xs">https://provebeforeact.com/mcp</code> 暴露原生MCP服务端，使用Streamable HTTP传输（POST）。可用工具：<code className="font-mono bg-muted px-1 rounded text-xs">certify_file</code>、<code className="font-mono bg-muted px-1 rounded text-xs">audit_agent_session</code>、<code className="font-mono bg-muted px-1 rounded text-xs">investigate_proof</code>、<code className="font-mono bg-muted px-1 rounded text-xs">register_trial</code>。
+             Prove Before Act在 <code className="font-mono bg-muted px-1 rounded text-xs">https://provebeforeact.com/mcp</code> 暴露原生MCP服务端，使用Streamable HTTP传输（POST）。核心工具包括：<code className="font-mono bg-muted px-1 rounded text-xs">register_trial</code>、<code className="font-mono bg-muted px-1 rounded text-xs">certify_file</code>、<code className="font-mono bg-muted px-1 rounded text-xs">verify_proof</code>、<code className="font-mono bg-muted px-1 rounded text-xs">audit_agent_session</code>、<code className="font-mono bg-muted px-1 rounded text-xs">investigate_proof</code>；请调用 <code className="font-mono bg-muted px-1 rounded text-xs">tools/list</code> 获取当前完整工具定义，此列表不是穷举。
           </p>
           <div className="rounded-md border border-primary/20 bg-primary/5 p-3 flex items-start gap-3">
             <Cpu className="h-4 w-4 text-primary shrink-0 mt-0.5" />
@@ -669,7 +669,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
             {[
               { label: "每日认证1000次", value: perDay1k, detail: `${priceStr} × 1000，实时费率` },
               { label: "每月认证30,000次", value: perMonth30k, detail: "50智能体 × 20次/天" },
-              { label: "单次批量上限", value: "100条", detail: "一次API调用最多100个哈希" },
+              { label: "单次批量上限", value: "50条", detail: "一次API调用最多50个哈希" },
             ].map((m) => (
               <div key={m.label} className="rounded-md border bg-muted/30 p-3 text-center">
                 <div className="text-xl font-bold text-primary mb-1">{m.value}</div>

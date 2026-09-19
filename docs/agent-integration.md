@@ -391,9 +391,16 @@ https://provebeforeact.com/.well-known/mcp.json
 ### Integration Steps
 
 1. Point your MCP-compatible agent to the Prove Before Act MCP manifest URL.
-2. The agent will discover available tools (certification, proof retrieval).
+2. The agent will call `tools/list` (or `discover_services`) to discover the
+   current tools. The core set includes `register_trial`, `certify_file`,
+   `verify_proof`, `audit_agent_session`, and `investigate_proof`.
 3. Configure authentication by providing your API key (`pm_...`) as a bearer token.
 4. The agent can then invoke Prove Before Act tools as part of its workflow.
+
+`register_trial` is the exception: it requires no Authorization header and
+returns a one-time `pm_` key with 10 free certifications. The full MCP tool
+catalog can change as capabilities are added, so clients should not hard-code
+an exhaustive list.
 
 The MCP manifest describes:
 

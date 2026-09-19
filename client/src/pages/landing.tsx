@@ -35,6 +35,13 @@ import { PublicSiteFooter, PublicSiteHeader } from "@/components/public-site-chr
 import { trackAgentCta, useAgentCtaExposure } from "@/lib/conversionTracking";
 import { trackEvent } from "@/lib/analytics";
 import {
+  clearStoredTrialKey,
+  markTrialKeyHandled,
+  readStoredTrialKey,
+  storeTrialKey,
+} from "@/lib/trial-key-storage";
+import { getSafeRedirectTo } from "@/lib/safe-redirect";
+import {
   Accordion,
   AccordionContent,
   AccordionItem,
@@ -167,6 +174,10 @@ function QuickStartCode({ onGetKey }: { onGetKey: () => void }) {
 
 export default function Landing() {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [loginRedirectTo, setLoginRedirectTo] = useState(() => {
+    const requestedPath = new URLSearchParams(window.location.search).get("returnTo") || undefined;
+    return getSafeRedirectTo(requestedPath);
+  });
   const { data: pricing } = useQuery<{
     current_price_usd: number;
     total_certifications: number;
@@ -180,6 +191,7 @@ export default function Landing() {
   const [trialAgentName, setTrialAgentName] = useState<string>("");
   const [copied, setCopied] = useState(false);
   const [trialError, setTrialError] = useState<string | null>(null);
+  const [trialKeyHandled, setTrialKeyHandled] = useState(false);
   const heroTrialCtaRef = useAgentCtaExposure<HTMLAnchorElement>("landing", "hero_free_trial");
   const heroScenariosRef = useAgentCtaExposure<HTMLDivElement>("landing", "hero_scenarios");
   const trialRegisterCtaRef = useAgentCtaExposure<HTMLButtonElement>("landing", "trial_register");
@@ -190,10 +202,37 @@ export default function Landing() {
   };
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const requestedPath = params.get("returnTo");
+    if (requestedPath && getSafeRedirectTo(requestedPath) === "/dashboard" && requestedPath !== "/dashboard") {
+      params.delete("returnTo");
+      const query = params.toString();
+      window.history.replaceState(
+        null,
+        "",
+        `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`,
+      );
+    }
     if (window.location.hash === "#free-trial") {
       scrollToFreeTrial();
     }
+    const storedTrial = readStoredTrialKey();
+    if (storedTrial) {
+      setTrialKey(storedTrial.apiKey);
+      setTrialAgentName(storedTrial.agentName);
+      setTrialKeyHandled(storedTrial.handled);
+    }
   }, []);
+
+  useEffect(() => {
+    if (!trialKey || trialKeyHandled) return;
+    const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "Your trial API key has not been copied or downloaded yet.";
+    };
+    window.addEventListener("beforeunload", warnBeforeLeaving);
+    return () => window.removeEventListener("beforeunload", warnBeforeLeaving);
+  }, [trialKey, trialKeyHandled]);
 
   const registerMutation = useMutation({
     mutationFn: async (name: string) => {
@@ -209,6 +248,8 @@ export default function Landing() {
     onSuccess: (data, name) => {
       setTrialKey(data.api_key);
       setTrialAgentName(name);
+      setTrialKeyHandled(false);
+      storeTrialKey(data.api_key, name);
       setTrialError(null);
       trackEvent("trial_registration_succeeded", { location: "landing" });
     },
@@ -230,14 +271,45 @@ export default function Landing() {
 
   const handleCopyKey = () => {
     if (!trialKey) return;
-    navigator.clipboard.writeText(trialKey);
-    trackEvent("trial_api_key_copied", { location: "landing" });
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    navigator.clipboard.writeText(trialKey).then(() => {
+      markTrialKeyHandled();
+      setTrialKeyHandled(true);
+      trackEvent("trial_api_key_copied", { location: "landing" });
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {
+      setTrialError("Copy failed. Please use the download button or copy the key manually.");
+    });
   };
 
-  const handleConnect = () => {
+  const handleDownloadKey = () => {
+    if (!trialKey) return;
+    const blob = new Blob([`${trialKey}\n`], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${trialAgentName || "prove-before-act"}-api-key.txt`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    markTrialKeyHandled();
+    setTrialKeyHandled(true);
+    trackEvent("trial_api_key_downloaded", { location: "landing" });
+  };
+
+  const handleClearTrialKey = () => {
+    clearStoredTrialKey();
+    setTrialKey(null);
+    setTrialAgentName("");
+    setTrialKeyHandled(false);
+    setProofFile(null);
+    setProofHash("");
+    setProofResult(null);
+    setProofError(null);
+  };
+
+  const handleConnect = (redirectTo = "/dashboard") => {
     trackEvent("wallet_login_opened", { location: "landing" });
+    setLoginRedirectTo(redirectTo);
     setIsLoginModalOpen(true);
   };
 
@@ -303,7 +375,7 @@ export default function Landing() {
         howItWorksHref="#how-it-works"
         primaryActionHref="#free-trial"
         primaryActionLabel="Prove a decision"
-        onConnect={handleConnect}
+        onConnect={() => handleConnect()}
       />
       {/* Hero — thesis and evidence case file */}
       <main id="main-content" className="min-w-0 max-w-full overflow-x-hidden">
@@ -361,15 +433,13 @@ export default function Landing() {
               </a>
             </Button>
             <Button
-              asChild
               size="lg"
               variant="outline"
               className="h-12 border-[#56635b] bg-transparent px-7 text-sm text-[#e8ebe5] hover:border-[#8ef2bd] hover:bg-transparent hover:text-[#8ef2bd]"
               data-testid="button-certify-file"
+              onClick={() => handleConnect("/certify")}
             >
-              <a href="/certify">
-                See how the loop works <ArrowRight className="ml-2 h-4 w-4" />
-              </a>
+              See how the loop works <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
             </div>
             <p className="mt-6 flex flex-wrap gap-3 font-mono text-[10px] text-[#79847b]">
@@ -572,6 +642,19 @@ export default function Landing() {
                     {copied ? <CheckCircle className="h-4 w-4 text-primary" /> : <Copy className="h-4 w-4" />}
                   </Button>
                 </div>
+                {!trialKeyHandled && (
+                  <p className="mb-3 text-left text-xs text-amber-300" role="status">
+                    Save this key now. It is shown only once and will not be recoverable after this browser tab is closed.
+                  </p>
+                )}
+                <div className="mb-5 flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" onClick={handleDownloadKey} data-testid="button-download-trial-key">
+                    Download key
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={handleClearTrialKey} data-testid="button-clear-trial-key">
+                    I saved it — hide key
+                  </Button>
+                </div>
                 <p className="text-sm text-muted-foreground mb-5">
                   Your key is ready — 10 free proofs for <strong>{trialAgentName}</strong>. Try one right now:
                 </p>
@@ -754,7 +837,7 @@ export default function Landing() {
                             <ArrowRight className="ml-1 h-3 w-3" />
                           </a>
                         </Button>
-                        <Button size="sm" variant="outline" onClick={handleConnect} data-testid="button-trial-connect-wallet">
+                        <Button size="sm" variant="outline" onClick={() => handleConnect()} data-testid="button-trial-connect-wallet">
                           <Wallet className="mr-1.5 h-3.5 w-3.5" />
                           Connect wallet
                         </Button>
@@ -772,7 +855,7 @@ export default function Landing() {
                       <ArrowRight className="ml-1 h-3 w-3" />
                     </a>
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={handleConnect} data-testid="button-trial-connect-wallet">
+                  <Button size="sm" variant="ghost" onClick={() => handleConnect()} data-testid="button-trial-connect-wallet">
                     <Wallet className="mr-2 h-3.5 w-3.5" />
                     Connect wallet
                   </Button>
@@ -827,7 +910,7 @@ export default function Landing() {
                   <span className="text-sm font-semibold">Web UI</span>
                 </div>
                 <p className="text-xs text-muted-foreground mb-3">Connect wallet, drag a file, get a proof. No code.</p>
-                <Button variant="outline" size="sm" onClick={handleConnect} data-testid="button-quickstart-connect">
+                <Button variant="outline" size="sm" onClick={() => handleConnect()} data-testid="button-quickstart-connect">
                   Connect wallet <ArrowRight className="ml-1 h-3 w-3" />
                 </Button>
               </div>
@@ -988,8 +1071,8 @@ for response in agent_responses:
                   <span className="text-sm font-bold">Multi-agent Orchestration</span>
                   <Badge variant="secondary" className="text-xs ml-auto">Fleet</Badge>
                 </div>
-                <p className="text-xs text-muted-foreground mb-3">One proof layer for 50+ agents. Batch up to 100 actions per call — cost per 1,000 anchors is calculated from the current live rate at <code>/api/pricing</code>.</p>
-                <pre className="rounded bg-muted/60 border border-border/40 p-3 text-xs font-mono leading-relaxed overflow-x-auto whitespace-pre">{`# Batch: up to 100 actions per call
+                <p className="text-xs text-muted-foreground mb-3">One proof layer for 50+ agents. Batch up to 50 actions per call — cost per 1,000 anchors is calculated from the current live rate at <code>/api/pricing</code>.</p>
+                <pre className="rounded bg-muted/60 border border-border/40 p-3 text-xs font-mono leading-relaxed overflow-x-auto whitespace-pre">{`# Batch: up to 50 actions per call
 proofs = xproof.certify_batch([
   {"file_hash": sha256(action1),
    "filename": "agent-01-trade.json"},
@@ -1230,7 +1313,7 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
                 <Button 
                   className="w-full" 
                   size="lg"
-                  onClick={handleConnect}
+                  onClick={() => handleConnect()}
                   data-testid="button-start-now"
                 >
                   Get started
@@ -1518,7 +1601,7 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
                 size="lg" 
                 variant="outline"
                 className="text-base h-12 px-8"
-                onClick={handleConnect}
+                onClick={() => handleConnect()}
                 data-testid="button-final-cta"
               >
                 <Shield className="mr-2 h-5 w-5" />
@@ -1533,6 +1616,7 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
       <WalletLoginModal 
         open={isLoginModalOpen} 
         onOpenChange={setIsLoginModalOpen} 
+        redirectTo={loginRedirectTo}
       />
     </div>
   );

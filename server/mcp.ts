@@ -1038,7 +1038,7 @@ export async function createMcpServer(ctx: McpContext) {
               search_terms: ["proof of existence", "blockchain certification", "audit trail", "decision provenance", "agent accountability", "file hash", "SHA-256 anchor"],
               discoverable_endpoints: [
                 { path: "POST /api/proof", description: "Certify any content — anchor SHA-256 hash on MultiversX with 4W provenance" },
-                { path: "POST /api/batch", description: "Batch certify up to 100 files in one transaction" },
+                { path: "POST /api/batch", description: "Batch certify up to 50 files in one transaction" },
                 { path: "POST /api/proof (investigate)", description: "4W incident investigation — reconstruct agent decision audit trail" },
               ],
               note: "Bazaar metadata (input/output schemas and examples) is included in Prove Before Act x402 responses. Check the live response before relying on catalog availability.",

@@ -20,3 +20,4 @@
 - [Drizzle composite FK introspection](drizzle-composite-fk-introspection.md) — stable 0.31 can churn composite FKs; use generated ownership keys when push idempotence matters
 - [Public route dual rendering](public-route-dual-rendering.md) — crawler prerenders can bypass React entirely; keep both representations aligned and test each delivery path
 - [Replit Stripe connection field names](replit-stripe-connection-fields.md) — current Stripe connector exposes `secret`, not the older `secret_key` field; managed webhook secrets are held by StripeSync
+- [One-time trial credentials](one-time-trial-credentials.md) — keep raw trial keys out of durable browser storage; allow tab-scoped recovery with explicit copy/download and graceful storage failure

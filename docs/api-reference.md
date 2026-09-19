@@ -293,7 +293,10 @@ curl -X POST https://provebeforeact.com/api/certifications \
 
 List all certifications for the authenticated user, ordered by creation date (newest first).
 
-**Auth:** Wallet session (required)
+**Auth:** Wallet session or `Authorization: Bearer pm_<api_key>` (required)
+
+The API-key form is scoped to the user who owns that key. A request without
+either credential returns `401`.
 
 **Response (200):**
 

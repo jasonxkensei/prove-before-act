@@ -295,7 +295,7 @@ Prove Before Act's Bazaar metadata is embedded in the \`extensions.bazaar\` fiel
 
 Discoverable endpoints:
 - \`POST ${baseUrl}/api/proof\` — single certification with 4W provenance
-- \`POST ${baseUrl}/api/batch\` — batch certification (up to 100 files)
+- \`POST ${baseUrl}/api/batch\` — batch certification (up to 50 files)
 
 ## 4W Audit Trail — Complete Example (One Shot)
 
@@ -2429,7 +2429,7 @@ How it works: Bazaar discovery metadata (input schema, output schema, examples, 
 
 Discoverable endpoints:
 - POST /api/proof — certify any SHA-256 hash on MultiversX with optional 4W provenance
-- POST /api/batch — certify up to 100 files in one transaction
+- POST /api/batch — certify up to 50 files in one transaction
 
 For agents with Bazaar MCP configured, add Prove Before Act MCP alongside it:
 \\\`\\\`\\\`json
@@ -4619,7 +4619,7 @@ Current price: **$${priceUsd} per certification**.
 | 10,000 anchors | $${(priceUsd * 10000).toFixed(0)} |
 | 50 agents × 20 actions/day × 30 days = 30,000 anchors/month | $${(priceUsd * 30000).toFixed(0)}/month |
 
-Flat $${priceUsd} per certification — no tiers, no volume discounts. Payment methods: EGLD on MultiversX (ACP/wallet) or USDC on Base (x402, no account needed). Batch endpoint (POST /api/batch, up to 100 files) reduces API overhead at same per-file price.
+Flat $${priceUsd} per certification — no tiers, no volume discounts. Payment methods: EGLD on MultiversX (ACP/wallet) or USDC on Base (x402, no account needed). Batch endpoint (POST /api/batch, up to 50 files) reduces API overhead at same per-file price.
 
 ---
 

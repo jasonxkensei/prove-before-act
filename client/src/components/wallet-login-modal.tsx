@@ -20,6 +20,7 @@ import { useLocation } from "wouter";
 import { queryClient } from "@/lib/queryClient";
 import { XPROOF_NATIVE_AUTH_TOKEN_KEY, handleLogout } from "@/lib/auth-storage";
 import { trackEvent } from "@/lib/analytics";
+import { getSafeRedirectTo } from "@/lib/safe-redirect";
 
 // Re-export so callers that import from this module keep working.
 export { XPROOF_NATIVE_AUTH_TOKEN_KEY, handleLogout };
@@ -115,7 +116,7 @@ export function WalletLoginModal({ open, onOpenChange, redirectTo }: WalletLogin
         });
 
         onOpenChange(false);
-        navigate(redirectTo || '/dashboard');
+         navigate(getSafeRedirectTo(redirectTo));
 
         return true;
       } else {

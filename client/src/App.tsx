@@ -41,6 +41,11 @@ const StandardPage = lazy(() => import("@/pages/standard"));
 const LearnPage = lazy(() => import("@/pages/learn"));
 const CreditsPage = lazy(() => import("@/pages/credits"));
 
+function ProtectedRouteRedirect() {
+  const requestedPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  return <Redirect to={`/?returnTo=${encodeURIComponent(requestedPath)}`} />;
+}
+
 function Router() {
   const { isAuthenticated, isLoading } = useWalletAuth();
 
@@ -98,6 +103,7 @@ function Router() {
           <Route path="/incident/:wallet/:proofId" component={IncidentReportPage} />
           <Route path="/agent-context" component={AgentContextPage} />
           <Route path="/agent-context/zh" component={AgentContextZhPage} />
+           <Route path="/agents/zh"><Redirect to="/agent-context/zh" /></Route>
           <Route path="/coherence" component={CoherencePage} />
            <Route path="/founder" component={JasonPage} />
           <Route path="/standard" component={StandardPage} />
@@ -105,12 +111,12 @@ function Router() {
            <Route path="/mcp"><Redirect to="/docs" /></Route>
           <Route path="/fleet" component={FleetPage} />
            <Route path="/fleets"><Redirect to="/fleet" /></Route>
-           <Route path="/dashboard"><Redirect to="/" /></Route>
-           <Route path="/certify"><Redirect to="/" /></Route>
-           <Route path="/settings"><Redirect to="/" /></Route>
-            <Route path="/credits"><Redirect to="/" /></Route>
-            <Route path="/billing"><Redirect to="/" /></Route>
-           <Route path="/fleet/overview"><Redirect to="/" /></Route>
+           <Route path="/dashboard" component={ProtectedRouteRedirect} />
+           <Route path="/certify" component={ProtectedRouteRedirect} />
+           <Route path="/settings" component={ProtectedRouteRedirect} />
+            <Route path="/credits" component={ProtectedRouteRedirect} />
+            <Route path="/billing" component={ProtectedRouteRedirect} />
+           <Route path="/fleet/overview" component={ProtectedRouteRedirect} />
           {/* /stats shows public platform metrics (unauthenticated /api/stats endpoint).
               Accessible without login — admin-only sections are protected server-side via
               requireAdmin on /api/admin/* routes and simply don't render for non-admins. */}
@@ -155,6 +161,7 @@ function Router() {
         <Route path="/incident/:wallet/:proofId" component={IncidentReportPage} />
         <Route path="/agent-context" component={AgentContextPage} />
         <Route path="/agent-context/zh" component={AgentContextZhPage} />
+         <Route path="/agents/zh"><Redirect to="/agent-context/zh" /></Route>
         <Route path="/coherence" component={CoherencePage} />
          <Route path="/founder" component={JasonPage} />
         <Route path="/standard" component={StandardPage} />

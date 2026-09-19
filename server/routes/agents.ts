@@ -320,7 +320,7 @@ export function registerAgentsRoutes(app: Express) {
           how_it_works: "Bazaar metadata (input/output schemas and pricing) is embedded in x402 payment responses from Prove Before Act. Confirm availability and pricing from the live response before a purchase.",
           discoverable_endpoints: [
             `POST ${baseUrl}/api/proof — single file/decision certification`,
-            `POST ${baseUrl}/api/batch — batch certification (up to 100 files)`,
+            `POST ${baseUrl}/api/batch — batch certification (up to 50 files)`,
           ],
         },
         mcp_direct: {

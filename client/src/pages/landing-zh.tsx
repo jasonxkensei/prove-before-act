@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { hashFile } from "@/lib/hashUtils";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,12 @@ import { WalletLoginModal } from "@/components/wallet-login-modal";
 import { trackAgentCta, useAgentCtaExposure } from "@/lib/conversionTracking";
 import { trackEvent } from "@/lib/analytics";
 import {
+  clearStoredTrialKey,
+  markTrialKeyHandled,
+  readStoredTrialKey,
+  storeTrialKey,
+} from "@/lib/trial-key-storage";
+import {
   Accordion,
   AccordionContent,
   AccordionItem,
@@ -55,6 +61,7 @@ export default function LandingZh() {
   const [trialAgentName, setTrialAgentName] = useState<string>("");
   const [copied, setCopied] = useState(false);
   const [trialError, setTrialError] = useState<string | null>(null);
+  const [trialKeyHandled, setTrialKeyHandled] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [proofHash, setProofHash] = useState("");
@@ -69,6 +76,25 @@ export default function LandingZh() {
   const [proofError, setProofError] = useState<string | null>(null);
   const heroTrialCtaRef = useAgentCtaExposure<HTMLAnchorElement>("landing_zh", "hero_free_trial");
   const trialRegisterCtaRef = useAgentCtaExposure<HTMLButtonElement>("landing_zh", "trial_register");
+
+  useEffect(() => {
+    const storedTrial = readStoredTrialKey();
+    if (storedTrial) {
+      setTrialKey(storedTrial.apiKey);
+      setTrialAgentName(storedTrial.agentName);
+      setTrialKeyHandled(storedTrial.handled);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!trialKey || trialKeyHandled) return;
+    const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "您的试用 API 密钥尚未复制或下载。";
+    };
+    window.addEventListener("beforeunload", warnBeforeLeaving);
+    return () => window.removeEventListener("beforeunload", warnBeforeLeaving);
+  }, [trialKey, trialKeyHandled]);
 
   // Single entry point for trial registration so the button click and the
   // Enter key record the same conversion telemetry before submitting.
@@ -89,11 +115,16 @@ export default function LandingZh() {
       const data = await res.json();
       if (!res.ok)
         throw new Error(data.message || "注册失败，请换一个名称重试。");
+      if (typeof data.api_key !== "string" || !data.api_key.startsWith("pm_")) {
+        throw new Error("注册成功但未收到有效 API 密钥，请重试。");
+      }
       return data;
     },
     onSuccess: (data, name) => {
       setTrialKey(data.api_key);
       setTrialAgentName(name);
+      setTrialKeyHandled(false);
+      storeTrialKey(data.api_key, name);
       setTrialError(null);
     },
     onError: (err: Error) => {
@@ -103,9 +134,38 @@ export default function LandingZh() {
 
   const handleCopyKey = () => {
     if (!trialKey) return;
-    navigator.clipboard.writeText(trialKey);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    navigator.clipboard.writeText(trialKey).then(() => {
+      markTrialKeyHandled();
+      setTrialKeyHandled(true);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {
+      setTrialError("复制失败。请使用下载按钮，或手动复制密钥。");
+    });
+  };
+
+  const handleDownloadKey = () => {
+    if (!trialKey) return;
+    const blob = new Blob([`${trialKey}\n`], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${trialAgentName || "prove-before-act"}-api-key.txt`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    markTrialKeyHandled();
+    setTrialKeyHandled(true);
+  };
+
+  const handleClearTrialKey = () => {
+    clearStoredTrialKey();
+    setTrialKey(null);
+    setTrialAgentName("");
+    setTrialKeyHandled(false);
+    setProofFile(null);
+    setProofHash("");
+    setProofResult(null);
+    setProofError(null);
   };
 
   const handleFileSelect = async (file: File) => {
@@ -132,6 +192,12 @@ export default function LandingZh() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || data.error || "存证失败，请重试。");
+      if (
+        typeof data.verify_url !== "string" &&
+        (typeof data.proof_id !== "string" && typeof data.proof_id !== "number")
+      ) {
+        throw new Error("存证已返回，但没有可用的验证标识。请重试。");
+      }
       return data;
     },
     onSuccess: (data) => {
@@ -534,7 +600,7 @@ export default function LandingZh() {
                   <li className="flex items-start gap-1.5"><span className="text-primary mt-0.5 shrink-0">✓</span>每日1000次决策全量存证：<strong className="text-foreground">按实时费率计算</strong></li>
                   <li className="flex items-start gap-1.5"><span className="text-primary mt-0.5 shrink-0">✓</span>监管检查：随时出具链上证明</li>
                   <li className="flex items-start gap-1.5"><span className="text-primary mt-0.5 shrink-0">✓</span>客户争议：完整4W审计轨迹即时导出</li>
-                  <li className="flex items-start gap-1.5"><span className="text-primary mt-0.5 shrink-0">✓</span>批量API：单次提交100条，3行代码集成</li>
+                  <li className="flex items-start gap-1.5"><span className="text-primary mt-0.5 shrink-0">✓</span>批量API：单次提交50条，3行代码集成</li>
                 </ul>
               </div>
             </div>
@@ -545,8 +611,8 @@ export default function LandingZh() {
                   icon: Blocks,
                   title: "批量认证",
                   subtitle: "Batch Certification",
-                  desc: `单次API调用可提交最多100个哈希值，适用于高频操作的智能体集群。每次按 ${price} 的实时费率计费，按需扩展。`,
-                  code: `# 批量提交100个操作哈希
+                  desc: `单次API调用可提交最多50个哈希值，适用于高频操作的智能体集群。每次按 ${price} 的实时费率计费，按需扩展。`,
+                  code: `# 批量提交50个操作哈希
 POST /api/batch
 {
   "hashes": [
@@ -716,6 +782,19 @@ GET /api/agents/{wallet}/incident-report
                     {copied ? <CheckCircle className="h-4 w-4 text-primary" /> : <Copy className="h-4 w-4" />}
                   </Button>
                 </div>
+                {!trialKeyHandled && (
+                  <p className="mb-3 text-left text-xs text-amber-600 dark:text-amber-300" role="status">
+                    请立即保存此密钥。关闭此浏览器标签页后，密钥不会再次显示或恢复。
+                  </p>
+                )}
+                <div className="mb-5 flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" onClick={handleDownloadKey} data-testid="button-download-trial-key-zh">
+                    下载密钥
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={handleClearTrialKey} data-testid="button-clear-trial-key-zh">
+                    我已保存 — 隐藏密钥
+                  </Button>
+                </div>
                 <p className="text-sm text-muted-foreground mb-5">
                   您的密钥已就绪 — <strong>{trialAgentName}</strong> 享有 10 次免费存证。现在就试一次：
                 </p>
@@ -821,16 +900,22 @@ GET /api/agents/{wallet}/incident-report
                       )}
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <Button asChild size="sm" variant="outline" data-testid="button-view-proof-zh">
-                        <a
-                          href={proofResult.verify_url || `/proof/${proofResult.proof_id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
-                          查看验证页面
-                        </a>
-                      </Button>
+                      {proofResult.verify_url || proofResult.proof_id ? (
+                        <Button asChild size="sm" variant="outline" data-testid="button-view-proof-zh">
+                          <a
+                            href={proofResult.verify_url || `/proof/${encodeURIComponent(String(proofResult.proof_id))}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                            查看验证页面
+                          </a>
+                        </Button>
+                      ) : (
+                        <p className="text-sm text-destructive" role="alert">
+                          存证已返回，但没有可用的验证链接。请稍后从文档中的 API 查询 proof_id。
+                        </p>
+                      )}
                       {proofResult.trial?.remaining !== undefined && (
                         <span className="text-xs text-muted-foreground">
                           剩余免费次数：{proofResult.trial.remaining}
@@ -894,7 +979,7 @@ print(proof["verify_url"])  # 链上可验证`}
                   price,
                   priceUnit: "/ 次",
                   desc: "无限次，随时可用",
-                  features: ["不限量存证", "批量API（100条/次）", "信任评分", "事件报告", "链上锚定"],
+                  features: ["不限量存证", "批量API（50条/次）", "信任评分", "事件报告", "链上锚定"],
                   cta: "连接钱包",
                   ctaHref: "#",
                   highlight: true,
@@ -992,7 +1077,7 @@ print(proof["verify_url"])  # 链上可验证`}
                 },
                 {
                   q: "批量认证适合高频操作的集群吗？",
-                  a: `是的。Prove Before Act的批量API支持单次请求提交最多100个哈希值，按当前实时费率 ${price} 计费，无任何批量溢价。对于每秒产生大量操作的集群，您可以在本地缓冲操作记录，定期批量提交，实现高效可扩展的审计基础设施。`,
+                  a: `是的。Prove Before Act的批量API支持单次请求提交最多50个哈希值，按当前实时费率 ${price} 计费，无任何批量溢价。对于每秒产生大量操作的集群，您可以在本地缓冲操作记录，定期批量提交，实现高效可扩展的审计基础设施。`,
                 },
                 {
                   q: "x402协议如何工作？智能体无需账号也能存证吗？",
@@ -1079,6 +1164,7 @@ print(proof["verify_url"])  # 链上可验证`}
       <WalletLoginModal
         open={isLoginModalOpen}
         onOpenChange={setIsLoginModalOpen}
+        redirectTo="/dashboard"
       />
     </div>
   );

@@ -982,7 +982,7 @@ if intent_proof.status == "confirmed":
     <table><thead><tr><th>Property</th><th>xProof</th></tr></thead><tbody>
       <tr><td>Anchoring ledger</td><td>MultiversX mainnet</td></tr>
       <tr><td>Hash algorithm</td><td>SHA-256</td></tr>
-      <tr><td>Payment</td><td>x402 / USDC on Base ($0.01/proof)</td></tr>
+      <tr><td>Payment</td><td>x402 / USDC on Base (live rate: <a href="${baseUrl}/api/pricing">/api/pricing</a>)</td></tr>
       <tr><td>Free trial</td><td>10 proofs, no wallet or account required</td></tr>
       <tr><td>MCP integration</td><td>Native MCP server at provebeforeact.com/mcp</td></tr>
       <tr><td>Python SDK</td><td>pip install xproof</td></tr>
@@ -1245,7 +1245,7 @@ ${renderPublicHeader(baseUrl)}
   <h1>The accountability pattern for autonomous agents</h1>
   <p><strong>Prove Before Act creates independently verifiable pre-execution evidence.</strong> An agent declares its decision basis (WHY), context, and intended action before executing; xProof is the reference implementation that anchors the proof on MultiversX. The actual result (WHAT) can be anchored after. This is not a request for internal chain-of-thought. $${priceUsd.toFixed(2)}/proof. No API key needed via x402.</p>
   <p>Certifying a file as an individual? Use <a href="${baseUrl}/certify">Certify a file</a>.</p>
-  <p><a href="${baseUrl}/agents/zh">中文版 →</a></p>
+  <p><a href="${baseUrl}/agent-context/zh">中文版 →</a></p>
 
   <section>
     <h2>Quick Start — 30 seconds</h2>
@@ -1302,7 +1302,7 @@ print(f"Audit trail: ${baseUrl}/proof/{proof_id}")</code></pre>
     <p>Running a fleet of agents (support, pricing, logistics)? Batch certifications instead of one call per decision.</p>
     <pre><code>import hashlib, json, requests
 
-decisions = [...]  # up to 100 decisions per batch call
+decisions = [...]  # up to 50 decisions per batch call
 
 batch = [{
     "file_hash": hashlib.sha256(json.dumps(d, sort_keys=True).encode()).hexdigest(),
@@ -1343,7 +1343,7 @@ resp = requests.post("${baseUrl}/api/batch",
     <h3>REST API</h3>
     <ul>
       <li><strong>Single proof</strong> — <code>POST /api/proof</code> with <code>file_hash</code> + <code>filename</code> → <code>proof_id</code></li>
-      <li><strong>Batch (up to 100)</strong> — <code>POST /api/batch</code> → 50× fewer requests in production</li>
+       <li><strong>Batch (up to 50)</strong> — <code>POST /api/batch</code> → 50× fewer requests in production</li>
       <li><strong>Auth</strong> — <code>Authorization: Bearer pm_YOUR_KEY</code></li>
     </ul>
 
@@ -1388,7 +1388,7 @@ async function renderAgentsPageZh(baseUrl: string): Promise<string> {
   const title = "Prove Before Act — AI 智能体的执行前问责模式";
   const description = `Prove Before Act 是自主智能体的问责模式，xProof 是其参考实现。支持 MCP、x402、ACP、REST：执行前锚定声明的决策依据（WHY），执行后锚定实际结果（WHAT）。每次存证 $${priceUsd.toFixed(2)}，通过 x402 无需账户即可使用。`;
 
-  return `${commonHead(title, description, `${baseUrl}/agents/zh`)}
+  return `${commonHead(title, description, `${baseUrl}/agent-context/zh`)}
 <body>
 ${renderPublicHeader(baseUrl)}
 
@@ -1452,7 +1452,7 @@ print(f"审计链接: ${baseUrl}/proof/{proof_id}")</code></pre>
     <p>如果你管理一个智能体舰队（客服、动态定价、物流调度等），应使用批量存证接口，而不是逐条调用。</p>
     <pre><code>import hashlib, json, requests
 
-decisions = [...]  # 每批最多 100 条决策
+decisions = [...]  # 每批最多 50 条决策
 
 batch = [{
     "file_hash": hashlib.sha256(json.dumps(d, sort_keys=True).encode()).hexdigest(),
@@ -1493,7 +1493,7 @@ resp = requests.post("${baseUrl}/api/batch",
     <h3>REST API</h3>
     <ul>
       <li><strong>单次存证</strong> — <code>POST /api/proof</code>，传入 <code>file_hash</code> + <code>filename</code> → 返回 <code>proof_id</code></li>
-      <li><strong>批量（最多 100 条）</strong> — <code>POST /api/batch</code> → 生产环境请求数减少 50 倍</li>
+      <li><strong>批量（最多 50 条）</strong> — <code>POST /api/batch</code> → 生产环境请求数减少 50 倍</li>
       <li><strong>认证</strong> — <code>Authorization: Bearer pm_YOUR_KEY</code></li>
     </ul>
 
@@ -1568,7 +1568,7 @@ curl -X POST ${baseUrl}/api/proof -H "Authorization: Bearer pm_YOUR_KEY" -H "Con
   <section id="production">
     <h2>Going to production? — 4 required patterns</h2>
     <ul>
-      <li><strong>Batch anchoring</strong> — POST /api/batch, up to 100 files per call, 50× fewer requests than one-by-one</li>
+       <li><strong>Batch anchoring</strong> — POST /api/batch, up to 50 files per call, 50× fewer requests than one-by-one</li>
       <li><strong>Retry policy</strong> — exponential backoff (1s→2s→4s), handle 409 dedup, respect Retry-After on 429</li>
       <li><strong>Monitoring</strong> — alert if daily proof volume drops below expected minimum</li>
       <li><strong>Operator policy: no proof = no action</strong> — for high-stakes agents (trading, legal, medical), your own agent code can block an action if anchoring fails after 3 retries</li>
@@ -1811,7 +1811,7 @@ Content-Type: application/json
       <li><strong>LlamaIndex</strong> — FunctionTool.from_defaults(fn=xproof.anchor)</li>
       <li><strong>OpenAI Agents SDK</strong> — function_tool decorator, Prove Before Act in run loop</li>
       <li><strong>Vercel AI SDK</strong> — tool() wrapper, anchor in execute() before action</li>
-      <li><strong>MCP</strong> — POST ${baseUrl}/mcp · tools: certify_file, audit_agent_session, register_trial</li>
+       <li><strong>MCP</strong> — POST ${baseUrl}/mcp · core tools: register_trial, certify_file, verify_proof, audit_agent_session, investigate_proof; call tools/list for the complete catalog</li>
       <li><strong>Fetch.ai / uAgents</strong> — XProofuAgentMiddleware(agent, api_key="pm_...") — one-line integration, anchors WHY proof before and WHAT proof after every message handler. Full example: github.com/jasonxkensei/prove-before-act-examples/tree/main/fetchai</li>
     </ul>
   </section>
@@ -2406,9 +2406,12 @@ export function prerenderMiddleware() {
         .send(await renderAgentContextPage(baseUrl));
     }
 
-    // /agents/zh is a dedicated MCP doc page for Chinese-speaking agents —
-    // always serve prerendered HTML to every visitor, same rationale as /agent-context
+    // /agent-context/zh is the canonical Chinese MCP doc page. Keep the old
+    // /agents/zh URL as a redirect so crawlers and shared links converge.
     if (path === "/agents/zh") {
+      return res.redirect(301, `${baseUrl}/agent-context/zh`);
+    }
+    if (path === "/agent-context/zh") {
       return res.status(200)
         .set("Content-Type", "text/html; charset=utf-8")
         .set("Cache-Control", "public, max-age=300")

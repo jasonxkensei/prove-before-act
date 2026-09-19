@@ -179,18 +179,32 @@ proof = requests.post("https://provebeforeact.com/api/proof",
 # {"proof_id": "...", "verify_url": "..."}
 ```
 
+### 方式五：MCP（智能体原生接入）
+
+MCP 服务地址为 `POST https://provebeforeact.com/mcp`。首次接入且没有
+API 密钥时，先调用 `register_trial`（无需钱包）获取 10 次免费存证：
+
+```json
+{"name":"register_trial","arguments":{"agent_name":"my-agent"}}
+```
+
+核心工具包括 `register_trial`、`certify_file`、`verify_proof`、
+`audit_agent_session` 和 `investigate_proof`。服务端还可能提供置信度分级、
+证明检索、结果回报与校准等工具；请通过 MCP `tools/list` 或
+`discover_services` 获取当前完整工具和参数定义，不要将此列表视为穷举。
+
 ---
 
 ## 集群运营商：批量认证
 
 ```python
-# 单次API调用提交最多100个操作哈希
+# 单次API调用提交最多50个操作哈希
 result = client.batch_certify([
     {"file_hash": "hash_001", "filename": "decision_basis_001.json",
      "metadata": {"role": "WHY", "agent_id": "agent-001"}},
     {"file_hash": "hash_002", "filename": "action_result_001.json",
      "metadata": {"role": "WHAT", "agent_id": "agent-001"}},
-    # ...最多100条
+    # ...最多50条
 ])
 print(f"已批量存证: {len(result['results'])} 条")
 ```

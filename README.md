@@ -10,6 +10,7 @@
   <a href="#for-agents">Agent Integration</a> &bull;
   <a href="https://provebeforeact.com/leaderboard">Trust Leaderboard</a> &bull;
   <a href="docs/architecture.md">Architecture</a> &bull;
+  <a href="docs/acquisition-fr.md">Acquisition guide (FR)</a> &bull;
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
@@ -223,7 +224,7 @@ curl -X POST https://provebeforeact.com/api/proof \
 
 ### POST /api/batch -- Batch Certification
 
-Certify up to 50 files in a single call.
+Certify up to 50 files in a single call. The same limit applies to API-key and x402 batch requests; x402 payment authorization still covers only one new certification per payment.
 
 ```bash
 curl -X POST https://provebeforeact.com/api/batch \
@@ -277,7 +278,7 @@ Prove Before Act is designed to be discovered, consumed, and paid by autonomous 
 
 | Protocol | Endpoint / Resource | Description |
 |---|---|---|
-| **MCP** | `POST /mcp` | JSON-RPC 2.0 endpoint with `certify_file` and `verify_proof` tools |
+| **MCP** | `POST /mcp` | JSON-RPC 2.0 endpoint; discover the current tool set with `tools/list` |
 | **x402** | `POST /api/proof`, `POST /api/batch` | HTTP 402 payment flow -- no account needed |
 | **ACP** | `GET /api/acp/products` | Agent Commerce Protocol -- discover, checkout, confirm |
 | **MX-8004** | On-chain registries | Supported integration; inspect `/api/mx8004/status` for active vs `not_configured` |
@@ -301,12 +302,18 @@ Any agent can certify without an API key using the x402 payment protocol:
 
 ### MCP -- Model Context Protocol
 
-Prove Before Act exposes a live MCP server at `POST /mcp` with two tools:
+Prove Before Act exposes a live MCP server at `POST /mcp`. The core acquisition and verification tools include:
 
+- `register_trial` -- obtain a free API key without a wallet
 - `certify_file` -- certify a file hash on MultiversX
 - `verify_proof` -- verify an existing certification
+- `audit_agent_session` -- create a pre-action audit record
+- `investigate_proof` -- reconstruct the audit trail for a proof
 
-Any MCP-compatible agent can discover and call these tools directly.
+The server can expose additional tools for confidence staging, proof retrieval,
+attestations, outcomes, and calibration. Always call MCP `tools/list` (or
+`discover_services`) for the complete, current schema rather than hard-coding
+an exhaustive list.
 
 ### ACP -- Agent Commerce Protocol
 
@@ -427,7 +434,7 @@ User/Agent                    Prove Before Act                     MultiversX
 | **Verification Badges** | Dynamic SVG badges (shields.io style) with embeddable Markdown. |
 | **Wallet Authentication** | Native Auth via xPortal, MultiversX Web Wallet, WalletConnect. |
 | **Agent Commerce Protocol** | Agents discover, purchase, and consume certifications programmatically. |
-| **MCP Server** | JSON-RPC 2.0 endpoint with `certify_file` and `verify_proof` tools. |
+| **MCP Server** | JSON-RPC 2.0 endpoint with discoverable certification, audit, verification, trial, and investigation tools. |
 | **LangChain / CrewAI** | Ready-made Python tool definitions. |
 | **Webhook Delivery** | HMAC-SHA256 signed notifications with retry and exponential backoff. |
 | **API Keys** | `pm_`-prefixed bearer tokens with per-key rate limiting. |

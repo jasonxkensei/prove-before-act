@@ -89,8 +89,8 @@ describe("/fleet browser and crawler delivery regression guard", () => {
 });
 
 /**
- * Regression guard: /agents/zh and /agent-context must always serve
- * prerendered HTML — even to a visitor that looks like a real browser
+ * Regression guard: the canonical Chinese context page and /agent-context
+ * always serve prerendered HTML, while /agents/zh remains a permanent alias.
  * (standard User-Agent + Sec-Fetch-Mode: navigate).
  *
  * These two routes live in the always-serve block of server/prerender.ts
@@ -98,9 +98,20 @@ describe("/fleet browser and crawler delivery regression guard", () => {
  * the gate, or if a new middleware intercepts them first, the React SPA shell
  * will be returned instead.
  */
-describe("/agents/zh and /agent-context always-serve regression guard", () => {
-  it("GET /agents/zh with a browser UA returns 200 with the prerendered headline", async () => {
-    const res = await fetch(`${BASE}/agents/zh`, { headers: BROWSER_HEADERS });
+describe("Chinese context canonical route and /agent-context prerender guard", () => {
+  it("GET /agents/zh permanently redirects to the canonical Chinese route", async () => {
+    const res = await fetch(`${BASE}/agents/zh`, {
+      headers: BROWSER_HEADERS,
+      redirect: "manual",
+    });
+    expect(res.status).toBe(301);
+    const location = res.headers.get("location");
+    expect(location).toBeTruthy();
+    expect(new URL(location!).pathname).toBe("/agent-context/zh");
+  });
+
+  it("GET /agent-context/zh with a browser UA returns 200 with the prerendered headline", async () => {
+    const res = await fetch(`${BASE}/agent-context/zh`, { headers: BROWSER_HEADERS });
     expect(res.status).toBe(200);
 
     const body = await res.text();
@@ -125,8 +136,8 @@ describe("/agents/zh and /agent-context always-serve regression guard", () => {
     expect(body).not.toMatch(/<div id="root">\s*<\/div>/);
   });
 
-  it("GET /agents/zh without Sec-Fetch-Mode (crawler / LLM agent) also returns 200 with the headline", async () => {
-    const res = await fetch(`${BASE}/agents/zh`, {
+  it("GET /agent-context/zh without Sec-Fetch-Mode (crawler / LLM agent) also returns 200 with the headline", async () => {
+    const res = await fetch(`${BASE}/agent-context/zh`, {
       headers: {
         "User-Agent": BROWSER_HEADERS["User-Agent"],
         Accept: BROWSER_HEADERS["Accept"],

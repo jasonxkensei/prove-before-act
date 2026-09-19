@@ -366,6 +366,7 @@ export default function AgentsPage() {
       <WalletLoginModal
         open={isLoginModalOpen}
         onOpenChange={setIsLoginModalOpen}
+        redirectTo="/agents"
       />
     </div>
   );

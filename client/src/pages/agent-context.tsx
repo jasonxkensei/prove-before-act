@@ -113,9 +113,9 @@ export default function AgentContextPage() {
 
           {/* Batch */}
           <div>
-            <p className="text-xs font-semibold mb-2">1. Batch anchoring — up to 100 files per call</p>
+            <p className="text-xs font-semibold mb-2">1. Batch anchoring — up to 50 files per call</p>
             <p className="text-xs text-muted-foreground mb-2">
-              Instead of one HTTP call per action, group up to 100 file hashes in a single <code className="font-mono bg-muted px-1 rounded">POST /api/batch</code>. Reduces overhead for high-volume fleets from 50× calls to 1 call.
+              Instead of one HTTP call per action, group up to 50 file hashes in a single <code className="font-mono bg-muted px-1 rounded">POST /api/batch</code>. Reduces overhead for high-volume fleets from 50× calls to 1 call.
             </p>
             <CodeBlock lang="python" code={`import hashlib, requests
 
@@ -129,7 +129,7 @@ actions = [
     for i, d in enumerate(declared_decisions)
 ]
 
-# One call — up to 100 items
+# One call — up to 50 items
 resp = requests.post(
     "https://provebeforeact.com/api/batch",
     headers={"Authorization": f"Bearer {api_key}"},
@@ -435,7 +435,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
               <li>• 50 agents × 20 actions × 30 days = <strong className="text-foreground">30,000 anchors/month</strong></li>
               <li>• At {priceStr}/anchor = <strong className="text-foreground">{per30k}/month</strong></li>
               <li>• Per agent: <strong className="text-foreground">{per30kPerAgent}/month</strong> — lower than most SaaS compliance tools</li>
-              <li>• Batch mode (up to 100 files per call): same price, reduced API overhead</li>
+              <li>• Batch mode (up to 50 files per call): same price, reduced API overhead</li>
             </ul>
           </div>
           <p className="text-xs text-muted-foreground">
@@ -564,7 +564,7 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
       content: (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground leading-relaxed">
-            Prove Before Act exposes a native MCP server at <code className="font-mono bg-muted px-1 rounded text-xs">https://provebeforeact.com/mcp</code>. Use Streamable HTTP transport (POST). Tools available: <code className="font-mono bg-muted px-1 rounded text-xs">certify_file</code>, <code className="font-mono bg-muted px-1 rounded text-xs">audit_agent_session</code>, <code className="font-mono bg-muted px-1 rounded text-xs">investigate_proof</code>, <code className="font-mono bg-muted px-1 rounded text-xs">register_trial</code>.
+            Prove Before Act exposes a native MCP server at <code className="font-mono bg-muted px-1 rounded text-xs">https://provebeforeact.com/mcp</code>. Use Streamable HTTP transport (POST). Core tools include <code className="font-mono bg-muted px-1 rounded text-xs">register_trial</code>, <code className="font-mono bg-muted px-1 rounded text-xs">certify_file</code>, <code className="font-mono bg-muted px-1 rounded text-xs">verify_proof</code>, <code className="font-mono bg-muted px-1 rounded text-xs">audit_agent_session</code>, and <code className="font-mono bg-muted px-1 rounded text-xs">investigate_proof</code>. Call <code className="font-mono bg-muted px-1 rounded text-xs">tools/list</code> for the complete current catalog; this list is not exhaustive.
           </p>
           <div className="rounded-md border border-primary/20 bg-primary/5 p-3 flex items-start gap-3">
             <Cpu className="h-4 w-4 text-primary shrink-0 mt-0.5" />
@@ -1836,7 +1836,7 @@ await sendToCustomer(ticketId, responseText, { audit_ref: proof_id });`,
             </Button>
           </div>
           <ul className="grid gap-1.5 sm:grid-cols-2 text-xs text-muted-foreground">
-            <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-amber-500" /><span><strong className="text-foreground">Batch anchoring</strong> — up to 100 files per call, 50× fewer requests</span></li>
+            <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-amber-500" /><span><strong className="text-foreground">Batch anchoring</strong> — up to 50 files per call, 50× fewer requests</span></li>
             <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-amber-500" /><span><strong className="text-foreground">Retry policy</strong> — exponential backoff, 409 dedup, Retry-After support</span></li>
             <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-amber-500" /><span><strong className="text-foreground">Monitoring</strong> — alert if daily proof volume drops unexpectedly</span></li>
             <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-amber-500" /><span><strong className="text-foreground">Operator policy: no proof = no action</strong> — an optional hard gate for high-stakes decisions</span></li>
