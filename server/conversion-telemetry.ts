@@ -133,6 +133,7 @@ export function conversionOutcomeMiddleware(req: Request, res: Response, next: N
       ? "proof"
       : isPost && (
         req.path === "/api/credits/stripe/checkout"
+        || req.path === "/api/checkout"
         || req.path === "/api/credits/purchase"
         || req.path === "/api/credits/confirm"
       )

@@ -549,6 +549,12 @@ Stripe is an additional payment option for Starter, Pro, and Business packs. It
 does not replace USDC/Base, x402, ACP, or EGLD. Pack prices are calculated from
 the live certification rate at checkout time.
 
+Human buyers can inspect prepaid packs at `/billing`; the compatibility browser
+path `/checkout` redirects there. Machine clients can discover the Stripe
+workflow as JSON from `GET /api/stripe`, `GET /api/billing`, or
+`GET /api/checkout`. These discovery aliases prevent unknown API paths from
+falling through to the HTML app. The canonical checkout operation remains:
+
 ### POST /api/credits/stripe/checkout
 
 Create a hosted, one-time Stripe Checkout Session.

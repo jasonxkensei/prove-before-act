@@ -115,7 +115,8 @@ function Router() {
            <Route path="/certify" component={ProtectedRouteRedirect} />
            <Route path="/settings" component={ProtectedRouteRedirect} />
             <Route path="/credits" component={ProtectedRouteRedirect} />
-            <Route path="/billing" component={ProtectedRouteRedirect} />
+            <Route path="/billing" component={CreditsPage} />
+            <Route path="/checkout"><Redirect to="/billing" /></Route>
            <Route path="/fleet/overview" component={ProtectedRouteRedirect} />
           {/* /stats shows public platform metrics (unauthenticated /api/stats endpoint).
               Accessible without login — admin-only sections are protected server-side via
@@ -139,7 +140,8 @@ function Router() {
         <Route path="/certify" component={Certify} />
         <Route path="/settings" component={Settings} />
         <Route path="/credits" component={CreditsPage} />
-         <Route path="/billing" component={CreditsPage} />
+        <Route path="/billing" component={CreditsPage} />
+        <Route path="/checkout"><Redirect to="/billing" /></Route>
         <Route path="/stats" component={AdminDashboard} />
         <Route path="/admin" component={AdminDashboard} />
         <Route path="/proof/:id" component={ProofPage} />

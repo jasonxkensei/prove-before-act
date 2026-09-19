@@ -123,6 +123,41 @@ async function processStripeWebhook(payload: Buffer, signature: string): Promise
 }
 
 export function registerStripeCreditsRoutes(app: Express): void {
+  const checkoutPath = "/api/credits/stripe/checkout";
+  const statusPath = "/api/credits/stripe/status/{session_id}";
+
+  const sendStripeDiscovery = (req: Request, res: express.Response) => {
+    const origin = `${req.protocol}://${req.get("host")}`;
+    return res.json({
+      status: "available",
+      provider: "stripe",
+      ui_url: `${origin}/billing`,
+      packages_url: `${origin}/api/credits/packages`,
+      checkout: {
+        method: "POST",
+        canonical_url: `${origin}${checkoutPath}`,
+        compatibility_url: `${origin}/api/checkout`,
+        authentication: "Wallet session or Authorization: Bearer pm_xxx",
+        body: { package_id: "starter" },
+      },
+      status_url_template: `${origin}${statusPath}`,
+      fulfillment: "Credits are added only after Stripe's signed payment webhook confirms payment.",
+    });
+  };
+
+  // Browser and machine compatibility aliases. These explicit responses keep
+  // discovery requests from silently falling through to the SPA HTML shell.
+  app.get("/checkout", (_req, res) => res.redirect(308, "/billing"));
+  app.get(["/api/billing", "/api/stripe", "/api/checkout"], sendStripeDiscovery);
+  app.get(checkoutPath, (req, res) => {
+    res.status(405).set("Allow", "POST");
+    return res.json({
+      error: "METHOD_NOT_ALLOWED",
+      message: `Use POST ${checkoutPath} to create a checkout session.`,
+      discovery_url: `${req.protocol}://${req.get("host")}/api/stripe`,
+    });
+  });
+
   app.post("/api/webhooks/stripe", express.raw({ type: "application/json", limit: "256kb" }), async (req, res) => {
     const header = req.headers["stripe-signature"];
     const signature = Array.isArray(header) ? header[0] : header;
@@ -139,7 +174,7 @@ export function registerStripeCreditsRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/credits/stripe/checkout", async (req, res) => {
+  app.post([checkoutPath, "/api/checkout"], async (req, res) => {
     const user = await resolveCheckoutUser(req);
     if (!user) return res.status(401).json({ error: "AUTH_REQUIRED", message: "Use a wallet session or Authorization: Bearer pm_xxx" });
 

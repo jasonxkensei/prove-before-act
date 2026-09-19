@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useWalletAuth } from "@/hooks/useWalletAuth";
+import { WalletLoginModal } from "@/components/wallet-login-modal";
 
 type CreditPackage = {
   id: string;
@@ -23,7 +25,9 @@ type PackagesResponse = {
 
 export default function CreditsPage() {
   const { toast } = useToast();
+  const { isAuthenticated } = useWalletAuth();
   const [loadingPackage, setLoadingPackage] = useState<string | null>(null);
+  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState<"waiting" | "paid" | null>(null);
   const sessionId = new URLSearchParams(window.location.search).get("session_id");
   const returnState = new URLSearchParams(window.location.search).get("stripe");
@@ -64,6 +68,10 @@ export default function CreditsPage() {
   }, [returnState, sessionId, toast]);
 
   const startStripeCheckout = async (packageId: string) => {
+    if (!isAuthenticated) {
+      setIsLoginModalOpen(true);
+      return;
+    }
     setLoadingPackage(packageId);
     try {
       const response = await fetch("/api/credits/stripe/checkout", {
@@ -168,6 +176,11 @@ export default function CreditsPage() {
           </p>
         </div>
       </main>
+      <WalletLoginModal
+        open={isLoginModalOpen}
+        onOpenChange={setIsLoginModalOpen}
+        redirectTo="/billing"
+      />
     </div>
   );
 }
