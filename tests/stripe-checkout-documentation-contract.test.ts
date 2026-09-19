@@ -37,7 +37,7 @@ describe("Stripe prepaid-pack public contract", () => {
     const appRoutes = read("client/src/App.tsx");
     const telemetry = read("server/conversion-telemetry.ts");
     expect(stripeRoutes).toContain('app.get("/checkout"');
-    expect(stripeRoutes).toContain('"/api/billing", "/api/stripe", "/api/checkout"');
+    expect(stripeRoutes).toContain('"/api/billing", "/api/stripe", "/api/checkout", "/api/payments"');
     expect(stripeRoutes).toContain('app.post([checkoutPath, "/api/checkout"]');
     expect(stripeRoutes).toContain("METHOD_NOT_ALLOWED");
     expect(appRoutes).toContain('<Route path="/billing" component={CreditsPage} />');

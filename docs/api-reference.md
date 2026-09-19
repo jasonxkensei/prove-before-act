@@ -551,8 +551,8 @@ the live certification rate at checkout time.
 
 Human buyers can inspect prepaid packs at `/billing`; the compatibility browser
 path `/checkout` redirects there. Machine clients can discover the Stripe
-workflow as JSON from `GET /api/stripe`, `GET /api/billing`, or
-`GET /api/checkout`. These discovery aliases prevent unknown API paths from
+workflow as JSON from `GET /api/stripe`, `GET /api/billing`,
+`GET /api/checkout`, or `GET /api/payments`. These discovery aliases prevent unknown API paths from
 falling through to the HTML app. The canonical checkout operation remains:
 
 ### POST /api/credits/stripe/checkout

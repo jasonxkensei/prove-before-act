@@ -148,7 +148,7 @@ export function registerStripeCreditsRoutes(app: Express): void {
   // Browser and machine compatibility aliases. These explicit responses keep
   // discovery requests from silently falling through to the SPA HTML shell.
   app.get("/checkout", (_req, res) => res.redirect(308, "/billing"));
-  app.get(["/api/billing", "/api/stripe", "/api/checkout"], sendStripeDiscovery);
+  app.get(["/api/billing", "/api/stripe", "/api/checkout", "/api/payments"], sendStripeDiscovery);
   app.get(checkoutPath, (req, res) => {
     res.status(405).set("Allow", "POST");
     return res.json({
