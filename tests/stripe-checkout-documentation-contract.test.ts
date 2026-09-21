@@ -44,4 +44,14 @@ describe("Stripe prepaid-pack public contract", () => {
     expect(appRoutes).toContain('<Route path="/checkout"><Redirect to="/billing" /></Route>');
     expect(telemetry).toContain('req.path === "/api/checkout"');
   });
+
+  it("registers Stripe webhooks on the non-redirecting canonical host", () => {
+    const stripeInitialization = read("server/stripe.ts");
+    expect(stripeInitialization).toContain('import { CANONICAL_PUBLIC_ORIGIN } from "./publicOrigin"');
+    expect(stripeInitialization).toContain('process.env.NODE_ENV === "production"');
+    expect(stripeInitialization).toContain("? CANONICAL_PUBLIC_ORIGIN");
+    expect(stripeInitialization).toContain(
+      'findOrCreateManagedWebhook(`${webhookOrigin}/api/webhooks/stripe`)',
+    );
+  });
 });

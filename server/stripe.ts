@@ -2,11 +2,17 @@ import { runMigrations } from "stripe-replit-sync";
 import { getStripeSync } from "./stripeClient";
 import { logger } from "./logger";
 import { pool } from "./db";
+import { CANONICAL_PUBLIC_ORIGIN } from "./publicOrigin";
 
 export async function initializeStripe(): Promise<void> {
   const databaseUrl = process.env.DATABASE_URL;
-  const domain = process.env.REPLIT_DOMAINS?.split(",")[0]?.trim();
-  if (!databaseUrl || !domain) {
+  const runtimeDomain = process.env.REPLIT_DOMAINS?.split(",")[0]?.trim();
+  const webhookOrigin = process.env.NODE_ENV === "production"
+    ? CANONICAL_PUBLIC_ORIGIN
+    : runtimeDomain
+      ? `https://${runtimeDomain}`
+      : null;
+  if (!databaseUrl || !webhookOrigin) {
     logger.warn("Stripe checkout disabled: database or public runtime domain unavailable", {
       component: "stripe",
     });
@@ -42,7 +48,11 @@ export async function initializeStripe(): Promise<void> {
   `);
   await runMigrations({ databaseUrl });
   const stripeSync = await getStripeSync();
-  await stripeSync.findOrCreateManagedWebhook(`https://${domain}/api/webhooks/stripe`);
+  // Stripe does not follow redirects when delivering webhooks. Production must
+  // use the canonical host rather than REPLIT_DOMAINS, whose first entry may be
+  // a legacy hostname. Development keeps its replit.dev callback so test-mode
+  // events never get delivered to the live application.
+  await stripeSync.findOrCreateManagedWebhook(`${webhookOrigin}/api/webhooks/stripe`);
   await stripeSync.syncBackfill();
   logger.info("Stripe checkout and synchronization initialized", { component: "stripe" });
 }
