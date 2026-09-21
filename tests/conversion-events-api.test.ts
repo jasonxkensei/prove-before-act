@@ -185,7 +185,7 @@ describe("conversion outcome middleware", () => {
     // The telemetry row is deliberately an allow-list: prove no raw request
     // body, raw IP, URL, cookie, or user-agent can be retained by this path.
     expect(Object.keys(rows[0].stored_event as object).sort()).toEqual([
-      "created_at", "event_type", "http_class", "http_status", "id", "ip_hash",
+      "created_at", "dedup_key", "event_type", "http_class", "http_status", "id", "ip_hash",
       "outcome", "referrer_host", "stage", "traffic_segment", "utm_source",
     ]);
   });

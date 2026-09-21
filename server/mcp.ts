@@ -23,7 +23,7 @@ import { buildCoherenceAnchor } from "./coherence-anchor";
 import { isMX8004Configured } from "./mx8004";
 import { ensureDefaultAgent, resolveAgentForApiKey } from "./agent-identity";
 import type { Request } from "express";
-import { recordConversionEvent } from "./conversion-telemetry";
+import { recordConversionEvent, recordProofVerificationMilestone } from "./conversion-telemetry";
 
 interface McpContext {
   baseUrl: string;
@@ -927,14 +927,7 @@ export async function createMcpServer(ctx: McpContext) {
         const isConfirmed = cert.blockchainStatus === "confirmed"
           && /^[a-fA-F0-9]{64}$/.test(cert.transactionHash ?? "");
         if (request && isConfirmed && (ordinal === 1 || ordinal === 2)) {
-          recordConversionEvent(request, {
-            eventType: ordinal === 1
-              ? "first_proof_verified"
-              : "external_agent_second_proof_verified",
-            stage: "proof",
-            outcome: "success",
-            httpStatus: 200,
-          });
+          void recordProofVerificationMilestone(request, cert.id, ordinal);
         }
 
         return {

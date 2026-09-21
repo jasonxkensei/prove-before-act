@@ -15,6 +15,8 @@ import { db, pool } from "../server/db";
 import { getSession } from "../server/replitAuth";
 import { registerAdminRoutes } from "../server/routes/admin";
 import * as metrics from "../server/metrics";
+import { recordProofVerificationMilestone } from "../server/conversion-telemetry";
+import { migrateConversionEventsTable } from "../server/maintenance";
 
 const ADMIN_WALLET = `erd1conversionadmintest${crypto.randomBytes(10).toString("hex")}`;
 let server: Server;
@@ -23,6 +25,7 @@ let cookie: string;
 let sid: string;
 let originalAdminWallets: string | undefined;
 const seededTelemetryHashes: string[] = [];
+const seededDedupKeys: string[] = [];
 
 async function createAdminSession(walletAddress: string): Promise<string> {
   sid = crypto.randomUUID().replace(/-/g, "");
@@ -47,6 +50,7 @@ async function createAdminSession(walletAddress: string): Promise<string> {
 beforeAll(async () => {
   originalAdminWallets = process.env.ADMIN_WALLETS;
   process.env.ADMIN_WALLETS = ADMIN_WALLET;
+  await migrateConversionEventsTable();
 
   const app = express();
   app.use(getSession());
@@ -63,6 +67,9 @@ beforeAll(async () => {
 afterAll(async () => {
   if (seededTelemetryHashes.length > 0) {
     await pool.query(`DELETE FROM conversion_events WHERE ip_hash = ANY($1)`, [seededTelemetryHashes]);
+  }
+  if (seededDedupKeys.length > 0) {
+    await pool.query(`DELETE FROM conversion_event_dedup_keys WHERE dedup_key = ANY($1)`, [seededDedupKeys]);
   }
   if (sid) await pool.query(`DELETE FROM sessions WHERE sid = $1`, [sid]);
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
@@ -144,13 +151,14 @@ describe("GET /api/admin/conversion-funnel", () => {
        VALUES
          ('landing:trial_register', 'cta', 'seen', NULL, '0xx', 'human_browser', $1),
          ('registration_request', 'registration', 'success', 202, '2xx', 'api_client', $2),
-         ('proof_request', 'proof', 'success', 201, '2xx', 'api_client', $3)`,
+         ('proof_request', 'proof', 'success', 201, '2xx', 'api_client', $3),
+         ('first_proof_verified', 'proof', 'success', 200, '2xx', 'api_client', $3)`,
       hashes,
     );
 
     const after = await getFunnel();
     // These are actual endpoint aggregates, not a duplicate SQL assertion.
-    expect(after.totals.events).toBe(before.totals.events + 3);
+    expect(after.totals.events).toBe(before.totals.events + 4);
     expect(after.totals.visitors).toBe(before.totals.visitors + 3);
     expect(after.totals.cta_views).toBe(before.totals.cta_views + 1);
     expect(after.totals.registrations).toBe(before.totals.registrations + 1);
@@ -185,8 +193,8 @@ describe("GET /api/admin/conversion-funnel", () => {
        VALUES
          ('landing:scenario_payment', 'cta', 'clicked', NULL, '0xx', 'human_browser', $1, $2),
          ('registration_request', 'registration', 'success', 202, '2xx', 'human_browser', $1, NULL),
-         ('proof_request', 'proof', 'success', 201, '2xx', 'human_browser', $1, NULL),
-         ('proof_request', 'proof', 'success', 201, '2xx', 'human_browser', $1, NULL)`,
+          ('first_proof_verified', 'proof', 'success', 200, '2xx', 'human_browser', $1, NULL),
+          ('external_agent_second_proof_verified', 'proof', 'success', 200, '2xx', 'human_browser', $1, NULL)`,
       [hash, source],
     );
 
@@ -207,6 +215,45 @@ describe("GET /api/admin/conversion-funnel", () => {
       expect.objectContaining({ stage: "first_proof", visitors: 1 }),
       expect.objectContaining({ stage: "second_proof", visitors: 1 }),
     ]);
+  });
+
+  it("atomically records each proof verification milestone once across concurrent callers", async () => {
+    const run = crypto.randomUUID();
+    const proofId = crypto.randomUUID();
+    seededDedupKeys.push(`proof-verification:${proofId}`);
+    const ip = `198.51.100.${crypto.randomInt(1, 255)}`;
+    const req = {
+      query: {},
+      path: `/api/proof/${proofId}`,
+      get: (name: string) => name.toLowerCase() === "user-agent" ? "node-fetch" : undefined,
+      headers: { "x-forwarded-for": ip },
+      socket: { remoteAddress: ip },
+    } as any;
+    const expectedHash = crypto
+      .createHmac("sha256", process.env.SESSION_SECRET!)
+      .update("pba-conversion-visitor-v1\0")
+      .update(ip, "utf8")
+      .digest("hex");
+    seededTelemetryHashes.push(expectedHash);
+
+    const results = await Promise.all(
+      Array.from({ length: 12 }, () =>
+        recordProofVerificationMilestone(req, proofId, 2)
+      ),
+    );
+    expect(results.filter(Boolean)).toHaveLength(1);
+
+    const stored = await pool.query(
+      `SELECT event_type, COUNT(*)::int AS events
+       FROM conversion_events
+       WHERE dedup_key = $1
+       GROUP BY event_type`,
+      [`proof-verification:${proofId}`],
+    );
+    expect(stored.rows).toEqual([{
+      event_type: "external_agent_second_proof_verified",
+      events: 1,
+    }]);
   });
 
   it("returns daily totals and zero-conversion alerts to an authorized admin", async () => {

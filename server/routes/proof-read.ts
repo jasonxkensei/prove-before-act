@@ -10,7 +10,7 @@ import { computeDrift, DRIFT_MONITORED_FIELDS } from "./helpers";
 import { IRREVERSIBLE_CONFIDENCE_THRESHOLD, buildTimingBreakdown } from "../auditSchema";
 import { getTxExplorerUrl } from "../blockchain";
 import { CANONICAL_PUBLIC_ORIGIN } from "../publicOrigin";
-import { recordConversionEvent } from "../conversion-telemetry";
+import { recordProofVerificationMilestone } from "../conversion-telemetry";
 
 // Hard cap on rows materialized by any public metadata-keyed lookup. Public
 // integration endpoints filter `certifications.metadata` with JSONB extraction
@@ -136,14 +136,7 @@ export function registerProofReadRoutes(app: Express) {
       const isConfirmed = certification.blockchainStatus === "confirmed"
         && /^[a-fA-F0-9]{64}$/.test(certification.transactionHash ?? "");
       if (isConfirmed && (proofOrdinal === 1 || proofOrdinal === 2)) {
-        recordConversionEvent(req, {
-          eventType: proofOrdinal === 1
-            ? "first_proof_verified"
-            : "external_agent_second_proof_verified",
-          stage: "proof",
-          outcome: "success",
-          httpStatus: 200,
-        });
+        void recordProofVerificationMilestone(req, certification.id, proofOrdinal);
       }
 
       // Return only explicitly public fields — never spread the full DB row.

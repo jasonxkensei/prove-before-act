@@ -431,6 +431,7 @@ export async function migrateConversionEventsTable() {
         ip_hash VARCHAR(64) NOT NULL,
         referrer_host VARCHAR(128),
         utm_source VARCHAR(128),
+        dedup_key VARCHAR(160),
         created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
         CONSTRAINT conversion_events_stage_check CHECK (stage IN ('cta', 'registration', 'proof', 'purchase')),
         CONSTRAINT conversion_events_outcome_check CHECK (outcome IN ('seen', 'clicked', 'started', 'success', 'failure')),
@@ -444,10 +445,19 @@ export async function migrateConversionEventsTable() {
       ALTER TABLE conversion_events ADD CONSTRAINT conversion_events_stage_check
         CHECK (stage IN ('cta', 'registration', 'proof', 'purchase'))
     `);
+    await pool.query(`ALTER TABLE conversion_events ADD COLUMN IF NOT EXISTS dedup_key VARCHAR(160)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_conversion_events_day_funnel ON conversion_events (created_at, stage, outcome)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_conversion_events_day_segment ON conversion_events (created_at, traffic_segment)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_conversion_events_day_http ON conversion_events (created_at, http_class)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_conversion_events_ip_time ON conversion_events (ip_hash, created_at)`);
+    await pool.query(`DROP INDEX IF EXISTS idx_conversion_events_dedup_key`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_conversion_events_dedup_lookup ON conversion_events (dedup_key)`);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS conversion_event_dedup_keys (
+        dedup_key VARCHAR(160) PRIMARY KEY,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+      )
+    `);
     logger.info("conversion_events table ready", { component: "migration" });
   } catch (err: any) {
     logger.error("conversion_events migration error", { component: "migration", error: err.message });

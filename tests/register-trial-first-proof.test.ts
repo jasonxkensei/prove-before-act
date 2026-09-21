@@ -16,6 +16,7 @@ import {
   createDeterministicTestBlockchainAdapter,
   setTestBlockchainAdapter,
 } from "../server/blockchain";
+import { migrateConversionEventsTable } from "../server/maintenance";
 
 const BASE_URL = "http://localhost:5000";
 const TRIAL_QUOTA = 10;
@@ -282,6 +283,7 @@ describe("register_trial — registration response shape (no onboarding cert)", 
 describe("two-proof activation through authenticated proof creation", () => {
   it("registers, creates and verifies two proofs with one credential without broadcasting", async () => {
     setTestBlockchainAdapter(createDeterministicTestBlockchainAdapter());
+    await migrateConversionEventsTable();
     const app = express();
     app.set("trust proxy", 1);
     app.use(express.json());
@@ -360,6 +362,38 @@ describe("two-proof activation through authenticated proof creation", () => {
       });
       expect(JSON.stringify(secondVerified)).not.toContain(issuedKey);
 
+      const repeatedVerifications = await Promise.all([
+        fetch(`${baseUrl}/api/proof/${firstCreated.proof_id}`),
+        fetch(`${baseUrl}/api/proof/${firstCreated.proof_id}`),
+        mcpCallAt(baseUrl, "verify_proof", { proof_id: firstCreated.proof_id }, clientIp),
+        fetch(`${baseUrl}/api/proof/${secondCreated.proof_id}`),
+        mcpCallAt(baseUrl, "verify_proof", { proof_id: secondCreated.proof_id }, clientIp),
+        mcpCallAt(baseUrl, "verify_proof", { proof_id: secondCreated.proof_id }, clientIp),
+      ]);
+      expect(repeatedVerifications.every((response) => response.status === 200)).toBe(true);
+
+      let milestoneRows: Array<{ event_type: string; events: number }> = [];
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        const milestones = await pool.query(
+          `SELECT event_type, COUNT(*)::int AS events
+           FROM conversion_events
+           WHERE dedup_key = ANY($1)
+           GROUP BY event_type
+           ORDER BY event_type`,
+          [[
+            `proof-verification:${firstCreated.proof_id}`,
+            `proof-verification:${secondCreated.proof_id}`,
+          ]],
+        );
+        milestoneRows = milestones.rows;
+        if (milestoneRows.length === 2) break;
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
+      expect(milestoneRows).toEqual([
+        { event_type: "external_agent_second_proof_verified", events: 1 },
+        { event_type: "first_proof_verified", events: 1 },
+      ]);
+
       const statusResponse = await fetch(`${baseUrl}/api/agent/status`, {
         headers: { Authorization: `Bearer ${issuedKey}` },
       });
@@ -395,6 +429,24 @@ describe("two-proof activation through authenticated proof creation", () => {
       setTestBlockchainAdapter(null);
       await new Promise<void>((resolve, reject) =>
         server.close((error) => error ? reject(error) : resolve()),
+      );
+      await pool.query(
+        `DELETE FROM conversion_events
+         WHERE dedup_key IN (
+           SELECT 'proof-verification:' || id::text
+           FROM certifications
+           WHERE user_id = (SELECT id FROM users WHERE agent_name = $1)
+         )`,
+        [agentName],
+      );
+      await pool.query(
+        `DELETE FROM conversion_event_dedup_keys
+         WHERE dedup_key IN (
+           SELECT 'proof-verification:' || id::text
+           FROM certifications
+           WHERE user_id = (SELECT id FROM users WHERE agent_name = $1)
+         )`,
+        [agentName],
       );
       await pool.query(`DELETE FROM users WHERE agent_name = $1`, [agentName]);
       await pool.query(`DELETE FROM rate_limit_counters WHERE bucket = $1`, [registerBucket]);

@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import type { NextFunction, Request, Response } from "express";
 import { db } from "./db";
-import { conversionEvents } from "@shared/schema";
+import { conversionEventDedupKeys, conversionEvents } from "@shared/schema";
 import { getClientIp } from "./routes/helpers";
 import { logger } from "./logger";
 import { recordConversionTelemetryWriteFailure } from "./metrics";
@@ -23,6 +23,7 @@ export const CTA_NAMES = [
 
 type ConversionStage = "cta" | "registration" | "proof" | "purchase";
 type ConversionOutcome = "seen" | "clicked" | "started" | "success" | "failure";
+export type ProofVerificationOrdinal = 1 | 2;
 
 const SCANNER_UA_PATTERNS = [
   "semrush", "ahrefs", "zgrab", "masscan", "nmap", "nikto", "sqlmap",
@@ -121,6 +122,53 @@ export function recordConversionEvent(
     });
     checkAndAlertConversionTelemetry().catch(() => {});
   });
+}
+
+export async function recordProofVerificationMilestone(
+  req: Request,
+  proofId: string,
+  ordinal: ProofVerificationOrdinal,
+): Promise<boolean> {
+  const eventType = ordinal === 1
+    ? "first_proof_verified"
+    : "external_agent_second_proof_verified";
+  const status = 200;
+  const dedupKey = `proof-verification:${proofId}`;
+
+  try {
+    return await db.transaction(async (tx) => {
+      const claimed = await tx.insert(conversionEventDedupKeys).values({
+        dedupKey,
+      }).onConflictDoNothing({
+        target: conversionEventDedupKeys.dedupKey,
+      }).returning({ dedupKey: conversionEventDedupKeys.dedupKey });
+      if (claimed.length === 0) return false;
+
+      await tx.insert(conversionEvents).values({
+        eventType,
+        stage: "proof",
+        outcome: "success",
+        httpStatus: status,
+        httpClass: httpClass(status),
+        trafficSegment: classifyTrafficSegment(req),
+        ipHash: visitorKey(req),
+        referrerHost: getReferrerHost(req),
+        utmSource: typeof req.query.utm_source === "string"
+          ? req.query.utm_source.slice(0, 128)
+          : null,
+        dedupKey,
+      });
+      return true;
+    });
+  } catch (error: unknown) {
+    recordConversionTelemetryWriteFailure();
+    logger.warn("Conversion telemetry write failed", {
+      component: "conversion-telemetry",
+      error: error instanceof Error ? error.message : String(error),
+    });
+    checkAndAlertConversionTelemetry().catch(() => {});
+    return false;
+  }
 }
 
 // This must be mounted before body parsing, global API limiting, and request

@@ -459,12 +459,14 @@ export const conversionEvents = pgTable("conversion_events", {
   ipHash: varchar("ip_hash", { length: 64 }).notNull(),
   referrerHost: varchar("referrer_host", { length: 128 }),
   utmSource: varchar("utm_source", { length: 128 }),
+  dedupKey: varchar("dedup_key", { length: 160 }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   index("idx_conversion_events_day_funnel").on(table.createdAt, table.stage, table.outcome),
   index("idx_conversion_events_day_segment").on(table.createdAt, table.trafficSegment),
   index("idx_conversion_events_day_http").on(table.createdAt, table.httpClass),
   index("idx_conversion_events_ip_time").on(table.ipHash, table.createdAt),
+  index("idx_conversion_events_dedup_lookup").on(table.dedupKey),
   check("conversion_events_stage_check", sql`stage IN ('cta', 'registration', 'proof', 'purchase')`),
   check("conversion_events_outcome_check", sql`outcome IN ('seen', 'clicked', 'started', 'success', 'failure')`),
   check("conversion_events_http_class_check", sql`http_class IN ('0xx', '2xx', '3xx', '4xx', '5xx')`),
@@ -472,6 +474,13 @@ export const conversionEvents = pgTable("conversion_events", {
 ]);
 
 export type ConversionEvent = typeof conversionEvents.$inferSelect;
+
+// Permanent proof-scoped idempotency markers. These contain no visitor,
+// request, campaign, or referrer data, so telemetry rows can still expire.
+export const conversionEventDedupKeys = pgTable("conversion_event_dedup_keys", {
+  dedupKey: varchar("dedup_key", { length: 160 }).primaryKey(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
 
 export type CreditPurchase = typeof creditPurchases.$inferSelect;
 

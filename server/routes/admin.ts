@@ -493,11 +493,8 @@ export function registerAdminRoutes(app: Express) {
               AND outcome = 'success'
               AND http_class = '2xx'
             ) AS registered,
-            COUNT(*) FILTER (
-              WHERE stage = 'proof'
-                AND outcome = 'success'
-                AND http_status = 201
-            )::int AS successful_proofs
+            BOOL_OR(event_type = 'first_proof_verified') AS first_proof_verified,
+            BOOL_OR(event_type = 'external_agent_second_proof_verified') AS second_proof_verified
           FROM conversion_events
           WHERE created_at >= NOW() - INTERVAL '30 days'
           GROUP BY traffic_segment, ip_hash
@@ -507,8 +504,8 @@ export function registerAdminRoutes(app: Express) {
           COUNT(*) FILTER (WHERE scenario_selected)::int AS scenario_selected,
           COUNT(*) FILTER (WHERE primary_cta_clicked)::int AS primary_cta_clicked,
           COUNT(*) FILTER (WHERE registered)::int AS registered,
-          COUNT(*) FILTER (WHERE successful_proofs >= 1)::int AS first_proof,
-          COUNT(*) FILTER (WHERE successful_proofs >= 2)::int AS second_proof
+          COUNT(*) FILTER (WHERE first_proof_verified)::int AS first_proof,
+          COUNT(*) FILTER (WHERE second_proof_verified)::int AS second_proof
         FROM visitor_metrics
         GROUP BY traffic_segment
         ORDER BY traffic_segment
@@ -547,11 +544,8 @@ export function registerAdminRoutes(app: Express) {
               AND outcome = 'success'
               AND http_class = '2xx'
             ) AS registered,
-            COUNT(*) FILTER (
-              WHERE stage = 'proof'
-                AND outcome = 'success'
-                AND http_status = 201
-            )::int AS successful_proofs
+            BOOL_OR(event_type = 'first_proof_verified') AS first_proof_verified,
+            BOOL_OR(event_type = 'external_agent_second_proof_verified') AS second_proof_verified
           FROM window_events
           LEFT JOIN first_touch_source USING (ip_hash)
           GROUP BY campaign_source, window_events.ip_hash
@@ -562,25 +556,22 @@ export function registerAdminRoutes(app: Express) {
           COUNT(*) FILTER (WHERE scenario_selected)::int AS scenario_selected,
           COUNT(*) FILTER (WHERE primary_cta_clicked)::int AS primary_cta_clicked,
           COUNT(*) FILTER (WHERE registered)::int AS registered,
-          COUNT(*) FILTER (WHERE successful_proofs >= 1)::int AS first_proof,
-          COUNT(*) FILTER (WHERE successful_proofs >= 2)::int AS second_proof
+          COUNT(*) FILTER (WHERE first_proof_verified)::int AS first_proof,
+          COUNT(*) FILTER (WHERE second_proof_verified)::int AS second_proof
         FROM visitor_metrics
         GROUP BY campaign_source
         ORDER BY campaign_source
       `);
       const proofActivationResult = await db.execute(sql`
         SELECT
-          COUNT(*) FILTER (WHERE successful_proofs >= 1)::int AS first_proof_visitors,
-          COUNT(*) FILTER (WHERE successful_proofs >= 2)::int AS repeat_proof_visitors
-        FROM (
-          SELECT ip_hash, COUNT(*)::int AS successful_proofs
-          FROM conversion_events
-          WHERE created_at >= NOW() - INTERVAL '30 days'
-            AND stage = 'proof'
-            AND outcome = 'success'
-            AND http_status = 201
-          GROUP BY ip_hash
-        ) proof_visitors
+          COUNT(DISTINCT ip_hash) FILTER (
+            WHERE event_type = 'first_proof_verified'
+          )::int AS first_proof_visitors,
+          COUNT(DISTINCT ip_hash) FILTER (
+            WHERE event_type = 'external_agent_second_proof_verified'
+          )::int AS repeat_proof_visitors
+        FROM conversion_events
+        WHERE created_at >= NOW() - INTERVAL '30 days'
       `);
       const lastSevenDaysResult = await db.execute(sql`
         SELECT
