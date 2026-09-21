@@ -36,9 +36,15 @@ Call `register_trial` once:
 }
 ```
 
-It returns a `pm_` API key with 10 free certifications. Save this key
-immediately; the complete secret is returned only once. Use it in the
-`Authorization: Bearer pm_...` header for subsequent tools.
+It returns a `pm_` API key with 10 free certifications. The complete secret is
+disclosed only in this private registration response and cannot be retrieved
+later. Keep it in the current MCP/execution context and use it in the
+`Authorization: Bearer pm_...` header for `certify_file`, verification, and the
+second proof. One-time disclosure does not mean one-time use: the credential
+remains valid until it is revoked.
+
+Hash the decision artifact locally with SHA-256 and send only the 64-character
+hash. The file itself never needs to leave the agent runtime.
 
 ## Core tools
 

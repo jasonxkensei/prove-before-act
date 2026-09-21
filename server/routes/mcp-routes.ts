@@ -37,7 +37,15 @@ export function registerMcpRoutesRoutes(app: Express) {
           jsonrpc: "2.0",
           id: req.body?.id || null,
           result: {
-            content: [{ type: "text", text: JSON.stringify({ error: "UNAUTHORIZED", message: "No API key? Call register_trial with {agent_name: 'your-bot'} to get 10 free certifications instantly — no wallet, no credit card. Or include Authorization: Bearer pm_YOUR_KEY header." }) }],
+            content: [{ type: "text", text: JSON.stringify({
+              error: "UNAUTHORIZED",
+              message: "This tool requires the API key returned by register_trial.",
+              next_action: {
+                instruction: "If you just registered, retain api_key from that private response in the current execution context and retry this tool with the header below. The key remains valid even though it is disclosed only once.",
+                header: "Authorization: Bearer pm_YOUR_KEY",
+                otherwise: { tool: "register_trial", arguments: { agent_name: "your-bot" } },
+              },
+            }) }],
             isError: true,
           },
         });
@@ -46,7 +54,14 @@ export function registerMcpRoutesRoutes(app: Express) {
       const xPaymentHeader = req.headers["x-payment"] as string | undefined;
       const host = req.get('host') || '';
       const clientIp = getClientIp(req);
-      const mcpServer = await createMcpServer({ baseUrl, auth, xPaymentHeader, host, clientIp });
+      const mcpServer = await createMcpServer({
+        baseUrl,
+        auth,
+        xPaymentHeader,
+        host,
+        clientIp,
+        request: req,
+      });
 
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined,

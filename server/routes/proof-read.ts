@@ -10,6 +10,7 @@ import { computeDrift, DRIFT_MONITORED_FIELDS } from "./helpers";
 import { IRREVERSIBLE_CONFIDENCE_THRESHOLD, buildTimingBreakdown } from "../auditSchema";
 import { getTxExplorerUrl } from "../blockchain";
 import { CANONICAL_PUBLIC_ORIGIN } from "../publicOrigin";
+import { recordConversionEvent } from "../conversion-telemetry";
 
 // Hard cap on rows materialized by any public metadata-keyed lookup. Public
 // integration endpoints filter `certifications.metadata` with JSONB extraction
@@ -78,7 +79,13 @@ export function registerProofReadRoutes(app: Express) {
       // Reject non-UUID inputs immediately before touching the database.
       const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!id || !UUID_REGEX.test(id)) {
-        return res.status(400).json({ error: "Invalid proof id — expected UUID format" });
+        return res.status(400).json({
+          error: "INVALID_PROOF_ID",
+          message: "Invalid proof id — expected UUID format",
+          next_action: {
+            instruction: "Use proof_id or verify_url exactly as returned by POST /api/proof.",
+          },
+        });
       }
 
       const [certification] = await db
@@ -87,7 +94,13 @@ export function registerProofReadRoutes(app: Express) {
         .where(eq(certifications.id, id));
 
       if (!certification || !certification.isPublic) {
-        return res.status(404).json({ message: "Proof not found" });
+        return res.status(404).json({
+          error: "PROOF_NOT_FOUND",
+          message: "Proof not found",
+          next_action: {
+            instruction: "Check proof_id from the certification response and retry the returned verify_url.",
+          },
+        });
       }
 
       // Require the owning user to have a public profile — isPublic alone is insufficient.
@@ -105,6 +118,33 @@ export function registerProofReadRoutes(app: Express) {
         return res.status(404).json({ message: "Proof not found" });
       }
       const ownerWallet = owner.walletAddress;
+      const ordinalResult = await db.execute(sql`
+        SELECT proof_ordinal
+        FROM (
+          SELECT
+            id,
+            ROW_NUMBER() OVER (ORDER BY created_at ASC, id ASC)::int AS proof_ordinal
+          FROM certifications
+          WHERE user_id = ${certification.userId}
+            AND auth_method != 'onboarding'
+            AND blockchain_status = 'confirmed'
+            AND transaction_hash ~ '^[a-fA-F0-9]{64}$'
+        ) ranked
+        WHERE id = ${certification.id}
+      `);
+      const proofOrdinal = Number((ordinalResult.rows[0] as any)?.proof_ordinal ?? 0);
+      const isConfirmed = certification.blockchainStatus === "confirmed"
+        && /^[a-fA-F0-9]{64}$/.test(certification.transactionHash ?? "");
+      if (isConfirmed && (proofOrdinal === 1 || proofOrdinal === 2)) {
+        recordConversionEvent(req, {
+          eventType: proofOrdinal === 1
+            ? "first_proof_verified"
+            : "external_agent_second_proof_verified",
+          stage: "proof",
+          outcome: "success",
+          httpStatus: 200,
+        });
+      }
 
       // Return only explicitly public fields — never spread the full DB row.
       // Internal fields (userId, webhookUrl, webhookStatus, webhookAttempts,
@@ -124,6 +164,35 @@ export function registerProofReadRoutes(app: Express) {
         transactionHash: certification.transactionHash,
         transactionUrl: getTxExplorerUrl(certification.transactionHash),
         blockchainStatus: certification.blockchainStatus,
+        verified: isConfirmed,
+        activation: !isConfirmed
+          ? {
+              stage: "awaiting_confirmation",
+              complete: false,
+              next_action: {
+                method: "GET",
+                url: `${CANONICAL_PUBLIC_ORIGIN}/api/proof/${certification.id}`,
+                instruction: certification.blockchainStatus === "failed"
+                  ? "This proof failed to confirm and cannot complete activation. Create a new proof with a different hash."
+                  : "Wait for on-chain confirmation, then retry this URL.",
+              },
+            }
+          : proofOrdinal === 1
+            ? {
+                stage: "first_proof_verified",
+                complete: false,
+                next_action: {
+                  method: "POST",
+                  url: `${CANONICAL_PUBLIC_ORIGIN}/api/proof`,
+                  instruction: "Create proof #2 with a different locally computed SHA-256 hash, then open its verify_url.",
+                },
+              }
+            : proofOrdinal === 2
+              ? {
+                  stage: "external_agent_second_proof_verified",
+                  complete: true,
+                }
+              : undefined,
         certificateUrl: certification.certificateUrl,
         isPublic: certification.isPublic,
         metadata: certification.metadata,

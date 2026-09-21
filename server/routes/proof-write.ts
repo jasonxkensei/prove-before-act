@@ -376,6 +376,10 @@ export function registerProofWriteRoutes(app: Express) {
           return res.status(401).json({
             error: "INVALID_API_KEY",
             message: "API key must start with 'pm_' prefix",
+            next_action: {
+              instruction: "Use the exact key returned by registration.",
+              header: "Authorization: Bearer pm_YOUR_API_KEY",
+            },
           });
         }
 
@@ -387,6 +391,11 @@ export function registerProofWriteRoutes(app: Express) {
           return res.status(401).json({
             error: "INVALID_API_KEY",
             message: "Invalid or expired API key",
+            next_action: {
+              instruction: "Check the Authorization header. If the one-time registration key was lost, register a new uniquely named trial agent.",
+              header: "Authorization: Bearer pm_YOUR_API_KEY",
+              register: `POST https://${req.get("host")}/api/agent/register`,
+            },
           });
         }
 
@@ -443,6 +452,10 @@ export function registerProofWriteRoutes(app: Express) {
                 x402: buildX402Block(baseUrl),
                 prepaid_credits: buildPrepaidCreditsBlock(baseUrl),
                 check_balance: `GET ${baseUrl}/api/agent/status`,
+                next_action: {
+                  instruction: "The free trial is exhausted. Continue with prepaid credits or the x402 payment flow shown in this response.",
+                  options: ["prepaid_credits", "x402"],
+                },
               });
             }
           }
@@ -491,6 +504,12 @@ export function registerProofWriteRoutes(app: Express) {
             { type: "api_key", header: "Authorization: Bearer pm_xxx", description: "Use an existing API key" },
             { type: "x402", price: `Current live price — see ${baseUrl}/api/pricing`, network: "Base (USDC)", description: "Pay per use, no account needed" },
           ],
+          next_action: {
+            instruction: "Register for the free trial, retain the returned key in the current execution context, then retry this request with the Bearer header.",
+            method: "POST",
+            path: "/api/agent/register",
+            body: { agent_name: "your-agent-name" },
+          },
         });
       }
 
@@ -866,7 +885,12 @@ export function registerProofWriteRoutes(app: Express) {
             const [[{ cnt }], [ownerUser]] = await Promise.all([
               db.select({ cnt: sql<number>`count(*)` })
                 .from(certifications)
-                .where(and(eq(certifications.userId, ownerUserId), sql`auth_method != 'onboarding'`)),
+                .where(and(
+                  eq(certifications.userId, ownerUserId),
+                  sql`auth_method != 'onboarding'`,
+                  eq(certifications.blockchainStatus, "confirmed"),
+                  sql`transaction_hash ~ '^[a-fA-F0-9]{64}$'`,
+                )),
               db.select({
                 walletAddress: users.walletAddress,
                 agentName: users.agentName,
@@ -885,9 +909,11 @@ export function registerProofWriteRoutes(app: Express) {
             const trialLeft = ownerUser?.trialQuota != null
               ? Math.max(0, (ownerUser.trialQuota ?? TRIAL_QUOTA) - (ownerUser.trialUsed ?? 0) - 1)
               : null;
+            const proofOrdinal = Number(cnt);
 
             return {
-              ...(Number(cnt) === 1 ? { first_proof: true } : {}),
+              ...(proofOrdinal === 1 ? { first_proof: true } : {}),
+              ...(proofOrdinal === 2 ? { second_proof: true } : {}),
               guidance: {
                 // 1. Contextual 4W hints — action_type-aware, null if all fields provided
                 four_w: get4WHints(actionType, certMeta),
@@ -901,6 +927,9 @@ export function registerProofWriteRoutes(app: Express) {
                     { file_hash: "<sha256-hex>", filename: "artifact_2.json", author_name: agentName },
                   ],
                   remaining: trialLeft !== null ? `${trialLeft} trial certifications left` : "continue anchoring",
+                    activation_goal: proofOrdinal === 1
+                      ? "Create a second proof with a different locally computed SHA-256 hash, then open its verify_url."
+                      : "Second proof created. Open verify_url to complete activation.",
                 },
 
                 // 3. Coherence mode — available from cert #1, not unlocked at cert #3
@@ -1021,6 +1050,13 @@ export function registerProofWriteRoutes(app: Express) {
           error: "VALIDATION_ERROR",
           message: "Invalid request data",
           details: error.errors,
+          next_action: {
+            instruction: "Hash the artifact locally with SHA-256 and submit file_hash as exactly 64 hexadecimal characters. Include a non-empty filename.",
+            example: {
+              file_hash: "<64-character-sha256-hex>",
+              filename: "decision.json",
+            },
+          },
         });
       }
       logger.withRequest(req).error("Proof creation failed");

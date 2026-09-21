@@ -22,6 +22,8 @@ import { pgCheckRateLimit } from "./pgRateLimit";
 import { buildCoherenceAnchor } from "./coherence-anchor";
 import { isMX8004Configured } from "./mx8004";
 import { ensureDefaultAgent, resolveAgentForApiKey } from "./agent-identity";
+import type { Request } from "express";
+import { recordConversionEvent } from "./conversion-telemetry";
 
 interface McpContext {
   baseUrl: string;
@@ -29,6 +31,7 @@ interface McpContext {
   xPaymentHeader?: string;
   host: string;
   clientIp: string;
+  request?: Request;
 }
 
 // ── MCP calibration rate limiting + caching ───────────────────────────────
@@ -81,7 +84,7 @@ export async function createMcpServer(ctx: McpContext) {
     version: "1.3.0",
   });
 
-  const { baseUrl, auth, xPaymentHeader, host, clientIp } = ctx;
+  const { baseUrl, auth, xPaymentHeader, host, clientIp, request } = ctx;
   // authenticateApiKey resolves this from the validated key. The fallback is
   // retained for callers which construct an MCP context directly, and is
   // deliberately account-deterministic rather than derived from tool inputs.
@@ -108,7 +111,11 @@ export async function createMcpServer(ctx: McpContext) {
         const ipHash = crypto.createHash("sha256").update(clientIp).digest("hex").slice(0, 16);
         const regRl = await pgCheckRateLimit("register", ipHash, REGISTER_RATE_LIMIT_MAX, REGISTER_RATE_LIMIT_WINDOW_MS);
         if (!regRl.allowed) {
-          return { content: [{ type: "text" as const, text: JSON.stringify({ error: "RATE_LIMIT_EXCEEDED", message: `Maximum ${REGISTER_RATE_LIMIT_MAX} trial registrations per hour per IP. Try again later.` }) }], isError: true };
+          return { content: [{ type: "text" as const, text: JSON.stringify({
+            error: "RATE_LIMIT_EXCEEDED",
+            message: `Maximum ${REGISTER_RATE_LIMIT_MAX} trial registrations per hour per IP. Try again later.`,
+            next_action: { instruction: "Wait for the registration window to reset, then retry once." },
+          }) }], isError: true };
         }
 
         // Duplicate-name guard — same logic as REST endpoint
@@ -133,7 +140,15 @@ export async function createMcpServer(ctx: McpContext) {
           : [];
         if (existingByUser.length > 0 || existingByKey.length > 0) {
           const suggested = `${name}-${crypto.randomBytes(3).toString("hex")}`;
-          return { content: [{ type: "text" as const, text: JSON.stringify({ error: "DUPLICATE_AGENT_NAME", message: `An agent named "${name}" already exists. Try a unique name (e.g. "${suggested}").` }) }], isError: true };
+          return { content: [{ type: "text" as const, text: JSON.stringify({
+            error: "DUPLICATE_AGENT_NAME",
+            message: `An agent named "${name}" already exists.`,
+            next_action: {
+              tool: "register_trial",
+              arguments: { agent_name: suggested },
+              instruction: "Retry with a unique agent_name. Existing raw API keys cannot be retrieved.",
+            },
+          }) }], isError: true };
         }
 
         // Create trial user + API key — identical flow to REST endpoint.
@@ -160,10 +175,17 @@ export async function createMcpServer(ctx: McpContext) {
             registrationIpHash,
           }).returning();
 
+          await tx.insert(agents).values({
+            id: newUser.id,
+            ownerAccountId: newUser.id,
+            name,
+          });
+
           await tx.insert(apiKeys).values({
             keyHash,
             keyPrefix,
             userId: newUser.id,
+            agentId: newUser.id,
             name: `Trial: ${name}`,
             isActive: true,
           });
@@ -176,6 +198,20 @@ export async function createMcpServer(ctx: McpContext) {
           userId: trialUser.id,
           ipHash,
         });
+        if (request) {
+          recordConversionEvent(request, {
+            eventType: "agent_registered",
+            stage: "registration",
+            outcome: "success",
+            httpStatus: 200,
+          });
+          recordConversionEvent(request, {
+            eventType: "api_key_issued",
+            stage: "registration",
+            outcome: "success",
+            httpStatus: 200,
+          });
+        }
 
         // No onboarding certification is anchored at registration. Agents only
         // receive a certification when they explicitly request one via
@@ -196,9 +232,16 @@ export async function createMcpServer(ctx: McpContext) {
             type: "text" as const,
             text: JSON.stringify({
               success: true,
+              agent_id: trialUser.id,
               api_key: rawKey,
               agent_name: name,
               trial_remaining: trialRemaining,
+              credential_context: {
+                disclosure: "one_time",
+                usable_until: "revoked",
+                instruction: "Retain api_key in this private MCP/execution context and attach it as Authorization: Bearer <api_key> to the next MCP request. The key is not shown by later tools, but remains valid for proof #1, verification, proof #2, and later calls.",
+                warning: "Do not discard the key after reading this response. One-time disclosure does not mean one-time use.",
+              },
               authorization_guide: {
                 problem: "register_trial requires NO Authorization header — it is the only tool that works without a key. Every other tool (certify_file, audit_agent_session, etc.) requires Authorization: Bearer <api_key>.",
                 solution: `Add this header to your MCP client before calling any other tool: Authorization: Bearer ${rawKey}`,
@@ -217,10 +260,11 @@ export async function createMcpServer(ctx: McpContext) {
                 rest_example: `curl -s -X POST ${baseUrl}/api/proof -H "Authorization: Bearer ${rawKey}" -H "Content-Type: application/json" -d '{"file_hash":"${sampleHash}","filename":"output.json"}'`,
                 batch: `POST ${baseUrl}/api/batch to certify up to 50 files in a single call (Authorization: Bearer ${rawKey}).`,
               },
-              next_step: {
-                action: "Call certify_file",
-                note: "Replace file_hash with SHA-256 of your own content. No proof is created until you call certify_file.",
-                example: { file_hash: "<sha256-of-your-content>", filename: "output.json" },
+              next_action: {
+                tool: "certify_file",
+                authorization: `Bearer ${rawKey}`,
+                note: "Hash the artifact locally, retain the API key in the current execution context, then call certify_file. No file upload is required and no proof is created until this call.",
+                arguments: { file_hash: "<sha256-of-your-content>", filename: "output.json" },
                 rest_alternative: `curl -s -X POST ${baseUrl}/api/proof -H "Authorization: Bearer ${rawKey}" -H "Content-Type: application/json" -d '{"file_hash":"${sampleHash}","filename":"output.json"}'`,
               },
               message: `Registration complete. You have ${trialRemaining} free certifications. Configure Authorization: Bearer ${rawKey} in your MCP client, then call certify_file to anchor your first proof.`,
@@ -476,15 +520,29 @@ export async function createMcpServer(ctx: McpContext) {
         }
 
         // First real proof milestone
-        let firstProofMilestone: Record<string, any> | undefined;
+        let activationMilestone: Record<string, any> | undefined;
         if (certUserId) {
           try {
             const [{ cnt }] = await db
               .select({ cnt: sql<number>`count(*)` })
               .from(certifications)
-              .where(and(eq(certifications.userId, certUserId), sql`auth_method != 'onboarding'`));
-            if (Number(cnt) === 1) {
-              firstProofMilestone = {
+              .where(and(
+                eq(certifications.userId, certUserId),
+                sql`auth_method != 'onboarding'`,
+                eq(certifications.blockchainStatus, "confirmed"),
+                sql`transaction_hash ~ '^[a-fA-F0-9]{64}$'`,
+              ));
+            const proofOrdinal = Number(cnt);
+            if (request && (proofOrdinal === 1 || proofOrdinal === 2)) {
+              recordConversionEvent(request, {
+                eventType: proofOrdinal === 1 ? "first_proof_created" : "second_proof_created",
+                stage: "proof",
+                outcome: "success",
+                httpStatus: 201,
+              });
+            }
+            if (proofOrdinal === 1) {
+              activationMilestone = {
                 first_proof: true,
                 milestone: {
                   message: "This is your first on-chain proof. Your agent now has a verifiable track record on MultiversX.",
@@ -494,6 +552,17 @@ export async function createMcpServer(ctx: McpContext) {
                     certify_more: "Call certify_file again with a different file_hash",
                     upgrade: `POST ${baseUrl}/api/trial/claim — link these proofs to your real wallet`,
                     audit_trail: "Call audit_agent_session for session-level provenance",
+                  },
+                },
+              };
+            } else if (proofOrdinal === 2) {
+              activationMilestone = {
+                second_proof: true,
+                milestone: {
+                  message: "Your second proof is anchored. Call verify_proof with this proof_id to complete activation.",
+                  next_action: {
+                    tool: "verify_proof",
+                    arguments: { proof_id: certification.id },
                   },
                 },
               };
@@ -515,7 +584,7 @@ export async function createMcpServer(ctx: McpContext) {
               timestamp: certification.createdAt?.toISOString(),
               webhook_status: webhookStatus,
               ...(mcpWebhookSecret ? { webhook_secret: mcpWebhookSecret } : {}),
-              ...(firstProofMilestone ?? {}),
+              ...(activationMilestone ?? {}),
               message: "File certified on MultiversX blockchain. Proof is immutable and publicly verifiable.",
             }),
           }],
@@ -766,7 +835,12 @@ export async function createMcpServer(ctx: McpContext) {
             const [{ cnt }] = await db
               .select({ cnt: sql<number>`count(*)` })
               .from(certifications)
-              .where(and(eq(certifications.userId, auth.userId), sql`auth_method != 'onboarding'`));
+              .where(and(
+                eq(certifications.userId, auth.userId),
+                sql`auth_method != 'onboarding'`,
+                eq(certifications.blockchainStatus, "confirmed"),
+                sql`transaction_hash ~ '^[a-fA-F0-9]{64}$'`,
+              ));
             if (Number(cnt) === 1) {
               cwcFirstProofMilestone = {
                 first_proof: true,
@@ -828,9 +902,39 @@ export async function createMcpServer(ctx: McpContext) {
         if (!cert.userId) {
           return { content: [{ type: "text" as const, text: JSON.stringify({ error: "NOT_FOUND", message: "Proof not found" }) }], isError: true };
         }
-        const [owner] = await db.select({ isPublicProfile: users.isPublicProfile }).from(users).where(eq(users.id, cert.userId));
-        if (!owner?.isPublicProfile) {
+        const [owner] = await db.select({
+          isPublicProfile: users.isPublicProfile,
+          isTrial: users.isTrial,
+        }).from(users).where(eq(users.id, cert.userId));
+        if (!owner?.isPublicProfile && !owner?.isTrial) {
           return { content: [{ type: "text" as const, text: JSON.stringify({ error: "NOT_FOUND", message: "Proof not found" }) }], isError: true };
+        }
+        const ordinalResult = await db.execute(sql`
+          SELECT proof_ordinal
+          FROM (
+            SELECT
+              id,
+              ROW_NUMBER() OVER (ORDER BY created_at ASC, id ASC)::int AS proof_ordinal
+            FROM certifications
+            WHERE user_id = ${cert.userId}
+              AND auth_method != 'onboarding'
+              AND blockchain_status = 'confirmed'
+              AND transaction_hash ~ '^[a-fA-F0-9]{64}$'
+          ) ranked
+          WHERE id = ${cert.id}
+        `);
+        const ordinal = Number((ordinalResult.rows[0] as any)?.proof_ordinal ?? 0);
+        const isConfirmed = cert.blockchainStatus === "confirmed"
+          && /^[a-fA-F0-9]{64}$/.test(cert.transactionHash ?? "");
+        if (request && isConfirmed && (ordinal === 1 || ordinal === 2)) {
+          recordConversionEvent(request, {
+            eventType: ordinal === 1
+              ? "first_proof_verified"
+              : "external_agent_second_proof_verified",
+            stage: "proof",
+            outcome: "success",
+            httpStatus: 200,
+          });
         }
 
         return {
@@ -838,8 +942,8 @@ export async function createMcpServer(ctx: McpContext) {
             type: "text" as const,
             text: JSON.stringify({
               proof_id: cert.id,
-              status: cert.blockchainStatus || "confirmed",
-              verified: true,
+              status: cert.blockchainStatus || "pending",
+              verified: isConfirmed,
               file_hash: cert.fileHash,
               filename: cert.fileName,
               author: cert.authorName,
@@ -847,6 +951,32 @@ export async function createMcpServer(ctx: McpContext) {
               certificate_url: `${baseUrl}/api/certificates/${cert.id}.pdf`,
               blockchain: { network: "MultiversX", transaction_hash: cert.transactionHash, explorer_url: cert.transactionUrl },
               timestamp: cert.createdAt?.toISOString(),
+              activation: !isConfirmed
+                ? {
+                    stage: "awaiting_confirmation",
+                    complete: false,
+                    next_action: {
+                      tool: "verify_proof",
+                      arguments: { proof_id: cert.id },
+                      instruction: cert.blockchainStatus === "failed"
+                        ? "This proof failed to confirm and cannot complete activation. Create a new proof with a different hash."
+                        : "Wait for on-chain confirmation, then call verify_proof again.",
+                    },
+                  }
+                : ordinal === 1
+                ? {
+                    stage: "first_proof_verified",
+                    next_action: {
+                      tool: "certify_file",
+                      instruction: "Create proof #2 with a different locally computed SHA-256 hash, then call verify_proof on its proof_id.",
+                    },
+                  }
+                : ordinal === 2
+                  ? {
+                      stage: "external_agent_second_proof_verified",
+                      complete: true,
+                    }
+                  : undefined,
             }),
           }],
         };

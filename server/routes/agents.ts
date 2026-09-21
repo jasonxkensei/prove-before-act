@@ -12,6 +12,7 @@ import { TRIAL_QUOTA, REGISTER_RATE_LIMIT_MAX, REGISTER_RATE_LIMIT_WINDOW_MS, ge
 import { pgCheckRateLimit } from "../pgRateLimit";
 import { CANONICAL_PUBLIC_ORIGIN } from "../publicOrigin";
 import { getCertificationPriceUsd } from "../pricing";
+import { recordConversionEvent } from "../conversion-telemetry";
 
 // ============================================
 // Builds the machine-actionable quick_start guide
@@ -395,6 +396,9 @@ export function registerAgentsRoutes(app: Express) {
           error: "RATE_LIMIT_EXCEEDED",
           message: `Maximum ${REGISTER_RATE_LIMIT_MAX} trial registrations per hour per IP. Try again later.`,
           retry_after: Math.ceil((regRl.resetAt - Date.now()) / 1000),
+          next_action: {
+            instruction: "Wait for retry_after seconds, then retry registration once.",
+          },
         });
       }
 
@@ -428,6 +432,12 @@ export function registerAgentsRoutes(app: Express) {
           message: `An agent named "${data.agent_name}" already exists on a real wallet. Registration blocked to prevent duplicates.`,
           resolution: `If this is your agent: connect your wallet at ${baseUrl} and use your existing API key. If you need a trial key for a different agent: choose a unique name (e.g. "${data.agent_name}-v2" or "${data.agent_name}-${crypto.randomBytes(3).toString("hex")}").`,
           claim_endpoint: `POST ${baseUrl}/api/trial/claim`,
+          next_action: {
+            method: "POST",
+            path: "/api/agent/register",
+            instruction: "Retry with a unique agent_name. Existing raw API keys cannot be retrieved.",
+            body: { agent_name: `${data.agent_name}-v2` },
+          },
         });
       }
 
@@ -488,6 +498,18 @@ export function registerAgentsRoutes(app: Express) {
         ipHash,
         hasWebhook: !!data.webhook_url,
       });
+      recordConversionEvent(req, {
+        eventType: "agent_registered",
+        stage: "registration",
+        outcome: "success",
+        httpStatus: 201,
+      });
+      recordConversionEvent(req, {
+        eventType: "api_key_issued",
+        stage: "registration",
+        outcome: "success",
+        httpStatus: 201,
+      });
 
       const baseUrl = CANONICAL_PUBLIC_ORIGIN;
 
@@ -496,8 +518,24 @@ export function registerAgentsRoutes(app: Express) {
       const trialRemaining = TRIAL_QUOTA;
 
       return res.status(201).json({
+        agent_id: trialUser.id,
         api_key: rawKey,
         agent_name: data.agent_name,
+        credential_handling: {
+          disclosure: "one_time",
+          scope: "private_registration_response",
+          usable_until: "revoked",
+          instruction: "Keep this credential in the current private execution context. The full key cannot be retrieved later, but it remains valid for immediate and subsequent authenticated requests.",
+          warning: "One-time disclosure does not mean one-time use. Do not discard the key before creating and verifying your proofs.",
+        },
+        next_action: {
+          method: "POST",
+          path: "/api/proof",
+          url: `${baseUrl}/api/proof`,
+          authorization: `Bearer ${rawKey}`,
+          content_type: "application/json",
+          instruction: "Hash the decision artifact locally with SHA-256. Submit only the 64-character hash; do not upload the artifact.",
+        },
         authorization_guide: {
           problem: "POST /api/agent/register requires NO Authorization header — it is the only endpoint that works without a key. Every other endpoint (POST /api/proof, GET /api/agent/status, etc.) requires Authorization: Bearer <api_key>.",
           solution: `Add this header to every subsequent request: Authorization: Bearer ${rawKey}`,
@@ -751,7 +789,7 @@ export function registerAgentsRoutes(app: Express) {
           request: {
             method: "POST",
             url: `${baseUrl}/api/proof`,
-            headers: { Authorization: `Bearer ${rawKey}`, "Content-Type": "application/json" },
+             headers: { Authorization: "Bearer <current_api_key>", "Content-Type": "application/json" },
             body: {
               file_hash: "<sha256-hex-64-chars>",
               filename: "decision.json",
@@ -765,8 +803,9 @@ export function registerAgentsRoutes(app: Express) {
               },
             },
           },
+          credential_note: "Reuse the API key already held by this private execution context. This endpoint intentionally never redisplays the full secret.",
           curl: `curl -X POST "${baseUrl}/api/proof" \\
-  -H "Authorization: Bearer ${rawKey}" \\
+  -H "Authorization: Bearer $PROVE_BEFORE_ACT_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"file_hash":"<sha256-hex>","filename":"decision.json","author_name":"${agentName}","metadata":{"action_type":"decision","who":"${agentName}","why":"<instruction>"}}'`,
         };
@@ -794,8 +833,9 @@ export function registerAgentsRoutes(app: Express) {
           certify: {
             single: `POST ${baseUrl}/api/proof — individual certifications`,
             batch: `POST ${baseUrl}/api/batch — up to 50 files per call, same price. Use for CI/CD or multi-artifact runs.`,
-            batch_curl: `curl -X POST "${baseUrl}/api/batch" \\\n  -H "Authorization: Bearer ${rawKey}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"files":[{"file_hash":"<sha256>","filename":"artifact_1.wasm"},{"file_hash":"<sha256>","filename":"artifact_2.json"}]}'`,
-            single_curl: `curl -X POST "${baseUrl}/api/proof" \\\n  -H "Authorization: Bearer ${rawKey}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"file_hash":"<sha256-hex>","filename":"decision.json","author_name":"${agentNameCtx}","metadata":{"action_type":"decision","who":"${agentNameCtx}","why":"<intent>"}}'`,
+            credential_note: "Reuse the API key already held by this private execution context. This endpoint intentionally never redisplays the full secret.",
+            batch_curl: `curl -X POST "${baseUrl}/api/batch" \\\n  -H "Authorization: Bearer $PROVE_BEFORE_ACT_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{"files":[{"file_hash":"<sha256>","filename":"artifact_1.wasm"},{"file_hash":"<sha256>","filename":"artifact_2.json"}]}'`,
+            single_curl: `curl -X POST "${baseUrl}/api/proof" \\\n  -H "Authorization: Bearer $PROVE_BEFORE_ACT_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{"file_hash":"<sha256-hex>","filename":"decision.json","author_name":"${agentNameCtx}","metadata":{"action_type":"decision","who":"${agentNameCtx}","why":"<intent>"}}'`,
           },
           tips: [
             "Add metadata.who / what / when / why for complete 4W provenance. Run GET /api/agent/status after a proof to see which fields are missing.",
@@ -924,11 +964,12 @@ export function registerAgentsRoutes(app: Express) {
         },
         mcp_config: {
           description: "If you support MCP (Claude Desktop, Cursor, etc.), add Prove Before Act to your config",
+          credential_note: "Substitute the API key already held by the current private execution context. The full secret is intentionally not returned by this status endpoint.",
           claude_desktop_config: {
             mcpServers: {
               "prove-before-act": {
                 url: `${baseUrl}/mcp`,
-                headers: { Authorization: `Bearer ${rawKey}` },
+                headers: { Authorization: "Bearer <current_api_key>" },
               },
             },
           },

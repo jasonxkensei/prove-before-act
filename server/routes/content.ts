@@ -2233,9 +2233,7 @@ ${urls}
     const priceUsd = await getCertificationPriceUsd();
     const content = `# Prove Before Act — Prove Before & After Act
 
-> No API key needed. Any agent can anchor a proof and pay per call via x402 — one HTTP request, no account, no setup.
-
-**x402 — machine-native payment**: POST /api/proof (no auth) → HTTP 402 → sign $${priceUsd} USDC on Base (eip155:8453) → resend with X-PAYMENT header → proof_id returned. Zero setup, zero human involvement. Any agent with a Base wallet is production-ready in one session.
+> Start with ${TRIAL_QUOTA} free proofs. No wallet, credit card, payment setup, or file upload is required.
 
 **Prove Before & After Act**: declare and hash a decision basis (WHY: intended action, context, and justification) BEFORE executing any significant agent action, then anchor the actual result (WHAT) AFTER. Never provide internal chain-of-thought. The hash stays local — nothing sensitive leaves the agent.
 
@@ -2262,7 +2260,9 @@ curl -X POST https://provebeforeact.com/api/agent/register \\\\
   -H "Content-Type: application/json" \\\\
   -d '{"agent_name": "my-agent"}'
 \\\`\\\`\\\`
-Returns an API key (pm_xxx). Use it immediately to certify files.
+Returns an API key (pm_xxx). The full secret is disclosed only in this private
+registration response. Retain it in the current execution context: it remains
+usable until revoked even though no later endpoint will display it again.
 
 Check quota and your certifications at any time:
 \\\`\\\`\\\`bash
@@ -2272,13 +2272,58 @@ Returns: trial_remaining, trial_used, total certifications. Each POST /api/proof
 
 ## Quick Start (for AI agents)
 
+This section is the canonical zero-knowledge activation contract. If another
+document is less specific, follow this sequence and the live response fields.
+
 ### REST API
-Certify a file in one API call:
+PBA does not require uploading the decision file. Hash the artifact locally and
+submit only its SHA-256 hash.
+
+Canonical activation path:
+1. Register and retain the returned API key in the current private context.
+2. Hash \`decision.json\` locally.
+3. Create proof #1 with \`POST /api/proof\` and the Bearer header.
+4. Open the returned \`verify_url\`.
+5. Repeat with a different artifact/hash for proof #2 and open its \`verify_url\`.
+
+#### curl
 \\\`\\\`\\\`bash
+FILE_HASH=$(sha256sum decision.json | awk '{print $1}')
 curl -X POST https://provebeforeact.com/api/proof \\\\
   -H "Authorization: Bearer pm_YOUR_API_KEY" \\\\
   -H "Content-Type: application/json" \\\\
-  -d '{"file_hash": "a1b2c3d4...64-char-sha256-hex", "filename": "document.pdf", "webhook_url": "https://your-agent.example.com/webhooks/prove-before-act"}'
+  -d "{\\"file_hash\\":\\"$FILE_HASH\\",\\"filename\\":\\"decision.json\\"}"
+\\\`\\\`\\\`
+
+#### JavaScript / TypeScript
+\\\`\\\`\\\`typescript
+import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+const fileHash = createHash("sha256").update(await readFile("decision.json")).digest("hex");
+const response = await fetch("https://provebeforeact.com/api/proof", {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer pm_YOUR_API_KEY",
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({ file_hash: fileHash, filename: "decision.json" })
+});
+const proof = await response.json();
+console.log(proof.verify_url);
+\\\`\\\`\\\`
+
+#### Python
+\\\`\\\`\\\`python
+import hashlib
+import requests
+with open("decision.json", "rb") as artifact:
+    file_hash = hashlib.sha256(artifact.read()).hexdigest()
+proof = requests.post(
+    "https://provebeforeact.com/api/proof",
+    headers={"Authorization": "Bearer pm_YOUR_API_KEY"},
+    json={"file_hash": file_hash, "filename": "decision.json"},
+).json()
+print(proof["verify_url"])
 \\\`\\\`\\\`
 
 Response: proof_id, verify_url, certificate_url, blockchain transaction hash, webhook_status.
