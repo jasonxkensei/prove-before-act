@@ -54,4 +54,13 @@ describe("Stripe prepaid-pack public contract", () => {
       'findOrCreateManagedWebhook(`${webhookOrigin}/api/webhooks/stripe`)',
     );
   });
+
+  it("synchronizes all three prepaid packs into the active Stripe catalog", () => {
+    const stripeInitialization = read("server/stripe.ts");
+    const credits = read("server/credits.ts");
+    expect(stripeInitialization).toContain("ensureStripeCreditCatalog");
+    expect(stripeInitialization).toContain("for (const pkg of CREDIT_PACKAGES)");
+    expect(stripeInitialization).toContain("default_price: price.id");
+    expect(credits).not.toContain("best unit price");
+  });
 });

@@ -1,8 +1,83 @@
 import { runMigrations } from "stripe-replit-sync";
-import { getStripeSync } from "./stripeClient";
+import { getStripeSync, getUncachableStripeClient } from "./stripeClient";
 import { logger } from "./logger";
 import { pool } from "./db";
 import { CANONICAL_PUBLIC_ORIGIN } from "./publicOrigin";
+import { CREDIT_PACKAGES } from "./credits";
+import { getCertificationPriceUsd } from "./pricing";
+
+async function ensureStripeCreditCatalog(): Promise<void> {
+  const stripe = await getUncachableStripeClient();
+  const products = await stripe.products.list({ limit: 100 });
+  const unitPriceUsd = await getCertificationPriceUsd();
+
+  for (const pkg of CREDIT_PACKAGES) {
+    let product = products.data.find(
+      (candidate) => candidate.metadata.pba_package_id === pkg.id,
+    );
+
+    if (!product) {
+      product = await stripe.products.create({
+        name: pkg.name,
+        description: pkg.description,
+        active: true,
+        metadata: { pba_package_id: pkg.id },
+      });
+    } else if (
+      product.name !== pkg.name
+      || product.description !== pkg.description
+      || !product.active
+    ) {
+      product = await stripe.products.update(product.id, {
+        name: pkg.name,
+        description: pkg.description,
+        active: true,
+        metadata: { pba_package_id: pkg.id },
+      });
+    }
+
+    const amountUsdCents = Math.round(unitPriceUsd * pkg.certs * 100);
+    if (!Number.isSafeInteger(amountUsdCents) || amountUsdCents <= 0) {
+      throw new Error(`Invalid Stripe catalog price for package ${pkg.id}`);
+    }
+
+    const prices = await stripe.prices.list({
+      product: product.id,
+      active: true,
+      currency: "usd",
+      limit: 100,
+    });
+    let price = prices.data.find(
+      (candidate) => candidate.type === "one_time"
+        && candidate.unit_amount === amountUsdCents,
+    );
+    if (!price) {
+      price = await stripe.prices.create({
+        product: product.id,
+        unit_amount: amountUsdCents,
+        currency: "usd",
+        metadata: {
+          pba_package_id: pkg.id,
+          pricing_source: "live_certification_rate",
+        },
+      });
+    }
+
+    if (
+      (typeof product.default_price === "string"
+        ? product.default_price
+        : product.default_price?.id)
+      !== price.id
+    ) {
+      await stripe.products.update(product.id, { default_price: price.id });
+    }
+  }
+
+  logger.info("Stripe credit catalog synchronized", {
+    component: "stripe",
+    packages: CREDIT_PACKAGES.length,
+  });
+}
 
 export async function initializeStripe(): Promise<void> {
   const databaseUrl = process.env.DATABASE_URL;
@@ -53,6 +128,7 @@ export async function initializeStripe(): Promise<void> {
   // a legacy hostname. Development keeps its replit.dev callback so test-mode
   // events never get delivered to the live application.
   await stripeSync.findOrCreateManagedWebhook(`${webhookOrigin}/api/webhooks/stripe`);
+  await ensureStripeCreditCatalog();
   await stripeSync.syncBackfill();
   logger.info("Stripe checkout and synchronization initialized", { component: "stripe" });
 }
