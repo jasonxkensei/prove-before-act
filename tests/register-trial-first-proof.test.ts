@@ -8,14 +8,38 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import crypto from "crypto";
+import express from "express";
 import { pool } from "../server/db";
 import { REGISTER_RATE_LIMIT_WINDOW_MS } from "../server/routes/helpers";
+import { registerRoutes } from "../server/routes";
+import {
+  createDeterministicTestBlockchainAdapter,
+  setTestBlockchainAdapter,
+} from "../server/blockchain";
 
 const BASE_URL = "http://localhost:5000";
 const TRIAL_QUOTA = 10;
 
 function mcpCall(method: string, params: Record<string, unknown>, clientIp: string, auth?: string) {
   return fetch(`${BASE_URL}/mcp`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "application/json, text/event-stream",
+      "X-Forwarded-For": clientIp,
+      ...(auth ? { Authorization: `Bearer ${auth}` } : {}),
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: { name: method, arguments: params },
+    }),
+  });
+}
+
+function mcpCallAt(baseUrl: string, method: string, params: Record<string, unknown>, clientIp: string, auth?: string) {
+  return fetch(`${baseUrl}/mcp`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -253,6 +277,129 @@ describe("register_trial — registration response shape (no onboarding cert)", 
     expect(qs?.mcp_certify).toContain("certify_file");
     expect(qs?.batch).toContain("/api/batch");
   });
+});
+
+describe("two-proof activation through authenticated proof creation", () => {
+  it("registers, creates and verifies two proofs with one credential without broadcasting", async () => {
+    setTestBlockchainAdapter(createDeterministicTestBlockchainAdapter());
+    const app = express();
+    app.set("trust proxy", 1);
+    app.use(express.json());
+    const server = await registerRoutes(app);
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Test server did not bind a TCP port");
+    const baseUrl = `http://127.0.0.1:${address.port}`;
+    const agentName = uniqueName("two-proof-activation");
+    const clientIp = `198.20.${crypto.randomInt(1, 255)}.${crypto.randomInt(1, 255)}`;
+    const rateLimitWindowStart = Math.floor(Date.now() / REGISTER_RATE_LIMIT_WINDOW_MS) * REGISTER_RATE_LIMIT_WINDOW_MS;
+    const registerBucket = rateLimitBucket(clientIp, rateLimitWindowStart);
+
+    try {
+      const registrationResponse = await mcpCallAt(baseUrl, "register_trial", { agent_name: agentName }, clientIp);
+      expect(registrationResponse.status).toBe(200);
+      const registrationEnvelope = await registrationResponse.json();
+      const registration = JSON.parse(registrationEnvelope.result.content[0].text);
+      const issuedKey = registration.api_key;
+      expect(issuedKey).toMatch(/^pm_/);
+      expect(registration.trial_remaining).toBe(10);
+
+      const firstHash = crypto.createHash("sha256").update(`${agentName}:proof:1`).digest("hex");
+      const firstCreateResponse = await fetch(`${baseUrl}/api/proof`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${issuedKey}`,
+          "X-Forwarded-For": clientIp,
+        },
+        body: JSON.stringify({ file_hash: firstHash, filename: "activation-1.json" }),
+      });
+      expect(firstCreateResponse.status).toBe(201);
+      const firstCreated = await firstCreateResponse.json();
+      expect(firstCreated.blockchain.transaction_hash).toMatch(/^[a-f0-9]{64}$/);
+      expect(firstCreated.trial.remaining).toBe(9);
+
+      const firstVerifyResponse = await mcpCallAt(
+        baseUrl,
+        "verify_proof",
+        { proof_id: firstCreated.proof_id },
+        clientIp,
+      );
+      const firstVerifyEnvelope = await firstVerifyResponse.json();
+      const firstVerified = JSON.parse(firstVerifyEnvelope.result.content[0].text);
+      expect(firstVerified).toMatchObject({
+        verified: true,
+        activation: { stage: "first_proof_verified" },
+      });
+      expect(JSON.stringify(firstVerified)).not.toContain(issuedKey);
+
+      const secondHash = crypto.createHash("sha256").update(`${agentName}:proof:2`).digest("hex");
+      const secondCreateResponse = await mcpCallAt(
+        baseUrl,
+        "certify_file",
+        { file_hash: secondHash, filename: "activation-2.json" },
+        clientIp,
+        issuedKey,
+      );
+      expect(secondCreateResponse.status).toBe(200);
+      const secondCreateEnvelope = await secondCreateResponse.json();
+      expect(secondCreateEnvelope.result?.isError).not.toBe(true);
+      const secondCreated = JSON.parse(secondCreateEnvelope.result.content[0].text);
+      expect(secondCreated.blockchain.transaction_hash).toMatch(/^[a-f0-9]{64}$/);
+
+      const secondVerifyResponse = await fetch(`${baseUrl}/api/proof/${secondCreated.proof_id}`);
+      expect(secondVerifyResponse.status).toBe(200);
+      const secondVerified = await secondVerifyResponse.json();
+      expect(secondVerified).toMatchObject({
+        verified: true,
+        activation: {
+          stage: "external_agent_second_proof_verified",
+          complete: true,
+        },
+      });
+      expect(JSON.stringify(secondVerified)).not.toContain(issuedKey);
+
+      const statusResponse = await fetch(`${baseUrl}/api/agent/status`, {
+        headers: { Authorization: `Bearer ${issuedKey}` },
+      });
+      expect(statusResponse.status).toBe(200);
+      const status = await statusResponse.json();
+      expect(status.credits.trial).toMatchObject({ quota: 10, used: 2, remaining: 8 });
+      expect(JSON.stringify(status)).not.toContain(issuedKey);
+
+      const userResult = await pool.query(`SELECT id FROM users WHERE agent_name = $1`, [agentName]);
+      const userId = userResult.rows[0]?.id;
+      for (const fixture of [
+        { name: "pending.json", status: "pending", tx: null },
+        { name: "failed.json", status: "failed", tx: crypto.randomBytes(32).toString("hex") },
+        { name: "malformed.json", status: "confirmed", tx: "not-a-valid-transaction-hash" },
+      ]) {
+        const inserted = await pool.query(
+          `INSERT INTO certifications
+            (user_id, agent_id, file_name, file_hash, auth_method, blockchain_status, is_public, transaction_hash)
+           VALUES ($1, $1, $2, $3, 'api_key', $4, true, $5)
+           RETURNING id`,
+          [userId, fixture.name, crypto.randomBytes(32).toString("hex"), fixture.status, fixture.tx],
+        );
+        const response = await mcpCallAt(baseUrl, "verify_proof", { proof_id: inserted.rows[0].id }, clientIp);
+        const envelope = await response.json();
+        const verification = JSON.parse(envelope.result.content[0].text);
+        expect(verification).toMatchObject({
+          verified: false,
+          activation: { stage: "awaiting_confirmation", complete: false },
+        });
+        expect(JSON.stringify(verification)).not.toContain(issuedKey);
+      }
+    } finally {
+      setTestBlockchainAdapter(null);
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => error ? reject(error) : resolve()),
+      );
+      await pool.query(`DELETE FROM users WHERE agent_name = $1`, [agentName]);
+      await pool.query(`DELETE FROM rate_limit_counters WHERE bucket = $1`, [registerBucket]);
+    }
+  }, 30_000);
 });
 
 describe("POST /api/agent/register — registration response shape (no onboarding cert)", () => {
