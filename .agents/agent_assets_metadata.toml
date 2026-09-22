@@ -119,3 +119,17 @@ mtime_ms = 1790074723392
 storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/88399382-c6a8-4a20-86c5-f2f842de1afa/cbee5a17-f720-442e-9894-ad969bd3711c"
 storage_version_token = "1790075181548070"
 content_type = "image/jpeg"
+
+[[outputs]]
+id = "LXk8LhxkQBj__Ahv_WF6Y"
+uri = "file://screenshots/product-hunt-interactive-demo.jpg"
+type = "image"
+title = "Démo interactive Product Hunt"
+description = "Aperçu desktop de la nouvelle route /demo, conçue pour raconter le parcours Prove Before Act en 90 secondes."
+logical_id = "8778465c-2b3f-4125-a9a5-5a33d16fb353"
+content_hash = "sha256:df80750d0eb914624b42eb2b99831c96a689898b228e249951799c30e3c9df9a"
+size = 58569
+mtime_ms = 1790076021597
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/8778465c-2b3f-4125-a9a5-5a33d16fb353/6aff69cb-08fb-425e-a3e5-fe429113fcdb"
+storage_version_token = "1790076070802434"
+content_type = "image/jpeg"

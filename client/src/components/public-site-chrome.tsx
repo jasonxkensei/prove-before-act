@@ -126,17 +126,17 @@ export function PublicSiteHeader({
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
               <DropdownMenuLabel>Explore</DropdownMenuLabel>
-               {PUBLIC_MORE_NAV.slice(0, 4).map(({ href, label }) => (
+               {PUBLIC_MORE_NAV.slice(0, 5).map(({ href, label }) => (
                  <DropdownMenuItem key={href} asChild><a href={href}>{label}</a></DropdownMenuItem>
                ))}
               <DropdownMenuSeparator />
               <DropdownMenuLabel>Developers</DropdownMenuLabel>
-               {PUBLIC_MORE_NAV.slice(4, 7).map(({ href, label }) => (
+               {PUBLIC_MORE_NAV.slice(5, 8).map(({ href, label }) => (
                  <DropdownMenuItem key={href} asChild><a href={href}>{label}</a></DropdownMenuItem>
                ))}
               <DropdownMenuSeparator />
                <DropdownMenuLabel>About</DropdownMenuLabel>
-               {PUBLIC_MORE_NAV.slice(7).map(({ href, label }) => (
+               {PUBLIC_MORE_NAV.slice(8).map(({ href, label }) => (
                  <DropdownMenuItem key={href} asChild><a href={href}>{label}</a></DropdownMenuItem>
                ))}
             </DropdownMenuContent>
