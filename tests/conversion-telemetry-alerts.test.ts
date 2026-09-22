@@ -129,3 +129,114 @@ describe("conversion telemetry sustained-failure alerts", () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("conversion telemetry retention-cleanup alerts", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    process.env = { ...ORIGINAL_ENV };
+    delete process.env.TX_ALERT_WEBHOOK_URL;
+    process.env.CONVERSION_TELEMETRY_ALERT_WEBHOOK_URL = "https://example.com/hooks/telemetry-alert";
+    process.env.CONVERSION_TELEMETRY_PURGE_ALERT_THRESHOLD = "2";
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-22T08:00:00.000Z"));
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("fires after repeated purge failures and resolves after a successful purge", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const metrics = await import("../server/metrics");
+    const {
+      checkAndAlertConversionTelemetryPurge,
+      getConversionTelemetryAlertConfig,
+    } = await import("../server/conversionTelemetryAlerts");
+
+    metrics.recordConversionTelemetryPurgeFailure();
+    await checkAndAlertConversionTelemetryPurge();
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    metrics.recordConversionTelemetryPurgeFailure();
+    await checkAndAlertConversionTelemetryPurge();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(fetchSpy.mock.calls[0][1].body)).toMatchObject({
+      alert: "conversion_telemetry_retention_cleanup",
+      severity: "critical",
+      status: "firing",
+      consecutive_failures: 2,
+      threshold: 2,
+    });
+    expect(getConversionTelemetryAlertConfig().purgeAlertActive).toBe(true);
+
+    metrics.recordConversionTelemetryPurgeFailure();
+    await checkAndAlertConversionTelemetryPurge();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+    vi.advanceTimersByTime(24 * 60 * 60 * 1000);
+    metrics.recordConversionTelemetryPurgeSuccess();
+    await checkAndAlertConversionTelemetryPurge();
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(fetchSpy.mock.calls[1][1].body)).toMatchObject({
+      alert: "conversion_telemetry_retention_cleanup",
+      severity: "info",
+      status: "resolved",
+      consecutive_failures: 0,
+      threshold: 2,
+      last_success_at: "2026-09-23T08:00:00.000Z",
+    });
+    expect(metrics.getConversionTelemetryPurgeStats()).toMatchObject({
+      consecutive_failures: 0,
+      last_failure_at: "2026-09-22T08:00:00.000Z",
+      last_success_at: "2026-09-23T08:00:00.000Z",
+    });
+    expect(getConversionTelemetryAlertConfig().purgeAlertActive).toBe(false);
+
+    for (const [, init] of fetchSpy.mock.calls) {
+      const payload = JSON.parse(init.body);
+      expect(payload).not.toHaveProperty("dedup_key");
+      expect(payload).not.toHaveProperty("proof_id");
+    }
+  });
+
+  it.each([
+    ["network failure", new Error("webhook unavailable")],
+    ["non-2xx response", { ok: false, status: 503 }],
+  ])("retries the firing alert after a %s", async (_label, firstResult) => {
+    const fetchSpy = firstResult instanceof Error
+      ? vi.fn()
+          .mockRejectedValueOnce(firstResult)
+          .mockResolvedValue({ ok: true, status: 200 })
+      : vi.fn()
+          .mockResolvedValueOnce(firstResult)
+          .mockResolvedValue({ ok: true, status: 200 });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const metrics = await import("../server/metrics");
+    const {
+      checkAndAlertConversionTelemetryPurge,
+      getConversionTelemetryAlertConfig,
+    } = await import("../server/conversionTelemetryAlerts");
+
+    metrics.recordConversionTelemetryPurgeFailure();
+    metrics.recordConversionTelemetryPurgeFailure();
+    await checkAndAlertConversionTelemetryPurge();
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(getConversionTelemetryAlertConfig().purgeAlertActive).toBe(false);
+
+    await checkAndAlertConversionTelemetryPurge();
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(fetchSpy.mock.calls[1][1].body)).toMatchObject({
+      alert: "conversion_telemetry_retention_cleanup",
+      status: "firing",
+      consecutive_failures: 2,
+    });
+    expect(getConversionTelemetryAlertConfig().purgeAlertActive).toBe(true);
+  });
+});

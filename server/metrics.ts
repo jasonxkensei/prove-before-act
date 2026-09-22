@@ -52,6 +52,39 @@ const CONVERSION_TELEMETRY_FAILURE_EVENTS_MAX_AGE_MS = 60 * 60 * 1000;
 const CONVERSION_TELEMETRY_FAILURE_EVENTS_SAFETY_CAP = 10000;
 const conversionTelemetryWriteFailureEvents: number[] = [];
 
+// ── Conversion telemetry retention-cleanup tracking ─────────────────────────
+// Daily purge failures are tracked separately from request-path write failures.
+// Only aggregate health is retained; proof deduplication markers are unrelated.
+let conversionTelemetryPurgeConsecutiveFailures = 0;
+let conversionTelemetryPurgeLastFailureAt: number | null = null;
+let conversionTelemetryPurgeLastSuccessAt: number | null = null;
+
+export function recordConversionTelemetryPurgeFailure(): void {
+  conversionTelemetryPurgeConsecutiveFailures++;
+  conversionTelemetryPurgeLastFailureAt = Date.now();
+}
+
+export function recordConversionTelemetryPurgeSuccess(): void {
+  conversionTelemetryPurgeConsecutiveFailures = 0;
+  conversionTelemetryPurgeLastSuccessAt = Date.now();
+}
+
+export function getConversionTelemetryPurgeStats(): {
+  consecutive_failures: number;
+  last_failure_at: string | null;
+  last_success_at: string | null;
+} {
+  return {
+    consecutive_failures: conversionTelemetryPurgeConsecutiveFailures,
+    last_failure_at: conversionTelemetryPurgeLastFailureAt
+      ? new Date(conversionTelemetryPurgeLastFailureAt).toISOString()
+      : null,
+    last_success_at: conversionTelemetryPurgeLastSuccessAt
+      ? new Date(conversionTelemetryPurgeLastSuccessAt).toISOString()
+      : null,
+  };
+}
+
 export function recordConversionTelemetryWriteFailure(): void {
   const now = Date.now();
   conversionTelemetryWriteFailureEvents.push(now);
@@ -233,7 +266,10 @@ export function getMetrics() {
       queue_size: mx8004QueueSize,
     },
     rate_limit_fail_open: getRateLimitFailOpenStats(),
-    conversion_telemetry: getConversionTelemetryWriteFailureStats(),
+    conversion_telemetry: {
+      ...getConversionTelemetryWriteFailureStats(),
+      retention_cleanup: getConversionTelemetryPurgeStats(),
+    },
   };
 }
 

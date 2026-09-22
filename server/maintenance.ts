@@ -10,6 +10,11 @@ import { purgeExpiredRateLimitRows } from "./pgRateLimit";
 import { checkAndAlertViolationQueue } from "./alerts";
 import { logger } from "./logger";
 import { getMx8004SignerBalance, isMX8004Configured } from "./mx8004";
+import {
+  recordConversionTelemetryPurgeFailure,
+  recordConversionTelemetryPurgeSuccess,
+} from "./metrics";
+import { checkAndAlertConversionTelemetryPurge } from "./conversionTelemetryAlerts";
 
 let lastMx8004LowBalanceWarningAt = 0;
 
@@ -138,11 +143,15 @@ export async function runDailyMaintenance() {
       // 90-day reporting window. A SESSION_SECRET rotation deliberately
       // starts a new anonymous cohort rather than linking identities.
       purgedConversionEvents = await purgeExpiredConversionEvents();
+      recordConversionTelemetryPurgeSuccess();
+      await checkAndAlertConversionTelemetryPurge();
     } catch (purgeErr: any) {
+      recordConversionTelemetryPurgeFailure();
       logger.debug("Conversion telemetry purge skipped during maintenance", {
         component: "maintenance",
         error: purgeErr?.message ?? String(purgeErr),
       });
+      await checkAndAlertConversionTelemetryPurge();
     }
 
     // Alert if the proposed-violation review queue has grown beyond the
