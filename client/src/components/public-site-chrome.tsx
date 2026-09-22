@@ -93,7 +93,7 @@ export function PublicSiteHeader({
       <header ref={headerRef} className={`public-site-header ${paper ? "public-site-header--paper" : ""} sticky top-0 z-50 border-b backdrop-blur ${headerClass}`}>
       <div className="container flex min-h-16 items-center justify-between gap-3">
         <a href="/" className="flex shrink-0 items-center gap-2" data-testid="link-logo-home">
-          <img src="/pba-logo.svg" alt={PUBLIC_SITE_NAME} className="h-8 w-auto" />
+          <img src={paper ? "/pba-logo-on-light.svg" : "/pba-logo.svg"} alt={PUBLIC_SITE_NAME} className="h-8 w-auto" />
         </a>
 
         <nav className="hidden items-center gap-6 md:flex" aria-label="Primary navigation">

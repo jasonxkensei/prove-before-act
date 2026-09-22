@@ -370,7 +370,7 @@ export default function Landing() {
   const proofVerificationUrl = proofResult ? getProofVerificationUrl(proofResult) : null;
 
   return (
-    <div className="min-h-[100dvh] min-w-0 max-w-full overflow-x-hidden bg-[#111612] text-[#e8ebe5]">
+    <div className="min-h-[100dvh] min-w-0 max-w-full overflow-x-hidden bg-[#0d1117] text-white">
       <PublicSiteHeader
         howItWorksHref="#how-it-works"
         primaryActionHref="#free-trial"
@@ -379,20 +379,20 @@ export default function Landing() {
       />
       {/* Hero — thesis and evidence case file */}
       <main id="main-content" className="min-w-0 max-w-full overflow-x-hidden">
-      <section className="border-b border-[#303832] bg-[radial-gradient(ellipse_at_80%_45%,#1b2a21_0%,#111612_42%)] px-5 py-10 md:px-12 md:py-14 lg:px-[9vw]">
-        <div className="mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-[1.02fr_.98fr]">
+      <section className="border-b border-[#1a1f26] bg-[radial-gradient(ellipse_at_80%_45%,#102820_0%,#0d1117_42%)] px-5 py-10 md:px-12 md:py-14 lg:px-[9vw]">
+        <div className="mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-[1.12fr_.88fr]">
           <div>
             <div className="mb-6 flex items-center gap-2 font-mono text-[10px] font-medium tracking-[.14em] text-[#ffbe78]" data-testid="badge-prove-before-act">
               <span className="h-2 w-2 rounded-full bg-[#ffbe78] shadow-[0_0_0_4px_rgba(255,190,120,.08)]" />
               CONSEQUENCES REQUIRE EVIDENCE
             </div>
-            <h1 className="mb-5 max-w-3xl text-[clamp(2.9rem,5vw,4.6rem)] font-semibold leading-[.96] tracking-[-.06em]">
-              Your agent can act.<br /><span className="font-serif font-normal italic text-[#8ef2bd]">Can it prove why it acted?</span>
+            <h1 className="mb-5 max-w-3xl text-[clamp(2.75rem,4.4vw,4rem)] font-semibold leading-[.98] tracking-[-.05em]">
+              Your agent can act.<br /><span className="font-serif font-normal italic text-[#00ff9d]">Can it prove why it acted?</span>
             </h1>
-            <p className="mb-5 max-w-xl text-base leading-7 text-[#aeb7af]" data-testid="text-hero-positioning">
-              When an autonomous agent moves money, changes production, signs a contract, or delegates to another agent, the audit trail cannot begin after the incident. Commit the decision basis before execution and leave evidence a reviewer can verify. <span className="text-[#e8ebe5]">10 free proofs · no wallet needed.</span>
+            <p className="mb-5 max-w-xl text-base leading-7 text-[#8b949e]" data-testid="text-hero-positioning">
+              When an autonomous agent moves money, changes production, signs a contract, or delegates to another agent, the audit trail cannot begin after the incident. Commit the decision basis before execution and leave evidence a reviewer can verify. <span className="text-white">10 free proofs · no wallet needed.</span>
             </p>
-            <div ref={heroScenariosRef} className="mb-5 grid max-w-xl grid-cols-1 border-y border-[#303832] py-2 font-mono text-[10px] uppercase tracking-[.1em] text-[#7f8d82] sm:grid-cols-2" data-testid="hero-risk-scenarios">
+            <div ref={heroScenariosRef} className="mb-5 grid max-w-xl grid-cols-1 border-y border-[#1a1f26] py-2 font-mono text-[10px] uppercase tracking-[.1em] text-[#8b949e] sm:grid-cols-2" data-testid="hero-risk-scenarios">
               {[
                 ["01", "Payment approval", "scenario_payment"],
                 ["02", "Production deploy", "scenario_devops"],
@@ -402,14 +402,14 @@ export default function Landing() {
                 <a
                   key={cta}
                   href="#free-trial"
-                  className="group flex min-h-9 items-center rounded-sm px-2 transition-colors hover:bg-[#1b241d] hover:text-[#e8ebe5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#8ef2bd]"
+                  className="group flex min-h-9 items-center rounded-sm px-2 transition-colors hover:bg-[#1a1f26] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#00ff9d]"
                   onClick={() => {
                     trackAgentCta("cta_clicked", "landing", cta as "scenario_payment" | "scenario_devops" | "scenario_legal" | "scenario_multi_agent");
                     trackEvent("risk_scenario_selected", { scenario: cta.replace("scenario_", "") });
                     scrollToFreeTrial();
                   }}
                 >
-                  <b className="mr-2 text-[#ffbe78] transition-colors group-hover:text-[#8ef2bd]">{number}</b> {label}
+                  <b className="mr-2 text-[#ffbe78] transition-colors group-hover:text-[#00ff9d]">{number}</b> {label}
                 </a>
               ))}
             </div>
@@ -417,7 +417,7 @@ export default function Landing() {
             <Button
               asChild
               size="lg"
-              className="h-12 border-[#8ef2bd] bg-[#8ef2bd] px-7 text-sm font-bold text-[#102119] hover:bg-[#b1ffd0]"
+              className="h-12 border-[#00ff9d] bg-[#00ff9d] px-7 text-sm font-bold text-[#0d1117] hover:bg-[#6effc7]"
               data-testid="button-free-trial-hero"
             >
               <a

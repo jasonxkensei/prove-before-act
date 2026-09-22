@@ -91,3 +91,17 @@ mtime_ms = 1788536338883
 storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/74ac3056-7dfa-41f0-a65e-56380fb23ad9/2b3cbd7a-63c3-4653-bacc-201c3c239bc2"
 storage_version_token = "1788536445730112"
 content_type = "application/octet-stream"
+
+[[outputs]]
+id = "2BNMfjs1gDEXNhoLgwegi"
+uri = "file://client/public/og-image.jpg"
+type = "image"
+title = "Prove Before Act — carte sociale"
+description = "Carte Open Graph 1200 × 630 de la nouvelle identité The Anchor, prête pour le partage."
+logical_id = "79b16baf-29e3-4084-90c4-c21f195ca90f"
+content_hash = "sha256:29957c23b84e707c8293a25c0532c9768c1929c14dce19b621d4d22cc4e597f5"
+size = 83241
+mtime_ms = 1790074124059
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/79b16baf-29e3-4084-90c4-c21f195ca90f/d9b32c51-96ee-4580-863d-aae7d5e6a9f6"
+storage_version_token = "1790074222478845"
+content_type = "image/jpeg"

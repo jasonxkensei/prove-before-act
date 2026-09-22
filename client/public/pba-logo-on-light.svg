@@ -1,14 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 80" role="img" aria-labelledby="title desc">
   <title id="title">Prove Before Act</title>
-  <desc id="desc">The Anchor brand mark and Prove Before Act wordmark</desc>
+  <desc id="desc">The Anchor brand mark and Prove Before Act wordmark for light surfaces</desc>
   <g transform="translate(8 8)">
-    <circle cx="32" cy="32" r="25" fill="none" stroke="#00FF9D" stroke-width="7"
+    <circle cx="32" cy="32" r="25" fill="none" stroke="#00C97B" stroke-width="7"
       stroke-linecap="round" stroke-dasharray="32 8" transform="rotate(-5 32 32)"/>
-    <circle cx="32" cy="32" r="9" fill="#FFFFFF"/>
+    <circle cx="32" cy="32" r="9" fill="#0D1117"/>
   </g>
-  <text x="86" y="50" fill="#FFFFFF"
+  <text x="86" y="50" fill="#0D1117"
     font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
     font-size="28" font-weight="600" letter-spacing="-0.8">
-    Prove Before <tspan fill="#00FF9D">Act</tspan>
+    Prove Before <tspan fill="#008A55">Act</tspan>
   </text>
 </svg>

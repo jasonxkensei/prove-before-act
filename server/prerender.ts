@@ -150,7 +150,7 @@ function renderPublicHeader(baseUrl: string, { paper = false }: { paper?: boolea
   return `<header class="public-site-header${paper ? " public-site-header--paper" : ""}">
   <div class="public-site-header-inner">
     <a class="public-site-brand" href="${escapeHtml(baseUrl)}">
-      <img src="${escapeHtml(publicHref(baseUrl, "/pba-logo.svg"))}" alt="${PUBLIC_SITE_NAME}" />
+      <img src="${escapeHtml(publicHref(baseUrl, paper ? "/pba-logo-on-light.svg" : "/pba-logo.svg"))}" alt="${PUBLIC_SITE_NAME}" />
     </a>
     <nav class="public-site-nav" aria-label="Primary navigation">
       ${primaryLinks}
@@ -195,13 +195,13 @@ function renderPublicFooter(baseUrl: string, { paper = false }: { paper?: boolea
 
 const PUBLIC_SITE_CHROME_STYLES = `
   .public-site-header, .public-site-footer {
-    --public-bg: hsl(150 17% 7%);
-    --public-fg: hsl(82 18% 92%);
-    --public-muted: hsl(143 10% 64%);
-    --public-border: hsl(150 10% 22%);
-    --public-primary: hsl(143 52% 58%);
+    --public-bg: #0D1117;
+    --public-fg: #FFFFFF;
+    --public-muted: #8B949E;
+    --public-border: #1A1F26;
+    --public-primary: #00FF9D;
     box-sizing: border-box;
-    font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
   }
   .public-site-header *, .public-site-footer * { box-sizing: border-box; }
   .public-site-header {
@@ -289,11 +289,12 @@ function commonHead(title: string, description: string, canonicalUrl: string, og
 <meta name="twitter:description" content="${escapeHtml(description)}">
 <meta name="twitter:image" content="https://provebeforeact.com/og-image.jpg">
 
-<link rel="icon" href="/favicon-new.png" type="image/png">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
 <link rel="icon" href="/favicon.ico" sizes="32x32">
-<link rel="apple-touch-icon" href="/favicon-new.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/site.webmanifest">
-<meta name="theme-color" content="#10b981">
+<meta name="theme-color" content="#00FF9D">
 
 <meta name="keywords" content="pre-execution evidence, agent accountability, commit before execution, decision provenance, blockchain certification, MultiversX, AI agent, x402, MCP, SHA-256, agent commerce">
 <meta name="author" content="Prove Before Act">
@@ -1922,7 +1923,7 @@ async function renderAgentProfilePage(baseUrl: string, walletAddress: string): P
   :root { color-scheme: dark; }
   *, *::before, *::after { box-sizing: border-box; }
   html { background: #101612; }
-  body { margin: 0; min-width: 320px; overflow-x: hidden; background: #101612; color: #e7eee8; font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif; line-height: 1.55; }
+  body { margin: 0; min-width: 320px; overflow-x: hidden; background: #0D1117; color: #FFFFFF; font-family: "Inter", ui-sans-serif, system-ui, sans-serif; line-height: 1.55; }
   a { color: #8eeeb8; }
   .dossier-nav { border-bottom: 1px solid #2c3830; padding: 0 1.25rem; }
   .dossier-nav-inner { display:flex; align-items:center; min-height:64px; max-width:1120px; margin:0 auto; }
@@ -2030,7 +2031,7 @@ function renderCoherencePage(baseUrl: string, priceUsd: number): string {
   :root { color-scheme: dark; }
   *, *::before, *::after { box-sizing: border-box; }
   html { scroll-behavior: smooth; background: #111612; }
-  body { margin: 0; min-width: 320px; overflow-x: hidden; background: #111612; color: #e8ebe5; font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif; font-size: 16px; line-height: 1.65; }
+  body { margin: 0; min-width: 320px; overflow-x: hidden; background: #0D1117; color: #FFFFFF; font-family: "Inter", ui-sans-serif, system-ui, sans-serif; font-size: 16px; line-height: 1.65; }
   a { color: #8ef2bd; } a:hover { color: #b1ffd0; }
   :focus-visible { outline: 2px solid #8ef2bd; outline-offset: 3px; }
   .coherence-shell { min-height: 100vh; }
@@ -2150,7 +2151,7 @@ function renderFleetPage(baseUrl: string): string {
     min-width: 320px;
     background: #0d1410;
     color: #e4ebe5;
-    font-family: "DM Sans", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     font-size: 16px;
     line-height: 1.65;
   }
