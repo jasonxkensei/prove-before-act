@@ -147,7 +147,7 @@ function renderPublicHeader(baseUrl: string, { paper = false }: { paper?: boolea
     `<a href="${escapeHtml(publicHref(baseUrl, href))}">${escapeHtml(label)}</a>`,
   ).join("");
 
-  return `<header class="public-site-header${paper ? " public-site-header--paper" : ""}">
+  return `<header class="public-site-header${paper ? " public-site-header--paper" : ""}" data-brand-surface="${paper ? "paper" : "dark"}" data-brand-logo="${paper ? "light" : "dark"}" data-brand-fonts="Inter|DM Mono" data-brand-palette="anchor">
   <div class="public-site-header-inner">
     <a class="public-site-brand" href="${escapeHtml(baseUrl)}">
       <img src="${escapeHtml(publicHref(baseUrl, paper ? "/pba-logo-on-light.svg" : "/pba-logo.svg"))}" alt="${PUBLIC_SITE_NAME}" />

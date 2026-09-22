@@ -114,7 +114,112 @@ const HARDCODED_COST_PATTERNS = [
   /每次(?:认证|存证)?(?:固定收费)?\s*\$0\.01/,
 ];
 
+const PUBLIC_ROUTE_BRAND_CONTRACTS = [
+  { route: "/agents", reactSource: "client/src/pages/agents.tsx", surface: "dark", logo: "dark", sharedChrome: true },
+  { route: "/learn", reactSource: "client/src/pages/learn.tsx", surface: "paper", logo: "light", sharedChrome: true },
+  { route: "/standard", reactSource: "client/src/pages/standard.tsx", surface: "paper", logo: "light", sharedChrome: true },
+  { route: "/fleet", reactSource: "client/src/pages/fleet.tsx", surface: "dark", logo: "dark", sharedChrome: false },
+  { route: "/coherence", reactSource: "client/src/pages/coherence.tsx", surface: "dark", logo: "dark", sharedChrome: true },
+] as const;
+
+const RETIRED_BRAND_SIGNATURES = [
+  /(?:src|href)=["'][^"']*\/(?:xproof-logo|logo-xproof|logo-old)\.(?:svg|png)/i,
+  /font-family\s*:\s*["']?(?:Space Grotesk|JetBrains Mono|Roboto Mono)/i,
+  /#10b981\b/i,
+  /#09090b\b/i,
+];
+
 describe("public branding and capability claims", () => {
+  it("defines the canonical Anchor palette and Inter/DM Mono typography for React", () => {
+    const css = readFileSync(path.resolve(process.cwd(), "client/src/index.css"), "utf8");
+    expect(css).toContain('family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700');
+    expect(css).toContain('--font-sans: "Inter"');
+    expect(css).toContain('--font-mono: "DM Mono"');
+    expect(css).toContain("--background: 215 28% 7%");
+    expect(css).toContain("--primary: 157 100% 50%");
+    expect(css).toContain("--background: 42 28% 94%");
+    for (const signature of RETIRED_BRAND_SIGNATURES) {
+      expect(css).not.toMatch(signature);
+    }
+  });
+
+  it("keeps both shared React chrome variants on the canonical branding contract", () => {
+    const chrome = readFileSync(
+      path.resolve(process.cwd(), "client/src/components/public-site-chrome.tsx"),
+      "utf8",
+    );
+    expect(chrome).toContain('data-brand-surface={paper ? "paper" : "dark"}');
+    expect(chrome).toContain('data-brand-logo={paper ? "light" : "dark"}');
+    expect(chrome).toContain('data-brand-fonts="Inter|DM Mono"');
+    expect(chrome).toContain('data-brand-palette="anchor"');
+    expect(chrome).toContain('src={paper ? "/pba-logo-on-light.svg" : "/pba-logo.svg"}');
+    expect(chrome.match(/src=\{paper \? "\/pba-logo-on-light\.svg" : "\/pba-logo\.svg"\}/g))
+      .toHaveLength(2);
+    for (const signature of RETIRED_BRAND_SIGNATURES) {
+      expect(chrome).not.toMatch(signature);
+    }
+  });
+
+  it.each(PUBLIC_ROUTE_BRAND_CONTRACTS)(
+    "keeps the React branding contract canonical on $route",
+    ({ reactSource, surface, logo, sharedChrome }) => {
+      const source = readFileSync(path.resolve(process.cwd(), reactSource), "utf8");
+      if (sharedChrome) {
+        const chrome = readFileSync(
+          path.resolve(process.cwd(), "client/src/components/public-site-chrome.tsx"),
+          "utf8",
+        );
+        expect(source).toContain("PublicSiteHeader");
+        expect(source).toMatch(
+          surface === "paper"
+            ? /<PublicSiteHeader\s+paper\b/
+            : /<PublicSiteHeader(?:\s|>)/,
+        );
+        if (surface === "dark") expect(source).not.toMatch(/<PublicSiteHeader\s+paper\b/);
+        expect(chrome).toContain(`data-brand-surface={paper ? "paper" : "dark"}`);
+        expect(chrome).toContain(`data-brand-logo={paper ? "light" : "dark"}`);
+        expect(chrome).toContain(
+          `src={paper ? "/pba-logo-on-light.svg" : "/pba-logo.svg"}`,
+        );
+        expect(surface === "paper" ? "light" : "dark").toBe(logo);
+      } else {
+        expect(source).toContain(`data-brand-surface="${surface}"`);
+        expect(source).toContain(`data-brand-logo="${logo}"`);
+        expect(source).toContain('data-brand-fonts="Inter|DM Mono"');
+        expect(source).toContain('data-brand-palette="anchor"');
+        expect(source).toContain(`src="/pba-logo${logo === "light" ? "-on-light" : ""}.svg"`);
+      }
+      for (const signature of RETIRED_BRAND_SIGNATURES) {
+        expect(source).not.toMatch(signature);
+      }
+    },
+  );
+
+  it.each(PUBLIC_ROUTE_BRAND_CONTRACTS)(
+    "keeps crawler branding aligned with React on $route",
+    async ({ route, surface, logo }) => {
+      const response = await fetch(`${BASE}${route}`, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+          Accept: "text/html",
+        },
+      });
+      expect(response.status).toBe(200);
+      const html = await response.text();
+      expect(html).toContain(`data-brand-surface="${surface}"`);
+      expect(html).toContain(`data-brand-logo="${logo}"`);
+      expect(html).toContain('data-brand-fonts="Inter|DM Mono"');
+      expect(html).toContain('data-brand-palette="anchor"');
+      expect(html).toContain(`/pba-logo${logo === "light" ? "-on-light" : ""}.svg`);
+      expect(html).toContain("family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700");
+      expect(html).toContain("--public-bg: hsl(215 28% 7%)");
+      expect(html).toContain("--public-primary: hsl(157 100% 50%)");
+      for (const signature of RETIRED_BRAND_SIGNATURES) {
+        expect(html).not.toMatch(signature);
+      }
+    },
+  );
+
   it("keeps ClawHub installation messaging canonical and actionable", () => {
     const clawHubPage = "https://clawhub.ai/jasonxkensei/skills/xproof";
     const obsoleteClawHubPage = "https://clawhub.ai/jasonxkensei/prove-before-act";

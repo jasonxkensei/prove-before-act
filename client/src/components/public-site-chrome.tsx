@@ -90,7 +90,14 @@ export function PublicSiteHeader({
   return (
     <>
       <a href="#main-content" className="skip-link">Skip to content</a>
-      <header ref={headerRef} className={`public-site-header ${paper ? "public-site-header--paper" : ""} sticky top-0 z-50 border-b backdrop-blur ${headerClass}`}>
+      <header
+        ref={headerRef}
+        className={`public-site-header ${paper ? "public-site-header--paper" : ""} sticky top-0 z-50 border-b backdrop-blur ${headerClass}`}
+        data-brand-surface={paper ? "paper" : "dark"}
+        data-brand-logo={paper ? "light" : "dark"}
+        data-brand-fonts="Inter|DM Mono"
+        data-brand-palette="anchor"
+      >
       <div className="container flex min-h-16 items-center justify-between gap-3">
         <a href="/" className="flex shrink-0 items-center gap-2" data-testid="link-logo-home">
           <img src={paper ? "/pba-logo-on-light.svg" : "/pba-logo.svg"} alt={PUBLIC_SITE_NAME} className="h-8 w-auto" />

@@ -148,7 +148,13 @@ export default function FleetPage() {
 
   return (
     <div className="page-shell overflow-x-hidden">
-      <header className="operational-header">
+      <header
+        className="operational-header"
+        data-brand-surface="dark"
+        data-brand-logo="dark"
+        data-brand-fonts="Inter|DM Mono"
+        data-brand-palette="anchor"
+      >
         <div className="container flex h-16 items-center justify-between gap-3 px-4">
           <Link href="/" data-testid="link-logo-home" className="flex items-center gap-2">
             <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
