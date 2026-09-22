@@ -45,6 +45,15 @@ export async function checkMx8004WalletBalance() {
   return balance;
 }
 
+export async function purgeExpiredConversionEvents(): Promise<number> {
+  // Proof-verification deduplication markers intentionally live in
+  // conversion_event_dedup_keys beyond this reporting retention window.
+  const result = await pool.query(
+    `DELETE FROM conversion_events WHERE created_at < NOW() - INTERVAL '90 days'`
+  );
+  return result.rowCount || 0;
+}
+
 export async function runDailyMaintenance() {
   try {
     const publicAgents = await db
@@ -128,10 +137,7 @@ export async function runDailyMaintenance() {
       // Visitor keys are HMAC-derived and are never retained beyond the
       // 90-day reporting window. A SESSION_SECRET rotation deliberately
       // starts a new anonymous cohort rather than linking identities.
-      const result = await pool.query(
-        `DELETE FROM conversion_events WHERE created_at < NOW() - INTERVAL '90 days'`
-      );
-      purgedConversionEvents = result.rowCount || 0;
+      purgedConversionEvents = await purgeExpiredConversionEvents();
     } catch (purgeErr: any) {
       logger.debug("Conversion telemetry purge skipped during maintenance", {
         component: "maintenance",

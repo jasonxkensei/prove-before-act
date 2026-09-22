@@ -16,7 +16,10 @@ import { getSession } from "../server/replitAuth";
 import { registerAdminRoutes } from "../server/routes/admin";
 import * as metrics from "../server/metrics";
 import { recordProofVerificationMilestone } from "../server/conversion-telemetry";
-import { migrateConversionEventsTable } from "../server/maintenance";
+import {
+  migrateConversionEventsTable,
+  purgeExpiredConversionEvents,
+} from "../server/maintenance";
 
 const ADMIN_WALLET = `erd1conversionadmintest${crypto.randomBytes(10).toString("hex")}`;
 let server: Server;
@@ -283,6 +286,69 @@ describe("GET /api/admin/conversion-funnel", () => {
     );
     expect(removed.rows).toHaveLength(0);
   });
+
+  it.each([
+    [1, "first_proof_verified"],
+    [2, "external_agent_second_proof_verified"],
+  ] as const)(
+    "retains proof deduplication after cleanup for ordinal %i",
+    async (ordinal, eventType) => {
+      const run = crypto.randomUUID();
+      const proofId = crypto.randomUUID();
+      const userId = crypto.randomUUID();
+      const dedupKey = `proof-verification:${proofId}`;
+      seededUserIds.push(userId);
+      seededDedupKeys.push(dedupKey);
+      await pool.query(
+        `INSERT INTO users (id, wallet_address) VALUES ($1, $2)`,
+        [userId, `erd1conversionretention${run.replace(/-/g, "")}`],
+      );
+      await pool.query(
+        `INSERT INTO certifications (id, user_id, file_name, file_hash, blockchain_status)
+         VALUES ($1, $2, $3, $4, 'confirmed')`,
+        [proofId, userId, `retention-${run}.json`, crypto.createHash("sha256").update(run).digest("hex")],
+      );
+      const ip = `203.0.113.${crypto.randomInt(1, 255)}`;
+      const req = {
+        query: {},
+        path: `/api/proof/${proofId}`,
+        get: (name: string) => name.toLowerCase() === "user-agent" ? "node-fetch" : undefined,
+        headers: { "x-forwarded-for": ip },
+        socket: { remoteAddress: ip },
+      } as any;
+      const expectedHash = crypto
+        .createHmac("sha256", process.env.SESSION_SECRET!)
+        .update("pba-conversion-visitor-v1\0")
+        .update(ip, "utf8")
+        .digest("hex");
+      seededTelemetryHashes.push(expectedHash);
+
+      expect(await recordProofVerificationMilestone(req, proofId, ordinal)).toBe(true);
+      await pool.query(
+        `UPDATE conversion_events
+         SET created_at = NOW() - INTERVAL '91 days'
+         WHERE dedup_key = $1`,
+        [dedupKey],
+      );
+
+      expect(await purgeExpiredConversionEvents()).toBeGreaterThanOrEqual(1);
+      const retained = await pool.query(
+        `SELECT proof_id FROM conversion_event_dedup_keys WHERE dedup_key = $1`,
+        [dedupKey],
+      );
+      expect(retained.rows).toEqual([{ proof_id: proofId }]);
+
+      expect(await recordProofVerificationMilestone(req, proofId, ordinal)).toBe(false);
+      const milestones = await pool.query(
+        `SELECT event_type FROM conversion_events WHERE dedup_key = $1`,
+        [dedupKey],
+      );
+      expect(milestones.rows).toHaveLength(0);
+      expect(milestones.rows).not.toContainEqual({ event_type: eventType });
+
+      await pool.query(`DELETE FROM certifications WHERE id = $1`, [proofId]);
+    },
+  );
 
   it("returns daily totals and zero-conversion alerts to an authorized admin", async () => {
     // The route issues exactly six aggregate queries: daily rows, 30-day
