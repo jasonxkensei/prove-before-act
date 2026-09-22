@@ -15,6 +15,27 @@ import { checkAndAlertTx } from "./alerts";
 
 let workerInterval: ReturnType<typeof setInterval> | null = null;
 
+type TxEnqueuer = (
+  jobType: string,
+  jobId: string,
+  payload: Record<string, any>,
+  requestId?: string,
+) => Promise<void>;
+
+let testTxEnqueuer: TxEnqueuer | null = null;
+
+/**
+ * Test-only injection point for replacing persistent background queue writes.
+ * Keeping the override at the queue boundary lets integration tests exercise
+ * the complete proof-write path without leaving jobs for a live worker.
+ */
+export function setTestTxEnqueuer(enqueuer: TxEnqueuer | null): void {
+  if (process.env.NODE_ENV !== "test") {
+    throw new Error("The test transaction enqueuer is only available when NODE_ENV=test");
+  }
+  testTxEnqueuer = enqueuer;
+}
+
 const VALIDATION_STEPS = [
   "init_job",
   "submit_proof",
@@ -29,6 +50,10 @@ export async function enqueueTx(
   payload: Record<string, any>,
   requestId?: string
 ): Promise<void> {
+  if (testTxEnqueuer) {
+    return testTxEnqueuer(jobType, jobId, payload, requestId);
+  }
+
   await db.insert(txQueue).values({
     jobType,
     jobId,

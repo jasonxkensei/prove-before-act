@@ -16,6 +16,7 @@ import {
   createDeterministicTestBlockchainAdapter,
   setTestBlockchainAdapter,
 } from "../server/blockchain";
+import { setTestTxEnqueuer } from "../server/txQueue";
 import { migrateConversionEventsTable } from "../server/maintenance";
 
 const BASE_URL = "http://localhost:5000";
@@ -282,7 +283,15 @@ describe("register_trial — registration response shape (no onboarding cert)", 
 
 describe("two-proof activation through authenticated proof creation", () => {
   it("registers, creates and verifies two proofs with one credential without broadcasting", async () => {
+    const interceptedFinalityJobs: Array<{
+      jobType: string;
+      jobId: string;
+      payload: Record<string, any>;
+    }> = [];
     setTestBlockchainAdapter(createDeterministicTestBlockchainAdapter());
+    setTestTxEnqueuer(async (jobType, jobId, payload) => {
+      interceptedFinalityJobs.push({ jobType, jobId, payload });
+    });
     await migrateConversionEventsTable();
     const app = express();
     app.set("trust proxy", 1);
@@ -349,6 +358,28 @@ describe("two-proof activation through authenticated proof creation", () => {
       expect(secondCreateEnvelope.result?.isError).not.toBe(true);
       const secondCreated = JSON.parse(secondCreateEnvelope.result.content[0].text);
       expect(secondCreated.blockchain.transaction_hash).toMatch(/^[a-f0-9]{64}$/);
+
+      expect(interceptedFinalityJobs).toEqual([
+        expect.objectContaining({
+          jobType: "mx8004_validation_loop",
+          jobId: `xproof_cert_${firstCreated.proof_id}`,
+          payload: expect.objectContaining({
+            certificationId: firstCreated.proof_id.toString(),
+            fileHash: firstHash,
+            transactionHash: firstCreated.blockchain.transaction_hash,
+          }),
+        }),
+      ]);
+      const leakedJobs = await pool.query(
+        `SELECT job_id
+         FROM tx_queue
+         WHERE job_id = ANY($1)`,
+        [[
+          `xproof_cert_${firstCreated.proof_id}`,
+          `xproof_cert_${secondCreated.proof_id}`,
+        ]],
+      );
+      expect(leakedJobs.rows).toEqual([]);
 
       const secondVerifyResponse = await fetch(`${baseUrl}/api/proof/${secondCreated.proof_id}`);
       expect(secondVerifyResponse.status).toBe(200);
@@ -426,6 +457,7 @@ describe("two-proof activation through authenticated proof creation", () => {
         expect(JSON.stringify(verification)).not.toContain(issuedKey);
       }
     } finally {
+      setTestTxEnqueuer(null);
       setTestBlockchainAdapter(null);
       await new Promise<void>((resolve, reject) =>
         server.close((error) => error ? reject(error) : resolve()),
