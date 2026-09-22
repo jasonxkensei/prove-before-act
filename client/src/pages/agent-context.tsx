@@ -352,7 +352,7 @@ print(f"Proof: https://provebeforeact.com{result['verify_url']}")`} />
               <p className="text-xs font-semibold mb-2">HTTP status codes and what they mean</p>
               <div className="space-y-1.5 text-xs">
                 {[
-                  { code: "200", action: "Success. Proceed with action.", color: "text-emerald-500" },
+                  { code: "200", action: "Success. Proceed with action.", color: "text-primary" },
                   { code: "402", action: "Payment required (x402 flow). Sign USDC payment and retry.", color: "text-primary" },
                   { code: "409", action: "Duplicate hash already anchored — retrieve existing proof_id, no re-anchoring needed.", color: "text-blue-400" },
                   { code: "429", action: "Rate limited. Retry after Retry-After header value.", color: "text-amber-400" },
@@ -540,9 +540,9 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
                   <tr key={i} className={`border-b border-border/40 ${i % 2 === 0 ? "bg-muted/10" : ""}`}>
                     <td className="py-2 px-2 text-muted-foreground max-w-[160px]">{row.useCase}</td>
                     <td className={`py-2 px-2 text-center font-medium ${row["Prove Before Act"].startsWith("✓") ? "text-primary" : "text-muted-foreground"}`}>{row["Prove Before Act"]}</td>
-                    <td className={`py-2 px-2 text-center ${row.arweave.startsWith("✓") ? "text-emerald-500" : "text-muted-foreground"}`}>{row.arweave}</td>
-                    <td className={`py-2 px-2 text-center ${row.ceramic.startsWith("✓") ? "text-emerald-500" : "text-muted-foreground"}`}>{row.ceramic}</td>
-                    <td className={`py-2 px-2 text-center ${row.sign.startsWith("✓") ? "text-emerald-500" : "text-muted-foreground"}`}>{row.sign}</td>
+                    <td className={`py-2 px-2 text-center ${row.arweave.startsWith("✓") ? "text-primary" : "text-muted-foreground"}`}>{row.arweave}</td>
+                    <td className={`py-2 px-2 text-center ${row.ceramic.startsWith("✓") ? "text-primary" : "text-muted-foreground"}`}>{row.ceramic}</td>
+                    <td className={`py-2 px-2 text-center ${row.sign.startsWith("✓") ? "text-primary" : "text-muted-foreground"}`}>{row.sign}</td>
                   </tr>
                 ))}
               </tbody>
@@ -716,8 +716,8 @@ curl -X POST https://provebeforeact.com/api/proof \\
             Prove Before Act is built on a <strong className="text-foreground">hash-only model</strong>: your file, declared decision basis, or agent output never leaves your environment. Only its SHA-256 fingerprint is transmitted.
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3">
-              <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-2">What is sent to Prove Before Act</p>
+            <div className="rounded-md border border-primary/20 bg-primary/5 p-3">
+              <p className="text-xs font-semibold text-primary mb-2">What is sent to Prove Before Act</p>
               <ul className="text-xs text-muted-foreground space-y-1 ml-2">
                 <li>• SHA-256 hash (64 hex characters)</li>
                 <li>• Filename (can be synthetic)</li>
@@ -904,8 +904,8 @@ outcome = agent.run_with_proof(
     action_description="Execute BUY 0.5 BTC at market price"
 )
 print(f"Trade executed. Proof: https://provebeforeact.com{outcome['verify_url']}")`} />
-          <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3">
-            <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-1">What this gives you</p>
+          <div className="rounded-md border border-primary/20 bg-primary/5 p-3">
+            <p className="text-xs font-semibold text-primary mb-1">What this gives you</p>
             <ul className="text-xs text-muted-foreground space-y-0.5 ml-2">
               <li>• Every action has a cryptographic proof of the declared decision basis that preceded it</li>
               <li>• The proof is publicly verifiable at <code className="font-mono bg-muted px-1 rounded">provebeforeact.com/proof/&#123;id&#125;</code> — no Prove Before Act account needed to verify</li>
@@ -1453,7 +1453,7 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
                 </div>
                 <p className="text-xs text-muted-foreground mb-2 pl-5">{item.honest}</p>
                 <div className="pl-5 flex items-start gap-1.5">
-                  <CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-emerald-500" />
+                  <CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-primary" />
                   <p className="text-xs text-muted-foreground/80">{item.mitigation}</p>
                 </div>
               </div>
@@ -1462,14 +1462,14 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
 
           {/* When to use vs not */}
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3">
-              <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-2">Use Prove Before Act when</p>
+            <div className="rounded-md border border-primary/20 bg-primary/5 p-3">
+              <p className="text-xs font-semibold text-primary mb-2">Use Prove Before Act when</p>
               <ul className="text-xs text-muted-foreground space-y-1">
-                <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-emerald-500" />You need Prove Before Act — proof of a declared decision basis BEFORE action</li>
-                <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-emerald-500" />You want zero-account machine payments (x402 + USDC on Base)</li>
-                <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-emerald-500" />You want a public trust score + audit trail for your agent</li>
-                <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-emerald-500" />Privacy matters — only the hash is public, content stays local</li>
-                <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-emerald-500" />You want 4W forensic reconstruction if something goes wrong</li>
+                <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-primary" />You need Prove Before Act — proof of a declared decision basis BEFORE action</li>
+                <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-primary" />You want zero-account machine payments (x402 + USDC on Base)</li>
+                <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-primary" />You want a public trust score + audit trail for your agent</li>
+                <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-primary" />Privacy matters — only the hash is public, content stays local</li>
+                <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-primary" />You want 4W forensic reconstruction if something goes wrong</li>
               </ul>
             </div>
             <div className="rounded-md border border-muted p-3">

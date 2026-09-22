@@ -105,3 +105,17 @@ mtime_ms = 1790074124059
 storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/79b16baf-29e3-4084-90c4-c21f195ca90f/d9b32c51-96ee-4580-863d-aae7d5e6a9f6"
 storage_version_token = "1790074222478845"
 content_type = "image/jpeg"
+
+[[outputs]]
+id = "pw5R8vztTZCDd0CWw33ft"
+uri = "file://screenshots/agents-anchor.jpg"
+type = "image"
+title = "Page Agents harmonisée"
+description = "Capture de la page /agents après alignement complet sur l’identité The Anchor."
+logical_id = "88399382-c6a8-4a20-86c5-f2f842de1afa"
+content_hash = "sha256:4dcc809b58ab83a66a3cec9f6099476b507232964cce6139b1df5f20b23f961f"
+size = 71560
+mtime_ms = 1790074723392
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/88399382-c6a8-4a20-86c5-f2f842de1afa/cbee5a17-f720-442e-9894-ad969bd3711c"
+storage_version_token = "1790075181548070"
+content_type = "image/jpeg"

@@ -186,9 +186,9 @@ interface CoherenceData {
 }
 
 const TRUST_LEVEL_STYLES: Record<string, { badge: string }> = {
-  Verified:  { badge: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30" },
-  Trusted:   { badge: "bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30" },
-  Active:    { badge: "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30" },
+  Verified:  { badge: "status-chip status-chip--verified" },
+  Trusted:   { badge: "status-chip status-chip--trusted" },
+  Active:    { badge: "status-chip status-chip--active" },
   Newcomer:  { badge: "bg-muted text-muted-foreground border-border" },
 };
 
@@ -198,16 +198,16 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 const DOMAIN_STYLES: Record<string, { color: string; label: string }> = {
-  healthcare: { color: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/25", label: "Healthcare" },
-  finance:    { color: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/25", label: "Finance" },
-  legal:      { color: "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/25", label: "Legal" },
-  security:   { color: "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/25", label: "Security" },
-  research:   { color: "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border-cyan-500/25", label: "Research" },
-  other:      { color: "bg-muted text-muted-foreground border-border", label: "Other" },
+  healthcare: { color: "status-chip status-chip--failed", label: "Healthcare" },
+  finance:    { color: "status-chip status-chip--pending", label: "Finance" },
+  legal:      { color: "status-chip status-chip--underconfident", label: "Legal" },
+  security:   { color: "status-chip status-chip--warning", label: "Security" },
+  research:   { color: "status-chip status-chip--active", label: "Research" },
+  other:      { color: "status-chip", label: "Other" },
 };
 
 function StatusIcon({ status }: { status: string | null }) {
-  if (status === "confirmed") return <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />;
+  if (status === "confirmed") return <CheckCircle2 className="h-3.5 w-3.5 text-[hsl(var(--status-verified))]" />;
   if (status === "failed") return <XCircle className="h-3.5 w-3.5 text-destructive" />;
   return <Clock className="h-3.5 w-3.5 text-yellow-500" />;
 }
@@ -243,8 +243,8 @@ interface TrustSnapshot {
 
 const LEVEL_THRESHOLDS = [
   { score: 100, label: "Active", color: "rgb(59,130,246)" },
-  { score: 300, label: "Trusted", color: "rgb(34,197,94)" },
-  { score: 700, label: "Verified", color: "rgb(16,185,129)" },
+  { score: 300, label: "Trusted", color: "hsl(157 72% 62%)" },
+  { score: 700, label: "Verified", color: "hsl(var(--status-verified))" },
 ];
 
 function HistoryTableBody({ snapshots }: { snapshots: TrustSnapshot[] }) {
@@ -262,7 +262,7 @@ function HistoryTableBody({ snapshots }: { snapshots: TrustSnapshot[] }) {
             <td className="px-3 py-2 text-right tabular-nums font-medium">
               {snap.score}
               {scoreDiff !== 0 && (
-                <span className={`ml-1 text-[10px] ${scoreDiff > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+                <span className={`ml-1 text-[10px] ${scoreDiff > 0 ? "text-[hsl(var(--status-verified))]" : "text-[hsl(var(--status-failed))]"}`}>
                   {scoreDiff > 0 ? "+" : ""}{scoreDiff}
                 </span>
               )}
@@ -371,7 +371,7 @@ function TrustHistoryChart({ snapshots, tableExpanded }: { snapshots: TrustSnaps
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <span className="text-sm font-medium">90-day trend</span>
-          <span className={`text-sm font-semibold tabular-nums ${delta >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`} data-testid="text-score-delta">
+          <span className={`text-sm font-semibold tabular-nums ${delta >= 0 ? "text-[hsl(var(--status-verified))]" : "text-[hsl(var(--status-failed))]"}`} data-testid="text-score-delta">
             {delta >= 0 ? "+" : ""}{delta} pts
           </span>
         </div>
@@ -380,7 +380,7 @@ function TrustHistoryChart({ snapshots, tableExpanded }: { snapshots: TrustSnaps
             <span data-testid="text-current-rank">
               Rank #{lastRank}
               {rankDelta !== null && rankDelta !== 0 && (
-                <span className={rankDelta > 0 ? "ml-1 text-emerald-600 dark:text-emerald-400" : "ml-1 text-red-600 dark:text-red-400"}>
+                <span className={rankDelta > 0 ? "ml-1 text-[hsl(var(--status-verified))]" : "ml-1 text-[hsl(var(--status-failed))]"}>
                   ({rankDelta > 0 ? "+" : ""}{rankDelta})
                 </span>
               )}
@@ -400,8 +400,8 @@ function TrustHistoryChart({ snapshots, tableExpanded }: { snapshots: TrustSnaps
         >
           <defs>
             <linearGradient id="histGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="rgb(16,185,129)" stopOpacity="0.20" />
-              <stop offset="100%" stopColor="rgb(16,185,129)" stopOpacity="0.02" />
+              <stop offset="0%" stopColor="hsl(var(--status-verified))" stopOpacity="0.20" />
+              <stop offset="100%" stopColor="hsl(var(--status-verified))" stopOpacity="0.02" />
             </linearGradient>
           </defs>
 
@@ -417,7 +417,7 @@ function TrustHistoryChart({ snapshots, tableExpanded }: { snapshots: TrustSnaps
 
           <polygon points={areaPoints} fill="url(#histGrad)" />
 
-          <polyline points={polyline} fill="none" stroke="rgb(16,185,129)" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+          <polyline points={polyline} fill="none" stroke="hsl(var(--status-verified))" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
 
           {levelChanges.map((lc) => {
             const p = points[lc.idx];
@@ -429,7 +429,7 @@ function TrustHistoryChart({ snapshots, tableExpanded }: { snapshots: TrustSnaps
             );
           })}
 
-          <circle cx={points[points.length - 1].x} cy={points[points.length - 1].y} r="4" fill="rgb(16,185,129)" stroke="white" strokeWidth="1.5" />
+          <circle cx={points[points.length - 1].x} cy={points[points.length - 1].y} r="4" fill="hsl(var(--status-verified))" stroke="hsl(var(--foreground))" strokeWidth="1.5" />
 
           {dateLabels.map((dl) => (
             <text key={dl.idx} x={xScale(dl.idx)} y={H - 6} textAnchor="middle" fontSize="8" className="fill-muted-foreground">{dl.label}</text>
@@ -457,8 +457,8 @@ function TrustHistoryChart({ snapshots, tableExpanded }: { snapshots: TrustSnaps
 
           {hoveredIdx !== null && (
             <g>
-              <line x1={points[hoveredIdx].x} y1={PAD_TOP} x2={points[hoveredIdx].x} y2={H - PAD_BOTTOM} stroke="rgb(16,185,129)" strokeWidth="0.5" opacity="0.5" />
-              <circle cx={points[hoveredIdx].x} cy={points[hoveredIdx].y} r="4" fill="rgb(16,185,129)" stroke="white" strokeWidth="1.5" />
+              <line x1={points[hoveredIdx].x} y1={PAD_TOP} x2={points[hoveredIdx].x} y2={H - PAD_BOTTOM} stroke="hsl(var(--status-verified))" strokeWidth="0.5" opacity="0.5" />
+              <circle cx={points[hoveredIdx].x} cy={points[hoveredIdx].y} r="4" fill="hsl(var(--status-verified))" stroke="hsl(var(--foreground))" strokeWidth="1.5" />
             </g>
           )}
         </svg>
@@ -693,7 +693,7 @@ function ScoreBreakdown({ agent }: { agent: AgentProfile }) {
           </div>
         ) : (
           <div
-            className="rounded-md border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-700 dark:text-emerald-400"
+            className="status-chip status-chip--verified px-3 py-2 text-sm"
             data-testid="text-max-level"
           >
             Maximum trust level achieved — Verified
@@ -705,9 +705,9 @@ function ScoreBreakdown({ agent }: { agent: AgentProfile }) {
 }
 
 const BIAS_STYLES = {
-  calibrated:    { badge: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30", bar: "bg-emerald-500", label: "Calibrated" },
-  overconfident: { badge: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30",   bar: "bg-amber-500",   label: "Overconfident" },
-  underconfident:{ badge: "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30",       bar: "bg-blue-500",    label: "Underconfident" },
+  calibrated:    { badge: "status-chip status-chip--calibrated", bar: "bg-[hsl(var(--status-verified))]", label: "Calibrated" },
+  overconfident: { badge: "status-chip status-chip--overconfident", bar: "bg-[hsl(var(--status-pending))]", label: "Overconfident" },
+  underconfident:{ badge: "status-chip status-chip--underconfident", bar: "bg-[hsl(190_65%_60%)]", label: "Underconfident" },
 };
 
 function CalibrationGapChart({ points }: { points: CalibrationPoint[] }) {
@@ -772,12 +772,12 @@ function CalibrationGapChart({ points }: { points: CalibrationPoint[] }) {
           );
         })}
 
-        <polyline points={polyline} fill="none" stroke="rgb(16,185,129)" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+        <polyline points={polyline} fill="none" stroke="hsl(var(--status-verified))" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
 
         {/* dots */}
         {pts.map((p, i) => (
           <circle key={i} cx={p.x} cy={p.y} r="3"
-            fill={p.gap > 0.10 ? "rgb(251,191,36)" : p.gap < -0.10 ? "rgb(59,130,246)" : "rgb(16,185,129)"}
+            fill={p.gap > 0.10 ? "hsl(var(--status-pending))" : p.gap < -0.10 ? "hsl(190 65% 70%)" : "hsl(var(--status-verified))"}
             stroke="white" strokeWidth="1"
           />
         ))}
@@ -802,7 +802,7 @@ function CalibrationGapChart({ points }: { points: CalibrationPoint[] }) {
         {hoveredIdx !== null && (
           <g>
             <line x1={pts[hoveredIdx].x} y1={PAD.top} x2={pts[hoveredIdx].x} y2={H - PAD.bottom}
-              stroke="rgb(16,185,129)" strokeWidth="0.5" opacity="0.5" />
+              stroke="hsl(var(--status-verified))" strokeWidth="0.5" opacity="0.5" />
           </g>
         )}
       </svg>
@@ -813,7 +813,7 @@ function CalibrationGapChart({ points }: { points: CalibrationPoint[] }) {
           style={{ left: `${tooltipPos.x}px`, transform: tooltipPos.x > 250 ? "translateX(-110%)" : "translateX(10%)" }}
         >
           <p className="font-medium tabular-nums">{hovered.data.submitted_at.slice(0, 10)}</p>
-          <p className="tabular-nums">Gap: <span className={`font-semibold ${hovered.pt.gap > 0.10 ? "text-amber-600 dark:text-amber-400" : hovered.pt.gap < -0.10 ? "text-blue-600 dark:text-blue-400" : "text-emerald-600 dark:text-emerald-400"}`}>{hovered.pt.gap > 0 ? "+" : ""}{hovered.pt.gap.toFixed(3)}</span></p>
+          <p className="tabular-nums">Gap: <span className={`font-semibold ${hovered.pt.gap > 0.10 ? "text-[hsl(var(--status-pending))]" : hovered.pt.gap < -0.10 ? "text-[hsl(190_65%_70%)]" : "text-[hsl(var(--status-verified))]"}`}>{hovered.pt.gap > 0 ? "+" : ""}{hovered.pt.gap.toFixed(3)}</span></p>
           <p className="tabular-nums text-muted-foreground">Anchored: {hovered.data.anchored_confidence.toFixed(2)} · Actual: {hovered.data.outcome_score.toFixed(2)}</p>
         </div>
       )}
@@ -1037,8 +1037,8 @@ function CalibrationCard({ data, wallet }: { data: CalibrationData; wallet: stri
     improving: {
       icon: TrendingUp,
       label: "Improving",
-      className: "text-emerald-600 dark:text-emerald-400",
-      bgClassName: "border-emerald-500/30 bg-emerald-500/10",
+      className: "text-[hsl(var(--status-verified))]",
+      bgClassName: "border-[hsl(var(--status-verified)/.3)] bg-[hsl(var(--status-verified)/.1)]",
     },
     worsening: {
       icon: TrendingDown,
@@ -1153,7 +1153,7 @@ function CalibrationCard({ data, wallet }: { data: CalibrationData; wallet: stri
         <div className="grid grid-cols-3 gap-3">
           <div className="rounded-md bg-muted/30 p-3 text-center">
             <p
-              className={`text-xl font-bold tabular-nums ${mean_gap > 0.10 ? "text-amber-600 dark:text-amber-400" : mean_gap < -0.10 ? "text-blue-600 dark:text-blue-400" : "text-emerald-600 dark:text-emerald-400"}`}
+              className={`text-xl font-bold tabular-nums ${mean_gap > 0.10 ? "text-[hsl(var(--status-pending))]" : mean_gap < -0.10 ? "text-[hsl(190_65%_70%)]" : "text-[hsl(var(--status-verified))]"}`}
               data-testid="text-mean-gap"
             >
               {mean_gap > 0 ? "+" : ""}{mean_gap.toFixed(3)}
@@ -1362,7 +1362,7 @@ function BadgeEmbedPanel({ wallet }: { wallet: string }) {
                   aria-label="Copy markdown snippet"
                 >
                   {copiedMarkdown ? (
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                    <CheckCircle2 className="h-4 w-4 text-[hsl(var(--status-verified))]" />
                   ) : (
                     <Copy className="h-4 w-4" />
                   )}
@@ -1389,7 +1389,7 @@ function BadgeEmbedPanel({ wallet }: { wallet: string }) {
                   aria-label="Copy script tag"
                 >
                   {copiedScript ? (
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                    <CheckCircle2 className="h-4 w-4 text-[hsl(var(--status-verified))]" />
                   ) : (
                     <Copy className="h-4 w-4" />
                   )}
@@ -1404,7 +1404,7 @@ function BadgeEmbedPanel({ wallet }: { wallet: string }) {
 }
 
 const COHERENCE_STATUS_STYLES: Record<CoherenceCheckEntry["status"], { badge: string; label: string }> = {
-  linked:    { badge: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30", label: "Linked" },
+  linked:    { badge: "status-chip status-chip--calibrated", label: "Linked" },
   pending:   { badge: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400 border-yellow-500/30", label: "Pending" },
   divergent: { badge: "bg-destructive/15 text-destructive border-destructive/30", label: "Divergent" },
 };
@@ -1437,7 +1437,7 @@ function CoherenceCard({ data }: { data: CoherenceData }) {
               <Badge
                 className={
                   aggregate.coherence_rate >= 70
-                    ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400"
+                    ? "status-chip status-chip--calibrated"
                     : aggregate.coherence_rate >= 40
                     ? "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400"
                     : "bg-destructive/15 text-destructive"
@@ -1463,7 +1463,7 @@ function CoherenceCard({ data }: { data: CoherenceData }) {
             <p className="mt-1 text-xs text-muted-foreground">WHY anchors</p>
           </div>
           <div className="rounded-md bg-muted/30 p-3 text-center">
-            <p className="text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400" data-testid="text-coherence-linked">
+            <p className="text-2xl font-bold tabular-nums text-[hsl(var(--status-verified))]" data-testid="text-coherence-linked">
               {aggregate.linked_count}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">Linked WHAT</p>
@@ -1509,7 +1509,7 @@ function CoherenceCard({ data }: { data: CoherenceData }) {
                   {/* WHAT side */}
                   <div className="flex flex-wrap items-center gap-2 pl-1">
                     <span className="text-muted-foreground">→</span>
-                    <span className="rounded bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-emerald-700 dark:text-emerald-400">WHAT</span>
+                    <span className="status-chip status-chip--calibrated px-1.5 py-0.5 font-mono text-[10px]">WHAT</span>
                     {check.linked_proof_id ? (
                       <>
                         <a
@@ -1648,7 +1648,7 @@ export default function AgentProfilePage() {
     : null;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="page-shell dossier-shell">
       <PublicSiteHeader />
 
       <main id="main-content" className="dossier-shell min-h-[calc(100dvh-4rem)]">
@@ -1715,7 +1715,7 @@ export default function AgentProfilePage() {
                         </Badge>
                       )}
                       {agent.attestations?.length > 0 && (
-                        <span className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-400" data-testid="badge-attested">
+                        <span className="status-chip status-chip--verified" data-testid="badge-attested">
                           <BadgeCheck className="h-3.5 w-3.5" />
                           {agent.attestations.length} attestation{agent.attestations.length > 1 ? "s" : ""}
                         </span>
@@ -1738,7 +1738,7 @@ export default function AgentProfilePage() {
                         data-testid="button-copy-wallet"
                       >
                         {copied ? (
-                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                          <CheckCircle2 className="h-3.5 w-3.5 text-[hsl(var(--status-verified))]" />
                         ) : (
                           <Copy className="h-3.5 w-3.5" />
                         )}
@@ -1784,7 +1784,7 @@ export default function AgentProfilePage() {
                     </p>
                     <p className="mt-1 max-w-xs text-xs leading-5 text-muted-foreground">A composite signal — not a substitute for inspecting the underlying evidence.</p>
                     {agent.activeAttestations > 0 && (
-                      <span className="mt-3 block text-xs text-emerald-600 dark:text-emerald-400" data-testid="text-attestation-bonus">
+                      <span className="mt-3 block text-xs text-[hsl(var(--status-verified))]" data-testid="text-attestation-bonus">
                         +{agent.attestationBonus ?? Math.min(3, agent.activeAttestations) * 50} pts from attestations
                       </span>
                     )}
@@ -1793,7 +1793,7 @@ export default function AgentProfilePage() {
                         variant="outline"
                         className={`mt-3 ${
                           agent.transparencyTier === "Tier 3"
-                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
+                            ? "status-chip status-chip--verified"
                             : "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30"
                         }`}
                         data-testid="badge-header-transparency"
@@ -2086,8 +2086,8 @@ export default function AgentProfilePage() {
                       const issuerLevel = att.issuer_level ?? "Newcomer";
                       const attValue = att.attestation_value ?? 10;
                       const issuerLevelColor: Record<string, string> = {
-                        Verified: "text-emerald-600 dark:text-emerald-400 border-emerald-500/40 bg-emerald-500/10",
-                        Trusted: "text-green-700 dark:text-green-400 border-green-500/40 bg-green-500/10",
+                        Verified: "text-[hsl(var(--status-verified))] border-[hsl(var(--status-verified)/.4)] bg-[hsl(var(--status-verified)/.1)]",
+                        Trusted: "text-[hsl(157_72%_62%)] border-[hsl(157_72%_50%/.4)] bg-[hsl(157_72%_40%/.1)]",
                         Active: "text-blue-600 dark:text-blue-400 border-blue-500/40 bg-blue-500/10",
                         Newcomer: "text-muted-foreground border-border bg-muted/50",
                       };
@@ -2100,7 +2100,7 @@ export default function AgentProfilePage() {
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <div className="space-y-1">
                             <div className="flex flex-wrap items-center gap-2">
-                              <BadgeCheck className="h-4 w-4 text-emerald-500" />
+                              <BadgeCheck className="h-4 w-4 text-[hsl(var(--status-verified))]" />
                               <span className="font-medium text-sm" data-testid={`text-attestation-title-${att.id}`}>
                                 {att.title}
                               </span>
@@ -2289,7 +2289,7 @@ export default function AgentProfilePage() {
                         variant="outline"
                         className={
                           agent.transparencyTier === "Tier 3"
-                            ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
+                            ? "status-chip status-chip--verified"
                             : agent.transparencyTier === "Tier 2"
                             ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30"
                             : "bg-muted text-muted-foreground"
@@ -2336,7 +2336,7 @@ export default function AgentProfilePage() {
                               ? "border-amber-500 bg-amber-500/20"
                               : hasMeta
                               ? "border-blue-500 bg-blue-500/20"
-                              : "border-emerald-500 bg-emerald-500/20"
+                              : "border-[hsl(var(--status-verified))] bg-[hsl(var(--status-verified)/.2)]"
                           }`} />
 
                           <div className="flex items-start justify-between gap-4">
@@ -2349,7 +2349,7 @@ export default function AgentProfilePage() {
                                       ? "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30"
                                       : hasMeta
                                       ? "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30"
-                                      : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
+                                      : "status-chip status-chip--verified"
                                   }
                                 >
                                   {isAudit ? "Audit" : hasMeta ? "Metadata" : "Cert"}

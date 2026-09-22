@@ -451,7 +451,7 @@ export default function Docs4WPage() {
             <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="rounded-md border bg-muted/30 p-3">
                 <p className="text-xs font-medium text-foreground mb-1 flex items-center gap-1.5">
-                  <CheckCircle className="h-3 w-3 text-green-500" /> intent_preceded_execution
+                  <CheckCircle className="h-3 w-3 text-primary" /> intent_preceded_execution
                 </p>
                 <p className="text-xs text-muted-foreground">True when WHY was certified before WHAT — cryptographic proof that intent preceded execution.</p>
               </div>

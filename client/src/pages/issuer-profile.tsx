@@ -43,11 +43,11 @@ interface AttestationRow {
 }
 
 const DOMAIN_STYLES: Record<string, { color: string; label: string }> = {
-  healthcare: { color: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/25", label: "Healthcare" },
-  finance:    { color: "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/25", label: "Finance" },
-  legal:      { color: "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/25", label: "Legal" },
-  security:   { color: "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/25", label: "Security" },
-  research:   { color: "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border-cyan-500/25", label: "Research" },
+  healthcare: { color: "bg-destructive/10 text-destructive border-destructive/25", label: "Healthcare" },
+  finance:    { color: "status-warning border-current/30 bg-current/10", label: "Finance" },
+  legal:      { color: "bg-accent text-accent-foreground border-border", label: "Legal" },
+  security:   { color: "status-warning border-current/30 bg-current/10", label: "Security" },
+  research:   { color: "bg-primary/10 text-primary border-primary/25", label: "Research" },
   other:      { color: "bg-muted text-muted-foreground border-border", label: "Other" },
 };
 
@@ -128,9 +128,9 @@ export default function IssuerProfilePage() {
                 )}
               </div>
               <div className="flex flex-col items-end gap-2">
-                <div className="flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5">
-                  <ShieldCheck className="h-4 w-4 text-emerald-500" />
-                  <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400" data-testid="text-active-count">
+                <div className="status-verified rounded-md border border-current/30 bg-current/10 px-3 py-1.5">
+                  <ShieldCheck className="h-4 w-4" />
+                  <span className="text-sm font-semibold" data-testid="text-active-count">
                     {issuer.activeCount} active
                   </span>
                 </div>
@@ -215,7 +215,7 @@ export default function IssuerProfilePage() {
           <Card data-testid="card-active-attestations">
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
-                <BadgeCheck className="h-4 w-4 text-emerald-500" />
+                <BadgeCheck className="h-4 w-4 text-primary" />
                 Active attestations
                 <Badge variant="secondary" className="ml-auto text-xs">{activeAttestations.length}</Badge>
               </CardTitle>

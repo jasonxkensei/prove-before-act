@@ -118,7 +118,7 @@ export default function CoherencePage() {
                   { label: "What was intended", icon: Eye, color: "border-primary/30 bg-primary/5", textColor: "text-primary" },
                   { label: "What was understood", icon: Blocks, color: "border-border/60 bg-muted/30", textColor: "text-foreground" },
                   { label: "What was decided", icon: Shield, color: "border-border/60 bg-muted/30", textColor: "text-foreground" },
-                  { label: "What can be proven", icon: CheckCircle, color: "border-emerald-500/30 bg-emerald-500/5", textColor: "text-emerald-500 dark:text-emerald-400" },
+                  { label: "What can be proven", icon: CheckCircle, color: "border-primary/30 bg-primary/5", textColor: "text-primary" },
                 ].map((item, i) => {
                   const Icon = item.icon;
                   return (

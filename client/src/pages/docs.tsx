@@ -696,7 +696,7 @@ assert hmac.compare_digest(expected, request.headers["X-ProveBeforeAct-Signature
 
 function MethodBadge({ method }: { method: string }) {
   const colors: Record<string, string> = {
-    GET: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+    GET: "bg-primary/15 text-primary border-primary/20",
     POST: "bg-blue-500/15 text-blue-400 border-blue-500/20",
     DELETE: "bg-red-500/15 text-red-400 border-red-500/20",
     PATCH: "bg-amber-500/15 text-amber-400 border-amber-500/20",

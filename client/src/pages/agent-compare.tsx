@@ -69,22 +69,22 @@ interface CalibrationData {
 }
 
 const TRUST_LEVEL_STYLES: Record<string, string> = {
-  Verified: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
-  Trusted: "bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30",
-  Active: "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30",
+  Verified: "status-chip status-chip--verified",
+  Trusted: "status-chip status-chip--trusted",
+  Active: "status-chip status-chip--active",
   Newcomer: "bg-muted text-muted-foreground border-border",
 };
 
 const BIAS_LABEL_STYLES: Record<string, string> = {
-  overconfident: "bg-red-500/15 text-red-600 dark:text-red-400 border-red-500/30",
-  underconfident: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30",
-  calibrated: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
+  overconfident: "status-chip status-chip--overconfident",
+  underconfident: "status-chip status-chip--underconfident",
+  calibrated: "status-chip status-chip--calibrated",
 };
 
 const CHART_COLORS = [
   "hsl(var(--primary))",
   "#f59e0b",
-  "#10b981",
+  "hsl(var(--status-verified))",
   "#8b5cf6",
   "#ef4444",
   "#06b6d4",
@@ -108,7 +108,7 @@ function formatShortDate(dateStr: string): string {
 function HighlightCell({ value, isMax, format }: { value: string | number; isMax: boolean; format?: "number" }) {
   const display = format === "number" ? Number(value).toLocaleString() : value;
   return (
-    <span className={isMax ? "text-emerald-600 dark:text-emerald-400 font-semibold" : ""}>
+    <span className={isMax ? "text-[hsl(var(--status-verified))] font-semibold" : ""}>
       {display}
     </span>
   );
@@ -360,7 +360,7 @@ export default function AgentComparePage() {
         const max = rates.length ? Math.max(...rates) : null;
         const isMax = max !== null && rate === max && rates.filter(v => v === max).length < agents.length;
         return (
-          <span className={isMax ? "text-emerald-600 dark:text-emerald-400 font-semibold" : ""}>
+          <span className={isMax ? "text-[hsl(var(--status-verified))] font-semibold" : ""}>
             {rate}% <span className="text-muted-foreground font-normal">(+{bonus} pts)</span>
           </span>
         );
@@ -380,7 +380,7 @@ export default function AgentComparePage() {
         const min = rates.length ? Math.min(...rates) : null;
         const isMin = min !== null && rate === min && rates.filter(v => v === min).length < agents.length;
         return (
-          <span className={isMin ? "text-emerald-600 dark:text-emerald-400 font-semibold" : ""}>
+          <span className={isMin ? "text-[hsl(var(--status-verified))] font-semibold" : ""}>
             {rate}% <span className="text-muted-foreground font-normal">({penalty} pts)</span>
           </span>
         );
@@ -403,7 +403,7 @@ export default function AgentComparePage() {
   const calibrationLoading = calibrationQueries.some(q => q.isLoading);
 
   return (
-    <div className="min-h-screen bg-background" data-testid="page-agent-compare">
+    <div className="page-shell dossier-shell" data-testid="page-agent-compare">
       <PublicSiteHeader />
 
       <main className="max-w-7xl mx-auto px-4 py-6 flex flex-col gap-6">
@@ -504,7 +504,7 @@ export default function AgentComparePage() {
                           return (
                             <td key={agent.walletAddress} className="py-3 px-3" data-testid={`cell-mean-gap-${agent.walletAddress}`}>
                               {meanGap !== undefined ? (
-                                <span className={isBest ? "text-emerald-600 dark:text-emerald-400 font-semibold" : ""}>
+                                <span className={isBest ? "text-[hsl(var(--status-verified))] font-semibold" : ""}>
                                   {meanGap >= 0 ? "+" : ""}{meanGap.toFixed(4)}
                                 </span>
                               ) : "—"}
@@ -547,7 +547,7 @@ export default function AgentComparePage() {
                             );
                           }
                           const TREND_STYLES = {
-                            improving: { Icon: TrendingUp, label: "Improving", className: "text-emerald-600 dark:text-emerald-400", badgeClass: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30" },
+                            improving: { Icon: TrendingUp, label: "Improving", className: "text-[hsl(var(--status-verified))]", badgeClass: "status-chip status-chip--calibrated" },
                             worsening: { Icon: TrendingDown, label: "Worsening", className: "text-red-600 dark:text-red-400", badgeClass: "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30" },
                             stable:    { Icon: Minus, label: "Stable", className: "text-muted-foreground", badgeClass: "border-border bg-muted/40 text-muted-foreground" },
                           } as const;

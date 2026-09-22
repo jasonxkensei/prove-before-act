@@ -212,10 +212,10 @@ export default function LandingZh() {
   return (
     <div className="min-h-[100dvh] min-w-0 max-w-full overflow-x-hidden bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <header className="public-site-header sticky top-0 z-50 border-b backdrop-blur">
         <div className="container flex h-16 items-center justify-between">
           <a href="/zh" className="flex items-center gap-2" data-testid="link-logo-home-zh">
-            <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
+              <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
           </a>
           <nav className="hidden md:flex items-center gap-6">
             <a href="#how-it-works" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
@@ -522,9 +522,9 @@ export default function LandingZh() {
                   desc: "区块链时间戳 + 交易哈希，独立于智能体系统，任何第三方均可独立核验",
                   reg: "《网络安全法》第21条：保留网络日志不少于六个月",
                   icon: Clock,
-                  color: "text-green-500",
-                  border: "border-green-500/20",
-                  bg: "bg-green-500/5",
+                  color: "text-primary",
+                  border: "border-primary/20",
+                  bg: "bg-primary/5",
                 },
                 {
                   w: "WHY",

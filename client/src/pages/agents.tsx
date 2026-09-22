@@ -24,9 +24,9 @@ import { WalletLoginModal } from "@/components/wallet-login-modal";
 import { PublicSiteFooter, PublicSiteHeader } from "@/components/public-site-chrome";
 
 const CALIBRATION_STYLES: Record<string, { badge: string; label: string }> = {
-  calibrated:     { badge: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30", label: "Calibrated" },
-  overconfident:  { badge: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30",   label: "Overconfident" },
-  underconfident: { badge: "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30",       label: "Underconfident" },
+  calibrated:     { badge: "status-chip status-chip--calibrated", label: "Calibrated" },
+  overconfident:  { badge: "status-chip status-chip--overconfident", label: "Overconfident" },
+  underconfident: { badge: "status-chip status-chip--underconfident", label: "Underconfident" },
 };
 
 interface CalibratedEntry {
@@ -194,16 +194,16 @@ export default function AgentsPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="page-shell dossier-shell">
       <PublicSiteHeader onConnect={handleConnect} />
-      <section className="container py-20 md:py-28">
+      <section className="container py-14 md:py-20">
         <div className="mx-auto max-w-5xl text-center">
-          <Badge variant="secondary" className="mb-6 px-4 py-1.5" data-testid="badge-universal-compatibility">
+          <Badge variant="outline" className="mb-6 border-primary/30 bg-primary/5 px-4 py-1.5 font-mono text-[10px] uppercase tracking-[0.16em] text-primary" data-testid="badge-universal-compatibility">
             <Zap className="mr-2 h-3.5 w-3.5" />
             Universal compatibility
           </Badge>
 
-          <h1 className="mb-6 text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-tight" data-testid="text-hero-title">
+          <h1 className="mb-6 text-4xl font-semibold leading-[1.04] tracking-[-0.04em] sm:text-5xl md:text-6xl lg:text-7xl" data-testid="text-hero-title">
             The accountability pattern
             <br />
             <span className="text-primary">for autonomous agents.</span>
@@ -220,7 +220,7 @@ export default function AgentsPage() {
           </p>
         </div>
       </section>
-      <section className="border-y bg-muted/30 py-20 md:py-28">
+       <section className="border-y border-border/70 bg-card/30 py-16 md:py-24">
         <div className="container">
           <div className="mx-auto max-w-5xl">
             <div className="mb-16 text-center">
@@ -233,7 +233,7 @@ export default function AgentsPage() {
               </p>
             </div>
 
-            <div className="grid gap-6 md:grid-cols-2">
+             <div className="grid gap-4 md:grid-cols-2">
               {protocols.map((protocol, i) => (
                 <ProtocolCard
                   key={protocol.name}

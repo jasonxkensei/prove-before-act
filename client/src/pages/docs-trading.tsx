@@ -347,8 +347,8 @@ export default function DocsTradingPage() {
                   {[
                     ["Newcomer", "0 – 99", "Just started certifying", "text-muted-foreground"],
                     ["Active", "100 – 299", "Regular certification activity", "text-blue-600 dark:text-blue-400"],
-                    ["Trusted", "300 – 699", "Established track record", "text-green-700 dark:text-green-400"],
-                    ["Verified", "700+", "Extensive, sustained history", "text-emerald-600 dark:text-emerald-400"],
+                    ["Trusted", "300 – 699", "Established track record", "text-primary"],
+                    ["Verified", "700+", "Extensive, sustained history", "text-primary"],
                   ].map(([level, score, meaning, color], i) => (
                     <tr key={i} className={`border-b last:border-0 ${i % 2 === 0 ? "" : "bg-muted/20"}`}>
                       <td className={`px-4 py-2.5 text-sm font-semibold ${color}`}>{level}</td>

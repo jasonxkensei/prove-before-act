@@ -61,8 +61,8 @@ function truncateWallet(addr: string) {
 }
 
 function rateColor(rate: number | null) {
-  if (rate === null) return "text-[#a0ada3]";
-  if (rate >= 80) return "text-[#8ef2bd]";
+  if (rate === null) return "text-muted-foreground";
+  if (rate >= 80) return "text-primary";
   if (rate >= 50) return "text-amber-300";
   return "text-red-300";
 }
@@ -70,13 +70,13 @@ function rateColor(rate: number | null) {
 function ScoreRing({ score }: { score: number | null }) {
   if (score === null) {
     return (
-      <div className="flex h-24 w-24 items-center justify-center rounded-full border-4 border-[#3a4740] text-[#a0ada3] text-sm">
+      <div className="flex h-24 w-24 items-center justify-center rounded-full border-4 border-border text-muted-foreground text-sm">
         —
       </div>
     );
   }
   const color =
-    score >= 80 ? "border-[#8ef2bd] text-[#8ef2bd]"
+    score >= 80 ? "border-primary text-primary"
     : score >= 50 ? "border-amber-300 text-amber-300"
     : "border-red-300 text-red-300";
   return (
@@ -147,27 +147,27 @@ export default function FleetPage() {
   };
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-[#111612] text-[#e8ebe5]">
-      <header className="sticky top-0 z-50 border-b border-[#303832] bg-[#111612]">
+    <div className="page-shell overflow-x-hidden">
+      <header className="operational-header">
         <div className="container flex h-16 items-center justify-between gap-3 px-4">
           <Link href="/" data-testid="link-logo-home" className="flex items-center gap-2">
             <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
           </Link>
           <nav className="flex min-w-0 items-center gap-1 sm:gap-4" aria-label="Fleet navigation">
-            <Button asChild variant="ghost" size="sm" className="text-[#c4cec5] hover:bg-[#202b23] hover:text-[#e8ebe5]" data-testid="link-nav-coherence">
+            <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:bg-muted hover:text-foreground" data-testid="link-nav-coherence">
               <Link href="/coherence" aria-label="Coherence">
                 <Network className="h-4 w-4 sm:hidden" />
                 <span className="hidden sm:inline">Coherence</span>
               </Link>
             </Button>
-            <Button asChild variant="ghost" size="sm" className="text-[#c4cec5] hover:bg-[#202b23] hover:text-[#e8ebe5]" data-testid="link-nav-leaderboard">
+            <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:bg-muted hover:text-foreground" data-testid="link-nav-leaderboard">
               <Link href="/leaderboard" aria-label="Leaderboard">
                 <ShieldCheck className="h-4 w-4 sm:hidden" />
                 <span className="hidden sm:inline">Leaderboard</span>
               </Link>
             </Button>
             {isAuthenticated && (
-              <Button asChild variant="outline" size="sm" className="gap-1.5 border-[#526158] bg-transparent text-[#e8ebe5] hover:bg-[#202b23] hover:text-[#e8ebe5]" data-testid="link-nav-manage-fleets">
+              <Button asChild variant="outline" size="sm" className="gap-1.5 border-border bg-transparent text-foreground hover:bg-muted hover:text-foreground" data-testid="link-nav-manage-fleets">
                 <Link href="/fleets" aria-label="Manage my fleets">
                   <Settings2 className="h-3.5 w-3.5" />
                   <span className="hidden md:inline">Manage my fleets</span>
@@ -179,24 +179,24 @@ export default function FleetPage() {
       </header>
 
       <main id="main-content" className="container mx-auto max-w-5xl px-4 py-8 sm:py-12">
-        <header className="mb-8 border-b border-[#303832] pb-6">
+        <header className="mb-8 border-b border-border pb-6">
           <div className="mb-2 flex items-center gap-2">
-            <Network className="h-6 w-6 text-[#8ef2bd]" />
+            <Network className="h-6 w-6 text-primary" />
             <h1 className="text-3xl font-bold tracking-tight">Fleet Coherence</h1>
           </div>
-          <p className="max-w-2xl text-[#a0ada3]">
+          <p className="max-w-2xl text-muted-foreground">
             Inspect public agent evidence by organization prefix or registered fleet. Review per-agent coherence rates and the fleet-level score.
           </p>
         </header>
 
-        <form onSubmit={submit} className="mb-8 border-b border-[#303832] pb-6">
+        <form onSubmit={submit} className="mb-8 border-b border-border pb-6">
           <label className="sr-only" htmlFor="fleet-lookup">Fleet identifier</label>
-          <div className="flex rounded-sm border border-[#3a4740] bg-[#171f19] p-0.5">
+          <div className="flex rounded-sm border border-border bg-card p-0.5">
             <Button
               type="button"
               size="sm"
               variant="ghost"
-              className={mode === "prefix" ? "bg-[#314438] text-[#e8ebe5] hover:bg-[#3a5141] hover:text-white" : "text-[#a0ada3] hover:bg-[#202b23] hover:text-[#e8ebe5]"}
+              className={mode === "prefix" ? "bg-muted text-foreground hover:bg-muted/80 hover:text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}
               data-testid="button-mode-prefix"
               onClick={() => setMode("prefix")}
             >
@@ -206,7 +206,7 @@ export default function FleetPage() {
               type="button"
               size="sm"
               variant="ghost"
-              className={mode === "slug" ? "bg-[#314438] text-[#e8ebe5] hover:bg-[#3a5141] hover:text-white" : "text-[#a0ada3] hover:bg-[#202b23] hover:text-[#e8ebe5]"}
+              className={mode === "slug" ? "bg-muted text-foreground hover:bg-muted/80 hover:text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}
               data-testid="button-mode-slug"
               onClick={() => setMode("slug")}
             >
@@ -214,7 +214,7 @@ export default function FleetPage() {
             </Button>
           </div>
           <div className="relative min-w-0 w-full flex-1 sm:min-w-64">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#a0ada3]" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               id="fleet-lookup"
               data-testid="input-org-prefix"
@@ -223,23 +223,23 @@ export default function FleetPage() {
                 : "Organization wallet prefix (e.g. erd1acme…) — min 6 characters"}
               value={orgInput}
               onChange={(e) => setOrgInput(e.target.value)}
-              className="border-[#526158] bg-[#171f19] pl-9 font-mono text-[#e8ebe5] placeholder:text-[#7f8d84] focus-visible:ring-[#8ef2bd]"
+              className="border-border bg-card pl-9 font-mono text-foreground placeholder:text-muted-foreground focus-visible:ring-primary"
             />
           </div>
-          <Button type="submit" className="bg-[#8ef2bd] text-[#102119] hover:bg-[#b1ffd0]" data-testid="button-load-fleet" disabled={!inputValid}>
+          <Button type="submit" className="bg-primary text-primary-foreground hover:bg-primary/90" data-testid="button-load-fleet" disabled={!inputValid}>
             View fleet
           </Button>
         </form>
 
         {!query && (
-          <Card className="border-[#303832] bg-[#171f19] text-[#e8ebe5] shadow-none">
+          <Card className="panel text-foreground shadow-none">
             <CardContent className="flex flex-col items-center gap-4 py-16 text-center">
-              <Network className="h-12 w-12 text-[#65716a]" />
+              <Network className="h-12 w-12 text-muted-foreground/60" />
               <div>
-                <p className="font-medium text-[#c4cec5]">
+                <p className="font-medium text-foreground/80">
                   Enter an organization wallet prefix or a registered fleet slug to load its fleet.
                 </p>
-                <p className="mt-1 text-sm text-[#a0ada3]">
+                <p className="mt-1 text-sm text-muted-foreground">
                   Prefix mode aggregates all agents whose wallet address starts with the prefix.
                   Registered fleets aggregate the exact member wallets added via{" "}
                   <code className="font-mono text-xs">POST /api/fleets</code> — no shared prefix needed.
@@ -257,10 +257,10 @@ export default function FleetPage() {
         )}
 
         {query && error instanceof Error && (
-          <Card className="border-[#634f27] bg-[#211e16] text-[#e8ebe5] shadow-none">
+          <Card className="border-[hsl(var(--status-warning)/.4)] bg-[hsl(var(--status-warning)/.1)] text-foreground shadow-none">
             <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
               <AlertTriangle className="h-8 w-8 text-amber-500" />
-              <p className="text-sm text-[#d4c29a]" data-testid="text-fleet-error">{error.message}</p>
+              <p className="text-sm text-[hsl(var(--status-warning))]" data-testid="text-fleet-error">{error.message}</p>
             </CardContent>
           </Card>
         )}
@@ -268,18 +268,18 @@ export default function FleetPage() {
         {query && data && (
           <>
             {/* Fleet summary */}
-            <Card className="mb-8 border-[#303832] bg-[#171f19] text-[#e8ebe5] shadow-none">
+            <Card className="panel mb-8 text-foreground shadow-none">
               <CardContent className="py-6">
                 <div className="flex flex-col md:flex-row md:items-center gap-6">
                   <div className="flex items-center gap-6">
                     <ScoreRing score={data.fleet.fleet_score} />
                     <div>
-                      <p className="text-xs uppercase tracking-wide text-[#a0ada3]">Fleet score</p>
+                      <p className="metric-label">Fleet score</p>
                       <p className="font-mono text-sm mt-1" data-testid="text-org-prefix">
                         {data.fleet_slug ? (data.fleet_name || data.fleet_slug) : `${data.org_prefix}…`}
                       </p>
                       {data.fleet_slug && (
-                        <p className="font-mono text-xs text-[#a0ada3]" data-testid="text-fleet-slug">{data.fleet_slug}</p>
+                        <p className="font-mono text-xs text-muted-foreground" data-testid="text-fleet-slug">{data.fleet_slug}</p>
                       )}
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -295,21 +295,21 @@ export default function FleetPage() {
                     </div>
                   </div>
                   <div className="grid flex-1 grid-cols-2 gap-4 sm:grid-cols-4">
-                    <div className="border border-[#303832] bg-[#111612] px-4 py-3">
+                    <div className="border border-border bg-background px-4 py-3">
                       <p className="text-xs text-[#a0ada3] flex items-center gap-1"><Bot className="h-3 w-3" /> Agents</p>
                       <p className="text-2xl font-bold tabular-nums" data-testid="stat-fleet-agents">{data.fleet.agent_count}</p>
                     </div>
-                    <div className="border border-[#303832] bg-[#111612] px-4 py-3">
+                    <div className="border border-border bg-background px-4 py-3">
                       <p className="text-xs text-[#a0ada3] flex items-center gap-1"><ShieldCheck className="h-3 w-3" /> WHY anchors</p>
                       <p className="text-2xl font-bold tabular-nums" data-testid="stat-fleet-anchors">{data.fleet.total_anchors}</p>
                     </div>
-                    <div className="border border-[#303832] bg-[#111612] px-4 py-3">
+                    <div className="border border-border bg-background px-4 py-3">
                       <p className="text-xs text-[#a0ada3] flex items-center gap-1"><Link2 className="h-3 w-3" /> Coherence rate</p>
                       <p className={`text-2xl font-bold tabular-nums ${rateColor(data.fleet.coherence_rate)}`} data-testid="stat-fleet-rate">
                         {data.fleet.coherence_rate !== null ? `${data.fleet.coherence_rate}%` : "—"}
                       </p>
                     </div>
-                    <div className="border border-[#303832] bg-[#111612] px-4 py-3">
+                    <div className="border border-border bg-background px-4 py-3">
                       <p className="text-xs text-[#a0ada3] flex items-center gap-1"><AlertTriangle className="h-3 w-3" /> Divergent</p>
                       <p className={`text-2xl font-bold tabular-nums ${data.fleet.divergent_count > 0 ? "text-red-300" : ""}`} data-testid="stat-fleet-divergent">
                         {data.fleet.divergent_count}
@@ -322,7 +322,7 @@ export default function FleetPage() {
 
             {/* Per-agent table */}
             {data.agents.length === 0 ? (
-              <Card className="border-[#303832] bg-[#171f19] text-[#e8ebe5] shadow-none">
+              <Card className="panel text-foreground shadow-none">
                 <CardContent className="flex flex-col items-center gap-4 py-16 text-center">
                   <Bot className="h-12 w-12 text-[#65716a]" />
                   <div>
@@ -339,9 +339,9 @@ export default function FleetPage() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="max-w-full overflow-x-auto border border-[#303832]">
+              <div className="max-w-full overflow-x-auto border border-border">
                 <table className="min-w-[42rem] w-full text-sm" data-testid="table-fleet">
-                  <thead className="border-b border-[#303832] bg-[#202b23]">
+                  <thead className="border-b border-border bg-muted">
                     <tr>
                       <th className="px-4 py-3 text-left font-medium text-[#a0ada3]">Agent</th>
                       <th className="px-4 py-3 text-right font-medium text-[#a0ada3]">WHY anchors</th>
@@ -381,7 +381,7 @@ export default function FleetPage() {
                       <tr
                         key={agent.wallet_address}
                         data-testid={`row-fleet-agent-${agent.wallet_address}`}
-                        className="border-b border-[#303832] last:border-0 cursor-pointer transition-colors hover:bg-[#202b23]"
+                        className="border-b border-border last:border-0 cursor-pointer transition-colors hover:bg-muted"
                         onClick={() => navigate(`/agent/${agent.wallet_address}`)}
                       >
                         <td className="px-4 py-3">
@@ -419,18 +419,18 @@ export default function FleetPage() {
             )}
 
             {/* Policy gate callout */}
-            <section className="mt-8 border-l-2 border-[#8ef2bd] bg-[#171f19] p-5 flex items-start gap-4">
-              <ShieldCheck className="h-5 w-5 text-[#8ef2bd] shrink-0 mt-0.5" />
+            <section className="mt-8 evidence-rule p-5 flex items-start gap-4">
+              <ShieldCheck className="h-5 w-5 text-primary shrink-0 mt-0.5" />
               <div>
                 <p className="text-sm font-semibold mb-1">Enforce coherence with the policy gate</p>
                 <p className="text-sm text-[#a0ada3] leading-relaxed">
                   Orchestrators can block any sub-action that has no valid WHY anchor: call the{" "}
-                  <code className="font-mono text-xs bg-[#111612] px-1">require_coherence_anchor</code>{" "}
+                  <code className="font-mono text-xs bg-background px-1">require_coherence_anchor</code>{" "}
                   MCP tool before delegating. It returns{" "}
-                  <code className="font-mono text-xs bg-[#111612] px-1">{`{ allowed, anchor_id, expires_at }`}</code>{" "}
+                  <code className="font-mono text-xs bg-background px-1">{`{ allowed, anchor_id, expires_at }`}</code>{" "}
                   — no anchor, no execution.
                 </p>
-                <Button asChild variant="outline" size="sm" className="mt-3 border-[#526158] bg-transparent text-[#e8ebe5] hover:bg-[#202b23] hover:text-[#e8ebe5]">
+                <Button asChild variant="outline" size="sm" className="mt-3 border-border bg-transparent text-foreground hover:bg-muted hover:text-foreground">
                   <Link href="/coherence">
                     Coherence Layer documentation
                     <ArrowRight className="ml-1.5 h-3.5 w-3.5" />

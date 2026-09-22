@@ -7,8 +7,8 @@
   --button-outline: rgba(255, 255, 255, .16);
   --badge-outline: rgba(255, 255, 255, .10);
   --opaque-button-border-intensity: 8;
-  --elevate-1: rgba(0, 255, 157, .045);
-  --elevate-2: rgba(0, 255, 157, .085);
+  --elevate-1: hsl(157 100% 50% / .06);
+  --elevate-2: hsl(157 100% 50% / .11);
 
   /* Canonical "The Anchor" palette from the Prove Before Act brand system. */
   --background: 215 28% 7%;
@@ -133,6 +133,14 @@
   .status-pending { @apply inline-flex items-center gap-1.5 text-sm font-medium; color: hsl(var(--status-pending)) !important; }
   .status-warning { @apply inline-flex items-center gap-1.5 text-sm font-medium; color: hsl(var(--status-warning)) !important; }
   .status-failed { @apply inline-flex items-center gap-1.5 text-sm font-medium; color: hsl(var(--status-failed)) !important; }
+  .status-chip { @apply inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium; }
+  .status-chip--verified, .status-chip--calibrated { color: hsl(var(--status-verified)); background: hsl(var(--status-verified) / .12); border-color: hsl(var(--status-verified) / .3); }
+  .status-chip--active { color: hsl(var(--primary)); background: hsl(var(--primary) / .12); border-color: hsl(var(--primary) / .3); }
+  .status-chip--trusted { color: hsl(157 72% 62%); background: hsl(157 72% 40% / .14); border-color: hsl(157 72% 50% / .3); }
+  .status-chip--pending, .status-chip--overconfident { color: hsl(var(--status-pending)); background: hsl(var(--status-pending) / .12); border-color: hsl(var(--status-pending) / .3); }
+  .status-chip--underconfident { color: hsl(190 65% 70%); background: hsl(190 65% 45% / .12); border-color: hsl(190 65% 60% / .3); }
+  .status-chip--warning { color: hsl(var(--status-warning)); background: hsl(var(--status-warning) / .12); border-color: hsl(var(--status-warning) / .3); }
+  .status-chip--failed { color: hsl(var(--status-failed)); background: hsl(var(--status-failed) / .12); border-color: hsl(var(--status-failed) / .3); }
   .contained-code {
     @apply max-w-full overflow-x-auto rounded-md border border-border/70 bg-background/75 p-4 font-mono text-xs leading-relaxed text-muted-foreground;
   }

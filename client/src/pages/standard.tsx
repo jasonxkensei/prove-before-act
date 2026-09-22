@@ -3,13 +3,13 @@ import { PublicSiteFooter, PublicSiteHeader } from "@/components/public-site-chr
 
 const STYLES = `
   .pba-std-root {
-    --paper: #f6f4ee;
-    --paper-strong: #fffdf8;
-    --ink: #17201b;
-    --muted: #657069;
-    --rule: #d4d8d1;
-    --code: #e9eee7;
-    --verified: #237a4b;
+    --paper: hsl(var(--background));
+    --paper-strong: hsl(var(--card));
+    --ink: hsl(var(--foreground));
+    --muted: hsl(var(--muted-foreground));
+    --rule: hsl(var(--border));
+    --code: hsl(var(--muted));
+    --verified: hsl(var(--primary));
     background: var(--paper);
     color: var(--ink);
   }
@@ -26,9 +26,9 @@ const STYLES = `
   .pba-std-root .pba-std-footer { border-color: var(--ink); background: var(--paper); }
   .pba-std-root .pba-std-container { max-width: 740px; }
   .pba-std-root {
-    background: #f8f7f4;
-    color: #0f0f0f;
-    font-family: Georgia, 'Times New Roman', serif;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-serif);
     font-size: 17px;
     line-height: 1.75;
     min-height: 100vh;
@@ -36,12 +36,12 @@ const STYLES = `
   .pba-std-root * { box-sizing: border-box; }
 
   .pba-std-header {
-    border-bottom: 2px solid #0f0f0f;
+    border-bottom: 2px solid var(--rule);
     padding: 3rem 0 2rem;
     text-align: center;
   }
   .pba-std-meta {
-    font-family: 'Courier New', Courier, monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -49,7 +49,7 @@ const STYLES = `
     margin-bottom: 1.5rem;
   }
   .pba-std-header h1 {
-    font-family: Georgia, 'Times New Roman', serif;
+    font-family: var(--font-serif);
     font-size: clamp(1.8rem, 4vw, 3rem);
     font-weight: normal;
     line-height: 1.2;
@@ -70,7 +70,7 @@ const STYLES = `
   }
   .pba-std-version {
     margin-top: 1.5rem;
-    font-family: 'Courier New', Courier, monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
     color: #888;
     letter-spacing: 0.08em;
@@ -89,7 +89,7 @@ const STYLES = `
     margin: 3rem 0;
   }
   .pba-std-toc-label {
-    font-family: 'Courier New', Courier, monospace;
+    font-family: var(--font-mono);
     font-size: 10px;
     letter-spacing: 0.15em;
     text-transform: uppercase;
@@ -119,7 +119,7 @@ const STYLES = `
     margin-bottom: 4rem;
   }
   .pba-std-section-num {
-    font-family: 'Courier New', Courier, monospace;
+    font-family: var(--font-mono);
     font-size: 10px;
     letter-spacing: 0.15em;
     text-transform: uppercase;
@@ -128,7 +128,7 @@ const STYLES = `
     margin-bottom: 0.5rem;
   }
   .pba-std-root h2 {
-    font-family: Georgia, 'Times New Roman', serif;
+    font-family: var(--font-serif);
     font-size: 1.6rem;
     font-weight: normal;
     letter-spacing: -0.01em;
@@ -139,7 +139,7 @@ const STYLES = `
     color: #0f0f0f;
   }
   .pba-std-root h3 {
-    font-family: Georgia, 'Times New Roman', serif;
+    font-family: var(--font-serif);
     font-size: 1.1rem;
     font-weight: normal;
     font-style: italic;
@@ -156,7 +156,7 @@ const STYLES = `
     text-align: center;
   }
   .pba-std-flow-title {
-    font-family: 'Courier New', Courier, monospace;
+    font-family: var(--font-mono);
     font-size: 10px;
     letter-spacing: 0.15em;
     text-transform: uppercase;
@@ -179,7 +179,7 @@ const STYLES = `
   .pba-std-flow-box {
     border: 1px solid #0f0f0f;
     padding: 0.6rem 1.2rem;
-    font-family: 'Courier New', Courier, monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
     letter-spacing: 0.05em;
     min-width: 100px;
@@ -193,7 +193,7 @@ const STYLES = `
     border-color: #0f0f0f;
   }
   .pba-std-flow-label {
-    font-family: 'Courier New', Courier, monospace;
+    font-family: var(--font-mono);
     font-size: 9px;
     color: #888;
     letter-spacing: 0.1em;
@@ -210,7 +210,7 @@ const STYLES = `
     background: #f0ede8;
     border-left: 3px solid #0f0f0f;
     padding: 1.5rem;
-    font-family: 'Courier New', Courier, monospace;
+    font-family: var(--font-mono);
     font-size: 13px;
     line-height: 1.6;
     overflow-x: auto;
@@ -218,7 +218,7 @@ const STYLES = `
     color: #0f0f0f;
   }
   .pba-std-root code {
-    font-family: 'Courier New', Courier, monospace;
+    font-family: var(--font-mono);
     font-size: 0.875em;
     background: #f0ede8;
     padding: 0.1em 0.3em;
@@ -248,7 +248,7 @@ const STYLES = `
   }
   .pba-std-root th {
     text-align: left;
-    font-family: 'Courier New', Courier, monospace;
+    font-family: var(--font-mono);
     font-size: 10px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -263,7 +263,7 @@ const STYLES = `
     color: #0f0f0f;
   }
   .pba-std-root td:first-child {
-    font-family: 'Courier New', Courier, monospace;
+    font-family: var(--font-mono);
     font-size: 13px;
   }
 
@@ -281,7 +281,7 @@ const STYLES = `
     position: absolute;
     left: 0;
     color: #1a6b3c;
-    font-family: 'Courier New', Courier, monospace;
+    font-family: var(--font-mono);
   }
   .pba-std-checklist li.no::before {
     content: "✗";
@@ -291,7 +291,7 @@ const STYLES = `
   .pba-std-impl-badge {
     display: inline-block;
     border: 1px solid #0f0f0f;
-    font-family: 'Courier New', Courier, monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
     letter-spacing: 0.05em;
     padding: 0.4rem 0.8rem;
@@ -314,7 +314,7 @@ const STYLES = `
     color: #0f0f0f;
   }
   .pba-std-footer-logo {
-    font-family: 'Courier New', Courier, monospace;
+    font-family: var(--font-mono);
     font-size: 13px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -361,7 +361,7 @@ export default function StandardPage() {
   return (
     <>
       <style>{STYLES}</style>
-      <div className="pba-std-root">
+      <div className="pba-std-root paper-page">
         <PublicSiteHeader paper />
         {/* ── Header ── */}
         <div className="pba-std-header">
@@ -666,7 +666,7 @@ intent_proof = anchor({
 if intent_proof.status == "confirmed":
     deploy(pr, proof_id=intent_proof.id)`}</pre>
 
-            <h3>MCP integration <span style={{ fontFamily: "'Courier New', monospace", fontSize: "0.75em", color: "#888", fontStyle: "normal" }}>(xProof reference implementation)</span></h3>
+            <h3>MCP integration <span style={{ fontFamily: "var(--font-mono)", fontSize: "0.75em", color: "var(--muted)", fontStyle: "normal" }}>(xProof reference implementation)</span></h3>
             <pre>{`// xProof maps anchor() → certify_file MCP tool
 {
   "name": "certify_file",

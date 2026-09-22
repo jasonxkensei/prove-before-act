@@ -53,7 +53,7 @@ function CopyButton({ value, label }: { value: string; label: string }) {
   return (
     <Button size="icon" variant="ghost" onClick={copy} data-testid={`button-copy-${label.toLowerCase().replace(/\s+/g, '-')}`}>
       {copied
-        ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+        ? <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
         : <Copy className="h-3.5 w-3.5" />
       }
     </Button>
@@ -124,7 +124,7 @@ export default function AttestationDetailPage() {
                           Expired
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400" data-testid="badge-active">
+                        <span className="status-verified rounded-md border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs" data-testid="badge-active">
                           <BadgeCheck className="h-3.5 w-3.5" />
                           Active attestation
                         </span>
@@ -254,8 +254,8 @@ export default function AttestationDetailPage() {
 
             {/* Trust impact */}
             {isActive && (
-              <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-sm" data-testid="card-trust-impact">
-                <p className="font-medium text-emerald-700 dark:text-emerald-400">
+              <div className="rounded-md border border-primary/20 bg-primary/5 px-4 py-3 text-sm" data-testid="card-trust-impact">
+                <p className="font-medium text-primary">
                   +50 trust score contribution
                 </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">

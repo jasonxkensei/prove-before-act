@@ -155,7 +155,7 @@ export function PublicSiteHeader({
           </a>
           <a
             href="/zh"
-            className={`rounded-md border px-2.5 py-1.5 font-mono text-xs transition-colors ${paper ? "border-[#d8d5cf] text-[#4a4a4a] hover:text-[#0f0f0f]" : "border-border/50 text-muted-foreground hover:text-foreground"}`}
+             className={`rounded-md border px-2.5 py-1.5 font-mono text-xs transition-colors ${paper ? "border-[hsl(40_13%_78%)] text-[hsl(40_9%_42%)] hover:text-[hsl(42_18%_18%)]" : "border-border/50 text-muted-foreground hover:text-foreground"}`}
             data-testid="link-lang-zh"
           >
             中文
@@ -212,17 +212,17 @@ export function PublicSiteHeader({
 }
 
 export function PublicSiteFooter({ paper = false }: { paper?: boolean }) {
-  const muted = paper ? "text-[#666]" : "text-muted-foreground";
-  const heading = paper ? "text-[#0f0f0f]" : "text-foreground";
-  const border = paper ? "border-[#d8d5cf] bg-[#f8f7f4]" : "border-border bg-background";
+  const muted = paper ? "text-[hsl(40_9%_42%)]" : "text-muted-foreground";
+  const heading = paper ? "text-[hsl(42_18%_18%)]" : "text-foreground";
+  const border = paper ? "border-[hsl(40_13%_78%)] bg-[hsl(42_28%_94%)]" : "border-border bg-background";
 
   return (
     <footer className={`public-site-footer border-t py-14 ${border}`}>
       <div className="container">
         <div className="mx-auto grid max-w-5xl gap-8 md:grid-cols-4">
           <div className="md:col-span-2">
-            <a href="/" className="mb-4 inline-flex">
-              <img src="/pba-logo.svg" alt={PUBLIC_SITE_NAME} className="h-8 w-auto" />
+        <a href="/" className="mb-4 inline-flex">
+              <img src={paper ? "/pba-logo-on-light.svg" : "/pba-logo.svg"} alt={PUBLIC_SITE_NAME} className="h-8 w-auto" />
             </a>
             <p className={`max-w-xs text-sm ${muted}`}>
               The accountability pattern for agents that act in the world.
@@ -239,7 +239,7 @@ export function PublicSiteFooter({ paper = false }: { paper?: boolean }) {
             </div>
           ))}
         </div>
-        <div className={`mx-auto mt-10 flex max-w-5xl flex-col items-center justify-between gap-3 border-t pt-6 text-sm sm:flex-row ${muted} ${paper ? "border-[#d8d5cf]" : "border-border"}`}>
+        <div className={`mx-auto mt-10 flex max-w-5xl flex-col items-center justify-between gap-3 border-t pt-6 text-sm sm:flex-row ${muted} ${paper ? "border-[hsl(40_13%_78%)]" : "border-border"}`}>
           <span>© {new Date().getFullYear()} Prove Before Act</span>
           <span>Powered by <a href="https://multiversx.com" target="_blank" rel="noopener noreferrer" className="font-medium hover:underline">MultiversX</a></span>
         </div>

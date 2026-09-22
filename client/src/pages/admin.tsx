@@ -578,7 +578,7 @@ function StatusIndicator({ status }: { status: string }) {
   switch (status) {
     case "ok":
     case "healthy":
-      return <Badge variant="outline" className="bg-emerald-500/15 text-emerald-500 border-emerald-500/25"><CheckCircle2 className="h-3 w-3 mr-1" /> {status === "healthy" ? "Healthy" : "OK"}</Badge>;
+      return <Badge variant="outline" className="status-verified border-current/30 bg-current/10"><CheckCircle2 className="h-3 w-3 mr-1" /> {status === "healthy" ? "Healthy" : "OK"}</Badge>;
     case "degraded":
       return <Badge variant="secondary" className="status-warning"><AlertTriangle className="h-3 w-3 mr-1" /> Degraded</Badge>;
     case "down":
@@ -767,7 +767,7 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
         {data.alerts.length > 0 && (
           <div className="space-y-1">
             {data.alerts.map((alert) => (
-              <div key={alert.condition} className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400" data-testid={`alert-${alert.condition}`}>
+              <div key={alert.condition} className="status-warning flex items-center gap-2 text-xs" data-testid={`alert-${alert.condition}`}>
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                 {alert.message}
               </div>
@@ -1288,7 +1288,7 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-background" data-testid="admin-dashboard">
       <main id="main-content" className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-        <header className="flex flex-wrap items-center justify-between gap-4 mb-8 border-b border-border pb-5">
+        <header className="operational-header -mx-4 mb-8 flex flex-wrap items-center justify-between gap-4 px-4 py-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
           <div className="flex items-center gap-3">
             <Link href="/">
               <Button variant="ghost" size="icon" data-testid="button-back-home">

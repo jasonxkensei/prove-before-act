@@ -74,7 +74,7 @@ interface ProofSummary {
 }
 
 const healthStyles: Record<HealthStatus, string> = {
-  green: "border-[#8ef2bd]/40 bg-[#8ef2bd]/10 text-[#8ef2bd]",
+  green: "border-primary/40 bg-primary/10 text-primary",
   orange: "border-amber-300/40 bg-amber-300/10 text-amber-200",
   red: "border-red-300/40 bg-red-300/10 text-red-200",
 };
@@ -99,10 +99,10 @@ function relativeTime(value: string | null) {
   return Number.isNaN(parsed.getTime()) ? "Unknown" : formatDistanceToNow(parsed, { addSuffix: true });
 }
 
-function SummaryMetric({ label, value, tone = "text-[#e8ebe5]" }: { label: string; value: number; tone?: string }) {
+function SummaryMetric({ label, value, tone = "text-foreground" }: { label: string; value: number; tone?: string }) {
   return (
-    <div className="border border-[#303832] bg-[#111612] px-4 py-3">
-      <p className="text-xs text-[#a0ada3]">{label}</p>
+    <div className="border border-border bg-background px-4 py-3">
+      <p className="text-xs text-muted-foreground">{label}</p>
       <p className={`mt-1 text-2xl font-bold tabular-nums ${tone}`}>{value}</p>
     </div>
   );
@@ -166,28 +166,28 @@ export default function FleetOverviewPage() {
   const historicalCount = summary?.historical_unknown_count ?? summary?.historical_unattributed_proofs ?? data?.historical_unknown_count ?? historical?.certification_count ?? historical?.count ?? historicalRecord?.proof_totals?.total ?? 0;
 
   return (
-    <div className="min-h-screen bg-[#111612] text-[#e8ebe5]">
-      <header className="sticky top-0 z-50 border-b border-[#303832] bg-[#111612]/95 backdrop-blur">
+    <div className="page-shell">
+      <header className="operational-header">
         <div className="container flex h-16 items-center justify-between gap-3 px-4">
           <Link href="/dashboard" data-testid="fleet-overview-link-logo" className="flex items-center gap-2">
             <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
           </Link>
           <nav aria-label="Operational navigation" className="flex items-center gap-1 sm:gap-2">
-            <Button asChild variant="ghost" size="sm" className="text-[#c4cec5] hover:bg-[#202b23] hover:text-[#e8ebe5]" data-testid="fleet-overview-link-dashboard">
+            <Button asChild variant="ghost" size="sm" className="text-foreground/80 hover:bg-muted hover:text-foreground" data-testid="fleet-overview-link-dashboard">
               <Link href="/dashboard">Dashboard</Link>
             </Button>
-            <Button asChild variant="ghost" size="sm" className="text-[#c4cec5] hover:bg-[#202b23] hover:text-[#e8ebe5]" data-testid="fleet-overview-link-coherence">
+            <Button asChild variant="ghost" size="sm" className="text-foreground/80 hover:bg-muted hover:text-foreground" data-testid="fleet-overview-link-coherence">
               <Link href="/fleet">Coherence</Link>
             </Button>
           </nav>
         </div>
       </header>
 
-      <main id="main-content" className="container mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
-        <section className="mb-8 border-b border-[#303832] pb-6">
+      <main id="main-content" className="page-container max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
+        <section className="mb-8 border-b border-border pb-6">
           <div className="mb-2 flex items-center gap-2">
-            <Activity className="h-6 w-6 text-[#8ef2bd]" aria-hidden="true" />
-            <p className="font-mono text-xs font-medium uppercase tracking-[0.16em] text-[#8ef2bd]">Read-only operations</p>
+            <Activity className="h-6 w-6 text-primary" aria-hidden="true" />
+            <p className="eyebrow">Read-only operations</p>
           </div>
           <h1 className="text-3xl font-bold tracking-tight">Fleet overview</h1>
           <p className="mt-2 max-w-3xl text-sm leading-relaxed text-[#a0ada3] sm:text-base">
@@ -197,10 +197,10 @@ export default function FleetOverviewPage() {
 
         {authLoading || isLoading ? (
           <div className="flex items-center justify-center py-20" data-testid="fleet-overview-loading">
-            <Loader2 className="h-8 w-8 animate-spin text-[#8ef2bd]" aria-label="Loading fleet overview" />
+            <Loader2 className="h-8 w-8 animate-spin text-primary" aria-label="Loading fleet overview" />
           </div>
         ) : error instanceof Error ? (
-          <Card className="border-[#634f27] bg-[#211e16] text-[#e8ebe5] shadow-none" data-testid="fleet-overview-error">
+          <Card className="border-[hsl(var(--status-warning)/.4)] bg-[hsl(var(--status-warning)/.1)] text-foreground shadow-none" data-testid="fleet-overview-error">
             <CardContent className="flex items-center gap-3 py-8">
               <AlertTriangle className="h-6 w-6 shrink-0 text-amber-300" />
               <p>{error.message}</p>
@@ -208,16 +208,16 @@ export default function FleetOverviewPage() {
           </Card>
         ) : (
           <>
-            <section className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label="Fleet health summary" data-testid="fleet-overview-summary">
+            <section className="metric-strip mb-8" aria-label="Fleet health summary" data-testid="fleet-overview-summary">
               <SummaryMetric label="Agents" value={total} />
-              <SummaryMetric label="Green" value={green} tone="text-[#8ef2bd]" />
+              <SummaryMetric label="Green" value={green} tone="text-[hsl(var(--status-verified))]" />
               <SummaryMetric label="Orange" value={orange} tone="text-amber-200" />
               <SummaryMetric label="Red" value={red} tone="text-red-200" />
             </section>
 
-            <section className="mb-8 border-l-2 border-[#8ef2bd] bg-[#171f19] p-5" aria-labelledby="fleet-overview-health-rules">
+            <section className="evidence-rule mb-8" aria-labelledby="fleet-overview-health-rules">
               <div className="flex gap-3">
-                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-[#8ef2bd]" aria-hidden="true" />
+                <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
                 <div>
                   <h2 id="fleet-overview-health-rules" className="font-semibold">Health rules</h2>
                   <p className="mt-1 text-sm leading-relaxed text-[#a0ada3]">
@@ -228,7 +228,7 @@ export default function FleetOverviewPage() {
             </section>
 
             {historicalCount > 0 && (
-              <section className="mb-8 border border-dashed border-[#526158] bg-[#171f19] p-5" data-testid="fleet-overview-historical-unknown">
+              <section className="mb-8 rounded-md border border-dashed border-border bg-card p-5" data-testid="fleet-overview-historical-unknown">
                 <div className="flex items-start gap-3">
                   <FileWarning className="mt-0.5 h-5 w-5 shrink-0 text-[#a0ada3]" aria-hidden="true" />
                   <div>
@@ -243,11 +243,11 @@ export default function FleetOverviewPage() {
 
             <section aria-labelledby="fleet-overview-agents-heading">
               <div className="mb-4 flex items-center gap-2">
-                <Users className="h-5 w-5 text-[#8ef2bd]" aria-hidden="true" />
+                <Users className="h-5 w-5 text-primary" aria-hidden="true" />
                 <h2 id="fleet-overview-agents-heading" className="text-xl font-semibold">Agents</h2>
               </div>
               {agents.length === 0 ? (
-                <Card className="border-[#303832] bg-[#171f19] text-[#e8ebe5] shadow-none" data-testid="fleet-overview-empty">
+                  <Card className="panel text-foreground shadow-none" data-testid="fleet-overview-empty">
                   <CardContent className="flex flex-col items-center py-14 text-center">
                     <Bot className="mb-4 h-12 w-12 text-[#65716a]" aria-hidden="true" />
                     <p className="font-medium text-[#c4cec5]">No operational agents recorded</p>
@@ -261,7 +261,7 @@ export default function FleetOverviewPage() {
                     const pendingProofs = proofCount(agent, "pending", agent.pending_proofs);
                     const failedProofs = proofCount(agent, "failed", agent.failed_proofs);
                     return (
-                      <Card key={agent.agent_id} className="border-[#303832] bg-[#171f19] text-[#e8ebe5] shadow-none" data-testid={`fleet-overview-agent-${agent.agent_id}`}>
+                      <Card key={agent.agent_id} className="panel text-foreground shadow-none" data-testid={`fleet-overview-agent-${agent.agent_id}`}>
                         <CardContent className="p-5 sm:p-6">
                           <div className="flex flex-col justify-between gap-5 md:flex-row md:items-start">
                             <div className="min-w-0">
@@ -281,7 +281,7 @@ export default function FleetOverviewPage() {
                                 </div>
                               </div>
                             </div>
-                            <div className="grid grid-cols-2 gap-x-6 gap-y-3 border-t border-[#303832] pt-4 text-sm md:min-w-64 md:border-l md:border-t-0 md:pl-6 md:pt-0">
+                            <div className="grid grid-cols-2 gap-x-6 gap-y-3 border-t border-border pt-4 text-sm md:min-w-64 md:border-l md:border-t-0 md:pl-6 md:pt-0">
                               <div className="col-span-2 flex items-center gap-2 text-[#a0ada3]"><Clock3 className="h-4 w-4" /><span>Last seen {relativeTime(agent.last_seen_at)}</span></div>
                               <div><p className="text-xs text-[#a0ada3]">Proofs</p><p className="font-semibold tabular-nums">{totalProofs}</p></div>
                               <div><p className="text-xs text-[#a0ada3]">Pending</p><p className="font-semibold tabular-nums">{pendingProofs}</p></div>
@@ -291,7 +291,7 @@ export default function FleetOverviewPage() {
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                className="col-span-2 mt-1 w-full border-[#526158] bg-transparent text-[#e8ebe5] hover:bg-[#202b23] hover:text-white"
+                                className="col-span-2 mt-1 w-full border-border bg-transparent text-foreground hover:bg-muted hover:text-foreground"
                                 onClick={() => {
                                   trackEvent("fleet_proof_summary_opened", { location: "fleet_overview" });
                                   setSelectedAgent(agent);
@@ -310,7 +310,7 @@ export default function FleetOverviewPage() {
               )}
             </section>
             <Dialog open={Boolean(selectedAgent)} onOpenChange={(open) => !open && setSelectedAgent(null)}>
-              <DialogContent className="max-h-[90vh] w-[calc(100vw-2rem)] overflow-y-auto border-[#303832] bg-[#111612] text-[#e8ebe5] sm:max-w-2xl" data-testid="fleet-proof-summary-dialog">
+              <DialogContent className="max-h-[90vh] w-[calc(100vw-2rem)] overflow-y-auto border-border bg-background text-foreground sm:max-w-2xl" data-testid="fleet-proof-summary-dialog">
                 <DialogHeader>
                   <DialogTitle>Proof summary: {selectedAgent?.name || "Unnamed agent"}</DialogTitle>
                   <DialogDescription className="text-[#a0ada3]">
@@ -318,7 +318,7 @@ export default function FleetOverviewPage() {
                   </DialogDescription>
                 </DialogHeader>
                 {proofSummary.isLoading ? (
-                  <div className="flex justify-center py-12"><Loader2 className="h-7 w-7 animate-spin text-[#8ef2bd]" aria-label="Loading proof summary" /></div>
+                  <div className="flex justify-center py-12"><Loader2 className="h-7 w-7 animate-spin text-primary" aria-label="Loading proof summary" /></div>
                 ) : proofSummary.error instanceof Error ? (
                   <p className="border border-amber-300/40 bg-amber-300/10 p-4 text-sm text-amber-200">{proofSummary.error.message}</p>
                 ) : proofSummary.data ? (
@@ -332,7 +332,7 @@ export default function FleetOverviewPage() {
                       </span>
                     </div>
                     <section aria-label="Proof status counts" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                      <SummaryMetric label="Confirmed" value={proofSummary.data.counts.confirmed ?? 0} tone="text-[#8ef2bd]" />
+                      <SummaryMetric label="Confirmed" value={proofSummary.data.counts.confirmed ?? 0} tone="text-[hsl(var(--status-verified))]" />
                       <SummaryMetric label="Pending" value={proofSummary.data.counts.pending ?? 0} tone="text-amber-200" />
                       <SummaryMetric label="Failed" value={proofSummary.data.counts.failed ?? 0} tone="text-red-200" />
                       <SummaryMetric label="Total" value={proofSummary.data.counts.total ?? 0} />
@@ -347,7 +347,7 @@ export default function FleetOverviewPage() {
                     <section>
                       <h3 className="mb-2 font-medium">Recent proofs</h3>
                       {proofSummary.data.recent_proofs.length ? (
-                        <ul className="divide-y divide-[#303832] border-y border-[#303832]">
+                        <ul className="divide-y divide-border border-y border-border">
                           {proofSummary.data.recent_proofs.map((proof) => (
                             <li key={proof.proof_id} className="flex flex-col gap-1 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
                               <span className="break-all font-mono text-xs text-[#c4cec5]">{proof.proof_id}</span>

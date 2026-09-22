@@ -370,7 +370,7 @@ export default function Landing() {
   const proofVerificationUrl = proofResult ? getProofVerificationUrl(proofResult) : null;
 
   return (
-    <div className="min-h-[100dvh] min-w-0 max-w-full overflow-x-hidden bg-[#0d1117] text-white">
+    <div className="page-shell min-w-0 max-w-full overflow-x-hidden">
       <PublicSiteHeader
         howItWorksHref="#how-it-works"
         primaryActionHref="#free-trial"
@@ -379,7 +379,7 @@ export default function Landing() {
       />
       {/* Hero — thesis and evidence case file */}
       <main id="main-content" className="min-w-0 max-w-full overflow-x-hidden">
-      <section className="border-b border-[#1a1f26] bg-[radial-gradient(ellipse_at_80%_45%,#102820_0%,#0d1117_42%)] px-5 py-10 md:px-12 md:py-14 lg:px-[9vw]">
+      <section className="border-b border-border bg-background px-5 py-10 md:px-12 md:py-14 lg:px-[9vw]">
         <div className="mx-auto grid max-w-6xl items-center gap-10 lg:grid-cols-[1.12fr_.88fr]">
           <div>
             <div className="mb-6 flex items-center gap-2 font-mono text-[10px] font-medium tracking-[.14em] text-[#ffbe78]" data-testid="badge-prove-before-act">
@@ -387,7 +387,7 @@ export default function Landing() {
               CONSEQUENCES REQUIRE EVIDENCE
             </div>
             <h1 className="mb-5 max-w-3xl text-[clamp(2.75rem,4.4vw,4rem)] font-semibold leading-[.98] tracking-[-.05em]">
-              Your agent can act.<br /><span className="font-serif font-normal italic text-[#00ff9d]">Can it prove why it acted?</span>
+              Your agent can act.<br /><span className="font-serif font-normal italic text-primary">Can it prove why it acted?</span>
             </h1>
             <p className="mb-5 max-w-xl text-base leading-7 text-[#8b949e]" data-testid="text-hero-positioning">
               When an autonomous agent moves money, changes production, signs a contract, or delegates to another agent, the audit trail cannot begin after the incident. Commit the decision basis before execution and leave evidence a reviewer can verify. <span className="text-white">10 free proofs · no wallet needed.</span>
@@ -417,7 +417,7 @@ export default function Landing() {
             <Button
               asChild
               size="lg"
-              className="h-12 border-[#00ff9d] bg-[#00ff9d] px-7 text-sm font-bold text-[#0d1117] hover:bg-[#6effc7]"
+              className="h-12 border-primary bg-primary px-7 text-sm font-bold text-primary-foreground hover:bg-primary/90"
               data-testid="button-free-trial-hero"
             >
               <a
@@ -435,7 +435,7 @@ export default function Landing() {
             <Button
               size="lg"
               variant="outline"
-              className="h-12 border-[#56635b] bg-transparent px-7 text-sm text-[#e8ebe5] hover:border-[#8ef2bd] hover:bg-transparent hover:text-[#8ef2bd]"
+               className="h-12 border-border bg-transparent px-7 text-sm text-foreground hover:border-primary hover:bg-transparent hover:text-primary"
               data-testid="button-certify-file"
               onClick={() => handleConnect("/certify")}
             >
@@ -446,11 +446,11 @@ export default function Landing() {
               <span className="text-[#ffbe78]">BEFORE THE ACTION</span><span>·</span><span>public pattern, reference implementation below</span>
             </p>
             <p className="mt-4 text-sm text-[#79847b]">
-              New to Prove Before Act? <a href="/learn" className="text-[#e8ebe5] underline underline-offset-2" data-testid="link-hero-learn">60-second overview →</a>
+              New to Prove Before Act? <a href="/learn" className="text-foreground underline underline-offset-2" data-testid="link-hero-learn">60-second overview →</a>
             </p>
             <p className="mt-3 text-xs text-[#79847b]">
               <span data-testid="text-hero-reference-implementation">xProof is the reference implementation of the </span>
-              <a href="/standard" className="text-[#e8ebe5] underline underline-offset-2" data-testid="link-hero-standard">Prove Before Act specification</a>
+              <a href="/standard" className="text-foreground underline underline-offset-2" data-testid="link-hero-standard">Prove Before Act specification</a>
             </p>
           </div>
           <div className="relative">
@@ -471,28 +471,28 @@ export default function Landing() {
               </button>
               {caseVerified && <div className="mt-3 flex items-center gap-2 bg-[#d2ebda] p-2 text-[11px] text-[#18633f]"><CheckCircle className="h-4 w-4" /> Verification checks the record against its public commitment</div>}
             </div>
-            <p className="mt-8 font-mono text-[10px] text-[#6e786f]"><span className="mr-3 text-[#8ef2bd]">01</span>The evidence is the product.</p>
+            <p className="mt-8 font-mono text-[10px] text-muted-foreground"><span className="mr-3 text-primary">01</span>The evidence is the product.</p>
           </div>
         </div>
       </section>
 
-      <section id="why" className="border-b border-[#303832] px-5 py-20 md:px-[10vw] md:py-28">
-        <div className="mb-10 font-mono text-[10px] tracking-[.14em] text-[#8ef2bd]">01 / THE THESIS</div>
+      <section id="why" className="border-b border-border px-5 py-20 md:px-[10vw] md:py-28">
+        <div className="eyebrow mb-10">01 / THE THESIS</div>
         <div className="grid gap-10 md:grid-cols-2 md:gap-[12vw]">
-          <h2 className="text-4xl font-semibold leading-none tracking-[-.05em] md:text-6xl">Autonomy without<br /><span className="font-serif font-normal italic text-[#8ef2bd]">accountability</span> is a blind spot.</h2>
-          <div className="max-w-md text-[15px] leading-7 text-[#9da89e]"><p>Agents are moving money, changing infrastructure, and speaking for companies. A log of what happened is not enough.</p><p className="mt-5 text-[#6f7b71]">Prove Before Act adds a narrow, durable invariant: the agent must publish a commitment to its declared decision basis before the action can happen.</p><a href="/standard" className="mt-5 inline-flex items-center gap-2 text-xs text-[#8ef2bd]" data-testid="link-thesis-standard">Read the PBA standard <ArrowRight className="h-4 w-4" /></a></div>
+          <h2 className="text-4xl font-semibold leading-none tracking-[-.05em] md:text-6xl">Autonomy without<br /><span className="font-serif font-normal italic text-primary">accountability</span> is a blind spot.</h2>
+          <div className="max-w-md text-[15px] leading-7 text-muted-foreground"><p>Agents are moving money, changing infrastructure, and speaking for companies. A log of what happened is not enough.</p><p className="mt-5 text-muted-foreground/70">Prove Before Act adds a narrow, durable invariant: the agent must publish a commitment to its declared decision basis before the action can happen.</p><a href="/standard" className="mt-5 inline-flex items-center gap-2 text-xs text-primary" data-testid="link-thesis-standard">Read the PBA standard <ArrowRight className="h-4 w-4" /></a></div>
         </div>
-        <div className="mt-16 flex flex-wrap items-center justify-between gap-4 border-y border-[#303832] py-6 font-mono text-[10px] tracking-[.1em] text-[#69766c]"><span>OBSERVE</span><b>→</b><span>DECIDE</span><b>→</b><strong className="text-[#8ef2bd]">PROVE</strong><b>→</b><span>ACT</span><b>→</b><strong className="text-[#8ef2bd]">PROVE</strong></div>
+        <div className="mt-16 flex flex-wrap items-center justify-between gap-4 border-y border-border py-6 font-mono text-[10px] tracking-[.1em] text-muted-foreground"><span>OBSERVE</span><b>→</b><span>DECIDE</span><b>→</b><strong className="text-primary">PROVE</strong><b>→</b><span>ACT</span><b>→</b><strong className="text-primary">PROVE</strong></div>
       </section>
-      <section id="why-now" className="border-b border-[#303832] bg-[#101511] px-5 py-20 md:px-[10vw] md:py-28" data-testid="section-why-now">
+      <section id="why-now" className="border-b border-border bg-card px-5 py-20 md:px-[10vw] md:py-28" data-testid="section-why-now">
         <div className="mx-auto max-w-6xl">
-          <div className="font-mono text-[10px] tracking-[.14em] text-[#8ef2bd]">02 / WHY NOW</div>
+          <div className="eyebrow">02 / WHY NOW</div>
           <div className="mt-10 grid gap-12 lg:grid-cols-[.82fr_1.18fr] lg:gap-20">
             <div>
               <h2 className="max-w-xl text-4xl font-semibold leading-[.98] tracking-[-.05em] md:text-6xl">
                 Evidence cannot be created
                 <br />
-                <span className="font-serif font-normal italic text-[#8ef2bd]">after the fact.</span>
+                <span className="font-serif font-normal italic text-primary">after the fact.</span>
               </h2>
               <p className="mt-7 max-w-md text-[15px] leading-7 text-[#9da89e]">
                 The right time to build an accountability record is before a client, auditor, insurer, or regulator asks for one.
@@ -500,7 +500,7 @@ export default function Landing() {
               <div className="mt-8 flex flex-col gap-3 sm:flex-row lg:flex-col lg:items-start xl:flex-row">
                 <Button
                   asChild
-                  className="border-[#8ef2bd] bg-[#8ef2bd] text-[#102119] hover:bg-[#b1ffd0]"
+                  className="border-primary bg-primary text-primary-foreground hover:bg-primary/90"
                   data-testid="button-why-now-first-proof"
                 >
                   <a
@@ -517,7 +517,7 @@ export default function Landing() {
                 <Button
                   asChild
                   variant="outline"
-                  className="border-[#56635b] bg-transparent text-[#e8ebe5] hover:border-[#8ef2bd] hover:bg-transparent hover:text-[#8ef2bd]"
+                  className="border-border bg-transparent text-foreground hover:border-primary hover:bg-transparent hover:text-primary"
                   data-testid="button-why-now-standard"
                 >
                   <a href="/standard">Inspect the standard</a>
@@ -525,7 +525,7 @@ export default function Landing() {
               </div>
             </div>
 
-            <ol className="border-t border-[#303832]">
+            <ol className="border-t border-border">
               {[
                 {
                   number: "01",
@@ -545,12 +545,12 @@ export default function Landing() {
               ].map((argument) => (
                 <li
                   key={argument.number}
-                  className="grid gap-4 border-b border-[#303832] py-7 sm:grid-cols-[42px_1fr] sm:gap-6"
+                  className="grid gap-4 border-b border-border py-7 sm:grid-cols-[42px_1fr] sm:gap-6"
                   data-testid={`why-now-argument-${argument.number}`}
                 >
                   <span className="font-mono text-[10px] tracking-[.12em] text-[#5f6d63]">{argument.number}</span>
                   <div>
-                    <h3 className="text-lg font-semibold tracking-[-.02em] text-[#e8ebe5]">{argument.title}</h3>
+                    <h3 className="text-lg font-semibold tracking-[-.02em] text-foreground">{argument.title}</h3>
                     <p className="mt-2 max-w-2xl text-sm leading-6 text-[#88948b]">{argument.body}</p>
                   </div>
                 </li>
@@ -559,20 +559,20 @@ export default function Landing() {
           </div>
         </div>
       </section>
-      <section id="loop" className="border-b border-[#303832] bg-[#e3e6dd] px-5 py-20 text-[#172019] md:px-[10vw] md:py-28">
+      <section id="loop" className="evidence-surface border-b px-5 py-20 md:px-[10vw] md:py-28">
         <div className="font-mono text-[10px] tracking-[.14em] text-[#287650]">03 / THE CANONICAL LOOP</div>
         <div className="mt-10 flex flex-col justify-between gap-5 md:flex-row md:items-end"><h2 className="text-4xl font-semibold leading-none tracking-[-.05em] md:text-6xl">A commitment is not<br /><span className="font-serif font-normal italic">a transcript.</span></h2><p className="max-w-md text-[15px] leading-7 text-[#56635a]">Declare the basis that can be inspected. Keep private cognition private. Make the boundary between intent and action public.</p></div>
         <div className="mt-12 grid border border-[#aeb8ae] md:grid-cols-5">
-          {["Collect the relevant state.", "Declare the decision basis.", "Anchor the commitment.", "Execute the approved action.", "Record the outcome."].map((lead, i) => <div key={lead} className={`min-h-[170px] border-b border-[#aeb8ae] p-5 last:border-0 md:border-b-0 md:border-r md:last:border-r-0 ${i === 2 ? "bg-[#18241d] text-[#e8ebe5]" : ""}`}><span className="font-mono text-[11px] text-[#64806d]">0{i + 1}</span><h3 className="my-6 font-mono text-sm tracking-[.05em]">{["OBSERVE", "DECIDE", "PROVE", "ACT", "PROVE"][i]}</h3><strong className="text-[13px]">{lead}</strong><p className={`mt-2 text-xs leading-5 ${i === 2 ? "text-[#a0ada3]" : "text-[#6d796f]"}`}>{["Signals, files, balances, permissions.", "A concise, inspectable justification.", "Hash, timestamp, actor, issuer.", "The commitment travels with the action.", "Close the loop with what happened."][i]}</p></div>)}
+          {["Collect the relevant state.", "Declare the decision basis.", "Anchor the commitment.", "Execute the approved action.", "Record the outcome."].map((lead, i) => <div key={lead} className={`min-h-[170px] border-b border-border p-5 last:border-0 md:border-b-0 md:border-r md:last:border-r-0 ${i === 2 ? "bg-accent text-foreground" : ""}`}><span className="font-mono text-[11px] text-muted-foreground">0{i + 1}</span><h3 className="my-6 font-mono text-sm tracking-[.05em]">{["OBSERVE", "DECIDE", "PROVE", "ACT", "PROVE"][i]}</h3><strong className="text-[13px]">{lead}</strong><p className={`mt-2 text-xs leading-5 ${i === 2 ? "text-muted-foreground" : "text-muted-foreground/80"}`}>{["Signals, files, balances, permissions.", "A concise, inspectable justification.", "Hash, timestamp, actor, issuer.", "The commitment travels with the action.", "Close the loop with what happened."][i]}</p></div>)}
         </div>
       </section>
-      <section className="border-b border-[#303832] bg-[#171f19] px-5 py-16 md:px-[10vw] md:py-20">
+      <section className="border-b border-border bg-card px-5 py-16 md:px-[10vw] md:py-20">
         <div className="font-mono text-[10px] tracking-[.14em] text-[#758178]">THE PATTERN / THE IMPLEMENTATION</div>
-        <div className="mt-8 grid gap-8 md:grid-cols-[1fr_70px_1fr] md:items-center"><div><h2 className="text-2xl font-semibold">Prove Before Act</h2><p className="mt-3 max-w-md text-sm leading-6 text-[#96a198]">An open pattern for public accountability. The invariant is simple enough to adopt across models, frameworks, and agents.</p></div><div className="text-3xl text-[#65736a]">→</div><div><h2 className="text-2xl font-semibold text-[#8ef2bd]">xProof</h2><p className="mt-3 max-w-md text-sm leading-6 text-[#96a198]">The reference implementation. One API call anchors an independently verifiable proof on MultiversX.</p><a href="/docs" className="mt-4 inline-flex items-center gap-2 text-xs text-[#8ef2bd]">Explore xProof <ArrowRight className="h-4 w-4" /></a></div></div>
+        <div className="mt-8 grid gap-8 md:grid-cols-[1fr_70px_1fr] md:items-center"><div><h2 className="text-2xl font-semibold">Prove Before Act</h2><p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">An open pattern for public accountability. The invariant is simple enough to adopt across models, frameworks, and agents.</p></div><div className="text-3xl text-muted-foreground/70">→</div><div><h2 className="text-2xl font-semibold text-primary">xProof</h2><p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">The reference implementation. One API call anchors an independently verifiable proof on MultiversX.</p><a href="/docs" className="mt-4 inline-flex items-center gap-2 text-xs text-primary">Explore xProof <ArrowRight className="h-4 w-4" /></a></div></div>
       </section>
 
       {/* Free Trial — Interactive Registration */}
-      <section id="free-trial" className="border-y border-[#303832] bg-[#172019] py-16 md:py-20">
+      <section id="free-trial" className="border-y border-border bg-card py-16 md:py-20">
         <div className="container">
           <div className="mx-auto max-w-2xl text-center">
             <Badge variant="secondary" className="mb-4 px-3 py-1">

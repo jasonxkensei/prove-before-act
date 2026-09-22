@@ -3,13 +3,13 @@ import { PublicSiteFooter, PublicSiteHeader } from "@/components/public-site-chr
 
 const STYLES = `
   .pba-learn-root {
-    --paper: #f6f4ee;
-    --paper-strong: #fffdf8;
-    --ink: #17201b;
-    --muted: #657069;
-    --rule: #d4d8d1;
-    --code: #e9eee7;
-    --verified: #237a4b;
+    --paper: hsl(var(--background));
+    --paper-strong: hsl(var(--card));
+    --ink: hsl(var(--foreground));
+    --muted: hsl(var(--muted-foreground));
+    --rule: hsl(var(--border));
+    --code: hsl(var(--muted));
+    --verified: hsl(var(--primary));
     background: var(--paper);
     color: var(--ink);
   }
@@ -24,9 +24,9 @@ const STYLES = `
   .pba-learn-root .pba-learn-rule,
   .pba-learn-root .pba-learn-credit { border-color: var(--rule); }
   .pba-learn-root {
-    background: #f8f7f4;
-    color: #0f0f0f;
-    font-family: Georgia, 'Times New Roman', serif;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--font-serif);
     min-height: 100vh;
     display: flex;
     flex-direction: column;
@@ -40,12 +40,12 @@ const STYLES = `
     display: flex;
     align-items: center;
     gap: 1.5rem;
-    font-family: 'Courier New', Courier, monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
     letter-spacing: 0.06em;
     flex-shrink: 0;
   }
-  .pba-learn-nav a { color: #0f0f0f; text-decoration: none; }
+  .pba-learn-nav a { color: var(--ink); text-decoration: none; }
   .pba-learn-nav a:hover { text-decoration: underline; }
   .pba-learn-nav-brand { font-weight: bold; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
   .pba-learn-nav-spacer { flex: 1; }
@@ -65,7 +65,7 @@ const STYLES = `
 
   /* ── Badge ── */
   .pba-learn-badge {
-    font-family: 'Courier New', Courier, monospace;
+    font-family: var(--font-mono);
     font-size: 10px;
     letter-spacing: 0.15em;
     text-transform: uppercase;
@@ -129,7 +129,7 @@ const STYLES = `
   .pba-learn-box {
     border: 1px solid #c0bdb8;
     padding: 0.45rem 0.9rem;
-    font-family: 'Courier New', Courier, monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
     letter-spacing: 0.07em;
     min-width: 78px;
@@ -143,7 +143,7 @@ const STYLES = `
     border-color: #0f0f0f;
   }
   .pba-learn-lbl {
-    font-family: 'Courier New', Courier, monospace;
+    font-family: var(--font-mono);
     font-size: 9px;
     color: #aaa;
     letter-spacing: 0.08em;
@@ -162,7 +162,7 @@ const STYLES = `
     background: #f0ede8;
     border-left: 3px solid #0f0f0f;
     padding: 0.75rem 1rem;
-    font-family: 'Courier New', Courier, monospace;
+    font-family: var(--font-mono);
     font-size: 12.5px;
     line-height: 1.55;
     margin: 0 0 1.25rem;
@@ -184,7 +184,7 @@ const STYLES = `
     display: inline-block;
     background: #0f0f0f;
     color: white;
-    font-family: 'Courier New', Courier, monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
     letter-spacing: 0.06em;
     padding: 0.65rem 1.25rem;
@@ -197,7 +197,7 @@ const STYLES = `
     display: inline-block;
     background: transparent;
     color: #0f0f0f;
-    font-family: 'Courier New', Courier, monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
     letter-spacing: 0.06em;
     padding: 0.65rem 1.25rem;
@@ -209,7 +209,7 @@ const STYLES = `
 
   /* ── Footer credit ── */
   .pba-learn-credit {
-    font-family: 'Courier New', Courier, monospace;
+    font-family: var(--font-mono);
     font-size: 10px;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -276,7 +276,7 @@ export default function LearnPage() {
   return (
     <>
       <style>{STYLES}</style>
-      <div className="pba-learn-root">
+      <div className="pba-learn-root paper-page">
 
         <PublicSiteHeader paper />
 

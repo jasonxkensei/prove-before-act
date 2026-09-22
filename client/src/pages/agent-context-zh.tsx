@@ -286,7 +286,7 @@ print(f"存证链接: https://provebeforeact.com{result['verify_url']}")`} />
             <p className="text-xs font-semibold mb-2">HTTP状态码及其含义</p>
             <div className="space-y-1.5 text-xs">
               {[
-                { code: "200", action: "成功。继续执行操作。", color: "text-emerald-500" },
+                { code: "200", action: "成功。继续执行操作。", color: "text-primary" },
                 { code: "402", action: "需要支付（x402流程）。签署USDC支付后重试。", color: "text-primary" },
                 { code: "409", action: "哈希重复，已存在锚定记录 — 获取现有proof_id，无需重新锚定。", color: "text-blue-400" },
                 { code: "429", action: "触发频率限制。等待Retry-After响应头指定的秒数后重试。", color: "text-amber-400" },
@@ -413,9 +413,9 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
                   <tr key={i} className={`border-b border-border/40 ${i % 2 === 0 ? "bg-muted/10" : ""}`}>
                     <td className="py-2 px-2 text-muted-foreground max-w-[160px]">{row.useCase}</td>
                     <td className={`py-2 px-2 text-center font-medium ${row["Prove Before Act"].startsWith("✓") ? "text-primary" : "text-muted-foreground"}`}>{row["Prove Before Act"]}</td>
-                    <td className={`py-2 px-2 text-center ${row.arweave.startsWith("✓") ? "text-emerald-500" : "text-muted-foreground"}`}>{row.arweave}</td>
-                    <td className={`py-2 px-2 text-center ${row.ceramic.startsWith("✓") ? "text-emerald-500" : "text-muted-foreground"}`}>{row.ceramic}</td>
-                    <td className={`py-2 px-2 text-center ${row.sign.startsWith("✓") ? "text-emerald-500" : "text-muted-foreground"}`}>{row.sign}</td>
+                    <td className={`py-2 px-2 text-center ${row.arweave.startsWith("✓") ? "text-primary" : "text-muted-foreground"}`}>{row.arweave}</td>
+                    <td className={`py-2 px-2 text-center ${row.ceramic.startsWith("✓") ? "text-primary" : "text-muted-foreground"}`}>{row.ceramic}</td>
+                    <td className={`py-2 px-2 text-center ${row.sign.startsWith("✓") ? "text-primary" : "text-muted-foreground"}`}>{row.sign}</td>
                   </tr>
                 ))}
               </tbody>
@@ -583,8 +583,8 @@ def anchor_with_retry(file_hash: str, filename: str, api_key: str, max_retries=3
             Prove Before Act基于<strong className="text-foreground">仅哈希模型</strong>构建：您的文件、声明的决策依据文档或智能体输出永远不会离开您的环境。只有其SHA-256指纹会被传输。
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3">
-              <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-2">发送给Prove Before Act的内容</p>
+            <div className="rounded-md border border-primary/20 bg-primary/5 p-3">
+              <p className="text-xs font-semibold text-primary mb-2">发送给Prove Before Act的内容</p>
               <ul className="text-xs text-muted-foreground space-y-1 ml-2">
                 <li>• SHA-256哈希（64位十六进制字符）</li>
                 <li>• 文件名（可使用合成名称）</li>
@@ -842,8 +842,8 @@ print(f"已锚定: {status['anchored']} | 待提交: {status['queue_pending']} |
             </div>
           </div>
 
-          <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3">
-            <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-1">实际成本核算 — 不同规模场景</p>
+          <div className="rounded-md border border-primary/20 bg-primary/5 p-3">
+            <p className="text-xs font-semibold text-primary mb-1">实际成本核算 — 不同规模场景</p>
             <div className="grid gap-2 sm:grid-cols-3 mt-2">
               {[
                 { scale: "小型团队", spec: "5个智能体 × 10次/天", cost: perMonth1500 },
@@ -976,8 +976,8 @@ outcome = agent.run_with_proof(
     action_description="以市价执行买入0.5 BTC"
 )
 print(f"交易已执行。存证链接: https://provebeforeact.com{outcome['verify_url']}")`} />
-          <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3">
-            <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-1">这为您提供的保障</p>
+          <div className="rounded-md border border-primary/20 bg-primary/5 p-3">
+            <p className="text-xs font-semibold text-primary mb-1">这为您提供的保障</p>
             <ul className="text-xs text-muted-foreground space-y-0.5 ml-2">
               <li>• 每次操作都有密码学存证，证明在行动前存在相应的声明决策依据</li>
               <li>• 存证可在 <code className="font-mono bg-muted px-1 rounded">provebeforeact.com/proof/&#123;id&#125;</code> 公开验证 — 无需Prove Before Act账号</li>
@@ -1328,21 +1328,21 @@ const anchorTool = tool({
                 </div>
                 <p className="text-xs text-muted-foreground mb-2 pl-5">{item.honest}</p>
                 <div className="pl-5 flex items-start gap-1.5">
-                  <CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-emerald-500" />
+                  <CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-primary" />
                   <p className="text-xs text-muted-foreground/80">{item.mitigation}</p>
                 </div>
               </div>
             ))}
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 p-3">
-              <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mb-2">适合使用Prove Before Act的场景</p>
+            <div className="rounded-md border border-primary/20 bg-primary/5 p-3">
+              <p className="text-xs font-semibold text-primary mb-2">适合使用Prove Before Act的场景</p>
               <ul className="text-xs text-muted-foreground space-y-1">
-                <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-emerald-500" />需要行动前证明——在行动前有声明决策依据的存证</li>
-                <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-emerald-500" />需要零账号机器支付（x402 + Base链USDC）</li>
-                <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-emerald-500" />需要公开信任评分+审计轨迹</li>
-                <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-emerald-500" />隐私重要——仅哈希公开，内容保留本地</li>
-                <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-emerald-500" />出现问题时需要4W取证重建能力</li>
+                <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-primary" />需要行动前证明——在行动前有声明决策依据的存证</li>
+                <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-primary" />需要零账号机器支付（x402 + Base链USDC）</li>
+                <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-primary" />需要公开信任评分+审计轨迹</li>
+                <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-primary" />隐私重要——仅哈希公开，内容保留本地</li>
+                <li className="flex items-start gap-1.5"><CheckCircle className="h-3 w-3 mt-0.5 shrink-0 text-primary" />出现问题时需要4W取证重建能力</li>
               </ul>
             </div>
             <div className="rounded-md border border-muted p-3">

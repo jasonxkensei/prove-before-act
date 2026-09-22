@@ -137,7 +137,7 @@ function AddMemberForm({ fleet, sessionWallet, onClose }: AddMemberFormProps) {
       {/* Ownership proof section */}
       {trimmedWallet && (
         isOwnWallet ? (
-          <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+          <p className="status-verified flex items-center gap-1.5">
             <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
             This is your connected wallet — no additional proof needed.
           </p>
@@ -186,7 +186,7 @@ function AddMemberForm({ fleet, sessionWallet, onClose }: AddMemberFormProps) {
                     <Copy className="h-3.5 w-3.5" />
                   </Button>
                 </div>
-                {copied && <p className="text-xs text-emerald-600 dark:text-emerald-400">Copied!</p>}
+                {copied && <p className="status-verified">Copied!</p>}
                 <Input
                   placeholder="0a1b2c3d… (hex-encoded Ed25519 signature)"
                   value={signature}
@@ -624,7 +624,7 @@ export default function FleetManagePage() {
         </div>
       </header>
 
-      <div className="container mx-auto max-w-3xl py-12 space-y-8">
+      <div className="page-container max-w-3xl py-12 space-y-8">
         {/* Page heading */}
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>

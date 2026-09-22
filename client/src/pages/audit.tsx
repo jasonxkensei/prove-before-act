@@ -38,13 +38,13 @@ const ACTION_TYPE_CONFIG: Record<string, { label: string; icon: any; color: stri
 };
 
 const DECISION_CONFIG: Record<string, { label: string; icon: any; color: string; bg: string }> = {
-  approved: { label: "Approved", icon: CheckCircle, color: "text-emerald-400", bg: "bg-emerald-500/10 border-emerald-500/20" },
+  approved: { label: "Approved", icon: CheckCircle, color: "text-primary", bg: "bg-primary/10 border-primary/20" },
   rejected: { label: "Rejected", icon: XCircle, color: "text-red-400", bg: "bg-red-500/10 border-red-500/20" },
   deferred: { label: "Deferred", icon: Clock, color: "text-amber-400", bg: "bg-amber-500/10 border-amber-500/20" },
 };
 
 const RISK_CONFIG: Record<string, { label: string; color: string }> = {
-  low: { label: "Low", color: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20" },
+  low: { label: "Low", color: "bg-primary/10 text-primary border-primary/20" },
   medium: { label: "Medium", color: "bg-amber-500/10 text-amber-400 border-amber-500/20" },
   high: { label: "High", color: "bg-orange-500/10 text-orange-400 border-orange-500/20" },
   critical: { label: "Critical", color: "bg-red-500/10 text-red-400 border-red-500/20" },
@@ -147,7 +147,7 @@ export default function AuditPage() {
             <div className="flex items-center justify-between flex-wrap gap-2">
               <h2 className="text-xl font-semibold">Action Details</h2>
               {isVerified && (
-                <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" data-testid="badge-verified">
+                  <Badge className="bg-primary/10 text-primary border border-primary/20" data-testid="badge-verified">
                   <CheckCircle className="mr-1 h-3 w-3" />
                   Verified on MultiversX
                 </Badge>

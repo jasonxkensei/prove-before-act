@@ -105,7 +105,7 @@ function CheckRow({
   return (
     <div className="flex items-center gap-2.5 py-1.5">
       {pass ? (
-        <CheckCircle className="h-4 w-4 text-green-500 dark:text-green-400 shrink-0" />
+        <CheckCircle className="h-4 w-4 text-primary shrink-0" />
       ) : (
         <XCircle className="h-4 w-4 text-red-500 dark:text-red-400 shrink-0" />
       )}
@@ -205,10 +205,10 @@ function VerdictBanner({
   > = {
     clean: {
       icon: ShieldCheck,
-      bg: "bg-green-500/5 dark:bg-green-500/10",
-      border: "border-green-500/20",
-      text: "text-green-700 dark:text-green-400",
-      badge: "text-green-700 dark:text-green-300 border-green-500/30 bg-green-500/10",
+      bg: "bg-primary/5",
+      border: "border-primary/20",
+      text: "text-primary",
+      badge: "text-primary border-primary/30 bg-primary/10",
       label: verdict.label,
     },
     gap: {
@@ -355,7 +355,7 @@ function PlainSummaryBlock({
   const verdictPhrases: Record<string, { phrase: string; cls: string }> = {
     clean: {
       phrase: "Timeline integrity verified — intent preceded execution.",
-      cls: "text-green-700 dark:text-green-400 font-semibold",
+      cls: "text-primary font-semibold",
     },
     gap: {
       phrase: "Declared decision-basis link not found — the WHY proof could not be automatically paired to this action.",
@@ -479,7 +479,7 @@ function DeltaCard({
     <Card
       className={
         intentOk === true
-          ? "border-green-500/20"
+          ? "border-primary/20"
           : intentOk === false
           ? "border-red-500/20"
           : ""
@@ -494,7 +494,7 @@ function DeltaCard({
             <p
               className={`text-lg font-bold mb-1 ${
                 intentOk === true
-                  ? "text-green-600 dark:text-green-400"
+                  ? "text-primary"
                   : intentOk === false
                   ? "text-red-600 dark:text-red-400"
                   : ""
@@ -511,7 +511,7 @@ function DeltaCard({
             <p
               className={`text-xs font-medium mt-2 ${
                 intentOk === true
-                  ? "text-green-600 dark:text-green-400"
+                  ? "text-primary"
                   : intentOk === false
                   ? "text-red-600 dark:text-red-400"
                   : "text-muted-foreground"
@@ -532,8 +532,8 @@ function TrustCard({ trust, agent }: { trust: any; agent: any }) {
   if (!trust) return null;
 
   const levelColors: Record<string, string> = {
-    Verified: "text-green-600 dark:text-green-400",
-    Trusted: "text-green-600 dark:text-green-400",
+    Verified: "text-primary",
+    Trusted: "text-primary",
     Active: "text-blue-600 dark:text-blue-400",
     Newcomer: "text-muted-foreground",
   };
@@ -655,7 +655,7 @@ function TimelineEntry({
               {entry.blockchain_status === "confirmed" ? (
                 <Badge
                   variant="outline"
-                  className="text-[10px] text-green-600 dark:text-green-400 border-green-500/30"
+                  className="text-[10px] text-primary border-primary/30"
                 >
                   confirmed
                 </Badge>
@@ -857,14 +857,14 @@ function DeltaConnector({ deltaSec }: { deltaSec: number }) {
       <div className="flex flex-col items-center">
         <div className="w-px h-4 bg-border" />
         <ArrowDown
-          className={`h-4 w-4 ${ok ? "text-green-500 dark:text-green-400" : "text-red-500 dark:text-red-400"}`}
+          className={`h-4 w-4 ${ok ? "text-primary" : "text-red-500 dark:text-red-400"}`}
         />
         <div className="w-px h-4 bg-border" />
       </div>
       <div
         className={`flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-mono ${
           ok
-            ? "border-green-500/20 bg-green-500/5 text-green-700 dark:text-green-400"
+            ? "border-primary/20 bg-primary/5 text-primary"
             : "border-red-500/20 bg-red-500/5 text-red-700 dark:text-red-400"
         }`}
       >

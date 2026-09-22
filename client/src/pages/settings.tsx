@@ -46,18 +46,18 @@ const DOMAIN_LABELS: Record<string, string> = {
 };
 
 const DOMAIN_STYLES: Record<string, string> = {
-  healthcare: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/25",
-  finance:    "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/25",
-  legal:      "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/25",
-  security:   "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/25",
-  research:   "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border-cyan-500/25",
+  healthcare: "bg-destructive/10 text-destructive border-destructive/25",
+  finance:    "status-warning border-current/30 bg-current/10",
+  legal:      "bg-accent text-accent-foreground border-border",
+  security:   "status-warning border-current/30 bg-current/10",
+  research:   "bg-primary/10 text-primary border-primary/25",
   other:      "bg-muted text-muted-foreground border-border",
 };
 
 const TRUST_LEVEL_STYLES: Record<string, string> = {
-  Verified: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
-  Trusted:  "bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30",
-  Active:   "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30",
+  Verified: "status-verified border-current/30 bg-current/10",
+  Trusted:  "status-verified border-current/30 bg-current/10",
+  Active:   "bg-primary/10 text-primary border-primary/30",
   Newcomer: "bg-muted text-muted-foreground border-border",
 };
 
@@ -687,7 +687,7 @@ export default function Settings() {
                 )}
               </div>
 
-              <div className="border-l-2 border-amber-500/60 bg-amber-500/5 px-4 py-3 text-sm text-muted-foreground" data-testid="text-next-level">
+              <div className="status-warning border-l-2 border-current bg-current/5 px-4 py-3 text-sm text-muted-foreground" data-testid="text-next-level">
                 {NEXT_LEVEL_HINTS[trustPreview.level] ?? NEXT_LEVEL_HINTS.Newcomer}
               </div>
             </CardContent>
@@ -871,7 +871,7 @@ export default function Settings() {
                         >
                           <div className="space-y-1">
                             <div className="flex flex-wrap items-center gap-2">
-                              <BadgeCheck className="h-4 w-4 text-emerald-500" />
+                              <BadgeCheck className="h-4 w-4 text-primary" />
                               <span className="text-sm font-medium">{att.title}</span>
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
