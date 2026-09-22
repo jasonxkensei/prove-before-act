@@ -139,6 +139,7 @@ export async function recordProofVerificationMilestone(
     return await db.transaction(async (tx) => {
       const claimed = await tx.insert(conversionEventDedupKeys).values({
         dedupKey,
+        proofId,
       }).onConflictDoNothing({
         target: conversionEventDedupKeys.dedupKey,
       }).returning({ dedupKey: conversionEventDedupKeys.dedupKey });

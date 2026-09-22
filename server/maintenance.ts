@@ -455,9 +455,31 @@ export async function migrateConversionEventsTable() {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS conversion_event_dedup_keys (
         dedup_key VARCHAR(160) PRIMARY KEY,
+        proof_id VARCHAR NOT NULL REFERENCES certifications(id) ON DELETE CASCADE,
         created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
       )
     `);
+    // Older marker rows encoded the proof only in dedup_key. Link markers whose
+    // proofs still exist, discard only true orphans, then enforce the lifecycle
+    // relationship so future proof deletion removes its marker atomically.
+    await pool.query(`ALTER TABLE conversion_event_dedup_keys ADD COLUMN IF NOT EXISTS proof_id VARCHAR`);
+    await pool.query(`
+      UPDATE conversion_event_dedup_keys d
+      SET proof_id = c.id
+      FROM certifications c
+      WHERE d.proof_id IS NULL
+        AND d.dedup_key = 'proof-verification:' || c.id
+    `);
+    await pool.query(`DELETE FROM conversion_event_dedup_keys WHERE proof_id IS NULL`);
+    await pool.query(`
+      DO $$ BEGIN
+        ALTER TABLE conversion_event_dedup_keys
+          ADD CONSTRAINT conversion_event_dedup_keys_proof_id_fkey
+          FOREIGN KEY (proof_id) REFERENCES certifications(id) ON DELETE CASCADE;
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$
+    `);
+    await pool.query(`ALTER TABLE conversion_event_dedup_keys ALTER COLUMN proof_id SET NOT NULL`);
     logger.info("conversion_events table ready", { component: "migration" });
   } catch (err: any) {
     logger.error("conversion_events migration error", { component: "migration", error: err.message });

@@ -26,6 +26,7 @@ let sid: string;
 let originalAdminWallets: string | undefined;
 const seededTelemetryHashes: string[] = [];
 const seededDedupKeys: string[] = [];
+const seededUserIds: string[] = [];
 
 async function createAdminSession(walletAddress: string): Promise<string> {
   sid = crypto.randomUUID().replace(/-/g, "");
@@ -70,6 +71,9 @@ afterAll(async () => {
   }
   if (seededDedupKeys.length > 0) {
     await pool.query(`DELETE FROM conversion_event_dedup_keys WHERE dedup_key = ANY($1)`, [seededDedupKeys]);
+  }
+  if (seededUserIds.length > 0) {
+    await pool.query(`DELETE FROM users WHERE id = ANY($1)`, [seededUserIds]);
   }
   if (sid) await pool.query(`DELETE FROM sessions WHERE sid = $1`, [sid]);
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
@@ -220,6 +224,17 @@ describe("GET /api/admin/conversion-funnel", () => {
   it("atomically records each proof verification milestone once across concurrent callers", async () => {
     const run = crypto.randomUUID();
     const proofId = crypto.randomUUID();
+    const userId = crypto.randomUUID();
+    seededUserIds.push(userId);
+    await pool.query(
+      `INSERT INTO users (id, wallet_address) VALUES ($1, $2)`,
+      [userId, `erd1conversionproof${run.replace(/-/g, "")}`],
+    );
+    await pool.query(
+      `INSERT INTO certifications (id, user_id, file_name, file_hash, blockchain_status)
+       VALUES ($1, $2, $3, $4, 'confirmed')`,
+      [proofId, userId, `conversion-${run}.json`, crypto.createHash("sha256").update(run).digest("hex")],
+    );
     seededDedupKeys.push(`proof-verification:${proofId}`);
     const ip = `198.51.100.${crypto.randomInt(1, 255)}`;
     const req = {
@@ -254,6 +269,19 @@ describe("GET /api/admin/conversion-funnel", () => {
       event_type: "external_agent_second_proof_verified",
       events: 1,
     }]);
+
+    const retained = await pool.query(
+      `SELECT proof_id FROM conversion_event_dedup_keys WHERE dedup_key = $1`,
+      [`proof-verification:${proofId}`],
+    );
+    expect(retained.rows).toEqual([{ proof_id: proofId }]);
+
+    await pool.query(`DELETE FROM certifications WHERE id = $1`, [proofId]);
+    const removed = await pool.query(
+      `SELECT proof_id FROM conversion_event_dedup_keys WHERE dedup_key = $1`,
+      [`proof-verification:${proofId}`],
+    );
+    expect(removed.rows).toHaveLength(0);
   });
 
   it("returns daily totals and zero-conversion alerts to an authorized admin", async () => {

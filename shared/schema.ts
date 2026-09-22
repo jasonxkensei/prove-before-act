@@ -475,10 +475,13 @@ export const conversionEvents = pgTable("conversion_events", {
 
 export type ConversionEvent = typeof conversionEvents.$inferSelect;
 
-// Permanent proof-scoped idempotency markers. These contain no visitor,
-// request, campaign, or referrer data, so telemetry rows can still expire.
+// Proof-scoped idempotency markers. These contain no visitor, request,
+// campaign, or referrer data, so telemetry rows can expire independently.
+// The proof FK keeps each marker for the proof's full lifetime, then removes it
+// automatically when that proof is permanently deleted.
 export const conversionEventDedupKeys = pgTable("conversion_event_dedup_keys", {
   dedupKey: varchar("dedup_key", { length: 160 }).primaryKey(),
+  proofId: varchar("proof_id").notNull().references(() => certifications.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
