@@ -133,3 +133,31 @@ mtime_ms = 1790076021597
 storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/8778465c-2b3f-4125-a9a5-5a33d16fb353/6aff69cb-08fb-425e-a3e5-fe429113fcdb"
 storage_version_token = "1790076070802434"
 content_type = "image/jpeg"
+
+[[outputs]]
+id = "3vyrqtu0p1rh6McltW9Be"
+uri = "file://client/public/pba-logo.svg"
+type = "image"
+title = "Logo Prove Before Act — fond sombre"
+description = "Logo officiel The Anchor pour les fonds sombres."
+logical_id = "5412b6c9-db0a-44c1-984d-83eaebe3e68a"
+content_hash = "sha256:4a6defe5fa4d827e7b6b20aa19ee23f1222157e6aacef5e475aa560a7791c683"
+size = 727
+mtime_ms = 1790074011312
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/5412b6c9-db0a-44c1-984d-83eaebe3e68a/c793e04e-3030-4a81-a265-86b0e6c9cba2"
+storage_version_token = "1790078216886184"
+content_type = "image/svg+xml"
+
+[[outputs]]
+id = "ix2qBS9B4oO-V-JiIhlvb"
+uri = "file://client/public/pba-logo-on-light.svg"
+type = "image"
+title = "Logo Prove Before Act — fond clair"
+description = "Logo officiel The Anchor pour les fonds clairs et les surfaces papier."
+logical_id = "fccc72b4-00bd-4003-9a65-29b620db8115"
+content_hash = "sha256:676a4705b24882ae4ca84d6cdd191f01e14c92e8cc6673fb7ff98332bdca23b7"
+size = 746
+mtime_ms = 1790074013476
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/fccc72b4-00bd-4003-9a65-29b620db8115/b920b789-a019-492e-b423-81a9d5e91dcb"
+storage_version_token = "1790078217542670"
+content_type = "image/svg+xml"
