@@ -6,6 +6,7 @@ export const PUBLIC_PRIMARY_NAV = [
 ] as const;
 
 export const PUBLIC_MORE_NAV = [
+  { href: "/demo", label: "Interactive demo" },
   { href: "/learn", label: "60-second overview" },
   { href: "/agents", label: "For AI Agents" },
   { href: "/leaderboard", label: "Trust Leaderboard" },
@@ -22,6 +23,7 @@ export const PUBLIC_FOOTER_COLUMNS = [
     heading: "Explore",
     links: [
       { href: "/learn", label: "60-second overview" },
+      { href: "/demo", label: "Interactive demo" },
       { href: "/standard", label: "PBA Standard" },
       { href: "/agents", label: "For AI Agents" },
       { href: "/leaderboard", label: "Trust Leaderboard" },

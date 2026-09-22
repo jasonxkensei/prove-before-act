@@ -40,6 +40,7 @@ const JasonPage = lazy(() => import("@/pages/jason"));
 const StandardPage = lazy(() => import("@/pages/standard"));
 const LearnPage = lazy(() => import("@/pages/learn"));
 const CreditsPage = lazy(() => import("@/pages/credits"));
+const DemoPage = lazy(() => import("@/pages/demo"));
 
 function ProtectedRouteRedirect() {
   const requestedPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
@@ -108,6 +109,7 @@ function Router() {
            <Route path="/founder" component={JasonPage} />
           <Route path="/standard" component={StandardPage} />
           <Route path="/learn" component={LearnPage} />
+           <Route path="/demo" component={DemoPage} />
            <Route path="/mcp"><Redirect to="/docs" /></Route>
           <Route path="/fleet" component={FleetPage} />
            <Route path="/fleets"><Redirect to="/fleet" /></Route>
@@ -168,6 +170,7 @@ function Router() {
          <Route path="/founder" component={JasonPage} />
         <Route path="/standard" component={StandardPage} />
         <Route path="/learn" component={LearnPage} />
+         <Route path="/demo" component={DemoPage} />
          <Route path="/mcp"><Redirect to="/docs" /></Route>
         <Route path="/fleet" component={FleetPage} />
         <Route path="/fleets" component={FleetManagePage} />

@@ -662,6 +662,45 @@ ${safeJsonLd({
 </html>`;
 }
 
+function renderDemoPage(baseUrl: string): string {
+  const title = "Interactive Demo — Prove Before Act";
+  const description = "Walk through the Prove Before Act accountability loop: declare the decision basis, anchor it before acting, and verify the outcome.";
+  return commonHead(title, description, `${baseUrl}/demo`) + `
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-width: 320px; background: #0D1117; color: #FFFFFF; font-family: "Inter", ui-sans-serif, system-ui, sans-serif; line-height: 1.65; }
+  main { max-width: 980px; margin: 0 auto; padding: 5rem 1.25rem 6rem; }
+  .kicker { color: #00FF9D; font: .7rem "DM Mono", ui-monospace, monospace; letter-spacing: .16em; text-transform: uppercase; }
+  h1 { max-width: 760px; margin: 1rem 0; font-size: clamp(2.5rem, 7vw, 5rem); line-height: .96; letter-spacing: -.06em; }
+  h1 em { color: #00FF9D; font-family: Georgia, serif; font-weight: 400; }
+  p { max-width: 62ch; color: #8B949E; font-size: 1.05rem; }
+  .loop { display: grid; gap: .75rem; margin-top: 3rem; grid-template-columns: repeat(4, 1fr); }
+  .step { border-top: 2px solid #00FF9D; padding: 1rem 0; }
+  .step strong { display: block; margin-bottom: .4rem; color: #FFFFFF; font: .72rem "DM Mono", ui-monospace, monospace; letter-spacing: .12em; }
+  .step span { color: #8B949E; font-size: .9rem; }
+  .note { margin-top: 3rem; border: 1px solid #1A1F26; background: #111821; padding: 1.25rem; color: #B6BEC8; }
+  .note a { color: #00FF9D; }
+  @media (max-width: 650px) { .loop { grid-template-columns: 1fr 1fr; } }
+</style>
+<body>
+${renderPublicHeader(baseUrl)}
+<main>
+  <div class="kicker">Interactive demo / 90 seconds</div>
+  <h1>Make the decision <em>provable first.</em></h1>
+  <p>Walk through a simulated agent decision: choose a scenario, declare the decision basis, anchor it before the action, then verify the outcome.</p>
+  <div class="loop">
+    <div class="step"><strong>01 / SCENARIO</strong><span>Choose what the agent is about to do.</span></div>
+    <div class="step"><strong>02 / WHY</strong><span>Declare an inspectable basis.</span></div>
+    <div class="step"><strong>03 / PROVE</strong><span>Commit before execution.</span></div>
+    <div class="step"><strong>04 / OUTCOME</strong><span>Close the accountability loop.</span></div>
+  </div>
+  <div class="note">The full browser demo is interactive and runs without an account or wallet. <a href="${baseUrl}/demo">Open the demo →</a></div>
+</main>
+${renderPublicFooter(baseUrl)}
+</body></html>`;
+}
+
 function renderStandardPage(baseUrl: string): string {
   const title = "Prove Before Act — A Design Pattern for Accountable Autonomous Agents";
   const description = "The Prove Before Act technical specification: definitions, threat model, core invariant, four primitives, 4W audit trail, and reference implementation. Draft v0.1.";
@@ -2526,6 +2565,13 @@ export function prerenderMiddleware() {
           .set("Content-Type", "text/html")
           .set("Link", agentLinks)
           .send(renderLearnPage(baseUrl));
+      }
+
+      if (path === "/demo") {
+        return res.status(200)
+          .set("Content-Type", "text/html")
+          .set("Link", agentLinks)
+          .send(renderDemoPage(baseUrl));
       }
 
       if (path === "/leaderboard") {

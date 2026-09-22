@@ -433,13 +433,15 @@ export default function Landing() {
               </a>
             </Button>
             <Button
-              size="lg"
-              variant="outline"
+               asChild
+               size="lg"
+               variant="outline"
                className="h-12 border-border bg-transparent px-7 text-sm text-foreground hover:border-primary hover:bg-transparent hover:text-primary"
-              data-testid="button-certify-file"
-              onClick={() => handleConnect("/certify")}
+               data-testid="button-interactive-demo"
             >
-              See how the loop works <ArrowRight className="ml-2 h-4 w-4" />
+               <a href="/demo">
+                 Try the interactive demo <Play className="ml-2 h-4 w-4" />
+               </a>
             </Button>
             </div>
             <p className="mt-6 flex flex-wrap gap-3 font-mono text-[10px] text-[#79847b]">
