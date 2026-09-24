@@ -1371,7 +1371,7 @@ const anchorTool = tool({
       <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur">
         <div className="container flex h-14 items-center justify-between gap-4">
           <a href="/zh" className="flex items-center gap-2 shrink-0" data-testid="link-logo-home-zh">
-            <img src="/pba-logo.svg" alt="Prove Before Act" className="h-7 w-auto" />
+            <img src="/pba-logo.png" alt="Prove Before Act" className="h-7 w-auto" />
           </a>
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Bot className="h-3.5 w-3.5 shrink-0" />

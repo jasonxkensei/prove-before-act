@@ -9,7 +9,7 @@ export default function NotFound() {
       <header className="operational-header">
         <div className="container flex h-16 items-center px-4">
           <Link href="/" className="flex items-center" data-testid="link-logo-home">
-            <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
+            <img src="/pba-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
           </Link>
         </div>
       </header>

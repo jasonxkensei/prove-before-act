@@ -170,7 +170,7 @@ export default function FleetOverviewPage() {
       <header className="operational-header">
         <div className="container flex h-16 items-center justify-between gap-3 px-4">
           <Link href="/dashboard" data-testid="fleet-overview-link-logo" className="flex items-center gap-2">
-            <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
+            <img src="/pba-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
           </Link>
           <nav aria-label="Operational navigation" className="flex items-center gap-1 sm:gap-2">
             <Button asChild variant="ghost" size="sm" className="text-foreground/80 hover:bg-muted hover:text-foreground" data-testid="fleet-overview-link-dashboard">

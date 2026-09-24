@@ -54,7 +54,7 @@ function Router() {
     return (
       <div className="flex min-h-[100dvh] items-center justify-center bg-background px-6">
         <div className="w-full max-w-xs space-y-5">
-          <img src="/pba-logo.svg" alt="Prove Before Act" className="h-10 w-auto animate-pulse" />
+          <img src="/pba-logo.png" alt="Prove Before Act" className="h-10 w-auto animate-pulse" />
           <div className="space-y-2" aria-label="Loading application">
             <div className="skeleton-line h-2 w-full" />
             <div className="skeleton-line h-2 w-2/3" />
@@ -68,7 +68,7 @@ function Router() {
   const fallback = (
     <div className="flex min-h-[100dvh] items-center justify-center bg-background px-6">
       <div className="w-full max-w-xs space-y-5">
-        <img src="/pba-logo.svg" alt="Prove Before Act" className="h-10 w-auto animate-pulse" />
+        <img src="/pba-logo.png" alt="Prove Before Act" className="h-10 w-auto animate-pulse" />
         <div className="space-y-2" aria-label="Loading page">
           <div className="skeleton-line h-2 w-full" />
           <div className="skeleton-line h-2 w-2/3" />

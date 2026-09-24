@@ -611,7 +611,7 @@ export default function FleetManagePage() {
       <header className="operational-header">
         <div className="container flex h-16 items-center justify-between gap-4">
           <Link href="/" data-testid="link-logo-home" className="flex items-center gap-2">
-            <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
+            <img src="/pba-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
           </Link>
           <nav className="flex items-center gap-3">
             <Button asChild variant="ghost" size="sm">

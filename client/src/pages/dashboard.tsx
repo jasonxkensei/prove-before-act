@@ -290,7 +290,7 @@ export default function Dashboard() {
       <header className="operational-header">
         <div className="container flex h-16 items-center justify-between">
           <a href="/" className="flex items-center gap-2" data-testid="link-logo-home">
-            <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
+            <img src="/pba-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
           </a>
           <div className="flex items-center gap-2 flex-wrap justify-end">
             <Button asChild variant="ghost" size="sm" data-testid="button-leaderboard">

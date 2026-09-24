@@ -1082,7 +1082,7 @@ export default function IncidentReportPage() {
               data-testid="link-logo"
             >
               <img
-                src="/pba-logo.svg"
+                src="/pba-logo.png"
                 alt="Prove Before Act"
                 className="h-7 w-auto"
               />

@@ -100,7 +100,7 @@ export default function CreditsPage() {
       <header className="operational-header">
         <div className="container flex h-16 items-center justify-between">
           <Link href="/dashboard" className="flex items-center gap-2">
-            <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
+            <img src="/pba-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
           </Link>
           <Button asChild variant="ghost" size="sm">
             <Link href="/dashboard"><ArrowLeft className="mr-2 h-4 w-4" />Dashboard</Link>
