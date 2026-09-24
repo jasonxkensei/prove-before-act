@@ -161,3 +161,91 @@ mtime_ms = 1790074013476
 storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/fccc72b4-00bd-4003-9a65-29b620db8115/b920b789-a019-492e-b423-81a9d5e91dcb"
 storage_version_token = "1790078217542670"
 content_type = "image/svg+xml"
+
+[[outputs]]
+id = "uWbqy9jZepvj_pJrqG0AJ"
+uri = "file://attached_assets/generated_audio/pba-product-hunt-launch-en.mp3"
+type = "audio"
+title = "PBA Product Hunt launch narration"
+description = "Text-to-speech audio: AI agents are starting to act in the real world. But when something goes wrong, a reconstructed explanation is not accountability. Prove Before Act gives every consequential act…"
+logical_id = "f814747f-7bc0-42af-a802-98b31ded5b15"
+
+[[outputs]]
+id = "EO96AdGOYMPrcVSnCgtvF"
+uri = "file://attached_assets/generated_audio/pba-launch-music.mp3"
+type = "audio"
+title = "PBA launch music"
+description = "Generated music: Minimal modern technology launch music bed, understated and trustworthy, subtle electronic pulse, warm analog synth texture, restrained cinematic lift, no vocals, no dramatic drops, …"
+logical_id = "4f7a5077-6355-4f4d-a588-9501878253ff"
+
+[[outputs]]
+id = "fazBbmOFdrlv_H3u_vRh3"
+uri = "file://attached_assets/generated_audio/pba-controlled-demo-en.mp3"
+type = "audio"
+title = "PBA controlled demo narration"
+description = "Text-to-speech audio: Here is how Prove Before Act works in a controlled demonstration. First, choose the action your agent is about to perform. In this example, the agent is preparing a supplier pay…"
+logical_id = "56449b41-ee18-4bf1-86d8-e1c8571f60aa"
+
+[[outputs]]
+id = "DylhKma_RWkFMVLCifRXN"
+uri = "file://attached_assets/generated_audio/pba-demo-music.mp3"
+type = "audio"
+title = "PBA demo music"
+description = "Generated music: Minimal ambient technology explainer music bed, precise and calm, subtle electronic pulse, light percussive ticks, trustworthy and contemporary, no vocals, consistent low energy for …"
+logical_id = "430c32c9-e2c7-41b9-bb15-cf14327c986e"
+
+[[outputs]]
+id = "vkmBLoDeVDU802rQGMeQF"
+uri = "file://launch-assets/exports/pba-product-hunt-launch-bilingual.mp4"
+type = "video"
+title = "PBA — Product Hunt Launch Video"
+description = "37.8-second launch film with English narration and embedded French subtitles."
+logical_id = "152fbf2b-c7b6-47b1-93ed-e70fa46911f2"
+content_hash = "sha256:0068bfe0bcfbb694c91c37cd7206d95105147c01a1282a1be92a6d217d529285"
+size = 2257492
+mtime_ms = 1790263524153
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/152fbf2b-c7b6-47b1-93ed-e70fa46911f2/aaf0c1ba-c3f0-4c18-bcf4-fafc211ec250"
+storage_version_token = "1790263550106387"
+content_type = "video/mp4"
+
+[[outputs]]
+id = "KxguMuNeLtN8JRkEa5E74"
+uri = "file://launch-assets/exports/pba-controlled-demo-bilingual.mp4"
+type = "video"
+title = "PBA — Controlled Product Demo"
+description = "65-second guided demo with English narration, embedded French subtitles, and an explicit no-transaction disclosure."
+logical_id = "c5cd918d-0f8c-4089-a794-e16057a6069f"
+content_hash = "sha256:70a9dbb5d073ed02c24c9698403f2b0454f980e9e82e0abb858bd9f846a16b39"
+size = 3302119
+mtime_ms = 1790263536513
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/c5cd918d-0f8c-4089-a794-e16057a6069f/d6d90c8c-3561-4703-98b4-4c1c6cb884a0"
+storage_version_token = "1790263551397156"
+content_type = "video/mp4"
+
+[[outputs]]
+id = "CmPUu7djdNU5pzXLeR_hV"
+uri = "file://launch-assets/product-hunt-launch-fr.srt"
+type = "unspecified"
+title = "Launch Video — French Subtitles"
+description = "Editable French subtitle source for the Product Hunt launch video."
+logical_id = "2437c946-838f-4246-a5eb-a0c0f81d45b1"
+content_hash = "sha256:2b9f3d00dcada4ad97be90ceed947db993f754cb342d913a4456a5c60795c90a"
+size = 857
+mtime_ms = 1790263342377
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/2437c946-838f-4246-a5eb-a0c0f81d45b1/cf2baa53-acc8-4ef4-a6e5-eb4586f2ab62"
+storage_version_token = "1790263552076380"
+content_type = "application/octet-stream"
+
+[[outputs]]
+id = "zAQ3jgpbRtoL4r7tNpPqP"
+uri = "file://launch-assets/controlled-demo-fr.srt"
+type = "unspecified"
+title = "Controlled Demo — French Subtitles"
+description = "Editable French subtitle source for the controlled product demonstration."
+logical_id = "11d29875-adc3-48ac-ac06-eda64e404846"
+content_hash = "sha256:c21058da9ad0e44185d578a7a56bf50484a031854b77542bf1819294478134a7"
+size = 1364
+mtime_ms = 1790263346937
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/11d29875-adc3-48ac-ac06-eda64e404846/cc606d97-c7bb-42c6-b0e7-3c8e75931496"
+storage_version_token = "1790263552981848"
+content_type = "application/octet-stream"
