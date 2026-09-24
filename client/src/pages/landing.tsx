@@ -215,6 +215,10 @@ export default function Landing() {
     }
     if (window.location.hash === "#free-trial") {
       scrollToFreeTrial();
+    } else if (window.location.hash === "#how-it-works") {
+      requestAnimationFrame(() => {
+        document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
     }
     const storedTrial = readStoredTrialKey();
     if (storedTrial) {

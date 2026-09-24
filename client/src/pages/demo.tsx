@@ -122,7 +122,6 @@ export default function DemoPage() {
   return (
     <div className="page-shell min-h-[100dvh]">
       <PublicSiteHeader
-        howItWorksHref="/demo"
         primaryActionHref="/#free-trial"
       />
 
