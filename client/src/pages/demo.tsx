@@ -124,7 +124,6 @@ export default function DemoPage() {
       <PublicSiteHeader
         howItWorksHref="/demo"
         primaryActionHref="/#free-trial"
-        primaryActionLabel="Start free"
       />
 
       <main id="main-content">

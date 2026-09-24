@@ -20,8 +20,6 @@ import {
 type PublicSiteHeaderProps = {
   howItWorksHref?: string;
   primaryActionHref?: string;
-  primaryActionLabel?: string;
-  desktopPrimaryActionLabel?: string;
   onConnect?: () => void;
   paper?: boolean;
 };
@@ -32,8 +30,6 @@ const primaryLinkClass =
 export function PublicSiteHeader({
   howItWorksHref = "/#how-it-works",
   primaryActionHref = "/#free-trial",
-  primaryActionLabel = "Start free",
-  desktopPrimaryActionLabel,
   onConnect,
   paper = false,
 }: PublicSiteHeaderProps) {
@@ -149,7 +145,7 @@ export function PublicSiteHeader({
             className="rounded-md border border-primary/20 bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/20"
             data-testid="link-nav-start-free"
           >
-            {desktopPrimaryActionLabel ?? primaryActionLabel}
+            Start free
           </a>
         </nav>
 
@@ -160,7 +156,7 @@ export function PublicSiteHeader({
             className="min-h-11 rounded-md border border-primary/25 bg-primary/10 px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/20 md:hidden"
             data-testid="link-nav-start-free-mobile"
           >
-            {primaryActionLabel}
+            Start free
           </a>
           <a
             href="/zh"

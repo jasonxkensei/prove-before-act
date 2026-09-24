@@ -50,7 +50,7 @@ function CodeBlock({ code, lang = "bash" }: { code: string; lang?: string }) {
 export default function CoherencePage() {
   return (
     <div className="min-h-[100dvh] overflow-x-hidden bg-background text-foreground">
-      <PublicSiteHeader primaryActionHref="/#free-trial" primaryActionLabel="Start free" />
+      <PublicSiteHeader primaryActionHref="/#free-trial" />
 
       <main id="main-content" tabIndex={-1}>
         {/* ── Hero ──────────────────────────────────────────────────────────── */}

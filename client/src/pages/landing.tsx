@@ -374,8 +374,6 @@ export default function Landing() {
       <PublicSiteHeader
         howItWorksHref="#how-it-works"
         primaryActionHref="#free-trial"
-        primaryActionLabel="Prove a decision"
-        desktopPrimaryActionLabel="Prove"
         onConnect={() => handleConnect()}
       />
       {/* Hero — thesis and evidence case file */}
