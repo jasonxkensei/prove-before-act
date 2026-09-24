@@ -22,3 +22,4 @@
 - [Replit Stripe connection field names](replit-stripe-connection-fields.md) — current Stripe connector exposes `secret`, not the older `secret_key` field; managed webhook secrets are held by StripeSync
 - [One-time trial credentials](one-time-trial-credentials.md) — keep raw trial keys out of durable browser storage; allow tab-scoped recovery with explicit copy/download and graceful storage failure
 - [Agent activation credential boundary](agent-activation-credential-boundary.md) — disclose raw keys once but preserve private-context usability; only confirmed proofs with valid transaction hashes advance activation
+- [MultiversX UI global CSS collisions](multiversx-ui-global-css-collisions.md) — SDK UI injects Tailwind utilities after app CSS; avoid generic utility classes for critical responsive visibility

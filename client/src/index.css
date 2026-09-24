@@ -110,6 +110,14 @@
     --public-header-background: hsl(42 28% 94% / .95);
     --public-header-foreground: hsl(42 18% 18%);
   }
+  .public-desktop-navigation {
+    display: none;
+  }
+  @media (min-width: 768px) {
+    .public-desktop-navigation {
+      display: flex !important;
+    }
+  }
   .public-site-footer {
     color: hsl(var(--muted-foreground));
   }

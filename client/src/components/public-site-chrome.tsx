@@ -103,7 +103,7 @@ export function PublicSiteHeader({
           <img src={paper ? "/pba-logo-on-light.png" : "/pba-logo.png"} alt={PUBLIC_SITE_NAME} className="h-8 w-auto" />
         </a>
 
-        <nav className="hidden items-center gap-6 md:flex" aria-label="Primary navigation">
+        <nav className="public-desktop-navigation items-center gap-6" aria-label="Primary navigation">
           {PUBLIC_PRIMARY_NAV.map(({ href, label }, index) => (
             <a
               key={href}

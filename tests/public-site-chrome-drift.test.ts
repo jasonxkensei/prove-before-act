@@ -37,6 +37,10 @@ describe("shared public-site chrome", () => {
     expect(prerender).toContain("renderPublicHeader");
     expect(prerender).toContain("renderPublicFooter");
     expect(css).toContain(".public-site-header");
+    expect(component).toContain("public-desktop-navigation");
+    expect(component).not.toContain('className="hidden items-center gap-6 md:flex"');
+    expect(css).toContain(".public-desktop-navigation");
+    expect(css).toContain("@media (min-width: 768px)");
     expect(css).toContain(".public-site-footer");
   });
 
