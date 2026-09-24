@@ -134,6 +134,14 @@
   .evidence-surface :is(.text-foreground, .text-card-foreground) { color: hsl(42 18% 18%); }
   .evidence-surface .text-muted-foreground { color: hsl(40 9% 42%); }
   .evidence-surface .border-border { border-color: hsl(40 13% 78%); }
+  .evidence-surface .loop-step-number,
+  .evidence-surface .loop-step-description { color: #56635a; }
+  .evidence-surface .loop-step--highlighted {
+    background-color: #0c3223;
+    color: #f4f7f2;
+  }
+  .evidence-surface .loop-step--highlighted .loop-step-number { color: #9ee4ba; }
+  .evidence-surface .loop-step--highlighted .loop-step-description { color: #c2dfcf; }
   .eyebrow { @apply font-mono text-[0.68rem] font-medium uppercase tracking-[0.16em] text-primary; }
   .section-space { @apply py-16 sm:py-20 lg:py-28; }
   .status-recorded { @apply inline-flex items-center gap-1.5 text-sm text-muted-foreground; }

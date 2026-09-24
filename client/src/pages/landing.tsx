@@ -375,6 +375,7 @@ export default function Landing() {
         howItWorksHref="#how-it-works"
         primaryActionHref="#free-trial"
         primaryActionLabel="Prove a decision"
+        desktopPrimaryActionLabel="Prove"
         onConnect={() => handleConnect()}
       />
       {/* Hero — thesis and evidence case file */}
@@ -565,7 +566,17 @@ export default function Landing() {
         <div className="font-mono text-[10px] tracking-[.14em] text-[#287650]">03 / THE CANONICAL LOOP</div>
         <div className="mt-10 flex flex-col justify-between gap-5 md:flex-row md:items-end"><h2 className="text-4xl font-semibold leading-none tracking-[-.05em] md:text-6xl">A commitment is not<br /><span className="font-serif font-normal italic">a transcript.</span></h2><p className="max-w-md text-[15px] leading-7 text-[#56635a]">Declare the basis that can be inspected. Keep private cognition private. Make the boundary between intent and action public.</p></div>
         <div className="mt-12 grid border border-[#aeb8ae] md:grid-cols-5">
-          {["Collect the relevant state.", "Declare the decision basis.", "Anchor the commitment.", "Execute the approved action.", "Record the outcome."].map((lead, i) => <div key={lead} className={`min-h-[170px] border-b border-border p-5 last:border-0 md:border-b-0 md:border-r md:last:border-r-0 ${i === 2 ? "bg-accent text-foreground" : ""}`}><span className="font-mono text-[11px] text-muted-foreground">0{i + 1}</span><h3 className="my-6 font-mono text-sm tracking-[.05em]">{["OBSERVE", "DECIDE", "PROVE", "ACT", "PROVE"][i]}</h3><strong className="text-[13px]">{lead}</strong><p className={`mt-2 text-xs leading-5 ${i === 2 ? "text-muted-foreground" : "text-muted-foreground/80"}`}>{["Signals, files, balances, permissions.", "A concise, inspectable justification.", "Hash, timestamp, actor, issuer.", "The commitment travels with the action.", "Close the loop with what happened."][i]}</p></div>)}
+          {["Collect the relevant state.", "Declare the decision basis.", "Anchor the commitment.", "Execute the approved action.", "Record the outcome."].map((lead, i) => (
+            <div
+              key={lead}
+              className={`min-h-[170px] border-b border-border p-5 last:border-0 md:border-b-0 md:border-r md:last:border-r-0 ${i === 2 ? "loop-step--highlighted" : ""}`}
+            >
+              <span className="loop-step-number font-mono text-[11px]">0{i + 1}</span>
+              <h3 className="my-6 font-mono text-sm tracking-[.05em]">{["OBSERVE", "DECIDE", "PROVE", "ACT", "PROVE"][i]}</h3>
+              <strong className="text-[13px]">{lead}</strong>
+              <p className="loop-step-description mt-2 text-xs leading-5">{["Signals, files, balances, permissions.", "A concise, inspectable justification.", "Hash, timestamp, actor, issuer.", "The commitment travels with the action.", "Close the loop with what happened."][i]}</p>
+            </div>
+          ))}
         </div>
       </section>
       <section className="border-b border-border bg-card px-5 py-16 md:px-[10vw] md:py-20">
