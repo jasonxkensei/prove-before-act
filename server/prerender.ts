@@ -155,7 +155,11 @@ function renderPublicHeader(baseUrl: string, { paper = false }: { paper?: boolea
     <nav class="public-site-nav" aria-label="Primary navigation">
       ${primaryLinks}
       <details class="public-site-more">
-        <summary>More</summary>
+        <summary aria-label="More pages">
+          <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>
+          </svg>
+        </summary>
         <div class="public-site-more-menu">${moreLinks}</div>
       </details>
       <a class="public-site-cta" href="${escapeHtml(publicHref(baseUrl, "/#free-trial"))}">Start free</a>
@@ -235,10 +239,13 @@ const PUBLIC_SITE_CHROME_STYLES = `
   }
   .public-site-nav a:hover, .public-site-more summary:hover, .public-site-language:hover { color: var(--public-fg); }
   .public-site-more { position: relative; }
-  .public-site-more summary { list-style: none; }
+  .public-site-more summary {
+    display: flex; align-items: center; justify-content: center;
+    width: 44px; height: 44px; list-style: none;
+  }
   .public-site-more summary::-webkit-details-marker { display: none; }
   .public-site-more-menu {
-    position: absolute; right: 0; top: 1.8rem; z-index: 2; display: grid; min-width: 12rem;
+    position: absolute; right: 0; top: 2.75rem; z-index: 2; display: grid; min-width: 12rem;
     gap: .15rem; padding: .5rem; border: 1px solid var(--public-border);
     background: var(--public-bg); box-shadow: 0 12px 30px rgb(0 0 0 / .24);
   }

@@ -116,10 +116,11 @@ export function PublicSiteHeader({
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className={`inline-flex items-center gap-1 text-sm font-medium transition-colors ${paperLinkClass}`}
+                className={`inline-flex h-11 w-11 items-center justify-center rounded-md transition-colors ${paperLinkClass}`}
+                aria-label="More pages"
                 data-testid="button-nav-more"
               >
-                More <MoreHorizontal className="h-4 w-4" />
+                <MoreHorizontal aria-hidden="true" className="h-5 w-5" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
