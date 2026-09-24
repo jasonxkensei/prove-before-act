@@ -150,7 +150,7 @@ function renderPublicHeader(baseUrl: string, { paper = false }: { paper?: boolea
   return `<header class="public-site-header${paper ? " public-site-header--paper" : ""}" data-brand-surface="${paper ? "paper" : "dark"}" data-brand-logo="${paper ? "light" : "dark"}" data-brand-fonts="Inter|DM Mono" data-brand-palette="anchor">
   <div class="public-site-header-inner">
     <a class="public-site-brand" href="${escapeHtml(baseUrl)}">
-      <img src="${escapeHtml(publicHref(baseUrl, paper ? "/pba-logo-on-light.svg" : "/pba-logo.svg"))}" alt="${PUBLIC_SITE_NAME}" />
+      <img src="${escapeHtml(publicHref(baseUrl, paper ? "/pba-logo-on-light.png" : "/pba-logo.png"))}" alt="${PUBLIC_SITE_NAME}" />
     </a>
     <nav class="public-site-nav" aria-label="Primary navigation">
       ${primaryLinks}
@@ -180,7 +180,7 @@ function renderPublicFooter(baseUrl: string, { paper = false }: { paper?: boolea
   <div class="public-site-footer-inner">
     <div class="public-site-footer-grid">
       <div class="public-site-footer-about">
-        <a href="${escapeHtml(baseUrl)}"><img src="${escapeHtml(publicHref(baseUrl, paper ? "/pba-logo-on-light.svg" : "/pba-logo.svg"))}" alt="${PUBLIC_SITE_NAME}" /></a>
+        <a href="${escapeHtml(baseUrl)}"><img src="${escapeHtml(publicHref(baseUrl, paper ? "/pba-logo-on-light.png" : "/pba-logo.png"))}" alt="${PUBLIC_SITE_NAME}" /></a>
         <p>The accountability pattern for agents that act in the world.</p>
       </div>
       ${columns}
@@ -296,7 +296,6 @@ function commonHead(title: string, description: string, canonicalUrl: string, og
 <meta name="twitter:description" content="${escapeHtml(description)}">
 <meta name="twitter:image" content="https://provebeforeact.com/og-image.jpg">
 
-<link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
 <link rel="icon" href="/favicon.ico" sizes="32x32">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
