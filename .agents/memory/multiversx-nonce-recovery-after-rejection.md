@@ -14,3 +14,9 @@ The server claims and persists a MultiversX wallet nonce before it broadcasts a 
 **Why:** Treating the account value as the next nonce causes `lowerNonceInTx` rejection at the exact current account value, and an asynchronous resync can otherwise restore the same bad value repeatedly.
 
 **How to apply:** Add one when seeding or resyncing the persisted next-nonce marker. If several broadcasts remain pending, inspect the gateway transaction states and account nonce before attempting replacement; do not create a nonce gap.
+
+**Recovery safety:** Gateway acceptance and completed validation jobs do not establish chain finality. A resync while other signer writers run can reuse a nonce, and a drained transaction pool does not by itself reconcile public proof statuses. Budget for the follow-on MX-8004 transactions as well as the direct proof.
+
+**Why:** An accepted high-nonce broadcast can be dropped before finality while the application has already advanced the nonce, marked the proof confirmed, and completed its validation job. A later proof cannot repair that history just by receiving a new hash.
+
+**How to apply:** Before a production resync, coordinate a write freeze across proof and validation paths, verify the chain account nonce and individual hashes, preserve and reconcile affected records, then resume with one independently finalized transaction before larger batches.
