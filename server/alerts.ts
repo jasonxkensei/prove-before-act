@@ -57,8 +57,54 @@ async function sendAlertWebhook(
     logger.error("Alert webhook network error", {
       component: "alerts",
       alertType,
-      error: err.message,
+      error: err instanceof Error ? err.name : "unknown",
     });
+  }
+}
+
+interface WebhookDeliveryExhaustedPayload {
+  alert: "proof_webhook_delivery_exhausted";
+  severity: "critical";
+  timestamp: string;
+  certification_id: string;
+  destination: string;
+  attempts: number;
+}
+
+function redactWebhookDestination(url: string): string {
+  try {
+    return `${new URL(url).origin}/[redacted]`;
+  } catch {
+    return "[invalid-url]";
+  }
+}
+
+/**
+ * Notify operators that a certified proof could not be delivered to its
+ * receiver. Only a redacted destination is included in logs and alert payloads.
+ */
+export async function alertWebhookDeliveryExhausted(
+  certificationId: string,
+  webhookUrl: string,
+  attempts: number,
+): Promise<void> {
+  const payload: WebhookDeliveryExhaustedPayload = {
+    alert: "proof_webhook_delivery_exhausted",
+    severity: "critical",
+    timestamp: new Date().toISOString(),
+    certification_id: certificationId,
+    destination: redactWebhookDestination(webhookUrl),
+    attempts,
+  };
+
+  logger.error("Proof callback delivery retries exhausted", {
+    component: "webhook-delivery-alerts",
+    ...payload,
+  });
+
+  const alertWebhookUrl = process.env.TX_ALERT_WEBHOOK_URL;
+  if (alertWebhookUrl) {
+    await sendAlertWebhook(alertWebhookUrl, payload.alert, payload);
   }
 }
 

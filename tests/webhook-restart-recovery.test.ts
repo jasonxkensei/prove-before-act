@@ -3,6 +3,7 @@ import dns from "dns";
 import https from "https";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { pollProofFinality } from "../server/proof-finality";
+import { logger } from "../server/logger";
 import {
   recoverPendingWebhookDeliveries,
   scheduleWebhookDelivery,
@@ -86,11 +87,14 @@ const webhookSecret = "restart-safe-proof-webhook-secret";
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   vi.useRealTimers();
 });
 
 describe("proof-certified webhook restart recovery", () => {
   it("waits through a restart while finality is pending, then sends the persisted signed callback", async () => {
+    vi.stubEnv("TX_ALERT_WEBHOOK_URL", "https://ops.example.test/alerts/webhook-secret");
+    const errorLog = vi.spyOn(logger, "error");
     mockState.certification = {
       id: "certification-restart-test",
       fileName: "decision.json",
@@ -139,7 +143,7 @@ describe("proof-certified webhook restart recovery", () => {
     expect(outboundRequests).toHaveLength(0);
     expect(mockState.certification?.webhookStatus).toBe("pending");
 
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+    const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
         txHash: transactionHash,
@@ -148,7 +152,8 @@ describe("proof-certified webhook restart recovery", () => {
         round: 100,
         blockNonce: 55,
       }),
-    }));
+    });
+    vi.stubGlobal("fetch", fetchMock);
 
     // The poller records chain finality and releases the persisted delivery.
     await pollProofFinality();
@@ -162,6 +167,12 @@ describe("proof-certified webhook restart recovery", () => {
     const signature = request.options.headers["X-ProveBeforeAct-Signature"];
     const timestamp = request.options.headers["X-ProveBeforeAct-Timestamp"];
     expect(verifyWebhookSignature(request.body, signature, timestamp, webhookSecret)).toEqual({ valid: true });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0][0]).not.toBe("https://ops.example.test/alerts/webhook-secret");
+    expect(errorLog).not.toHaveBeenCalledWith(
+      "Proof callback delivery retries exhausted",
+      expect.anything(),
+    );
     expect(JSON.parse(request.body)).toMatchObject({
       event: "proof.certified",
       proof_id: "certification-restart-test",
@@ -173,6 +184,12 @@ describe("proof-certified webhook restart recovery", () => {
 
   it("keeps the three-attempt ceiling and stable delivery ID across retries", async () => {
     vi.useFakeTimers();
+    const operatorAlertUrl = "https://ops.example.test/alerts/webhook-secret";
+    vi.stubEnv("TX_ALERT_WEBHOOK_URL", operatorAlertUrl);
+    const alertFetch = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal("fetch", alertFetch);
+    const errorLog = vi.spyOn(logger, "error");
+    const callbackUrl = "https://callback-user:callback-pass@callbacks.example.test/private/proof?access_token=callback-token#fragment";
     mockState.certification = {
       id: "certification-retry-limit-test",
       fileName: "decision.json",
@@ -183,7 +200,7 @@ describe("proof-certified webhook restart recovery", () => {
       finalityCheckedAt: new Date("2026-09-25T12:00:00.000Z"),
       finalityEvidence: {},
       authMethod: "api_key",
-      webhookUrl: "https://callbacks.example.test/proof",
+      webhookUrl: callbackUrl,
       webhookSigningSecret: webhookSecret,
       webhookBaseUrl: "https://provebeforeact.com",
       webhookStatus: "pending",
@@ -213,7 +230,7 @@ describe("proof-certified webhook restart recovery", () => {
 
     scheduleWebhookDelivery(
       "certification-retry-limit-test",
-      "https://callbacks.example.test/proof",
+      callbackUrl,
       "https://provebeforeact.com",
       webhookSecret,
     );
@@ -230,6 +247,35 @@ describe("proof-certified webhook restart recovery", () => {
     ]);
     expect(mockState.certification?.webhookAttempts).toBe(3);
     expect(mockState.certification?.webhookStatus).toBe("failed");
+    expect(alertFetch).toHaveBeenCalledTimes(1);
+    expect(alertFetch).toHaveBeenCalledWith(operatorAlertUrl, expect.objectContaining({
+      method: "POST",
+      body: expect.any(String),
+    }));
+    const alertPayload = JSON.parse(alertFetch.mock.calls[0][1].body);
+    expect(alertPayload).toMatchObject({
+      alert: "proof_webhook_delivery_exhausted",
+      severity: "critical",
+      certification_id: "certification-retry-limit-test",
+      destination: "https://callbacks.example.test/[redacted]",
+      attempts: 3,
+    });
+    expect(JSON.stringify(alertPayload)).not.toContain(webhookSecret);
+    expect(JSON.stringify(alertPayload)).not.toContain("callback-pass");
+    expect(JSON.stringify(alertPayload)).not.toContain("access_token");
+    expect(JSON.stringify(alertPayload)).not.toContain("/private/proof");
+    expect(errorLog).toHaveBeenCalledTimes(1);
+    const exhaustionLog = errorLog.mock.calls.find(([message]) =>
+      message === "Proof callback delivery retries exhausted",
+    );
+    expect(exhaustionLog?.[1]).toMatchObject({
+      certification_id: "certification-retry-limit-test",
+      destination: "https://callbacks.example.test/[redacted]",
+      attempts: 3,
+    });
+    expect(JSON.stringify(exhaustionLog?.[1])).not.toContain(webhookSecret);
+    expect(JSON.stringify(exhaustionLog?.[1])).not.toContain("callback-pass");
+    expect(JSON.stringify(exhaustionLog?.[1])).not.toContain("/private/proof");
   });
 
   it("reclaims an expired lease but only lets one recovery worker send the callback", async () => {

@@ -8,6 +8,7 @@ import { logger } from "./logger";
 import { proofWebhookHeaders } from "./webhookHeaders";
 import { publicProofStatus } from "./proof-finality";
 import { CANONICAL_PUBLIC_ORIGIN } from "./publicOrigin";
+import { alertWebhookDeliveryExhausted } from "./alerts";
 
 /**
  * Prove Before Act Webhook Signature Contract
@@ -53,6 +54,13 @@ function redactWebhookUrl(url: string): string {
   } catch {
     return "[invalid-url]";
   }
+}
+
+function safeWebhookErrorCode(error: unknown): string {
+  const code = error && typeof error === "object" && "code" in error
+    ? String((error as { code?: unknown }).code || "")
+    : "";
+  return /^[A-Z][A-Z0-9_]{0,39}$/.test(code) ? code : "unknown";
 }
 
 interface WebhookPayload {
@@ -232,16 +240,16 @@ export async function deliverWebhook(
         return true;
       } else {
         logger.warn("Webhook delivery failed", { component: "webhook", webhookUrl: redactWebhookUrl(webhookUrl), status: result.status });
-        await markWebhookFailed(certificationId);
+        await markWebhookFailed(certificationId, webhookUrl);
         return false;
       }
     } catch (fetchError: any) {
       // safeWebhookFetch throws for SSRF rejections, redirect attempts, timeouts,
       // TLS failures, and connection errors. All of these are treated as
       // delivery failures so they enter the retry/backoff path normally.
-      const reason = fetchError?.code || fetchError?.message || "unknown";
+      const reason = safeWebhookErrorCode(fetchError);
       logger.warn("Webhook network error", { component: "webhook", webhookUrl: redactWebhookUrl(webhookUrl), error: reason });
-      await markWebhookFailed(certificationId);
+      await markWebhookFailed(certificationId, webhookUrl);
       return false;
     }
   } catch (error) {
@@ -250,19 +258,39 @@ export async function deliverWebhook(
   }
 }
 
-async function markWebhookFailed(certificationId: string) {
+async function markWebhookFailed(certificationId: string, webhookUrl: string) {
   const [cert] = await db
     .select()
     .from(certifications)
     .where(eq(certifications.id, certificationId));
-  
+
   if (!cert) return;
-  
+
   const status = (cert.webhookAttempts || 0) >= MAX_WEBHOOK_ATTEMPTS ? "failed" : "pending";
+  if (status === "failed") {
+    await markWebhookExhausted(certificationId, webhookUrl);
+    return;
+  }
   await db
     .update(certifications)
     .set({ webhookStatus: status })
     .where(eq(certifications.id, certificationId));
+}
+
+async function markWebhookExhausted(certificationId: string, webhookUrl: string): Promise<void> {
+  const [transitioned] = await db
+    .update(certifications)
+    .set({ webhookStatus: "failed" })
+    .where(and(
+      eq(certifications.id, certificationId),
+      eq(certifications.webhookStatus, "pending"),
+    ))
+    .returning({ id: certifications.id });
+
+  // The durable status transition deduplicates alerts across workers and restarts.
+  if (transitioned) {
+    await alertWebhookDeliveryExhausted(certificationId, webhookUrl, MAX_WEBHOOK_ATTEMPTS);
+  }
 }
 
 type PendingWebhook = {
@@ -331,14 +359,14 @@ function queueWebhookDelivery(delivery: PendingWebhook, rescheduleWhenActive = t
       );
     })
     .catch(error => logger.error("Webhook scheduling failed", {
-      component: "webhook", certificationId: delivery.id, error: String(error),
+      component: "webhook", certificationId: delivery.id, error: safeWebhookErrorCode(error),
     }))
     .finally(() => {
       activeDeliveries.delete(delivery.id);
       if (queuedDuringDelivery.delete(delivery.id)) {
         void schedulePersistedWebhookDelivery(delivery.id).catch(error => logger.error(
           "Queued webhook delivery rescheduling failed",
-          { component: "webhook", certificationId: delivery.id, error: String(error) },
+          { component: "webhook", certificationId: delivery.id, error: safeWebhookErrorCode(error) },
         ));
       }
     });
@@ -364,7 +392,7 @@ async function deliverWebhookWithRetries(
 
     let nextAttemptNumber = cert.webhookAttempts || 0;
     if (nextAttemptNumber >= MAX_WEBHOOK_ATTEMPTS) {
-      await db.update(certifications).set({ webhookStatus: "failed" }).where(eq(certifications.id, certificationId));
+      await markWebhookExhausted(certificationId, webhookUrl);
       return;
     }
 
@@ -383,7 +411,7 @@ async function deliverWebhookWithRetries(
       }
       if (publicProofStatus(cert) !== "confirmed") return;
       if ((cert.webhookAttempts || 0) >= MAX_WEBHOOK_ATTEMPTS) {
-        await db.update(certifications).set({ webhookStatus: "failed" }).where(eq(certifications.id, certificationId));
+        await markWebhookExhausted(certificationId, webhookUrl);
         return;
       }
 
@@ -397,9 +425,7 @@ async function deliverWebhookWithRetries(
 
     // A failure before the attempt counter could be persisted still consumes an
     // attempt in this worker, preserving the three-attempt ceiling.
-    await db.update(certifications)
-      .set({ webhookStatus: "failed" })
-      .where(and(eq(certifications.id, certificationId), eq(certifications.webhookStatus, "pending")));
+    await markWebhookExhausted(certificationId, webhookUrl);
   } finally {
     await releaseWebhookDeliveryLease(certificationId, leaseToken);
   }
