@@ -303,8 +303,7 @@ function commonHead(title: string, description: string, canonicalUrl: string, og
 <meta name="twitter:description" content="${escapeHtml(description)}">
 <meta name="twitter:image" content="https://provebeforeact.com/og-image.jpg">
 
-<link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png">
-<link rel="icon" href="/favicon.ico" sizes="32x32">
+<link rel="icon" href="/favicon-new.png" sizes="64x64" type="image/png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/site.webmanifest">
 <meta name="theme-color" content="#00C97B">
