@@ -37,6 +37,26 @@ and prints the run ID, cursor, and cumulative counts. Resume a paused run with:
 PROOF_FINALITY_OPERATOR=ops npm run proofs:reconcile-legacy-finality -- --resume <run-id> --max-records 100
 ```
 
+## Read-only review report
+
+Review a run by ID without requiring an operator label or entering dry-run or
+apply mode:
+
+```sh
+npm run proofs:reconcile-legacy-finality -- --report <run-id>
+```
+
+Report mode reads the run summary and its proof audit items only. It does not
+acquire the reconciliation lease, call the chain API, or update any records.
+The JSON output includes run ID, mode, status, operator label, approval
+reference, cursor, and cumulative counts for `confirmed`, `failed`, `missing`,
+`unavailable`, `pending`, and `stale`. Each proof entry includes its
+certification ID, transaction and file hashes, result, reason, whether it was
+applied, and the time it was checked. `stale` counts confirmed outcomes that
+could not be applied because the certification no longer matched the dry-run
+state. Report mode cannot be combined with `--dry-run`, `--apply`, `--resume`,
+`--approved-dry-run`, `--max-records`, or `--delay-ms`.
+
 The CLI enforces at least one second between chain API lookups (at most 60 per
 minute), serializes operator runs with a database lease, and keeps the cursor
 and counts in the database. A process interruption can be resumed after the

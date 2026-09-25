@@ -30,10 +30,21 @@ interface Candidate {
 
 interface Options {
   resumeId: string | null;
+  reportId: string | null;
   apply: boolean;
   approvedDryRunId: string | null;
   maxRecords: number;
   delayMs: number;
+}
+
+interface ReconciliationItem {
+  certification_id: string;
+  transaction_hash: string | null;
+  file_hash: string;
+  result: HistoricalFinalityResult;
+  reason: string | null;
+  applied: boolean;
+  checked_at: Date | string;
 }
 
 const DEFAULT_COUNTS: Counts = {
@@ -68,6 +79,11 @@ function parseOptions(args: string[]): Options {
     throw new Error("Choose either --dry-run or --apply, not both.");
   }
 
+  const reportId = values.get("--report") ?? null;
+  if (reportId && (flags.has("--apply") || flags.has("--dry-run"))) {
+    throw new Error("--report cannot be combined with --dry-run or --apply.");
+  }
+
   const maxRecords = Number(values.get("--max-records") ?? 100);
   const delayMs = Number(values.get("--delay-ms") ?? MIN_LOOKUP_DELAY_MS);
   if (!Number.isInteger(maxRecords) || maxRecords < 1 || maxRecords > MAX_RECORDS_PER_INVOCATION) {
@@ -79,6 +95,9 @@ function parseOptions(args: string[]): Options {
   const apply = flags.has("--apply");
   const approvedDryRunId = values.get("--approved-dry-run") ?? null;
   const resumeId = values.get("--resume") ?? null;
+  if (reportId && (approvedDryRunId || resumeId || values.has("--max-records") || values.has("--delay-ms"))) {
+    throw new Error("--report cannot be combined with --approved-dry-run, --resume, --max-records, or --delay-ms.");
+  }
   if (values.has("--approved-dry-run") && !apply) {
     throw new Error("--approved-dry-run is only valid with --apply.");
   }
@@ -88,7 +107,7 @@ function parseOptions(args: string[]): Options {
   if (!apply && approvedDryRunId) {
     throw new Error("A dry run cannot use --approved-dry-run.");
   }
-  return { resumeId, apply, approvedDryRunId, maxRecords, delayMs };
+  return { resumeId, reportId, apply, approvedDryRunId, maxRecords, delayMs };
 }
 
 async function acquireGlobalLease(owner: string): Promise<void> {
@@ -133,6 +152,54 @@ async function loadRun(id: string): Promise<ReconciliationRun> {
   const run = result.rows[0];
   if (!run) throw new Error(`Reconciliation run ${id} was not found.`);
   return { ...run, counts: { ...DEFAULT_COUNTS, ...run.counts } };
+}
+
+async function loadReport(id: string): Promise<{
+  event: "proof_finality_reconciliation_report";
+  run: Omit<ReconciliationRun, "approved_dry_run_id" | "cursor_id"> & {
+    approvedDryRunId: string | null;
+    cursorId: string | null;
+  };
+  proofs: Array<{
+    certificationId: string;
+    transactionHash: string | null;
+    fileHash: string;
+    result: HistoricalFinalityResult;
+    reason: string | null;
+    applied: boolean;
+    checkedAt: Date | string;
+  }>;
+}> {
+  const run = await loadRun(id);
+  const items = await pool.query<ReconciliationItem>(
+    `SELECT certification_id, transaction_hash, file_hash, result, reason, applied, checked_at
+     FROM proof_finality_reconciliation_items
+     WHERE run_id = $1
+     ORDER BY checked_at, certification_id`,
+    [id],
+  );
+
+  return {
+    event: "proof_finality_reconciliation_report",
+    run: {
+      id: run.id,
+      mode: run.mode,
+      status: run.status,
+      operator: run.operator,
+      approvedDryRunId: run.approved_dry_run_id,
+      cursorId: run.cursor_id,
+      counts: run.counts,
+    },
+    proofs: items.rows.map((item) => ({
+      certificationId: item.certification_id,
+      transactionHash: item.transaction_hash,
+      fileHash: item.file_hash,
+      result: item.result,
+      reason: item.reason,
+      applied: item.applied,
+      checkedAt: item.checked_at,
+    })),
+  };
 }
 
 async function createRun(
@@ -296,8 +363,13 @@ async function setRunStatus(id: string, status: RunStatus): Promise<void> {
   );
 }
 
-async function run(): Promise<void> {
+export async function run(): Promise<void> {
   const options = parseOptions(process.argv.slice(2));
+  if (options.reportId) {
+    console.log(JSON.stringify(await loadReport(options.reportId)));
+    return;
+  }
+
   const operator = process.env.PROOF_FINALITY_OPERATOR?.trim();
   if (!operator || operator.length > 100) {
     throw new Error("Set PROOF_FINALITY_OPERATOR to a non-empty operator label of at most 100 characters.");
