@@ -116,6 +116,9 @@ export const certifications = pgTable("certifications", {
   webhookStatus: varchar("webhook_status"),
   webhookLastAttempt: timestamp("webhook_last_attempt"),
   webhookAttempts: integer("webhook_attempts").default(0),
+  // Cross-instance lease for an outbound proof-certified callback.
+  webhookLeaseToken: varchar("webhook_lease_token", { length: 64 }),
+  webhookLeaseExpiresAt: timestamp("webhook_lease_expires_at"),
   blockchainLatencyMs: integer("blockchain_latency_ms"),
   authMethod: varchar("auth_method"),
   metadata: jsonb("metadata"),

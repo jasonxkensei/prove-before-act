@@ -215,12 +215,18 @@ export async function pollProofFinality(): Promise<void> {
 }
 
 export function startProofFinalityPoller(): void {
-  const timer = setInterval(() => { void pollProofFinality(); }, 15_000);
+  const recoverPendingCallbacks = () => {
+    void import("./webhook")
+      .then(({ recoverPendingWebhookDeliveries }) => recoverPendingWebhookDeliveries())
+      .catch(error => logger.error("Pending webhook recovery failed", {
+        component: "proof-finality", error: String(error),
+      }));
+  };
+  const timer = setInterval(() => {
+    recoverPendingCallbacks();
+    void pollProofFinality();
+  }, 15_000);
   timer.unref();
-  void import("./webhook")
-    .then(({ recoverPendingWebhookDeliveries }) => recoverPendingWebhookDeliveries())
-    .catch(error => logger.error("Pending webhook recovery failed", {
-      component: "proof-finality", error: String(error),
-    }));
+  recoverPendingCallbacks();
   void pollProofFinality();
 }

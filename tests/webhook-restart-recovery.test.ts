@@ -32,17 +32,41 @@ const { mockDb, mockState } = vi.hoisted(() => {
     },
     update: () => {
       let changes: Record<string, unknown> = {};
+      let matched = false;
       const query: any = {
         set: (next: Record<string, unknown>) => {
           changes = next;
           return query;
         },
         where: () => {
-          if (state.certification) Object.assign(state.certification, changes);
+          if (state.certification) {
+            const isLeaseRelease = changes.webhookLeaseToken === null;
+            const isClaimOrRenewal =
+              typeof changes.webhookLeaseToken === "string" ||
+              Object.hasOwn(changes, "webhookLeaseExpiresAt");
+            if (isLeaseRelease) {
+              matched = true;
+              Object.assign(state.certification, changes);
+            } else if (isClaimOrRenewal) {
+              const existingToken = state.certification.webhookLeaseToken;
+              const expiresAt = state.certification.webhookLeaseExpiresAt
+                ? new Date(state.certification.webhookLeaseExpiresAt).getTime()
+                : null;
+              const isRenewal = existingToken === changes.webhookLeaseToken;
+              const leaseAvailable = expiresAt === null || expiresAt <= Date.now();
+              matched = isRenewal
+                ? expiresAt !== null && expiresAt > Date.now()
+                : state.certification.webhookStatus === "pending" && leaseAvailable;
+              if (matched) Object.assign(state.certification, changes);
+            } else {
+              matched = true;
+              Object.assign(state.certification, changes);
+            }
+          }
           return query;
         },
         returning: () => Promise.resolve(
-          state.certification ? [{ id: state.certification.id }] : [],
+          matched && state.certification ? [{ id: state.certification.id }] : [],
         ),
         then: (resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) =>
           Promise.resolve([]).then(resolve, reject),
@@ -206,5 +230,72 @@ describe("proof-certified webhook restart recovery", () => {
     ]);
     expect(mockState.certification?.webhookAttempts).toBe(3);
     expect(mockState.certification?.webhookStatus).toBe("failed");
+  });
+
+  it("reclaims an expired lease but only lets one recovery worker send the callback", async () => {
+    mockState.certification = {
+      id: "certification-cross-instance-test",
+      fileName: "decision.json",
+      fileHash,
+      transactionHash,
+      transactionUrl: `https://explorer.multiversx.com/transactions/${transactionHash}`,
+      blockchainStatus: "confirmed",
+      finalityCheckedAt: new Date("2026-09-25T12:00:00.000Z"),
+      finalityEvidence: {},
+      authMethod: "api_key",
+      webhookUrl: "https://callbacks.example.test/proof",
+      webhookSigningSecret: webhookSecret,
+      webhookBaseUrl: "https://provebeforeact.com",
+      webhookStatus: "pending",
+      webhookAttempts: 0,
+      webhookLastAttempt: null,
+      webhookLeaseToken: "lease-from-crashed-process",
+      webhookLeaseExpiresAt: new Date(Date.now() - 1_000),
+      createdAt: new Date("2026-09-25T12:00:00.000Z"),
+      updatedAt: new Date("2026-09-25T12:00:00.000Z"),
+    };
+
+    const deliveryIds: string[] = [];
+    let finishRequest: (() => void) | undefined;
+    vi.spyOn(dns.promises, "lookup").mockResolvedValue([
+      { address: "93.184.216.34", family: 4 },
+    ] as any);
+    vi.spyOn(https, "request").mockImplementation(((options: any) => {
+      deliveryIds.push(options.headers["X-ProveBeforeAct-Delivery"]);
+      const request = new EventEmitter() as any;
+      request.write = vi.fn();
+      request.destroy = vi.fn();
+      request.end = () => {
+        finishRequest = () => {
+          const response = new EventEmitter() as any;
+          response.statusCode = 204;
+          response.resume = () => queueMicrotask(() => response.emit("end"));
+          queueMicrotask(() => request.emit("response", response));
+        };
+      };
+      return request;
+    }) as any);
+
+    // Reload the module between workers to give each one an independent
+    // in-memory active-delivery set while retaining the same database mock.
+    vi.resetModules();
+    const workerA = await import("../server/webhook");
+    vi.resetModules();
+    const workerB = await import("../server/webhook");
+
+    await workerA.recoverPendingWebhookDeliveries();
+    await vi.waitFor(() => expect(deliveryIds).toHaveLength(1));
+    expect(mockState.certification?.webhookLeaseToken).not.toBe("lease-from-crashed-process");
+
+    await workerB.recoverPendingWebhookDeliveries();
+    await new Promise(resolve => setImmediate(resolve));
+    expect(deliveryIds).toHaveLength(1);
+    expect(finishRequest).toBeTypeOf("function");
+
+    finishRequest!();
+    await vi.waitFor(() => expect(mockState.certification?.webhookStatus).toBe("delivered"));
+    expect(deliveryIds).toEqual(["certification-cross-instance-test"]);
+    expect(mockState.certification?.webhookLeaseToken).toBeNull();
+    expect(mockState.certification?.webhookLeaseExpiresAt).toBeNull();
   });
 });

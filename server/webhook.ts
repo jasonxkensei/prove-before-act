@@ -3,7 +3,7 @@ import dns from "dns";
 import https from "https";
 import { db } from "./db";
 import { certifications } from "@shared/schema";
-import { and, eq, isNotNull } from "drizzle-orm";
+import { and, eq, gt, isNotNull, isNull, lte, or } from "drizzle-orm";
 import { logger } from "./logger";
 import { proofWebhookHeaders } from "./webhookHeaders";
 import { publicProofStatus } from "./proof-finality";
@@ -32,6 +32,7 @@ import { CANONICAL_PUBLIC_ORIGIN } from "./publicOrigin";
 
 const MAX_WEBHOOK_ATTEMPTS = 3;
 const WEBHOOK_TIMEOUT_MS = 10000; // 10 seconds
+const WEBHOOK_DELIVERY_LEASE_MS = 2 * 60 * 1000;
 const activeDeliveries = new Set<string>();
 const queuedDuringDelivery = new Set<string>();
 
@@ -267,19 +268,64 @@ type PendingWebhook = {
   webhookBaseUrl: string | null;
 };
 
-function queueWebhookDelivery(delivery: PendingWebhook): void {
+async function claimWebhookDelivery(certificationId: string): Promise<string | null> {
+  const now = new Date();
+  const leaseToken = crypto.randomUUID();
+  const [claimed] = await db.update(certifications).set({
+    webhookLeaseToken: leaseToken,
+    webhookLeaseExpiresAt: new Date(now.getTime() + WEBHOOK_DELIVERY_LEASE_MS),
+  }).where(and(
+    eq(certifications.id, certificationId),
+    eq(certifications.webhookStatus, "pending"),
+    or(
+      isNull(certifications.webhookLeaseExpiresAt),
+      lte(certifications.webhookLeaseExpiresAt, now),
+    ),
+  )).returning({ id: certifications.id });
+  return claimed ? leaseToken : null;
+}
+
+async function renewWebhookDeliveryLease(certificationId: string, leaseToken: string): Promise<boolean> {
+  const now = new Date();
+  const [renewed] = await db.update(certifications).set({
+    webhookLeaseToken: leaseToken,
+    webhookLeaseExpiresAt: new Date(now.getTime() + WEBHOOK_DELIVERY_LEASE_MS),
+  }).where(and(
+    eq(certifications.id, certificationId),
+    eq(certifications.webhookLeaseToken, leaseToken),
+    gt(certifications.webhookLeaseExpiresAt, now),
+  )).returning({ id: certifications.id });
+  return Boolean(renewed);
+}
+
+async function releaseWebhookDeliveryLease(certificationId: string, leaseToken: string): Promise<void> {
+  await db.update(certifications).set({
+    webhookLeaseToken: null,
+    webhookLeaseExpiresAt: null,
+  }).where(and(
+    eq(certifications.id, certificationId),
+    eq(certifications.webhookLeaseToken, leaseToken),
+  ));
+}
+
+function queueWebhookDelivery(delivery: PendingWebhook, rescheduleWhenActive = true): void {
   if (!delivery.webhookUrl) return;
   if (activeDeliveries.has(delivery.id)) {
-    queuedDuringDelivery.add(delivery.id);
+    if (rescheduleWhenActive) queuedDuringDelivery.add(delivery.id);
     return;
   }
   activeDeliveries.add(delivery.id);
-  void deliverWebhookWithRetries(
-    delivery.id,
-    delivery.webhookUrl,
-    delivery.webhookBaseUrl || CANONICAL_PUBLIC_ORIGIN,
-    delivery.webhookSigningSecret || undefined,
-  )
+  void claimWebhookDelivery(delivery.id)
+    .then(leaseToken => {
+      if (!leaseToken) return undefined;
+      return deliverWebhookWithRetries(
+        delivery.id,
+        delivery.webhookUrl!,
+        delivery.webhookBaseUrl || CANONICAL_PUBLIC_ORIGIN,
+        leaseToken,
+        delivery.webhookSigningSecret || undefined,
+      );
+    })
     .catch(error => logger.error("Webhook scheduling failed", {
       component: "webhook", certificationId: delivery.id, error: String(error),
     }))
@@ -298,55 +344,61 @@ async function deliverWebhookWithRetries(
   certificationId: string,
   webhookUrl: string,
   baseUrl: string,
+  leaseToken: string,
   signingSecret?: string,
 ): Promise<void> {
-  let [cert] = await db.select().from(certifications).where(eq(certifications.id, certificationId));
-  if (!cert || cert.webhookStatus !== "pending") return;
-  if (cert.blockchainStatus === "failed") {
-    await db.update(certifications).set({ webhookStatus: "failed" }).where(eq(certifications.id, certificationId));
-    return;
-  }
-  // Finality polling, not an in-memory timer, will enqueue this again after
-  // blockchainStatus and finalityCheckedAt are durably updated.
-  if (publicProofStatus(cert) !== "confirmed") return;
-
-  let nextAttemptNumber = cert.webhookAttempts || 0;
-  if (nextAttemptNumber >= MAX_WEBHOOK_ATTEMPTS) {
-    await db.update(certifications).set({ webhookStatus: "failed" }).where(eq(certifications.id, certificationId));
-    return;
-  }
-
-  let attemptsRemaining = MAX_WEBHOOK_ATTEMPTS - nextAttemptNumber;
-  while (attemptsRemaining > 0) {
-    if (nextAttemptNumber > 0) {
-      await new Promise(resolve => setTimeout(resolve, Math.pow(2, nextAttemptNumber) * 5000));
-    }
-
-    [cert] = await db.select().from(certifications).where(eq(certifications.id, certificationId));
-    if (!cert || cert.webhookStatus === "delivered" || cert.webhookStatus === "failed") return;
+  try {
+    let [cert] = await db.select().from(certifications).where(eq(certifications.id, certificationId));
+    if (!cert || cert.webhookStatus !== "pending") return;
     if (cert.blockchainStatus === "failed") {
       await db.update(certifications).set({ webhookStatus: "failed" }).where(eq(certifications.id, certificationId));
       return;
     }
+    // Finality polling, not an in-memory timer, will enqueue this again after
+    // blockchainStatus and finalityCheckedAt are durably updated.
     if (publicProofStatus(cert) !== "confirmed") return;
-    if ((cert.webhookAttempts || 0) >= MAX_WEBHOOK_ATTEMPTS) {
+
+    let nextAttemptNumber = cert.webhookAttempts || 0;
+    if (nextAttemptNumber >= MAX_WEBHOOK_ATTEMPTS) {
       await db.update(certifications).set({ webhookStatus: "failed" }).where(eq(certifications.id, certificationId));
       return;
     }
 
-    const attemptsBeforeDelivery = cert.webhookAttempts || 0;
-    attemptsRemaining--;
-    if (await deliverWebhook(certificationId, webhookUrl, baseUrl, signingSecret)) return;
-    [cert] = await db.select().from(certifications).where(eq(certifications.id, certificationId));
-    if (!cert || cert.webhookStatus === "delivered" || cert.webhookStatus === "failed") return;
-    nextAttemptNumber = Math.max(attemptsBeforeDelivery + 1, cert.webhookAttempts || 0);
-  }
+    let attemptsRemaining = MAX_WEBHOOK_ATTEMPTS - nextAttemptNumber;
+    while (attemptsRemaining > 0) {
+      if (nextAttemptNumber > 0) {
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, nextAttemptNumber) * 5000));
+      }
 
-  // A failure before the attempt counter could be persisted still consumes an
-  // attempt in this worker, preserving the three-attempt ceiling.
-  await db.update(certifications)
-    .set({ webhookStatus: "failed" })
-    .where(and(eq(certifications.id, certificationId), eq(certifications.webhookStatus, "pending")));
+      if (!await renewWebhookDeliveryLease(certificationId, leaseToken)) return;
+      [cert] = await db.select().from(certifications).where(eq(certifications.id, certificationId));
+      if (!cert || cert.webhookStatus === "delivered" || cert.webhookStatus === "failed") return;
+      if (cert.blockchainStatus === "failed") {
+        await db.update(certifications).set({ webhookStatus: "failed" }).where(eq(certifications.id, certificationId));
+        return;
+      }
+      if (publicProofStatus(cert) !== "confirmed") return;
+      if ((cert.webhookAttempts || 0) >= MAX_WEBHOOK_ATTEMPTS) {
+        await db.update(certifications).set({ webhookStatus: "failed" }).where(eq(certifications.id, certificationId));
+        return;
+      }
+
+      const attemptsBeforeDelivery = cert.webhookAttempts || 0;
+      attemptsRemaining--;
+      if (await deliverWebhook(certificationId, webhookUrl, baseUrl, signingSecret)) return;
+      [cert] = await db.select().from(certifications).where(eq(certifications.id, certificationId));
+      if (!cert || cert.webhookStatus === "delivered" || cert.webhookStatus === "failed") return;
+      nextAttemptNumber = Math.max(attemptsBeforeDelivery + 1, cert.webhookAttempts || 0);
+    }
+
+    // A failure before the attempt counter could be persisted still consumes an
+    // attempt in this worker, preserving the three-attempt ceiling.
+    await db.update(certifications)
+      .set({ webhookStatus: "failed" })
+      .where(and(eq(certifications.id, certificationId), eq(certifications.webhookStatus, "pending")));
+  } finally {
+    await releaseWebhookDeliveryLease(certificationId, leaseToken);
+  }
 }
 
 /**
@@ -396,7 +448,7 @@ export async function recoverPendingWebhookDeliveries(): Promise<void> {
     eq(certifications.webhookStatus, "pending"),
     isNotNull(certifications.webhookUrl),
   ));
-  for (const delivery of pending) queueWebhookDelivery(delivery);
+  for (const delivery of pending) queueWebhookDelivery(delivery, false);
 }
 
 /**
