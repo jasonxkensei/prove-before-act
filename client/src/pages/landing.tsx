@@ -31,6 +31,7 @@ import {
   Network,
 } from "lucide-react";
 import { WalletLoginModal } from "@/components/wallet-login-modal";
+import { ProofLookupForm } from "@/components/proof-lookup-form";
 import { PublicSiteFooter, PublicSiteHeader } from "@/components/public-site-chrome";
 import { trackAgentCta, useAgentCtaExposure } from "@/lib/conversionTracking";
 import { trackEvent } from "@/lib/analytics";
@@ -215,6 +216,10 @@ export default function Landing() {
     }
     if (window.location.hash === "#free-trial") {
       scrollToFreeTrial();
+    } else if (window.location.hash === "#verify-proof") {
+      requestAnimationFrame(() => {
+        document.getElementById("verify-proof")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
     } else if (window.location.hash === "#how-it-works") {
       requestAnimationFrame(() => {
         document.getElementById("how-it-works")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -432,7 +437,7 @@ export default function Landing() {
                   scrollToFreeTrial();
                 }}
               >
-                Prove your first agent decision <ArrowRight className="ml-2 h-4 w-4" />
+                Integrate your agent <ArrowRight className="ml-2 h-4 w-4" />
               </a>
             </Button>
             <Button
@@ -440,15 +445,18 @@ export default function Landing() {
                size="lg"
                variant="outline"
                className="h-12 border-border bg-transparent px-7 text-sm text-foreground hover:border-primary hover:bg-transparent hover:text-primary"
-               data-testid="button-interactive-demo"
+               data-testid="button-verify-proof-hero"
             >
-               <a href="/demo">
-                 Try the interactive demo <Play className="ml-2 h-4 w-4" />
+                <a href="#verify-proof" onClick={() => trackEvent("verify_proof_cta_clicked", { location: "hero" })}>
+                  Verify a proof <ArrowRight className="ml-2 h-4 w-4" />
                </a>
             </Button>
             </div>
             <p className="mt-6 flex flex-wrap gap-3 font-mono text-[10px] text-[#79847b]">
               <span className="text-[#ffbe78]">BEFORE THE ACTION</span><span>·</span><span>public pattern, reference implementation below</span>
+            </p>
+            <p className="mt-4 text-sm text-[#79847b]">
+              Prefer a walkthrough? <a href="/demo" className="inline-flex items-center gap-1 text-foreground underline underline-offset-2" data-testid="link-demo-secondary"><Play className="h-3.5 w-3.5" /> Explore the controlled demo</a>
             </p>
             <p className="mt-4 text-sm text-[#79847b]">
               New to Prove Before Act? <a href="/learn" className="text-foreground underline underline-offset-2" data-testid="link-hero-learn">60-second overview →</a>
@@ -584,6 +592,41 @@ export default function Landing() {
       <section className="border-b border-border bg-card px-5 py-16 md:px-[10vw] md:py-20">
         <div className="font-mono text-[10px] tracking-[.14em] text-[#758178]">THE PATTERN / THE IMPLEMENTATION</div>
         <div className="mt-8 grid gap-8 md:grid-cols-[1fr_70px_1fr] md:items-center"><div><h2 className="text-2xl font-semibold">Prove Before Act</h2><p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">An open pattern for public accountability. The invariant is simple enough to adopt across models, frameworks, and agents.</p></div><div className="text-3xl text-muted-foreground/70">→</div><div><h2 className="text-2xl font-semibold text-primary">xProof</h2><p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">The reference implementation. One API call anchors an independently verifiable proof on MultiversX.</p><a href="/docs" className="mt-4 inline-flex items-center gap-2 text-xs text-primary">Explore xProof <ArrowRight className="h-4 w-4" /></a></div></div>
+      </section>
+
+      <section id="choose-path" className="border-b border-border px-5 py-16 md:px-[10vw] md:py-20" data-testid="section-choose-path">
+        <div className="mx-auto max-w-6xl">
+          <div className="eyebrow">YOUR NEXT STEP</div>
+          <h2 className="mt-5 text-3xl font-semibold tracking-[-.04em] md:text-5xl">One principle. Two ways in.</h2>
+          <p className="mt-4 max-w-2xl text-sm leading-6 text-muted-foreground">
+            Commit before the action. Integrate that rule into your agent, or inspect an existing public proof.
+          </p>
+          <div className="mt-10 grid gap-4 md:grid-cols-2">
+            <div className="border border-primary/30 bg-primary/5 p-6 md:p-8">
+              <p className="font-mono text-[10px] uppercase tracking-[.13em] text-primary">01 / I run an agent</p>
+              <h3 className="mt-4 text-2xl font-semibold">Integrate</h3>
+              <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">
+                Get a free API key, create your first proof, then connect the flow to your agent.
+              </p>
+              <a
+                href="#free-trial"
+                className="mt-7 inline-flex min-h-11 items-center gap-2 rounded-md bg-primary px-5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                onClick={() => trackEvent("free_trial_cta_clicked", { location: "choice" })}
+                data-testid="link-choice-integrate"
+              >
+                Get your free key <ArrowRight className="h-4 w-4" />
+              </a>
+            </div>
+            <div id="verify-proof" className="scroll-mt-24 border border-border bg-card p-6 md:p-8" data-testid="card-choice-verify">
+              <p className="font-mono text-[10px] uppercase tracking-[.13em] text-primary">02 / I need to check a record</p>
+              <h3 className="mt-4 text-2xl font-semibold">Verify</h3>
+              <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">
+                Paste a public proof link or ID to inspect its current verification status. No account needed.
+              </p>
+              <ProofLookupForm />
+            </div>
+          </div>
+        </div>
       </section>
 
       {/* Free Trial — Interactive Registration */}
@@ -1213,12 +1256,9 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
           <div className="mx-auto max-w-5xl">
             <div className="mb-16 text-center">
               <Badge variant="outline" className="mb-4">How it works</Badge>
-              <h2 className="mb-4 text-3xl md:text-4xl font-bold">
-                One API call. Permanent accountability.
-              </h2>
+              <h2 className="mb-4 text-3xl md:text-4xl font-bold">Decide. Prove. Act.</h2>
               <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                Integrate Prove Before Act into your agent's execution loop.
-                Every decision, output, and action becomes a verifiable on-chain record.
+                Commit the decision basis before execution. A reviewer can inspect the proof and the recorded outcome.
               </p>
             </div>
             
@@ -1227,10 +1267,9 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
                 <div className="mb-6 mx-auto md:mx-0 flex h-16 w-16 items-center justify-center rounded-full bg-primary text-2xl font-bold text-primary-foreground">
                   1
                 </div>
-                <h3 className="mb-3 text-xl font-semibold">Your agent acts</h3>
+                <h3 className="mb-3 text-xl font-semibold">Declare the decision</h3>
                 <p className="text-muted-foreground">
-                  Your agent makes a decision, produces an output, or executes a task.
-                  Before moving on, it hashes that action locally — nothing leaves your infrastructure.
+                  State what your agent plans to do and the decision basis a reviewer should be able to inspect.
                 </p>
                 <div className="hidden md:block absolute top-8 left-[calc(100%-20px)] w-[calc(100%-40px)]">
                   <ArrowRight className="h-6 w-6 text-muted-foreground/30" />
@@ -1241,10 +1280,9 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
                 <div className="mb-6 mx-auto md:mx-0 flex h-16 w-16 items-center justify-center rounded-full bg-primary text-2xl font-bold text-primary-foreground">
                   2
                 </div>
-                <h3 className="mb-3 text-xl font-semibold">POST the SHA-256 hash</h3>
+                <h3 className="mb-3 text-xl font-semibold">Commit before execution</h3>
                 <p className="text-muted-foreground">
-                  One API call with a SHA-256 hash and optional metadata — model version, strategy, 
-                  confidence level, session ID. Your API key handles authentication. No overhead.
+                  Hash the declaration locally and submit it with one API call. Check its independent confirmation before acting.
                 </p>
                 <div className="hidden md:block absolute top-8 left-[calc(100%-20px)] w-[calc(100%-40px)]">
                   <ArrowRight className="h-6 w-6 text-muted-foreground/30" />
@@ -1255,10 +1293,9 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
                 <div className="mb-6 mx-auto md:mx-0 flex h-16 w-16 items-center justify-center rounded-full bg-primary text-2xl font-bold text-primary-foreground">
                   3
                 </div>
-                <h3 className="mb-3 text-xl font-semibold">Proof anchored on-chain</h3>
+                <h3 className="mb-3 text-xl font-semibold">Act, then record the outcome</h3>
                 <p className="text-muted-foreground">
-                  Prove Before Act anchors the hash on MultiversX and returns a <code className="text-xs bg-muted px-1 py-0.5 rounded font-mono">proof_id</code> and blockchain transaction URL.
-                  Your entire fleet now has a tamper-proof audit trail.
+                  Once the commitment is confirmed, execute the action and link its outcome to the public proof.
                 </p>
               </div>
             </div>

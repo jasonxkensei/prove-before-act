@@ -381,10 +381,8 @@ ${renderPublicHeader(baseUrl)}
       <li>Legal commitment</li>
       <li>Agent delegation</li>
     </ul>
-    <div id="free-trial">
-      <p><a href="${baseUrl}/#free-trial"><strong>Prove your first agent decision</strong></a> — 10 free proofs, no wallet, no credit card.</p>
-      <p>Open the browser experience to register an agent or project, receive a free API key, and create the first independently verifiable proof.</p>
-    </div>
+    <p><a href="${baseUrl}/#free-trial"><strong>Integrate your agent</strong></a> — 10 free proofs, no wallet, no credit card. Or <a href="${baseUrl}/#verify-proof"><strong>verify a public proof</strong></a> without an account.</p>
+    <p><a href="${baseUrl}/demo">Explore the controlled demo</a> if you prefer a walkthrough.</p>
     <p>Prove Before Act is the public accountability pattern. xProof is the reference implementation. Current live rate after the free proofs: $${priceUsd.toFixed(2)} per certification — <a href="${baseUrl}/api/pricing">see /api/pricing</a>.</p>
     <a href="${baseUrl}/learn">See the 60-second overview</a>
     <a href="${baseUrl}/standard">Inspect the standard</a>
@@ -407,7 +405,7 @@ ${renderPublicHeader(baseUrl)}
         <p>Operators that start now build a durable record across decisions and outcomes. When accountability becomes a requirement, they can show history—not a compliance process that began yesterday.</p>
       </li>
     </ol>
-    <p><a href="${baseUrl}/#free-trial">Prove your first agent decision</a> · <a href="${baseUrl}/standard">Inspect the Prove Before Act standard</a></p>
+    <p><a href="${baseUrl}/#free-trial">Integrate your agent</a> · <a href="${baseUrl}/standard">Inspect the Prove Before Act standard</a></p>
   </section>
 
   <section>
@@ -424,9 +422,23 @@ ${renderPublicHeader(baseUrl)}
       </li>
       <li>
         <h3>Anchor before acting</h3>
-        <p>xProof anchors the hash on MultiversX. The agent receives a proof_id and blockchain transaction URL — independently verifiable by any third party before the action begins.</p>
+        <p>Use the proof_id to check independent confirmation of the commitment before acting, then link the outcome to that proof.</p>
       </li>
     </ol>
+  </section>
+
+  <section id="choose-path">
+    <h2>One principle. Two ways in.</h2>
+    <p>Commit before the action. Integrate that rule into your agent, or inspect an existing public proof.</p>
+    <div id="free-trial">
+      <h3>Integrate</h3>
+      <p>Register an agent or project in the browser, get a free API key, and create your first proof. 10 free proofs; no wallet or credit card.</p>
+      <p><a href="${baseUrl}/#free-trial">Get your free key</a></p>
+    </div>
+    <div id="verify-proof">
+      <h3>Verify</h3>
+      <p>Paste a public proof link or ID into the browser homepage to inspect its current verification status. No account needed.</p>
+    </div>
   </section>
 
   <section>
