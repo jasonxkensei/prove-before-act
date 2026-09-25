@@ -61,6 +61,7 @@ export default function LandingZh() {
   const [trialAgentName, setTrialAgentName] = useState<string>("");
   const [copied, setCopied] = useState(false);
   const [trialError, setTrialError] = useState<string | null>(null);
+  const trialErrorRef = useRef<HTMLParagraphElement>(null);
   const [trialKeyHandled, setTrialKeyHandled] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [proofFile, setProofFile] = useState<File | null>(null);
@@ -96,11 +97,16 @@ export default function LandingZh() {
     return () => window.removeEventListener("beforeunload", warnBeforeLeaving);
   }, [trialKey, trialKeyHandled]);
 
+  useEffect(() => {
+    if (trialError) trialErrorRef.current?.focus();
+  }, [trialError]);
+
   // Single entry point for trial registration so the button click and the
   // Enter key record the same conversion telemetry before submitting.
   const submitTrialRegistration = () => {
     const name = agentName.trim();
     if (name.length < 2 || registerMutation.isPending) return;
+    setTrialError(null);
     trackAgentCta("cta_clicked", "landing_zh", "trial_register");
     registerMutation.mutate(name);
   };
@@ -111,10 +117,19 @@ export default function LandingZh() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ agent_name: name }),
+      }).catch(() => {
+        throw new Error("网络连接失败，请检查连接后重试。");
       });
-      const data = await res.json();
-      if (!res.ok)
-        throw new Error(data.message || "注册失败，请换一个名称重试。");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (res.status === 409 && data.error === "DUPLICATE_AGENT_NAME") {
+          throw new Error("该智能体名称已被使用，请换一个名称重试。");
+        }
+        if (res.status === 429) {
+          throw new Error("注册次数过多，请稍后再试。");
+        }
+        throw new Error("注册暂时失败，请重试。");
+      }
       if (typeof data.api_key !== "string" || !data.api_key.startsWith("pm_")) {
         throw new Error("注册成功但未收到有效 API 密钥，请重试。");
       }
@@ -737,7 +752,12 @@ GET /api/agents/{wallet}/incident-report
                   <Input
                     placeholder="智能体名称（如 my-agent-001）"
                     value={agentName}
-                    onChange={(e) => setAgentName(e.target.value)}
+                    onChange={(e) => {
+                      setAgentName(e.target.value);
+                      setTrialError(null);
+                    }}
+                    aria-invalid={!!trialError}
+                    aria-describedby={trialError ? "trial-register-error-zh" : undefined}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         submitTrialRegistration();
@@ -766,7 +786,16 @@ GET /api/agents/{wallet}/incident-report
                   </Button>
                 </div>
                 {trialError && (
-                  <p className="mt-3 text-sm text-destructive text-left">{trialError}</p>
+                  <p
+                    id="trial-register-error-zh"
+                    ref={trialErrorRef}
+                    role="alert"
+                    tabIndex={-1}
+                    className="mt-3 text-sm text-destructive text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    data-testid="text-trial-error-zh"
+                  >
+                    {trialError}
+                  </p>
                 )}
                 <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
                   {["10次免费存证", "无需钱包", "无需信用卡", "随时绑定钱包升级"].map((label) => (

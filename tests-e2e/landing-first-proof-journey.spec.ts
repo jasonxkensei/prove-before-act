@@ -201,6 +201,64 @@ test.describe("landing first-proof journey — mobile", () => {
 test.describe("Chinese landing first-proof journey — desktop", () => {
   test.use({ viewport: DESKTOP_VIEWPORT });
 
+  test("rejected names and temporary failures can be corrected and retried by keyboard", async ({
+    page,
+  }) => {
+    const submittedNames: string[] = [];
+    await page.route("**/api/agent/register", async (route) => {
+      const name = route.request().postDataJSON().agent_name;
+      submittedNames.push(name);
+      const attempt = submittedNames.length;
+      await route.fulfill({
+        status: attempt === 1 ? 409 : attempt === 2 ? 503 : 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          attempt === 1
+            ? { error: "DUPLICATE_AGENT_NAME", message: `An agent named "${name}" already exists.` }
+            : attempt === 2
+              ? { message: "Service unavailable" }
+              : { api_key: "pm_e2e_retry_trial_key" },
+        ),
+      });
+    });
+    await page.goto("/zh");
+    await page.getByTestId("button-free-trial-zh").click();
+    await expectChineseFreeTrialInViewport(page);
+
+    const nameInput = page.getByTestId("input-trial-agent-name-zh");
+    const registerButton = page.getByTestId("button-register-trial-zh");
+    const error = page.getByTestId("text-trial-error-zh");
+    await nameInput.focus();
+    await page.keyboard.type("taken-agent");
+    await page.keyboard.press("Enter");
+    await expect(error).toHaveText("该智能体名称已被使用，请换一个名称重试。");
+    await expect(error).toHaveAttribute("role", "alert");
+    await expect(error).toBeFocused();
+    await expect(nameInput).toHaveAttribute("aria-describedby", "trial-register-error-zh");
+    await expect(nameInput).toHaveValue("taken-agent");
+
+    await page.keyboard.press("Shift+Tab");
+    await expect(registerButton).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(nameInput).toBeFocused();
+    await page.keyboard.press("ControlOrMeta+A");
+    await page.keyboard.type("new-agent");
+    await expect(error).toHaveCount(0);
+    await page.keyboard.press("Tab");
+    await expect(registerButton).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(error).toHaveText("注册暂时失败，请重试。");
+    await expect(error).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(registerButton).toBeFocused();
+    await page.keyboard.press("Enter");
+
+    await expect(page.getByTestId("text-trial-key-zh")).toHaveText("pm_e2e_retry_trial_key");
+    await expect(page.getByTestId("dropzone-proof-zh")).toBeVisible();
+    await expect(page.getByTestId("dropzone-proof-zh")).toHaveAttribute("aria-label", "选择要存证的文件");
+    expect(submittedNames).toEqual(["taken-agent", "new-agent", "new-agent"]);
+  });
+
   test("hero CTA and a Chinese risk scenario reach the free-trial form", async ({ page }) => {
     await page.goto("/zh");
 
