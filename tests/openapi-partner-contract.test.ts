@@ -157,6 +157,31 @@ describe("OpenAPI partner endpoint contract", () => {
     expect(generated).toMatch(/transaction_hash: string \| null/);
   });
 
+  it("keeps the webhook contract separate from server routes for non-TypeScript generators", () => {
+    // OpenAPI Generator 7.25.0 (Java client, --global-property apis,models,webhooks)
+    // emits ProofCertifiedWebhookPayload and four required header arguments. It
+    // also synthesizes a client call to /proof.certified from the webhook key:
+    // that call is outbound, NOT an endpoint hosted by this API. Check the
+    // source spec boundary so a future edit cannot turn it into an inbound route.
+    const webhook = spec.webhooks["proof.certified"].post;
+    const exposedOperations = Object.entries<any>(spec.paths).flatMap(([path, item]) =>
+      Object.entries<any>(item)
+        .filter(([method]) => ["get", "post", "put", "patch", "delete"].includes(method))
+        .map(([, operation]) => ({ path, operationId: operation.operationId })),
+    );
+    expect(exposedOperations.some(({ path, operationId }) =>
+      path.includes("proof.certified") || operationId === webhook.operationId,
+    )).toBe(false);
+    expect(webhook.requestBody.required).toBe(true);
+    expect(webhook.requestBody.content["application/json"].schema.$ref)
+      .toBe("#/components/schemas/ProofCertifiedWebhookPayload");
+    expect(components.ProofCertifiedWebhookPayload.required).toContain("proof_id");
+    expect(webhook.parameters).toHaveLength(4);
+    for (const header of webhook.parameters) {
+      expect(header).toMatchObject({ in: "header", required: true, schema: { type: "string" } });
+    }
+  });
+
   it("documents all five partner paths", () => {
     for (const p of [
       "/api/sigil/{public_key}",
