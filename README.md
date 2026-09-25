@@ -254,8 +254,9 @@ curl -X POST https://provebeforeact.com/api/batch \
 When a proof is confirmed on-chain, Prove Before Act sends a POST to your
 `webhook_url`. Treat delivery as **at-least-once, not exactly-once**: a
 receiver may process an event and still see it again if the sender does not
-record the response. The sender makes up to three total attempts with backoff;
-delivery is not guaranteed if all attempts fail.
+record the response. The sender makes up to three attempts per delivery round
+with backoff. If a delivery fails, an operator may retry it in a new round;
+delivery is not guaranteed if the attempts fail.
 
 Verify `X-ProveBeforeAct-Signature` using your per-proof webhook secret and the
 raw request body: it is the hex HMAC-SHA256 of
@@ -263,7 +264,8 @@ raw request body: it is the hex HMAC-SHA256 of
 seconds. Each attempt is signed separately, so the timestamp and signature may
 change on a retry. `X-ProveBeforeAct-Event` identifies the event, and
 `X-ProveBeforeAct-Delivery` is the certification ID and remains the same across
-retries. The legacy `X-xProof-*` headers are also sent with identical values.
+retries and operator-initiated rounds. The legacy `X-xProof-*` headers are also
+sent with identical values.
 Verify the signature and timestamp before trusting the delivery ID.
 
 Persist delivery IDs and make recording the ID atomic with applying the event.
