@@ -417,7 +417,7 @@ AI agents discover Prove Before Act capabilities through multiple standard endpo
 | `/.well-known/agent.json` | Agent Protocol manifest |
 | `/llms.txt` | LLM-friendly summary |
 | `/llms-full.txt` | Extended documentation |
-| `/api/acp/openapi.json` | OpenAPI 3.0 specification |
+| `/api/acp/openapi.json` | OpenAPI 3.1 specification |
 | `/agent-tools/langchain.py` | LangChain tool definitions |
 | `/agent-tools/crewai.py` | CrewAI tool definitions |
 | `/agent-tools/openapi-actions.json` | GPT Actions specification |

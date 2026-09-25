@@ -116,6 +116,7 @@
     "zod-validation-error": "^3.4.0"
   },
   "devDependencies": {
+    "openapi-typescript": "^7.13.0",
     "@replit/vite-plugin-cartographer": "^0.6.1",
     "@replit/vite-plugin-dev-banner": "^0.1.1",
     "@replit/vite-plugin-runtime-error-modal": "^0.0.3",

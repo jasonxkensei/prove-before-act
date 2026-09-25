@@ -165,7 +165,7 @@ The proof is self-verifiable without relying on Prove Before Act infrastructure.
 - \`/genesis.md\` - Genesis document
 - \`/genesis.proof.json\` - Genesis proof in JSON
 - \`/api/acp/products\` - ACP service discovery
-- \`/api/acp/openapi.json\` - OpenAPI 3.0 specification
+- \`/api/acp/openapi.json\` - OpenAPI 3.1 specification
 - \`/mcp\` - MCP server (JSON-RPC 2.0 over Streamable HTTP via POST); GET serves connection documentation for people, crawlers, and agent discovery
 
 ### Documentation
@@ -1958,7 +1958,7 @@ Sitemap: ${baseUrl}/sitemap.xml
 # /.well-known/agent-audit-schema.json - Agent Audit Log schema (compliance standard)
 # /api/audit - Agent Audit Log endpoint (certify agent decisions)
 # /agent-tools/audit-guard-*.* - Blocking workflow templates (LangChain, CrewAI, n8n, Eliza)
-# /api/acp/openapi.json - OpenAPI 3.0 specification
+# /api/acp/openapi.json - OpenAPI 3.1 specification
 # /api/acp/health - Health check
 # /api/agent - Agent trial registration info
 `;

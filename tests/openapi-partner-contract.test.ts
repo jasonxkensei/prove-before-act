@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import crypto from "crypto";
+import openapiTS, { astToString } from "openapi-typescript";
 import { buildWebhookPayload, verifyWebhookSignature } from "../server/webhook";
 import { PBA_WEBHOOK_HEADERS, proofWebhookHeaders } from "../server/webhookHeaders";
 
@@ -65,19 +66,23 @@ beforeAll(async () => {
 
 describe("OpenAPI partner endpoint contract", () => {
   it("exposes the outbound proof.certified contract without presenting it as an inbound path", () => {
-    const notification = spec["x-webhooks"]?.["proof.certified"];
-    expect(spec.openapi).toBe("3.0.3");
+    const notification = spec.webhooks?.["proof.certified"];
+    expect(spec.openapi).toBe("3.1.0");
+    expect(spec["x-webhooks"]?.["proof.certified"]).toEqual(notification);
     expect(notification?.description).toMatch(/Outbound HTTPS POST/);
     expect(spec.paths["proof.certified"]).toBeUndefined();
     expect(spec.paths["/webhooks/proof.certified"]).toBeUndefined();
 
     const post = notification.post;
+    expect(post.operationId).toBe("proofCertifiedWebhook");
+    expect(post.security).toEqual([]);
     expect(post.requestBody.content["application/json"].schema).toEqual({
       $ref: "#/components/schemas/ProofCertifiedWebhookPayload",
     });
     const schema = components.ProofCertifiedWebhookPayload;
-    expect(schema.properties.blockchain.properties.transaction_hash).toMatchObject({ type: "string", nullable: true });
-    expect(schema.properties.blockchain.properties.explorer_url).toMatchObject({ type: "string", nullable: true });
+    expect(schema.properties.blockchain.properties.transaction_hash.type).toEqual(["string", "null"]);
+    expect(schema.properties.blockchain.properties.explorer_url.type).toEqual(["string", "null"]);
+    expect(components.PbaTrustLayer.properties.pba_trust_level.enum).toContain(null);
 
     // Compare every required key, nested key and value type with the actual sender
     // constructor, for both populated and nullable blockchain details.
@@ -88,11 +93,11 @@ describe("OpenAPI partner endpoint contract", () => {
       for (const [key, property] of Object.entries<any>(node.properties)) {
         const field = value[key];
         if (field === null) {
-          expect(property.nullable, `${key} must be nullable`).toBe(true);
+          expect(property.type, `${key} must allow null`).toContain("null");
         } else if (property.type === "object") {
           assertShape(field, property);
         } else {
-          expect(typeof field, `${key} must match its documented type`).toBe(property.type);
+          expect(Array.isArray(property.type) ? property.type : [property.type], `${key} must match its documented type`).toContain(typeof field);
           if (property.enum) expect(property.enum).toContain(field);
         }
       }
@@ -131,6 +136,27 @@ describe("OpenAPI partner endpoint contract", () => {
     expect(verifyWebhookSignature(JSON.stringify(JSON.parse(body), null, 2), signature, timestamp, "secret").valid).toBe(false);
   });
 
+  it("lets an OpenAPI generator discover webhook request types and required headers", async () => {
+    // Use the public document, not a hand-built fixture: openapi-typescript
+    // ignores x-webhooks but emits the standard webhooks and operations types.
+    const generated = astToString(await openapiTS(spec, { silent: true }));
+    expect(generated).toMatch(/interface webhooks\s*\{[\s\S]*?"proof\.certified":\s*\{[\s\S]*?post:\s*operations\["proofCertifiedWebhook"\]/);
+    const operation = generated.split("proofCertifiedWebhook: {")[1];
+    expect(operation).toBeDefined();
+    const headerTypes = operation.split("requestBody:")[0];
+    for (const name of [
+      PBA_WEBHOOK_HEADERS.signature, PBA_WEBHOOK_HEADERS.timestamp,
+      PBA_WEBHOOK_HEADERS.event, PBA_WEBHOOK_HEADERS.delivery,
+    ]) {
+      expect(headerTypes, `generated webhook must require ${name}`).toMatch(
+        new RegExp(`"${name}": (?:string|"proof\\.certified");`),
+      );
+    }
+    expect(operation).toContain('components["schemas"]["ProofCertifiedWebhookPayload"]');
+    expect(generated).toMatch(/ProofCertifiedWebhookPayload:\s*\{[\s\S]*?proof_id: string/);
+    expect(generated).toMatch(/transaction_hash: string \| null/);
+  });
+
   it("documents all five partner paths", () => {
     for (const p of [
       "/api/sigil/{public_key}",
@@ -160,14 +186,12 @@ describe("OpenAPI partner endpoint contract", () => {
     }
   });
 
-  it("deprecated alias schemas are valid OpenAPI 3.0 (no $ref siblings)", () => {
-    // OpenAPI 3.0 ignores siblings of $ref — a deprecated marker next to $ref
-    // is silently dropped by tooling. Aliases that reference a component must
-    // wrap the $ref in allOf.
+  it("deprecated alias schemas keep their pre-3.1 generator-compatible allOf wrappers", () => {
+    // Preserve older generator behavior for the existing alias schemas.
     const check = (node: any, where: string) => {
       if (node && typeof node === "object") {
         if (node.$ref && Object.keys(node).length > 1) {
-          throw new Error(`${where}: $ref has siblings (${Object.keys(node).join(", ")}) — invalid in OpenAPI 3.0`);
+          throw new Error(`${where}: $ref has siblings (${Object.keys(node).join(", ")}) — incompatible with older generators`);
         }
         for (const [k, v] of Object.entries(node)) check(v, `${where}.${k}`);
       }

@@ -1122,13 +1122,13 @@ export function registerAcpRoutes(app: Express) {
     }
   });
 
-  // OpenAPI 3.0 Specification for ACP
+  // OpenAPI specification for ACP, including outbound webhook notifications.
   app.get("/api/acp/openapi.json", publicReadRateLimiter, async (req, res) => {
     const baseUrl = CANONICAL_PUBLIC_ORIGIN;
     const priceUsd = await getCertificationPriceUsd();
 
     const openApiSpec = {
-      openapi: "3.0.3",
+      openapi: "3.1.0",
       info: {
         title: "Prove Before Act ACP - Agent Commerce Protocol",
         description: "API for AI agents to certify files on MultiversX blockchain. Create immutable proofs of file ownership with a simple API call. Supports x402 payment protocol (HTTP 402) as an alternative to API key auth — send requests to POST /api/proof or POST /api/batch without an API key, receive 402 with payment requirements, sign payment in USDC on Base (eip155:8453), and resend with X-PAYMENT header. Note: the product id 'xproof-certification' and the checkout message prefix 'xproof-acp-checkout' are stable legacy wire identifiers kept for backward compatibility (the service was formerly named xproof).",
@@ -1333,12 +1333,14 @@ export function registerAcpRoutes(app: Express) {
           },
         },
       },
-      // OpenAPI 3.0 has no standard top-level webhooks section (introduced in 3.1).
-      // Keep this outbound contract outside paths so generators do not create a fake inbound API route.
+      // Keep the legacy extension alongside the standard 3.1 webhooks section.
+      // Neither belongs in paths: this POST is sent to a subscriber, not hosted here.
       "x-webhooks": {
         "proof.certified": {
           description: "Outbound HTTPS POST to the webhook_url supplied by the subscriber after proof finality. At-least-once delivery; deduplicate by the verified delivery ID. The per-proof webhook_secret returned by the API signs each attempt.",
           post: {
+            operationId: "proofCertifiedWebhook",
+            security: [],
             parameters: [
               { in: "header", name: PBA_WEBHOOK_HEADERS.signature, required: true, schema: { type: "string", pattern: "^[0-9a-f]{64}$" }, description: "Hex HMAC-SHA256(secret, timestamp + \".\" + rawBody). Sign the exact request body bytes before JSON parsing; never reserialize JSON for verification." },
               { in: "header", name: PBA_WEBHOOK_HEADERS.timestamp, required: true, schema: { type: "string", pattern: "^[0-9]+$" }, description: "Unix epoch seconds. Reject timestamps older than 300 seconds or more than 60 seconds in the future." },
@@ -1953,7 +1955,27 @@ export function registerAcpRoutes(app: Express) {
       },
     };
 
-    res.json(openApiSpec);
+    // OpenAPI 3.1 uses JSON Schema type unions rather than the 3.0 nullable
+    // keyword. Convert all existing nullable fields, not just the webhook,
+    // so generated partner response types continue to accept null.
+    const convertNullableSchemas = (value: unknown): void => {
+      if (!value || typeof value !== "object") return;
+      if (Array.isArray(value)) {
+        value.forEach(convertNullableSchemas);
+        return;
+      }
+      const node = value as Record<string, unknown>;
+      if (node.nullable === true) {
+        if (typeof node.type === "string") node.type = [node.type, "null"];
+        else throw new Error("OpenAPI nullable schema without a type");
+        if (Array.isArray(node.enum)) node.enum = [...node.enum, null];
+        delete node.nullable;
+      }
+      Object.values(node).forEach(convertNullableSchemas);
+    };
+    convertNullableSchemas(openApiSpec.components);
+    convertNullableSchemas(openApiSpec.paths);
+    res.json({ ...openApiSpec, webhooks: openApiSpec["x-webhooks"] });
   });
 
   // ============================================

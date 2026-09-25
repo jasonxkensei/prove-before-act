@@ -295,11 +295,11 @@ describe("Prove Before Act API", () => {
   });
 
   describe("GET /api/acp/openapi.json", () => {
-    it("should return valid OpenAPI 3.0 specification", async () => {
+    it("should return an OpenAPI 3.1 specification with outbound webhooks", async () => {
       const res = await fetch(`${BASE_URL}/api/acp/openapi.json`);
       expect(res.status).toBe(200);
       const body = await res.json();
-      expect(body.openapi).toBe("3.0.3");
+      expect(body.openapi).toBe("3.1.0");
       expect(body.info).toBeDefined();
       expect(body.info.title).toContain("Prove Before Act");
       expect(body.info.version).toBeDefined();
@@ -313,6 +313,10 @@ describe("Prove Before Act API", () => {
       expect(body.paths["/api/acp/checkout"]).toBeDefined();
       expect(body.paths["/api/acp/confirm"]).toBeDefined();
       expect(body.paths["/api/proof"]).toBeDefined();
+      expect(body.webhooks["proof.certified"].post.requestBody.content["application/json"].schema.$ref)
+        .toBe("#/components/schemas/ProofCertifiedWebhookPayload");
+      expect(body.paths["/webhooks/proof.certified"]).toBeUndefined();
+      expect(body["x-webhooks"]).toEqual(body.webhooks);
     });
   });
 

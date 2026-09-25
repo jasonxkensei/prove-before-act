@@ -369,7 +369,7 @@ Full commerce flow for programmatic purchasing:
 
 ```
 GET  /api/acp/products       # Discover products and pricing
-GET  /api/acp/openapi.json   # OpenAPI 3.0 specification
+GET  /api/acp/openapi.json   # OpenAPI 3.1 specification
 POST /api/acp/checkout       # Start checkout session
 POST /api/acp/confirm        # Confirm transaction
 GET  /api/acp/health          # Health check
@@ -530,7 +530,7 @@ Full documentation: [docs/api-reference.md](docs/api-reference.md)
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
 | `GET` | `/api/acp/products` | Public | Discover products and pricing |
-| `GET` | `/api/acp/openapi.json` | Public | OpenAPI 3.0 specification |
+| `GET` | `/api/acp/openapi.json` | Public | OpenAPI 3.1 specification |
 | `POST` | `/api/acp/checkout` | API Key | Start checkout session |
 | `POST` | `/api/acp/confirm` | API Key | Confirm transaction |
 | `GET` | `/api/acp/health` | Public | Health check |
