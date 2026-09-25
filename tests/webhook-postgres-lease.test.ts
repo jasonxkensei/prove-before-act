@@ -52,6 +52,7 @@ async function loadWorker(applicationName: string): Promise<Worker> {
 async function createCertification(
   id: string,
   lease?: { token: string; expiresAt: Date },
+  blockchainStatus: "pending" | "confirmed" = "confirmed",
 ): Promise<void> {
   insertedCertificationIds.add(id);
   await testPool!.query(
@@ -61,7 +62,7 @@ async function createCertification(
        webhook_signing_secret, webhook_base_url, webhook_status, webhook_attempts,
        webhook_lease_token, webhook_lease_expires_at
      ) VALUES (
-       $1, $2, 'decision.json', $3, $4, $5, 'confirmed', NOW(), 'api_key',
+       $1, $2, 'decision.json', $3, $4, $5, $11, $12, 'api_key',
        $6, $7, $8, 'pending', 0, $9, $10
      )`,
     [
@@ -75,6 +76,8 @@ async function createCertification(
       webhookBaseUrl,
       lease?.token ?? null,
       lease?.expiresAt ?? null,
+      blockchainStatus,
+      blockchainStatus === "confirmed" ? new Date() : null,
     ],
   );
 }
@@ -105,11 +108,10 @@ async function waitForBlockedClaims(): Promise<void> {
   const applicationNames = ["webhook-pg-worker-a", "webhook-pg-worker-b"];
   for (let attempt = 0; attempt < 200; attempt++) {
     const result = await testPool!.query<{ blocked: string }>(
-      `SELECT count(*)::text AS blocked
+      `SELECT count(DISTINCT application_name)::text AS blocked
          FROM pg_stat_activity
         WHERE application_name = ANY($1::text[])
-          AND wait_event_type = 'Lock'
-          AND query ILIKE 'update %certifications%'`,
+          AND wait_event_type = 'Lock'`,
       [applicationNames],
     );
     if (Number(result.rows[0]?.blocked) === 2) return;
@@ -260,6 +262,88 @@ describeWithPostgres("PostgreSQL webhook delivery leases", () => {
         webhook_lease_expires_at: null,
       });
     });
+  }, 30_000);
+
+  it("releases recovery leases without callbacks until blockchain finality is persisted", async () => {
+    const certificationId = `webhook-pg-unfinalized-${runId}`;
+    const previousLeaseToken = "lease-from-unfinalized-worker";
+    await createCertification(
+      certificationId,
+      {
+        token: previousLeaseToken,
+        expiresAt: new Date(Date.now() - 1_000),
+      },
+      "pending",
+    );
+    mockOutboundHttpsRequests();
+
+    const worker = await loadWorker("webhook-pg-unfinalized");
+    await worker.recoverPendingWebhookDeliveries();
+
+    // The expired token must be replaced by recovery before its temporary
+    // lease is released; this prevents a pre-claim read from passing the test.
+    await vi.waitFor(async () => {
+      const row = await testPool!.query<{ webhook_lease_token: string | null }>(
+        "SELECT webhook_lease_token FROM certifications WHERE id = $1",
+        [certificationId],
+      );
+      expect(row.rows[0]?.webhook_lease_token).not.toBe(previousLeaseToken);
+    });
+    await vi.waitFor(async () => {
+      const row = await testPool!.query<{
+        blockchain_status: string;
+        webhook_status: string;
+        webhook_attempts: number;
+        webhook_lease_token: string | null;
+        webhook_lease_expires_at: Date | null;
+      }>(
+        `SELECT blockchain_status, webhook_status, webhook_attempts,
+                webhook_lease_token, webhook_lease_expires_at
+           FROM certifications WHERE id = $1`,
+        [certificationId],
+      );
+      expect(row.rows[0]).toMatchObject({
+        blockchain_status: "pending",
+        webhook_status: "pending",
+        webhook_attempts: 0,
+        webhook_lease_token: null,
+        webhook_lease_expires_at: null,
+      });
+    });
+    expect(outboundDeliveryIds).toEqual([]);
+    // Let the recovery queue finish its in-memory bookkeeping before retrying.
+    await new Promise(resolve => setTimeout(resolve, 25));
+
+    await testPool!.query(
+      `UPDATE certifications
+          SET blockchain_status = 'confirmed', finality_checked_at = NOW()
+        WHERE id = $1`,
+      [certificationId],
+    );
+    await worker.recoverPendingWebhookDeliveries();
+    await vi.waitFor(() => expect(outboundDeliveryIds).toEqual([certificationId]));
+
+    pendingResponses.shift()?.(204);
+    await vi.waitFor(async () => {
+      const row = await testPool!.query<{
+        webhook_status: string;
+        webhook_attempts: number;
+        webhook_lease_token: string | null;
+        webhook_lease_expires_at: Date | null;
+      }>(
+        `SELECT webhook_status, webhook_attempts,
+                webhook_lease_token, webhook_lease_expires_at
+           FROM certifications WHERE id = $1`,
+        [certificationId],
+      );
+      expect(row.rows[0]).toMatchObject({
+        webhook_status: "delivered",
+        webhook_attempts: 1,
+        webhook_lease_token: null,
+        webhook_lease_expires_at: null,
+      });
+    });
+    expect(outboundDeliveryIds).toEqual([certificationId]);
   }, 30_000);
 
   it("extends an active lease before retrying a callback", async () => {

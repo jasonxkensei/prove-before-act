@@ -27,3 +27,4 @@
 - [Durable tool clock](durable-tool-clock.md) — CodeExecution may reject Date.now despite guidance; omit optional time filters or use an explicit timestamp
 - [Workflow startup race](workflow-startup-race.md) — network-backed checks may run before the app opens its port; confirm readiness before judging connection-refused failures.
 - [Proof finality evidence](proof-finality-evidence.md) — legacy confirmed labels are not chain evidence; status-rule changes must invalidate persisted trust snapshots
+- [PostgreSQL lock observation in tests](postgres-lock-observation.md) — lock-wait tests should not rely on pg_stat_activity query text being enabled
