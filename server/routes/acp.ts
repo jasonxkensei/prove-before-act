@@ -14,6 +14,7 @@ import { Address } from "@multiversx/sdk-core";
 import { pgCheckRateLimit } from "../pgRateLimit";
 import { CANONICAL_PUBLIC_ORIGIN } from "../publicOrigin";
 import { getProofFinalityApiUrl, lookupProofFinality } from "../proof-finality";
+import { PBA_WEBHOOK_HEADERS } from "../webhookHeaders";
 
 // Bounds how many unpaid ACP checkouts a single proven payer wallet may create within the
 // window. Deliberately independent of the generic per-API-key rate limiter, since the DoS
@@ -1260,6 +1261,31 @@ export function registerAcpRoutes(app: Express) {
               message: { type: "string" },
             },
           },
+          ProofCertifiedWebhookPayload: {
+            type: "object",
+            description: "Outbound proof.certified notification sent to the subscriber's webhook_url after on-chain confirmation.",
+            required: ["event", "proof_id", "status", "file_hash", "filename", "verify_url", "certificate_url", "proof_json_url", "blockchain", "timestamp"],
+            properties: {
+              event: { type: "string", enum: ["proof.certified"] },
+              proof_id: { type: "string", description: "Certification ID; also the stable delivery ID." },
+              status: { type: "string", enum: ["certified"] },
+              file_hash: { type: "string", description: "SHA-256 file hash." },
+              filename: { type: "string" },
+              verify_url: { type: "string", format: "uri" },
+              certificate_url: { type: "string", format: "uri" },
+              proof_json_url: { type: "string", format: "uri" },
+              blockchain: {
+                type: "object",
+                required: ["network", "transaction_hash", "explorer_url"],
+                properties: {
+                  network: { type: "string", enum: ["MultiversX"] },
+                  transaction_hash: { type: "string", nullable: true, description: "MultiversX transaction hash, or null when not available." },
+                  explorer_url: { type: "string", format: "uri", nullable: true, description: "Transaction explorer URL, or null when not available." },
+                },
+              },
+              timestamp: { type: "string", format: "date-time", description: "Certification creation time (or send time if absent)." },
+            },
+          },
           ViolationCounts: {
             type: "object",
             nullable: true,
@@ -1304,6 +1330,26 @@ export function registerAcpRoutes(app: Express) {
               profile_url: { type: "string", format: "uri", nullable: true },
               trust_badge_svg: { type: "string", format: "uri", nullable: true },
             },
+          },
+        },
+      },
+      // OpenAPI 3.0 has no standard top-level webhooks section (introduced in 3.1).
+      // Keep this outbound contract outside paths so generators do not create a fake inbound API route.
+      "x-webhooks": {
+        "proof.certified": {
+          description: "Outbound HTTPS POST to the webhook_url supplied by the subscriber after proof finality. At-least-once delivery; deduplicate by the verified delivery ID. The per-proof webhook_secret returned by the API signs each attempt.",
+          post: {
+            parameters: [
+              { in: "header", name: PBA_WEBHOOK_HEADERS.signature, required: true, schema: { type: "string", pattern: "^[0-9a-f]{64}$" }, description: "Hex HMAC-SHA256(secret, timestamp + \".\" + rawBody). Sign the exact request body bytes before JSON parsing; never reserialize JSON for verification." },
+              { in: "header", name: PBA_WEBHOOK_HEADERS.timestamp, required: true, schema: { type: "string", pattern: "^[0-9]+$" }, description: "Unix epoch seconds. Reject timestamps older than 300 seconds or more than 60 seconds in the future." },
+              { in: "header", name: PBA_WEBHOOK_HEADERS.event, required: true, schema: { type: "string", enum: ["proof.certified"] }, description: "Notification event type." },
+              { in: "header", name: PBA_WEBHOOK_HEADERS.delivery, required: true, schema: { type: "string" }, description: "Certification ID, stable across delivery attempts and manual retries; deduplicate only after signature verification." },
+            ],
+            requestBody: {
+              required: true,
+              content: { "application/json": { schema: { $ref: "#/components/schemas/ProofCertifiedWebhookPayload" } } },
+            },
+            responses: { "2XX": { description: "Subscriber acknowledges the notification." } },
           },
         },
       },

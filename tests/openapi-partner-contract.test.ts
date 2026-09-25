@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
+import crypto from "crypto";
+import { buildWebhookPayload, verifyWebhookSignature } from "../server/webhook";
+import { PBA_WEBHOOK_HEADERS, proofWebhookHeaders } from "../server/webhookHeaders";
 
 /**
  * OpenAPI ↔ live-response contract tests for the partner integration endpoints.
@@ -61,6 +64,73 @@ beforeAll(async () => {
 });
 
 describe("OpenAPI partner endpoint contract", () => {
+  it("exposes the outbound proof.certified contract without presenting it as an inbound path", () => {
+    const notification = spec["x-webhooks"]?.["proof.certified"];
+    expect(spec.openapi).toBe("3.0.3");
+    expect(notification?.description).toMatch(/Outbound HTTPS POST/);
+    expect(spec.paths["proof.certified"]).toBeUndefined();
+    expect(spec.paths["/webhooks/proof.certified"]).toBeUndefined();
+
+    const post = notification.post;
+    expect(post.requestBody.content["application/json"].schema).toEqual({
+      $ref: "#/components/schemas/ProofCertifiedWebhookPayload",
+    });
+    const schema = components.ProofCertifiedWebhookPayload;
+    expect(schema.properties.blockchain.properties.transaction_hash).toMatchObject({ type: "string", nullable: true });
+    expect(schema.properties.blockchain.properties.explorer_url).toMatchObject({ type: "string", nullable: true });
+
+    // Compare every required key, nested key and value type with the actual sender
+    // constructor, for both populated and nullable blockchain details.
+    const assertShape = (value: any, node: any) => {
+      expect(node.type).toBe("object");
+      expect([...node.required].sort()).toEqual(Object.keys(value).sort());
+      expect(Object.keys(node.properties).sort()).toEqual(Object.keys(value).sort());
+      for (const [key, property] of Object.entries<any>(node.properties)) {
+        const field = value[key];
+        if (field === null) {
+          expect(property.nullable, `${key} must be nullable`).toBe(true);
+        } else if (property.type === "object") {
+          assertShape(field, property);
+        } else {
+          expect(typeof field, `${key} must match its documented type`).toBe(property.type);
+          if (property.enum) expect(property.enum).toContain(field);
+        }
+      }
+    };
+    for (const transactionHash of ["abc123", null]) {
+      assertShape(buildWebhookPayload({
+        id: "uuid",
+        fileHash: "abc123",
+        fileName: "report.pdf",
+        transactionHash,
+        transactionUrl: transactionHash ? "https://explorer.multiversx.com/transactions/abc123" : null,
+        createdAt: new Date("2025-01-01T00:00:00.000Z"),
+      }, "https://provebeforeact.com"), schema);
+    }
+
+    const headers = proofWebhookHeaders("signature", "123", "proof.certified", "uuid");
+    expect(post.parameters.map((p: any) => p.name).sort()).toEqual([
+      PBA_WEBHOOK_HEADERS.signature, PBA_WEBHOOK_HEADERS.timestamp,
+      PBA_WEBHOOK_HEADERS.event, PBA_WEBHOOK_HEADERS.delivery,
+    ].sort());
+    for (const parameter of post.parameters) {
+      expect(parameter.in).toBe("header");
+      expect(parameter.required).toBe(true);
+      expect(headers).toHaveProperty(parameter.name);
+    }
+    const signatureDescription = post.parameters.find((p: any) => p.name === PBA_WEBHOOK_HEADERS.signature).description;
+    expect(signatureDescription).toMatch(/HMAC-SHA256\(secret, timestamp \+ "\." \+ rawBody\)/);
+    expect(signatureDescription).toMatch(/exact request body bytes before JSON parsing/);
+    const body = JSON.stringify(buildWebhookPayload({
+      id: "uuid", fileHash: "abc123", fileName: "report.pdf",
+      transactionHash: null, transactionUrl: null, createdAt: new Date("2025-01-01T00:00:00.000Z"),
+    }, "https://provebeforeact.com"));
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const signature = crypto.createHmac("sha256", "secret").update(`${timestamp}.${body}`).digest("hex");
+    expect(verifyWebhookSignature(body, signature, timestamp, "secret")).toEqual({ valid: true });
+    expect(verifyWebhookSignature(JSON.stringify(JSON.parse(body), null, 2), signature, timestamp, "secret").valid).toBe(false);
+  });
+
   it("documents all five partner paths", () => {
     for (const p of [
       "/api/sigil/{public_key}",
