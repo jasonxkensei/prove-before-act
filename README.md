@@ -258,6 +258,9 @@ record the response. The sender makes up to three attempts per delivery round
 with backoff. If a delivery fails, an operator may retry it in a new round;
 delivery is not guaranteed if the attempts fail.
 
+For ready-to-adapt Python and Java receivers, see the
+[partner webhook guide](docs/agent-integration.md#receive-proofcertified-webhooks-python-or-java).
+
 Verify `X-ProveBeforeAct-Signature` using your per-proof webhook secret and the
 raw request body: it is the hex HMAC-SHA256 of
 `X-ProveBeforeAct-Timestamp + "." + rawBody`. The timestamp is Unix epoch

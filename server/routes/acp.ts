@@ -1337,7 +1337,7 @@ export function registerAcpRoutes(app: Express) {
       // Neither belongs in paths: this POST is sent to a subscriber, not hosted here.
       "x-webhooks": {
         "proof.certified": {
-          description: "Outbound HTTPS POST to the webhook_url supplied by the subscriber after proof finality. At-least-once delivery; deduplicate by the verified delivery ID. The per-proof webhook_secret returned by the API signs each attempt.",
+          description: "Outbound HTTPS POST to the webhook_url supplied by the subscriber after proof finality. At-least-once delivery; deduplicate by the verified delivery ID. The per-proof webhook_secret returned by the API signs each attempt. Implement a receiver at your URL (see docs/agent-integration.md); this is not a callable /proof.certified API path.",
           post: {
             operationId: "proofCertifiedWebhook",
             security: [],

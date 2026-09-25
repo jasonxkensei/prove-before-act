@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import crypto from "crypto";
+import { execFileSync } from "node:child_process";
 import openapiTS, { astToString } from "openapi-typescript";
 import { buildWebhookPayload, verifyWebhookSignature } from "../server/webhook";
 import { PBA_WEBHOOK_HEADERS, proofWebhookHeaders } from "../server/webhookHeaders";
@@ -180,6 +181,57 @@ describe("OpenAPI partner endpoint contract", () => {
     for (const header of webhook.parameters) {
       expect(header).toMatchObject({ in: "header", required: true, schema: { type: "string" } });
     }
+    expect(spec.webhooks["proof.certified"].description).toContain("not a callable /proof.certified API path");
+  });
+
+  it("Python receiver accepts the real sender shape and headers, rejects tampering, and deduplicates", () => {
+    const body = JSON.stringify(buildWebhookPayload({
+      id: "test-proof", fileHash: "abc123", fileName: "report.pdf",
+      transactionHash: null, transactionUrl: null, createdAt: new Date("2025-01-01T00:00:00.000Z"),
+    }, "https://provebeforeact.com"));
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const headers = proofWebhookHeaders(
+      crypto.createHmac("sha256", "test-secret").update(`${timestamp}.${body}`).digest("hex"),
+      timestamp, "proof.certified", "test-proof",
+    );
+    const program = `
+import http.client, json, sqlite3, tempfile, threading
+from http.server import ThreadingHTTPServer
+from examples.webhooks.python_receiver import Receiver, init_db
+body, headers = json.load(__import__("sys").stdin)
+with tempfile.TemporaryDirectory() as tmp:
+    Receiver.db_path = tmp + "/webhooks.sqlite"
+    init_db(Receiver.db_path)
+    with sqlite3.connect(Receiver.db_path) as db:
+        db.execute("INSERT INTO proof_secrets VALUES (?, ?)", ("test-proof", "test-secret"))
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Receiver)
+    thread = threading.Thread(target=server.serve_forever)
+    thread.start()
+    try:
+        def post(payload, h):
+            conn = http.client.HTTPConnection("127.0.0.1", server.server_port)
+            conn.request("POST", "/webhooks/prove-before-act", payload.encode(), h)
+            result = conn.getresponse()
+            status = result.status
+            result.read()
+            conn.close()
+            return status
+        assert post(body, headers) == 200
+        assert post(body, headers) == 200
+        assert post(body + " ", headers) == 401
+        assert post(body, {**headers, "X-ProveBeforeAct-Timestamp": "1"}) == 401
+        assert post(body, {**headers, "X-ProveBeforeAct-Event": "unknown"}) == 400
+        with sqlite3.connect(Receiver.db_path) as db:
+            assert db.execute("SELECT COUNT(*) FROM deliveries").fetchone()[0] == 1
+    finally:
+        server.shutdown()
+        thread.join()
+        server.server_close()
+`;
+    expect(() => execFileSync("python3", ["-c", program], {
+      input: JSON.stringify([body, headers]), cwd: process.cwd(),
+      timeout: 10000, stdio: ["pipe", "pipe", "pipe"],
+    })).not.toThrow();
   });
 
   it("documents all five partner paths", () => {

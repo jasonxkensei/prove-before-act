@@ -59,6 +59,54 @@ AI agents can automatically discover Prove Before Act through several standardiz
 
 ---
 
+## Receive proof.certified webhooks (Python or Java)
+
+Supply your own public HTTPS `webhook_url` when requesting certification. Once
+the proof is confirmed on-chain, **Prove Before Act POSTs to your URL**; it does
+not host a `/proof.certified` endpoint. Save the `webhook_secret` returned for
+each proof under its certification/proof ID before receiving the callback. This
+is a signing secret, not your API key; do not put it in source control or logs.
+
+Runnable receiver examples:
+
+- [Python 3.11+ standard-library receiver](../examples/webhooks/python_receiver.py):
+  `PBA_WEBHOOK_DB=webhooks.sqlite python3 examples/webhooks/python_receiver.py`.
+  Insert the per-proof ID and secret into `proof_secrets` after the API response,
+  before callback delivery (for example, use `sqlite3 webhooks.sqlite
+  "INSERT INTO proof_secrets VALUES ('<proof_id>', '<webhook_secret>');"`).
+  The example stores each verified payload and delivery ID atomically in SQLite.
+- [Java 17 Spring Boot receiver](../examples/webhooks/java/src/main/java/example/pba/ProofWebhookReceiver.java):
+  from `examples/webhooks/java`, run
+  `PBA_PROOF_ID=<proof_id> PBA_WEBHOOK_SECRET=<webhook_secret> mvn spring-boot:run`.
+  This single-proof demo uses in-memory storage; replace its secret lookup and
+  delivery handling with durable storage and an atomic insert/business action
+  before acknowledging in production. Its [Maven project](../examples/webhooks/java/pom.xml)
+  includes the required dependencies.
+
+Both examples listen on `/webhooks/prove-before-act` (port 8080); terminate TLS
+at a reverse proxy and make this URL publicly reachable over HTTPS. They
+receive the `ProofCertifiedWebhookPayload` and all four canonical headers:
+`X-ProveBeforeAct-Signature`, `X-ProveBeforeAct-Timestamp`,
+`X-ProveBeforeAct-Event`, and `X-ProveBeforeAct-Delivery`. The event must be
+`proof.certified`; the delivery header is the stable proof ID. The JSON body's
+`timestamp` is an ISO creation time **not** the Unix-seconds header timestamp.
+Verify `HMAC-SHA256(per-proof secret, UTF8(header timestamp + ".") + raw HTTP body
+bytes)` with a constant-time comparison before parsing or trusting the delivery
+ID. Reject timestamps older than 300 seconds or more than 60 seconds ahead.
+Retries may have different timestamps/signatures but the same delivery ID;
+acknowledge previously committed IDs without repeating the action. Legacy
+`X-xProof-*` aliases are sent too, but new receivers should use canonical names.
+
+OpenAPI 3.1 describes this notification in `webhooks`, not `paths`. OpenAPI
+Generator 7.25.0 can generate Java's payload model and header parameters with
+webhooks enabled, but its synthetic `/proof.certified` *client call* is not a
+hosted API route and must not be called. Default Python generation skips webhook
+operations; enabling them in that generator version produced invalid Python
+parameter annotations. Use these receiver examples/types rather than generated
+client methods for inbound callbacks.
+
+---
+
 ## Prerequisites
 
 Before integrating, you need:
