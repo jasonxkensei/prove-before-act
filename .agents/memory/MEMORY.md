@@ -24,3 +24,4 @@
 - [Agent activation credential boundary](agent-activation-credential-boundary.md) — disclose raw keys once but preserve private-context usability; only confirmed proofs with valid transaction hashes advance activation
 - [MultiversX UI global CSS collisions](multiversx-ui-global-css-collisions.md) — SDK UI injects Tailwind utilities after app CSS; avoid generic utility classes for critical responsive visibility
 - [Production bearer redirect](production-bearer-redirect.md) — a published host can redirect cross-origin and drop Authorization; resolve the verified destination before credentialed API calls
+- [Durable tool clock](durable-tool-clock.md) — CodeExecution may reject Date.now despite guidance; omit optional time filters or use an explicit timestamp
