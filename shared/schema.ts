@@ -105,6 +105,8 @@ export const certifications = pgTable("certifications", {
   blockchainStatus: varchar("blockchain_status").default("pending"), // pending, confirmed, failed
   // NULL for legacy rows: they are not automatically grandfathered into verified counts.
   finalityCheckedAt: timestamp("finality_checked_at"),
+  // A compact, independently verified MultiversX response retained for audit.
+  finalityEvidence: jsonb("finality_evidence"),
   certificateUrl: text("certificate_url"),
   isPublic: boolean("is_public").default(true),
   webhookUrl: text("webhook_url"),
@@ -170,6 +172,54 @@ export const certifications = pgTable("certifications", {
 ]);
 
 export type Certification = typeof certifications.$inferSelect;
+
+export const FINALITY_SNAPSHOT_VERSION = 2;
+
+// Append-only operator history for legacy proof-finality reconciliation.
+// These tables are created by migrateProofFinalityReconciliationSchema().
+export const proofFinalityReconciliationRuns = pgTable("proof_finality_reconciliation_runs", {
+  id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
+  mode: varchar("mode").notNull(),
+  status: varchar("status").notNull().default("running"),
+  operator: text("operator").notNull(),
+  approvedDryRunId: text("approved_dry_run_id"),
+  cursorId: varchar("cursor_id"),
+  counts: jsonb("counts").notNull().default(sql`'{"confirmed":0,"failed":0,"missing":0,"unavailable":0,"pending":0,"stale":0}'::jsonb`),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+}, (table) => [
+  check("proof_finality_reconciliation_runs_mode_check", sql`${table.mode} IN ('dry_run', 'reconcile')`),
+  check("proof_finality_reconciliation_runs_status_check", sql`${table.status} IN ('running', 'paused', 'completed', 'failed')`),
+  index("idx_proof_finality_reconciliation_runs_status").on(table.status, table.startedAt),
+]);
+
+export const proofFinalityReconciliationItems = pgTable("proof_finality_reconciliation_items", {
+  id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
+  runId: text("run_id").notNull().references(() => proofFinalityReconciliationRuns.id),
+  // Deliberately not a foreign key: an audit item must survive proof deletion.
+  certificationId: varchar("certification_id").notNull(),
+  transactionHash: text("transaction_hash"),
+  fileHash: text("file_hash").notNull(),
+  result: varchar("result").notNull(),
+  reason: text("reason"),
+  applied: boolean("applied").notNull().default(false),
+  evidence: jsonb("evidence"),
+  checkedAt: timestamp("checked_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  check("proof_finality_reconciliation_items_result_check", sql`${table.result} IN ('confirmed', 'failed', 'missing', 'unavailable', 'pending')`),
+  uniqueIndex("idx_proof_finality_reconciliation_items_run_cert").on(table.runId, table.certificationId),
+  index("idx_proof_finality_reconciliation_items_cert").on(table.certificationId, table.checkedAt),
+]);
+
+// One shared lease serializes operator runs across app instances and CLI processes.
+export const proofFinalityReconciliationLock = pgTable("proof_finality_reconciliation_lock", {
+  id: integer("id").primaryKey().default(1),
+  owner: text("owner"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+}, (table) => [
+  check("proof_finality_reconciliation_lock_singleton", sql`id = 1`),
+]);
 
 // ============================================
 // Attestations table — Domain-specific trust signals

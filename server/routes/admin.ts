@@ -3,7 +3,7 @@ import crypto from "crypto";
 import { db, pool } from "../db";
 import { getRateLimitStats } from "../pgRateLimit";
 import { logger } from "../logger";
-import { certifications, users, apiKeys, visits, txQueue as txQueueTable, agentViolations } from "@shared/schema";
+import { certifications, users, apiKeys, visits, txQueue as txQueueTable, agentViolations, FINALITY_SNAPSHOT_VERSION } from "@shared/schema";
 import { eq, desc, sql, and, gte, gt, count, ne } from "drizzle-orm";
 import { isWalletAuthenticated } from "../walletAuth";
 import { computeTrustScoreByWallet, runLeaderboardRefreshCycle, runTrustRefreshCycle } from "../trust";
@@ -1182,11 +1182,11 @@ export function registerAdminRoutes(app: Express) {
           updatedScore = { score: trust.score, level: trust.level };
           await pool.query(
             `INSERT INTO trust_score_snapshots (wallet_address, score, level, cert_total, active_attestations, rank, snapshot_date, finality_version)
-             VALUES ($1, $2, $3, $4, $5, 0, CURRENT_DATE, 1)
+             VALUES ($1, $2, $3, $4, $5, 0, CURRENT_DATE, ${FINALITY_SNAPSHOT_VERSION})
              ON CONFLICT (wallet_address, snapshot_date) DO UPDATE SET
                score = EXCLUDED.score, level = EXCLUDED.level,
                cert_total = EXCLUDED.cert_total, active_attestations = EXCLUDED.active_attestations,
-               finality_version = 1`,
+               finality_version = ${FINALITY_SNAPSHOT_VERSION}`,
             [target_wallet, trust.score, trust.level, trust.certTotal, trust.activeAttestations ?? 0]
           );
         }

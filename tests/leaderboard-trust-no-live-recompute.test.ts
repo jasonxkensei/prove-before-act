@@ -20,6 +20,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import crypto from "crypto";
 import { pool } from "../server/db";
+import { FINALITY_SNAPSHOT_VERSION } from "@shared/schema";
 import {
   getLeaderboard,
   computeTrustScoreByWallet,
@@ -40,7 +41,7 @@ let trustUserId = "";
 let leaderboardUserId = "";
 let readThroughUserId = "";
 let hadExistingLeaderboardSnapshot = false;
-let originalLeaderboardSnapshot: { entries: unknown; computed_at: string } | null = null;
+let originalLeaderboardSnapshot: { entries: unknown; computed_at: string; finality_version: number } | null = null;
 
 // Deliberately impossible values: no live computation against real data
 // could ever produce these, since the wallets below have zero real
@@ -71,8 +72,8 @@ beforeAll(async () => {
   readThroughUserId = readThroughRow.rows[0].id;
   await pool.query(
     `INSERT INTO certifications
-       (user_id, file_name, file_hash, blockchain_status, is_public, metadata)
-     VALUES ($1, 'first-proof.json', $2, 'confirmed', TRUE, $3::jsonb)`,
+       (user_id, file_name, file_hash, blockchain_status, finality_checked_at, is_public, metadata)
+     VALUES ($1, 'first-proof.json', $2, 'confirmed', NOW(), TRUE, $3::jsonb)`,
     [
       readThroughUserId,
       crypto.randomBytes(32).toString("hex"),
@@ -100,21 +101,23 @@ beforeAll(async () => {
 
   await pool.query(
     `INSERT INTO trust_score_snapshots
-       (wallet_address, score, level, cert_total, active_attestations, rank, snapshot_date, full_trust_data)
-     VALUES ($1, $2, $3, $4, $5, 0, CURRENT_DATE, $6::jsonb)
+       (wallet_address, score, level, cert_total, active_attestations, rank, snapshot_date, full_trust_data, finality_version)
+     VALUES ($1, $2, $3, $4, $5, 0, CURRENT_DATE, $6::jsonb, $7)
      ON CONFLICT (wallet_address, snapshot_date) DO UPDATE
        SET full_trust_data     = EXCLUDED.full_trust_data,
            score               = EXCLUDED.score,
            level               = EXCLUDED.level,
            cert_total          = EXCLUDED.cert_total,
-           active_attestations = EXCLUDED.active_attestations`,
+            active_attestations = EXCLUDED.active_attestations,
+            finality_version    = EXCLUDED.finality_version`,
     [
       TRUST_WALLET,
       IMPOSSIBLE_SCORE,
       "Verified",
       IMPOSSIBLE_CERT_TOTAL,
       IMPOSSIBLE_ACTIVE_ATTESTATIONS,
-      JSON.stringify(fakeTrustData),
+       JSON.stringify(fakeTrustData),
+       FINALITY_SNAPSHOT_VERSION,
     ],
   );
 
@@ -129,8 +132,8 @@ beforeAll(async () => {
   );
   leaderboardUserId = lbRow.rows[0].id;
 
-  const existing = await pool.query<{ entries: unknown; computed_at: string }>(
-    `SELECT entries, computed_at FROM leaderboard_snapshot WHERE id = 1`,
+  const existing = await pool.query<{ entries: unknown; computed_at: string; finality_version: number }>(
+    `SELECT entries, computed_at, finality_version FROM leaderboard_snapshot WHERE id = 1`,
   );
   if (existing.rows.length > 0) {
     hadExistingLeaderboardSnapshot = true;
@@ -165,12 +168,13 @@ beforeAll(async () => {
   ];
 
   await pool.query(
-    `INSERT INTO leaderboard_snapshot (id, entries, computed_at)
-     VALUES (1, $1::jsonb, NOW())
+    `INSERT INTO leaderboard_snapshot (id, entries, computed_at, finality_version)
+     VALUES (1, $1::jsonb, NOW(), $2)
      ON CONFLICT (id) DO UPDATE
        SET entries     = EXCLUDED.entries,
-           computed_at = EXCLUDED.computed_at`,
-    [JSON.stringify(fakeLeaderboardEntries)],
+           computed_at = EXCLUDED.computed_at,
+           finality_version = EXCLUDED.finality_version`,
+    [JSON.stringify(fakeLeaderboardEntries), FINALITY_SNAPSHOT_VERSION],
   );
 });
 
@@ -184,12 +188,17 @@ afterAll(async () => {
   // reads from on cold start.
   if (hadExistingLeaderboardSnapshot && originalLeaderboardSnapshot) {
     await pool.query(
-      `INSERT INTO leaderboard_snapshot (id, entries, computed_at)
-       VALUES (1, $1::jsonb, $2)
+      `INSERT INTO leaderboard_snapshot (id, entries, computed_at, finality_version)
+       VALUES (1, $1::jsonb, $2, $3)
        ON CONFLICT (id) DO UPDATE
          SET entries     = EXCLUDED.entries,
-             computed_at = EXCLUDED.computed_at`,
-      [JSON.stringify(originalLeaderboardSnapshot.entries), originalLeaderboardSnapshot.computed_at],
+             computed_at = EXCLUDED.computed_at,
+             finality_version = EXCLUDED.finality_version`,
+      [
+        JSON.stringify(originalLeaderboardSnapshot.entries),
+        originalLeaderboardSnapshot.computed_at,
+        originalLeaderboardSnapshot.finality_version,
+      ],
     );
   } else {
     await pool.query(`DELETE FROM leaderboard_snapshot WHERE id = 1`);

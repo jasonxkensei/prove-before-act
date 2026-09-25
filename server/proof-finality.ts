@@ -4,7 +4,32 @@ import { and, eq, isNotNull } from "drizzle-orm";
 import { logger } from "./logger";
 
 export type ChainFinality = "confirmed" | "pending" | "failed" | "unavailable";
+export type HistoricalFinalityResult = ChainFinality | "missing";
 const TX_HASH = /^[a-fA-F0-9]{64}$/;
+
+export interface ProofFinalityEvidence {
+  source: "multiversx-transaction-api";
+  apiUrl: string;
+  chainId: string;
+  checkedAt: string;
+  transactionHash: string;
+  returnedTransactionHash: string;
+  transactionStatus: string;
+  round: number;
+  blockNonce: number;
+  blockHash: string | null;
+  miniblockHash: string | null;
+  expectedFileHash: string;
+  payload: string;
+  payloadMatches: boolean;
+  payloadValidation: "matched" | "mismatch" | "unverified_acp" | "not_checked";
+}
+
+export interface ProofFinalityLookup {
+  result: HistoricalFinalityResult;
+  reason: string | null;
+  evidence: ProofFinalityEvidence | null;
+}
 
 export function getProofFinalityApiUrl(): string {
   if (process.env.MULTIVERSX_API_URL) return process.env.MULTIVERSX_API_URL;
@@ -34,30 +59,112 @@ export async function lookupProofFinality(
   fileHash: string,
   authMethod?: string | null,
 ): Promise<ChainFinality> {
-  if (!hash || !TX_HASH.test(hash)) return "pending";
+  const lookup = await lookupProofFinalityDetails(hash, fileHash, authMethod, {
+    allowUnboundAcp: authMethod === "acp",
+  });
+  return lookup.result === "missing" ? "pending" : lookup.result;
+}
+
+/**
+ * Return the chain result and the exact evidence used to decide it. A 404 and
+ * malformed/missing historical hashes are reported separately from API
+ * outages so an operator can distinguish missing transactions from unknown
+ * chain state.
+ */
+export async function lookupProofFinalityDetails(
+  hash: string | null,
+  fileHash: string,
+  authMethod?: string | null,
+  options: { allowUnboundAcp?: boolean } = {},
+): Promise<ProofFinalityLookup> {
+  if (!hash || !TX_HASH.test(hash)) {
+    return { result: "missing", reason: hash ? "invalid_transaction_hash" : "transaction_hash_missing", evidence: null };
+  }
+  // ACP certificates are paid/registered through a different payload flow.
+  // Do not infer their file-hash binding from a generic successful transaction.
+  if (authMethod === "acp" && !options.allowUnboundAcp) {
+    return { result: "unavailable", reason: "unsupported_acp_payload_format", evidence: null };
+  }
   try {
-    const response = await fetch(`${getProofFinalityApiUrl()}/transactions/${hash}`, {
+    const apiUrl = getProofFinalityApiUrl();
+    const response = await fetch(`${apiUrl}/transactions/${hash}`, {
       signal: AbortSignal.timeout(10_000),
     });
-    if (response.status === 404) return "pending"; // indexing can lag broadcast
+    if (response.status === 404) {
+      return { result: "missing", reason: "transaction_not_found", evidence: null };
+    }
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const tx = await response.json();
-    if (typeof tx.txHash !== "string" || tx.txHash.toLowerCase() !== hash.toLowerCase()) return "unavailable";
-    if (tx.status === "fail" || tx.status === "failed" || tx.status === "invalid") return "failed";
-    if (tx.status !== "success" || !Number.isInteger(tx.round) || tx.round <= 0 ||
-        !Number.isInteger(tx.blockNonce) || tx.blockNonce <= 0) return "pending";
-    if (authMethod !== "acp") {
-      const data = typeof tx.data === "string" ? Buffer.from(tx.data, "base64").toString("utf8") : "";
-      const prefixes = [`certify:${fileHash}`, `xproof:certify:${fileHash}`];
-      if (!prefixes.some(prefix => data === prefix || data.startsWith(`${prefix}|`))) return "failed";
+    if (!tx || typeof tx !== "object" || typeof tx.txHash !== "string" ||
+        tx.txHash.toLowerCase() !== hash.toLowerCase()) {
+      return { result: "unavailable", reason: "transaction_hash_mismatch", evidence: null };
     }
-    return "confirmed";
+    const status = typeof tx.status === "string" ? tx.status : "";
+    if (status === "fail" || status === "failed" || status === "invalid") {
+      return {
+        result: "failed",
+        reason: "transaction_failed_on_chain",
+        evidence: buildEvidence(apiUrl, hash, fileHash, tx, "", false, "not_checked"),
+      };
+    }
+    if (status !== "success") {
+      return { result: "pending", reason: "transaction_not_finalized", evidence: null };
+    }
+    if (!Number.isInteger(tx.round) || tx.round <= 0 ||
+        !Number.isInteger(tx.blockNonce) || tx.blockNonce <= 0) {
+      return { result: "pending", reason: "block_inclusion_not_available", evidence: null };
+    }
+    if (authMethod === "acp" && options.allowUnboundAcp) {
+      return {
+        result: "confirmed",
+        reason: null,
+        evidence: buildEvidence(apiUrl, hash, fileHash, tx, "", false, "unverified_acp"),
+      };
+    }
+    const payload = typeof tx.data === "string"
+      ? Buffer.from(tx.data, "base64").toString("utf8")
+      : "";
+    const prefixes = [`certify:${fileHash}`, `xproof:certify:${fileHash}`];
+    const payloadMatches = prefixes.some(prefix => payload === prefix || payload.startsWith(`${prefix}|`));
+    const evidence = buildEvidence(apiUrl, hash, fileHash, tx, payload, payloadMatches);
+    if (!payloadMatches) {
+      return { result: "failed", reason: "proof_payload_mismatch", evidence };
+    }
+    return { result: "confirmed", reason: null, evidence };
   } catch (error) {
     logger.warn("Proof finality lookup unavailable; will retry", {
       component: "proof-finality", hash, error: String(error),
     });
-    return "unavailable";
+    return { result: "unavailable", reason: "chain_api_unavailable", evidence: null };
   }
+}
+
+function buildEvidence(
+  apiUrl: string,
+  hash: string,
+  fileHash: string,
+  tx: Record<string, unknown>,
+  payload: string,
+  payloadMatches: boolean,
+  payloadValidation?: ProofFinalityEvidence["payloadValidation"],
+): ProofFinalityEvidence {
+  return {
+    source: "multiversx-transaction-api",
+    apiUrl,
+    chainId: process.env.MULTIVERSX_CHAIN_ID || "1",
+    checkedAt: new Date().toISOString(),
+    transactionHash: hash,
+    returnedTransactionHash: String(tx.txHash),
+    transactionStatus: String(tx.status ?? ""),
+    round: Number.isInteger(tx.round) ? Number(tx.round) : 0,
+    blockNonce: Number.isInteger(tx.blockNonce) ? Number(tx.blockNonce) : 0,
+    blockHash: typeof tx.blockHash === "string" ? tx.blockHash : null,
+    miniblockHash: typeof tx.miniBlockHash === "string" ? tx.miniBlockHash : null,
+    expectedFileHash: fileHash,
+    payload: payload.slice(0, 2048),
+    payloadMatches,
+    payloadValidation: payloadValidation ?? (payloadMatches ? "matched" : "mismatch"),
+  };
 }
 
 let polling = false;
@@ -73,13 +180,17 @@ export async function pollProofFinality(): Promise<void> {
       isNotNull(certifications.transactionHash),
     )).orderBy(certifications.updatedAt, certifications.id).limit(50);
     for (const row of rows) {
-      const result = await lookupProofFinality(row.transactionHash, row.fileHash, row.authMethod);
+      const lookup = await lookupProofFinalityDetails(row.transactionHash, row.fileHash, row.authMethod, {
+        allowUnboundAcp: row.authMethod === "acp",
+      });
+      const result = lookup.result === "missing" ? "pending" : lookup.result;
       await db.update(certifications).set({
         // Rotate unfinalized rows to the back so an outage or missing tx in
         // the oldest 50 cannot starve all later broadcasts indefinitely.
         updatedAt: new Date(),
         ...(result === "confirmed" || result === "failed" ? { blockchainStatus: result } : {}),
         ...(result === "confirmed" ? { finalityCheckedAt: new Date() } : {}),
+        ...(result === "confirmed" && lookup.evidence ? { finalityEvidence: lookup.evidence } : {}),
       }).where(and(
         eq(certifications.id, row.id),
         eq(certifications.blockchainStatus, "pending"),

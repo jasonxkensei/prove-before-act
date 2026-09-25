@@ -1,5 +1,5 @@
 import { db, pool } from "./db";
-import { certifications, users, agentViolations } from "@shared/schema";
+import { certifications, users, agentViolations, FINALITY_SNAPSHOT_VERSION } from "@shared/schema";
 import { eq, sql, and } from "drizzle-orm";
 import { logger } from "./logger";
 
@@ -627,6 +627,7 @@ export async function computeTrustScore(userId: string): Promise<TrustScore> {
 // one read-through computation for a known public wallet.
 //
 const TRUST_CACHE_MAX_ENTRIES = 5000;
+const TRUST_CACHE_TTL_MS = 60_000;
 const trustCache = new Map<string, { value: TrustScore | null; cachedAt: number }>();
 const trustReadThroughInFlight = new Map<string, Promise<TrustScore | null>>();
 
@@ -656,14 +657,14 @@ async function computeAndSnapshotTrustScoreByWallet(walletAddress: string): Prom
     await pool.query(
       `INSERT INTO trust_score_snapshots
          (wallet_address, score, level, cert_total, active_attestations, rank, snapshot_date, full_trust_data, finality_version)
-       VALUES ($1, $2, $3, $4, $5, 0, CURRENT_DATE, $6::jsonb, 1)
+       VALUES ($1, $2, $3, $4, $5, 0, CURRENT_DATE, $6::jsonb, ${FINALITY_SNAPSHOT_VERSION})
        ON CONFLICT (wallet_address, snapshot_date) DO UPDATE SET
          score               = EXCLUDED.score,
          level               = EXCLUDED.level,
          cert_total          = EXCLUDED.cert_total,
          active_attestations = EXCLUDED.active_attestations,
          full_trust_data     = EXCLUDED.full_trust_data,
-         finality_version    = 1`,
+         finality_version    = ${FINALITY_SNAPSHOT_VERSION}`,
       [
         walletAddress,
         trust.score,
@@ -692,7 +693,8 @@ async function computeAndSnapshotTrustScoreByWallet(walletAddress: string): Prom
 // exactly one single-wallet computation and persist it for subsequent reads.
 export async function computeTrustScoreByWallet(walletAddress: string): Promise<TrustScore | null> {
   const cached = trustCache.get(walletAddress);
-  if (cached) return cached.value;
+  if (cached && Date.now() - cached.cachedAt < TRUST_CACHE_TTL_MS) return cached.value;
+  if (cached) trustCache.delete(walletAddress);
 
   // Single bounded indexed read from the precomputed snapshot table.
   try {
@@ -700,7 +702,7 @@ export async function computeTrustScoreByWallet(walletAddress: string): Promise<
       `SELECT full_trust_data
        FROM trust_score_snapshots
        WHERE wallet_address = $1
-         AND finality_version = 1
+         AND finality_version = ${FINALITY_SNAPSHOT_VERSION}
          AND full_trust_data IS NOT NULL
        ORDER BY snapshot_date DESC LIMIT 1`,
       [walletAddress],
@@ -1008,14 +1010,14 @@ export async function runTrustRefreshCycle(): Promise<void> {
           await pool.query(
             `INSERT INTO trust_score_snapshots
                (wallet_address, score, level, cert_total, active_attestations, rank, snapshot_date, full_trust_data, finality_version)
-             VALUES ($1, $2, $3, $4, $5, 0, CURRENT_DATE, $6::jsonb, 1)
+             VALUES ($1, $2, $3, $4, $5, 0, CURRENT_DATE, $6::jsonb, ${FINALITY_SNAPSHOT_VERSION})
              ON CONFLICT (wallet_address, snapshot_date) DO UPDATE
                SET full_trust_data      = EXCLUDED.full_trust_data,
                    score                = EXCLUDED.score,
                    level                = EXCLUDED.level,
                    cert_total           = EXCLUDED.cert_total,
                    active_attestations  = EXCLUDED.active_attestations,
-                   finality_version     = 1`,
+                   finality_version     = ${FINALITY_SNAPSHOT_VERSION}`,
             [
               wallet_address,
               trust.score,
@@ -1064,11 +1066,11 @@ export async function runLeaderboardRefreshCycle(): Promise<void> {
     const computedAt = Date.now();
     await pool.query(
       `INSERT INTO leaderboard_snapshot (id, entries, computed_at, finality_version)
-       VALUES (1, $1::jsonb, NOW(), 1)
+       VALUES (1, $1::jsonb, NOW(), ${FINALITY_SNAPSHOT_VERSION})
        ON CONFLICT (id) DO UPDATE
          SET entries     = EXCLUDED.entries,
              computed_at = EXCLUDED.computed_at,
-             finality_version = 1`,
+             finality_version = ${FINALITY_SNAPSHOT_VERSION}`,
       [JSON.stringify(entries)],
     );
     leaderboardCache = { allEntries: entries, cachedAt: Date.now(), computedAt };
@@ -1091,7 +1093,7 @@ export async function runLeaderboardRefreshCycle(): Promise<void> {
 export async function warmCachesFromSnapshots(): Promise<void> {
   try {
     const snap = await pool.query<{ entries: LeaderboardEntry[]; computed_at: string }>(
-      `SELECT entries, computed_at FROM leaderboard_snapshot WHERE id = 1 AND finality_version = 1`,
+      `SELECT entries, computed_at FROM leaderboard_snapshot WHERE id = 1 AND finality_version = ${FINALITY_SNAPSHOT_VERSION}`,
     );
     if (snap.rows.length > 0) {
       const computedAt = new Date(snap.rows[0].computed_at).getTime();
@@ -1138,7 +1140,7 @@ export async function getLeaderboard(filters: LeaderboardFilters = {}): Promise<
 
   let allEntries: LeaderboardEntry[];
 
-  if (leaderboardCache) {
+  if (leaderboardCache && Date.now() - leaderboardCache.cachedAt < TRUST_CACHE_TTL_MS) {
     // Serve from in-memory cache — no DB work.
     allEntries = leaderboardCache.allEntries;
   } else {
@@ -1147,7 +1149,7 @@ export async function getLeaderboard(filters: LeaderboardFilters = {}): Promise<
     // This NEVER calls computeAllLeaderboardEntries().
     try {
       const snap = await pool.query<{ entries: LeaderboardEntry[]; computed_at: string }>(
-        `SELECT entries, computed_at FROM leaderboard_snapshot WHERE id = 1 AND finality_version = 1`,
+        `SELECT entries, computed_at FROM leaderboard_snapshot WHERE id = 1 AND finality_version = ${FINALITY_SNAPSHOT_VERSION}`,
       );
       if (snap.rows.length > 0) {
         const computedAt = new Date(snap.rows[0].computed_at).getTime();
@@ -1297,7 +1299,7 @@ async function getOldScoreBatch(wallets: string[], cutoff: Date): Promise<Map<st
     const result = await pool.query<{ wallet_address: string; score: string }>(
       `SELECT DISTINCT ON (wallet_address) wallet_address, score
        FROM trust_score_snapshots
-       WHERE wallet_address = ANY($1) AND snapshot_date <= $2 AND finality_version = 1
+       WHERE wallet_address = ANY($1) AND snapshot_date <= $2 AND finality_version = ${FINALITY_SNAPSHOT_VERSION}
        ORDER BY wallet_address, snapshot_date DESC`,
       [wallets, cutoff.toISOString().split("T")[0]],
     );
@@ -1320,7 +1322,7 @@ async function getPreviousLevelBatch(wallets: string[]): Promise<Map<string, Tru
          SELECT wallet_address, level,
                 ROW_NUMBER() OVER (PARTITION BY wallet_address ORDER BY snapshot_date DESC) AS rn
          FROM trust_score_snapshots
-         WHERE wallet_address = ANY($1) AND finality_version = 1
+         WHERE wallet_address = ANY($1) AND finality_version = ${FINALITY_SNAPSHOT_VERSION}
        ) ranked
        WHERE rn = 2`,
       [wallets],

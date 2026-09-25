@@ -10,6 +10,7 @@
     "check": "tsc",
     "test": "vitest run",
     "db:push": "drizzle-kit push",
+    "proofs:reconcile-legacy-finality": "tsx scripts/reconcile-legacy-proof-finality.ts",
     "postinstall": "node scripts/patch-playwright-webkit.mjs && npx playwright install"
   },
   "dependencies": {

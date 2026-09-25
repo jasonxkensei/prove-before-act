@@ -34,6 +34,7 @@ import {
   purgeOnboardingCertifications,
   sweepExpiredAcpReservations,
   migrateConversionEventsTable,
+  migrateProofFinalityReconciliationSchema,
   checkMx8004WalletBalance,
 } from "./maintenance";
 
@@ -242,6 +243,7 @@ app.use((req, res, next) => {
   // Additive only: legacy confirmed rows remain untouched and unverified until
   // a separately planned reconciliation. Never stamp them during deployment.
   await db.execute(sql`ALTER TABLE certifications ADD COLUMN IF NOT EXISTS finality_checked_at timestamp`);
+  await migrateProofFinalityReconciliationSchema();
   try {
     await initializeStripe();
   } catch (error) {

@@ -1,7 +1,7 @@
 import { type Express } from "express";
 import { db } from "../db";
 import { logger } from "../logger";
-import { certifications, users, attestations } from "@shared/schema";
+import { certifications, users, attestations, FINALITY_SNAPSHOT_VERSION } from "@shared/schema";
 import { eq, desc, sql, and, gte, count } from "drizzle-orm";
 import { z } from "zod";
 import { isWalletAuthenticated } from "../walletAuth";
@@ -490,7 +490,7 @@ export function registerAttestationsRoutes(app: Express) {
         SELECT score, level, cert_total, rank, snapshot_date
         FROM trust_score_snapshots
         WHERE wallet_address = ${wallet}
-          AND finality_version = 1
+          AND finality_version = ${FINALITY_SNAPSHOT_VERSION}
           AND snapshot_date >= CURRENT_DATE - (${days} || ' days')::interval
         ORDER BY snapshot_date ASC
       `);

@@ -3,7 +3,7 @@
 // bootstrapping and request handling.
 
 import { pool, db } from "./db";
-import { users } from "@shared/schema";
+import { FINALITY_SNAPSHOT_VERSION, users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { computeTrustScore } from "./trust";
 import { purgeExpiredRateLimitRows } from "./pgRateLimit";
@@ -92,7 +92,7 @@ export async function runDailyMaintenance() {
         await pool.query(
           `INSERT INTO trust_score_snapshots
              (wallet_address, score, level, cert_total, active_attestations, rank, snapshot_date, full_trust_data, finality_version)
-           VALUES ($1, $2, $3, $4, $5, $6, CURRENT_DATE, $7::jsonb, 1)
+           VALUES ($1, $2, $3, $4, $5, $6, CURRENT_DATE, $7::jsonb, ${FINALITY_SNAPSHOT_VERSION})
            ON CONFLICT (wallet_address, snapshot_date) DO UPDATE SET
              score               = EXCLUDED.score,
              level               = EXCLUDED.level,
@@ -100,7 +100,7 @@ export async function runDailyMaintenance() {
              active_attestations = EXCLUDED.active_attestations,
              rank                = EXCLUDED.rank,
              full_trust_data     = EXCLUDED.full_trust_data,
-             finality_version    = 1`,
+             finality_version    = ${FINALITY_SNAPSHOT_VERSION}`,
           [a.wallet, a.score, a.level, a.certTotal, a.activeAttestations, i + 1, a.fullData]
         );
         snapshots++;
@@ -522,6 +522,79 @@ export async function migrateTrustSnapshotSchema() {
     logger.info("trust snapshot schema ready", { component: "migration" });
   } catch (err: any) {
     logger.error("trust snapshot schema migration error", { component: "migration", error: err.message });
+  }
+}
+
+export async function migrateProofFinalityReconciliationSchema(): Promise<void> {
+  try {
+    await pool.query(`ALTER TABLE certifications ADD COLUMN IF NOT EXISTS finality_evidence JSONB`);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS proof_finality_reconciliation_runs (
+        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        mode VARCHAR NOT NULL
+          CONSTRAINT proof_finality_reconciliation_runs_mode_check
+          CHECK (mode IN ('dry_run', 'reconcile')),
+        status VARCHAR NOT NULL DEFAULT 'running'
+          CONSTRAINT proof_finality_reconciliation_runs_status_check
+          CHECK (status IN ('running', 'paused', 'completed', 'failed')),
+        operator TEXT NOT NULL,
+        approved_dry_run_id TEXT,
+        cursor_id VARCHAR,
+        counts JSONB NOT NULL DEFAULT
+          '{"confirmed":0,"failed":0,"missing":0,"unavailable":0,"pending":0,"stale":0}'::jsonb,
+        started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        completed_at TIMESTAMPTZ
+      )
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_proof_finality_reconciliation_runs_status
+        ON proof_finality_reconciliation_runs (status, started_at)
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS proof_finality_reconciliation_items (
+        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        run_id TEXT NOT NULL REFERENCES proof_finality_reconciliation_runs(id),
+        certification_id VARCHAR NOT NULL,
+        transaction_hash TEXT,
+        file_hash TEXT NOT NULL,
+        result VARCHAR NOT NULL
+          CONSTRAINT proof_finality_reconciliation_items_result_check
+          CHECK (result IN ('confirmed', 'failed', 'missing', 'unavailable', 'pending')),
+        reason TEXT,
+        applied BOOLEAN NOT NULL DEFAULT FALSE,
+        evidence JSONB,
+        checked_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_proof_finality_reconciliation_items_run_cert
+        ON proof_finality_reconciliation_items (run_id, certification_id)
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_proof_finality_reconciliation_items_cert
+        ON proof_finality_reconciliation_items (certification_id, checked_at)
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS proof_finality_reconciliation_lock (
+        id INTEGER PRIMARY KEY DEFAULT 1
+          CONSTRAINT proof_finality_reconciliation_lock_singleton CHECK (id = 1),
+        owner TEXT,
+        expires_at TIMESTAMPTZ
+      )
+    `);
+    await pool.query(`
+      INSERT INTO proof_finality_reconciliation_lock (id)
+      VALUES (1)
+      ON CONFLICT (id) DO NOTHING
+    `);
+    logger.info("proof finality reconciliation schema ready", { component: "migration" });
+  } catch (error: any) {
+    logger.error("proof finality reconciliation schema migration failed", {
+      component: "migration",
+      error: error?.message ?? String(error),
+    });
+    throw error;
   }
 }
 
