@@ -37,8 +37,8 @@ describe("shared public-site chrome", () => {
     }
     expect(prerender).toContain("renderPublicHeader");
     expect(prerender).toContain("renderPublicFooter");
-    expect(prerender).toContain('/favicon-new.png" sizes="64x64"');
-    expect(clientIndex).toContain('/favicon-new.png" sizes="64x64"');
+    expect(prerender).toContain('/favicon-new.png" sizes="131x129"');
+    expect(clientIndex).toContain('/favicon-new.png" sizes="131x129"');
     expect(css).toContain(".public-site-header");
     expect(component).toContain("public-desktop-navigation");
     expect(component).not.toContain('className="hidden items-center gap-6 md:flex"');
@@ -56,7 +56,7 @@ describe("shared public-site chrome", () => {
 
       expect(html).toContain('class="public-site-header');
       expect(html).toContain('class="public-site-footer');
-      expect(html).toContain('<link rel="icon" href="/favicon-new.png" sizes="64x64" type="image/png">');
+      expect(html).toContain('<link rel="icon" href="/favicon-new.png" sizes="131x129" type="image/png">');
       for (const { label } of PUBLIC_PRIMARY_NAV) expect(html).toContain(`>${label}</a>`);
       for (const { label } of PUBLIC_MORE_NAV) expect(html).toContain(`>${label}</a>`);
       for (const { links } of PUBLIC_FOOTER_COLUMNS) {
