@@ -1,0 +1,18 @@
+{
+  "label": "Synthetic demonstration data — not real visitor activity",
+  "stages": ["visit", "start_free", "register", "first_proof"],
+  "visitors": [
+    { "id": "demo-01", "steps": ["visit", "start_free", "register", "first_proof"] },
+    { "id": "demo-02", "steps": ["visit", "start_free", "register", "first_proof"] },
+    { "id": "demo-03", "steps": ["visit", "start_free", "register", "first_proof"] },
+    { "id": "demo-04", "steps": ["visit", "start_free", "register"] },
+    { "id": "demo-05", "steps": ["visit", "start_free", "register"] },
+    { "id": "demo-06", "steps": ["visit", "start_free"] },
+    { "id": "demo-07", "steps": ["visit", "start_free"] },
+    { "id": "demo-08", "steps": ["visit", "start_free"] },
+    { "id": "demo-09", "steps": ["visit"] },
+    { "id": "demo-10", "steps": ["visit"] },
+    { "id": "demo-11", "steps": ["visit"] },
+    { "id": "demo-12", "steps": ["visit"] }
+  ]
+}
