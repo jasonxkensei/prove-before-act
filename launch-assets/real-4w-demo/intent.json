@@ -1,0 +1,10 @@
+{
+  "kind": "pre-execution-decision-basis",
+  "run_id": "9899f0ad-2c90-4c4e-a5df-82858c47df98",
+  "data_notice": "Synthetic demonstration data — not real visitor activity",
+  "source_sha256": "93fda5839160b7bdcd36c9e047436e42d95d791586c903148e3edcc5dc74a5a4",
+  "planned_action": "Generate a local aggregate acquisition funnel report from synthetic demo events",
+  "output": "funnel-report.json",
+  "method": "Count ordered visit, start_free, register and first_proof stages; calculate conversion rates",
+  "safeguards": "No real visitor data, payment, fund transfer or external report publication"
+}
