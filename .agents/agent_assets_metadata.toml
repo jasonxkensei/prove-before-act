@@ -198,28 +198,28 @@ logical_id = "430c32c9-e2c7-41b9-bb15-cf14327c986e"
 id = "vkmBLoDeVDU802rQGMeQF"
 uri = "file://launch-assets/exports/pba-product-hunt-launch-bilingual.mp4"
 type = "video"
-title = "PBA — Product Hunt Launch Video"
-description = "37.8-second launch film with English narration and embedded French subtitles."
+title = "Vidéo de lancement Product Hunt"
+description = "Vidéo de lancement bilingue — MP4, 1280 × 720, 37,8 secondes."
 logical_id = "152fbf2b-c7b6-47b1-93ed-e70fa46911f2"
 content_hash = "sha256:0068bfe0bcfbb694c91c37cd7206d95105147c01a1282a1be92a6d217d529285"
 size = 2257492
 mtime_ms = 1790263524153
-storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/152fbf2b-c7b6-47b1-93ed-e70fa46911f2/aaf0c1ba-c3f0-4c18-bcf4-fafc211ec250"
-storage_version_token = "1790263550106387"
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/152fbf2b-c7b6-47b1-93ed-e70fa46911f2/f6fa38fb-495c-4b09-b9cd-35e845c8ba0f"
+storage_version_token = "1790332018393009"
 content_type = "video/mp4"
 
 [[outputs]]
 id = "KxguMuNeLtN8JRkEa5E74"
 uri = "file://launch-assets/exports/pba-controlled-demo-bilingual.mp4"
 type = "video"
-title = "PBA — Controlled Product Demo"
-description = "65-second guided demo with English narration, embedded French subtitles, and an explicit no-transaction disclosure."
+title = "Démonstration contrôlée bilingue"
+description = "Démonstration produit contrôlée — MP4, 1280 × 720, 65 secondes."
 logical_id = "c5cd918d-0f8c-4089-a794-e16057a6069f"
 content_hash = "sha256:70a9dbb5d073ed02c24c9698403f2b0454f980e9e82e0abb858bd9f846a16b39"
 size = 3302119
 mtime_ms = 1790263536513
-storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/c5cd918d-0f8c-4089-a794-e16057a6069f/d6d90c8c-3561-4703-98b4-4c1c6cb884a0"
-storage_version_token = "1790263551397156"
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/c5cd918d-0f8c-4089-a794-e16057a6069f/6876d6f9-5a83-43d4-8eb9-377794c8457c"
+storage_version_token = "1790332019627558"
 content_type = "video/mp4"
 
 [[outputs]]
