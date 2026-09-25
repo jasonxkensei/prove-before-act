@@ -820,16 +820,20 @@ export function registerProofWriteRoutes(app: Express) {
       if (effectiveWebhookUrl) {
         const { scheduleWebhookDelivery, isValidWebhookUrl } = await import("../webhook");
         if (isValidWebhookUrl(effectiveWebhookUrl)) {
-          await db.update(certifications)
-            .set({ webhookUrl: effectiveWebhookUrl, webhookStatus: "pending" })
-            .where(eq(certifications.id, certification.id));
-
           // Never reuse the API key as the signing secret — generate a random one-time
           // secret so webhook receivers cannot call xproof on the caller's behalf.
           if (!effectiveWebhookSecret) {
             generatedWebhookSecret = crypto.randomBytes(32).toString("hex");
             effectiveWebhookSecret = generatedWebhookSecret;
           }
+          await db.update(certifications)
+            .set({
+              webhookUrl: effectiveWebhookUrl,
+              webhookSigningSecret: effectiveWebhookSecret,
+              webhookBaseUrl: baseUrl,
+              webhookStatus: "pending",
+            })
+            .where(eq(certifications.id, certification.id));
           scheduleWebhookDelivery(certification.id, effectiveWebhookUrl, baseUrl, effectiveWebhookSecret);
         } else {
           webhookStatus = "failed";
@@ -1919,9 +1923,6 @@ export function registerProofWriteRoutes(app: Express) {
         if (batchEffectiveWebhookUrl) {
           const { scheduleWebhookDelivery, isValidWebhookUrl } = await import("../webhook");
           if (isValidWebhookUrl(batchEffectiveWebhookUrl)) {
-            await db.update(certifications)
-              .set({ webhookUrl: batchEffectiveWebhookUrl, webhookStatus: "pending" })
-              .where(eq(certifications.id, certification.id));
             // Never reuse the API key — use account secret if available, else generate a fresh one
             if (!batchEffectiveWebhookSecret) {
               if (!batchGeneratedWebhookSecret) {
@@ -1929,6 +1930,14 @@ export function registerProofWriteRoutes(app: Express) {
               }
               batchEffectiveWebhookSecret = batchGeneratedWebhookSecret;
             }
+            await db.update(certifications)
+              .set({
+                webhookUrl: batchEffectiveWebhookUrl,
+                webhookSigningSecret: batchEffectiveWebhookSecret,
+                webhookBaseUrl: baseUrl,
+                webhookStatus: "pending",
+              })
+              .where(eq(certifications.id, certification.id));
             scheduleWebhookDelivery(certification.id, batchEffectiveWebhookUrl, baseUrl, batchEffectiveWebhookSecret);
           }
         }

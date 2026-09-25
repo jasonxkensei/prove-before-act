@@ -184,7 +184,7 @@ export async function pollProofFinality(): Promise<void> {
         allowUnboundAcp: row.authMethod === "acp",
       });
       const result = lookup.result === "missing" ? "pending" : lookup.result;
-      await db.update(certifications).set({
+      const [updated] = await db.update(certifications).set({
         // Rotate unfinalized rows to the back so an outage or missing tx in
         // the oldest 50 cannot starve all later broadcasts indefinitely.
         updatedAt: new Date(),
@@ -195,7 +195,17 @@ export async function pollProofFinality(): Promise<void> {
         eq(certifications.id, row.id),
         eq(certifications.blockchainStatus, "pending"),
         eq(certifications.transactionHash, row.transactionHash!),
-      ));
+      )).returning({ id: certifications.id });
+      if (updated && (result === "confirmed" || result === "failed")) {
+        // Only a newly recorded finality transition can release a pending
+        // proof.certified delivery or close a delivery for a failed proof.
+        // The queue and retry budget are persisted.
+        void import("./webhook")
+          .then(({ schedulePersistedWebhookDelivery }) => schedulePersistedWebhookDelivery(row.id))
+          .catch(error => logger.error("Finalized proof webhook scheduling failed", {
+            component: "proof-finality", certificationId: row.id, error: String(error),
+          }));
+      }
     }
   } catch (error) {
     logger.error("Proof finality poll failed", { component: "proof-finality", error: String(error) });
@@ -207,5 +217,10 @@ export async function pollProofFinality(): Promise<void> {
 export function startProofFinalityPoller(): void {
   const timer = setInterval(() => { void pollProofFinality(); }, 15_000);
   timer.unref();
+  void import("./webhook")
+    .then(({ recoverPendingWebhookDeliveries }) => recoverPendingWebhookDeliveries())
+    .catch(error => logger.error("Pending webhook recovery failed", {
+      component: "proof-finality", error: String(error),
+    }));
   void pollProofFinality();
 }

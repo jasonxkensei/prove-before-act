@@ -329,7 +329,9 @@ export function registerCertificationsRoutes(app: Express) {
         .where(eq(certifications.userId, userId))
         .orderBy(desc(certifications.createdAt));
 
-      res.json(userCertifications);
+      // Delivery secrets are private recovery state, not part of certification
+      // records exposed by this authenticated listing endpoint.
+      res.json(userCertifications.map(({ webhookSigningSecret, webhookBaseUrl, ...certification }) => certification));
     } catch (error) {
       logger.withRequest(req).error("Failed to fetch certifications");
       res.status(500).json({ message: "Failed to fetch certifications" });

@@ -3,10 +3,11 @@ import dns from "dns";
 import https from "https";
 import { db } from "./db";
 import { certifications } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, isNotNull } from "drizzle-orm";
 import { logger } from "./logger";
 import { proofWebhookHeaders } from "./webhookHeaders";
 import { publicProofStatus } from "./proof-finality";
+import { CANONICAL_PUBLIC_ORIGIN } from "./publicOrigin";
 
 /**
  * Prove Before Act Webhook Signature Contract
@@ -31,6 +32,8 @@ import { publicProofStatus } from "./proof-finality";
 
 const MAX_WEBHOOK_ATTEMPTS = 3;
 const WEBHOOK_TIMEOUT_MS = 10000; // 10 seconds
+const activeDeliveries = new Set<string>();
+const queuedDuringDelivery = new Set<string>();
 
 /**
  * Return a redacted representation of a webhook URL safe for structured logs.
@@ -257,52 +260,143 @@ async function markWebhookFailed(certificationId: string) {
     .where(eq(certifications.id, certificationId));
 }
 
+type PendingWebhook = {
+  id: string;
+  webhookUrl: string | null;
+  webhookSigningSecret: string | null;
+  webhookBaseUrl: string | null;
+};
+
+function queueWebhookDelivery(delivery: PendingWebhook): void {
+  if (!delivery.webhookUrl) return;
+  if (activeDeliveries.has(delivery.id)) {
+    queuedDuringDelivery.add(delivery.id);
+    return;
+  }
+  activeDeliveries.add(delivery.id);
+  void deliverWebhookWithRetries(
+    delivery.id,
+    delivery.webhookUrl,
+    delivery.webhookBaseUrl || CANONICAL_PUBLIC_ORIGIN,
+    delivery.webhookSigningSecret || undefined,
+  )
+    .catch(error => logger.error("Webhook scheduling failed", {
+      component: "webhook", certificationId: delivery.id, error: String(error),
+    }))
+    .finally(() => {
+      activeDeliveries.delete(delivery.id);
+      if (queuedDuringDelivery.delete(delivery.id)) {
+        void schedulePersistedWebhookDelivery(delivery.id).catch(error => logger.error(
+          "Queued webhook delivery rescheduling failed",
+          { component: "webhook", certificationId: delivery.id, error: String(error) },
+        ));
+      }
+    });
+}
+
+async function deliverWebhookWithRetries(
+  certificationId: string,
+  webhookUrl: string,
+  baseUrl: string,
+  signingSecret?: string,
+): Promise<void> {
+  let [cert] = await db.select().from(certifications).where(eq(certifications.id, certificationId));
+  if (!cert || cert.webhookStatus !== "pending") return;
+  if (cert.blockchainStatus === "failed") {
+    await db.update(certifications).set({ webhookStatus: "failed" }).where(eq(certifications.id, certificationId));
+    return;
+  }
+  // Finality polling, not an in-memory timer, will enqueue this again after
+  // blockchainStatus and finalityCheckedAt are durably updated.
+  if (publicProofStatus(cert) !== "confirmed") return;
+
+  let nextAttemptNumber = cert.webhookAttempts || 0;
+  if (nextAttemptNumber >= MAX_WEBHOOK_ATTEMPTS) {
+    await db.update(certifications).set({ webhookStatus: "failed" }).where(eq(certifications.id, certificationId));
+    return;
+  }
+
+  let attemptsRemaining = MAX_WEBHOOK_ATTEMPTS - nextAttemptNumber;
+  while (attemptsRemaining > 0) {
+    if (nextAttemptNumber > 0) {
+      await new Promise(resolve => setTimeout(resolve, Math.pow(2, nextAttemptNumber) * 5000));
+    }
+
+    [cert] = await db.select().from(certifications).where(eq(certifications.id, certificationId));
+    if (!cert || cert.webhookStatus === "delivered" || cert.webhookStatus === "failed") return;
+    if (cert.blockchainStatus === "failed") {
+      await db.update(certifications).set({ webhookStatus: "failed" }).where(eq(certifications.id, certificationId));
+      return;
+    }
+    if (publicProofStatus(cert) !== "confirmed") return;
+    if ((cert.webhookAttempts || 0) >= MAX_WEBHOOK_ATTEMPTS) {
+      await db.update(certifications).set({ webhookStatus: "failed" }).where(eq(certifications.id, certificationId));
+      return;
+    }
+
+    const attemptsBeforeDelivery = cert.webhookAttempts || 0;
+    attemptsRemaining--;
+    if (await deliverWebhook(certificationId, webhookUrl, baseUrl, signingSecret)) return;
+    [cert] = await db.select().from(certifications).where(eq(certifications.id, certificationId));
+    if (!cert || cert.webhookStatus === "delivered" || cert.webhookStatus === "failed") return;
+    nextAttemptNumber = Math.max(attemptsBeforeDelivery + 1, cert.webhookAttempts || 0);
+  }
+
+  // A failure before the attempt counter could be persisted still consumes an
+  // attempt in this worker, preserving the three-attempt ceiling.
+  await db.update(certifications)
+    .set({ webhookStatus: "failed" })
+    .where(and(eq(certifications.id, certificationId), eq(certifications.webhookStatus, "pending")));
+}
+
 /**
- * Schedule webhook delivery with retry logic.
- * First attempt is immediate, retries are delayed with exponential backoff.
+ * Queue a delivery when proof finality is recorded. Pending proofs are not
+ * polled in memory; pollProofFinality calls this again only after confirmation.
  */
 export function scheduleWebhookDelivery(
   certificationId: string,
   webhookUrl: string,
   baseUrl: string,
-  signingSecret?: string
+  signingSecret?: string,
 ): void {
-  void (async () => {
-    // Never emit proof.certified for a gateway-accepted but unfinalized hash.
-    // Chain lookup outages leave the row pending; delivery remains retryable.
-    while (true) {
-      const [cert] = await db.select().from(certifications).where(eq(certifications.id, certificationId));
-      if (!cert || cert.blockchainStatus === "failed") return;
-      if (publicProofStatus(cert) === "confirmed") break;
-      await new Promise(resolve => setTimeout(resolve, 15_000));
-    }
-    const success = await deliverWebhook(certificationId, webhookUrl, baseUrl, signingSecret);
-    if (!success) {
-      for (let attempt = 1; attempt < MAX_WEBHOOK_ATTEMPTS; attempt++) {
-        const delay = Math.pow(2, attempt) * 5000; // 10s, 20s
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        
-        const [cert] = await db
-          .select()
-          .from(certifications)
-          .where(eq(certifications.id, certificationId));
-        
-        if (cert?.webhookStatus === "delivered" || cert?.webhookStatus === "failed") {
-          break;
-        }
-        
-        if ((cert?.webhookAttempts || 0) >= MAX_WEBHOOK_ATTEMPTS) {
-          await db.update(certifications)
-            .set({ webhookStatus: "failed" })
-            .where(eq(certifications.id, certificationId));
-          break;
-        }
-        
-        const retrySuccess = await deliverWebhook(certificationId, webhookUrl, baseUrl, signingSecret);
-        if (retrySuccess) break;
-      }
-    }
-  })().catch(error => logger.error("Webhook scheduling failed", { component: "webhook", certificationId, error: String(error) }));
+  queueWebhookDelivery({
+    id: certificationId,
+    webhookUrl,
+    webhookBaseUrl: baseUrl,
+    webhookSigningSecret: signingSecret || null,
+  });
+}
+
+/**
+ * Resume one persisted webhook delivery. Used by the finality poller after a
+ * confirmed transition and by startup recovery.
+ */
+export async function schedulePersistedWebhookDelivery(certificationId: string): Promise<void> {
+  const [cert] = await db.select({
+    id: certifications.id,
+    webhookUrl: certifications.webhookUrl,
+    webhookSigningSecret: certifications.webhookSigningSecret,
+    webhookBaseUrl: certifications.webhookBaseUrl,
+  }).from(certifications).where(eq(certifications.id, certificationId));
+  if (cert) queueWebhookDelivery(cert);
+}
+
+/**
+ * Re-enqueue durable pending rows after an app restart. Unfinalized rows are
+ * observed once and left for the finality poller; no certification event is
+ * sent until that poller independently confirms chain inclusion.
+ */
+export async function recoverPendingWebhookDeliveries(): Promise<void> {
+  const pending = await db.select({
+    id: certifications.id,
+    webhookUrl: certifications.webhookUrl,
+    webhookSigningSecret: certifications.webhookSigningSecret,
+    webhookBaseUrl: certifications.webhookBaseUrl,
+  }).from(certifications).where(and(
+    eq(certifications.webhookStatus, "pending"),
+    isNotNull(certifications.webhookUrl),
+  ));
+  for (const delivery of pending) queueWebhookDelivery(delivery);
 }
 
 /**

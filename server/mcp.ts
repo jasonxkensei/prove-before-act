@@ -509,11 +509,16 @@ export async function createMcpServer(ctx: McpContext) {
         if (webhook_url) {
           const { scheduleWebhookDelivery, isValidWebhookUrl } = await import("./webhook");
           if (isValidWebhookUrl(webhook_url)) {
-            await db.update(certifications)
-              .set({ webhookUrl: webhook_url, webhookStatus: "pending" })
-              .where(eq(certifications.id, certification.id));
             // Never reuse the API key hash as signing secret — generate a fresh random secret.
             mcpWebhookSecret = crypto.randomBytes(32).toString("hex");
+            await db.update(certifications)
+              .set({
+                webhookUrl: webhook_url,
+                webhookSigningSecret: mcpWebhookSecret,
+                webhookBaseUrl: baseUrl,
+                webhookStatus: "pending",
+              })
+              .where(eq(certifications.id, certification.id));
             scheduleWebhookDelivery(certification.id, webhook_url, baseUrl, mcpWebhookSecret);
           } else {
             webhookStatus = "failed";

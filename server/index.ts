@@ -243,6 +243,10 @@ app.use((req, res, next) => {
   // Additive only: legacy confirmed rows remain untouched and unverified until
   // a separately planned reconciliation. Never stamp them during deployment.
   await db.execute(sql`ALTER TABLE certifications ADD COLUMN IF NOT EXISTS finality_checked_at timestamp`);
+  // Pending proof-certified webhooks need their original signing key and URL
+  // context after a process restart. These fields are internal delivery state.
+  await db.execute(sql`ALTER TABLE certifications ADD COLUMN IF NOT EXISTS webhook_signing_secret text`);
+  await db.execute(sql`ALTER TABLE certifications ADD COLUMN IF NOT EXISTS webhook_base_url text`);
   await migrateProofFinalityReconciliationSchema();
   try {
     await initializeStripe();
