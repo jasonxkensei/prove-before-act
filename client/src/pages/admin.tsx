@@ -179,6 +179,19 @@ interface AdminStats {
   };
 }
 
+interface FailedProofCallback {
+  certificationId: string;
+  fileName: string | null;
+  attempts: number;
+  lastAttempt: string | null;
+  destination: string;
+}
+
+interface FailedProofCallbacksData {
+  callbacks: FailedProofCallback[];
+  total: number;
+}
+
 interface ConversionFunnelData {
   timezone: string;
   window_days: number;
@@ -1202,6 +1215,94 @@ function ProposedViolationsCard({ data, isAdmin }: { data: ProposedViolationsDat
   );
 }
 
+function FailedProofCallbacksCard() {
+  const queryClient = useQueryClient();
+  const { data, isLoading, isError } = useQuery<FailedProofCallbacksData>({
+    queryKey: ["/api/admin/proof-callbacks/failed"],
+    retry: false,
+  });
+
+  const retryMutation = useMutation({
+    mutationFn: async (certificationId: string) => apiRequest(
+      "POST",
+      `/api/admin/proof-callbacks/${encodeURIComponent(certificationId)}/retry`,
+    ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/proof-callbacks/failed"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+    },
+  });
+
+  const callbacks = data?.callbacks ?? [];
+
+  return (
+    <Card data-testid="card-failed-proof-callbacks">
+      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
+        <div>
+          <CardTitle className="text-sm font-medium">Failed Proof Callbacks</CardTitle>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Retry is available only when the proof is confirmed and saved callback credentials are present.
+          </p>
+        </div>
+        <Webhook className="h-4 w-4 text-muted-foreground" />
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading failed callbacks...</p>
+        ) : isError ? (
+          <p className="text-sm text-destructive">Failed callbacks could not be loaded.</p>
+        ) : callbacks.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No retryable failed callbacks.</p>
+        ) : (
+          <div className="space-y-3">
+            {callbacks.map((callback) => (
+              <div
+                key={callback.certificationId}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border p-3"
+                data-testid={`failed-callback-${callback.certificationId}`}
+              >
+                <div className="min-w-0 space-y-1">
+                  <p className="truncate text-sm font-medium">
+                    {callback.fileName || callback.certificationId}
+                  </p>
+                  <p className="break-all text-xs text-muted-foreground">
+                    Proof {callback.certificationId} · {callback.destination}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {callback.attempts} failed attempts
+                    {callback.lastAttempt
+                      ? ` · Last attempt ${new Date(callback.lastAttempt).toLocaleString()}`
+                      : ""}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => retryMutation.mutate(callback.certificationId)}
+                  disabled={retryMutation.isPending}
+                  data-testid={`button-retry-callback-${callback.certificationId}`}
+                >
+                  {retryMutation.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                  )}
+                  Queue retry
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+        {retryMutation.isError && (
+          <p className="mt-3 text-sm text-destructive">
+            {retryMutation.error.message || "The callback retry could not be queued."}
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function TrendIndicator({ current, previous }: { current: number; previous: number }) {
   if (previous === 0 && current === 0) {
     return <span className="text-xs text-muted-foreground flex items-center gap-1"><Minus className="h-3 w-3" /> No change</span>;
@@ -1596,6 +1697,7 @@ export default function AdminDashboard() {
             {isAdmin && (
               <div className="mb-6 space-y-6">
                 <ProposedViolationsCard data={proposedViolations} isAdmin={isAdmin} />
+                <FailedProofCallbacksCard />
                 <OnboardingFunnelCard data={stats.onboarding_funnel} />
                 <ConversionFunnelCard data={conversionFunnel} />
                 <TrafficSourcesCard data={trafficSources} />

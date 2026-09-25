@@ -18,6 +18,10 @@ import { getMx8004SignerBalance, getMx8004SignerBalanceReport, isMX8004Configure
 import { requireAdmin, EXCLUDED_IP_HASHES, getClientIp, safeErrMsg } from "./helpers";
 import { reconstructAuditTrail } from "../audit-trail";
 import { publicStatsRateLimiter } from "../reliability";
+import {
+  listRetryableFailedWebhookDeliveries,
+  retryFailedWebhookDelivery,
+} from "../webhook";
 
 // Map a referer hostname to a friendly traffic-source label.
 // Pattern match (suffix-based) so subdomains like t.co, lm.facebook.com,
@@ -1406,6 +1410,60 @@ export function registerAdminRoutes(app: Express) {
       res.status(500).json({ error: safeErrMsg(err) });
     }
   });
+
+  // ============================================
+  // Admin: Failed proof callback recovery
+  // ============================================
+  app.get("/api/admin/proof-callbacks/failed", isWalletAuthenticated, requireAdmin, async (req: any, res) => {
+    try {
+      const callbacks = await listRetryableFailedWebhookDeliveries();
+      res.json({ callbacks, total: callbacks.length });
+    } catch {
+      logger.withRequest(req).error("Failed to list retryable proof callbacks");
+      res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to list retryable proof callbacks." });
+    }
+  });
+
+  app.post(
+    "/api/admin/proof-callbacks/:certificationId/retry",
+    isWalletAuthenticated,
+    requireAdmin,
+    async (req: any, res) => {
+      const certificationId = typeof req.params.certificationId === "string"
+        ? req.params.certificationId
+        : "";
+      try {
+        const result = await retryFailedWebhookDelivery(certificationId);
+        if (!result.retried) {
+          return res.status(409).json({
+            error: "CALLBACK_NOT_RETRYABLE",
+            message: "This proof callback is not eligible for manual retry.",
+          });
+        }
+
+        logger.withRequest(req).info("Admin retried failed proof callback", {
+          action: "proof_webhook_retry",
+          operator_wallet: req.session.walletAddress,
+          certification_id: certificationId,
+          previous_attempts: result.previousAttempts,
+        });
+        return res.status(202).json({
+          success: true,
+          certification_id: certificationId,
+          status: "pending",
+        });
+      } catch {
+        logger.withRequest(req).error("Failed to queue proof callback retry", {
+          action: "proof_webhook_retry",
+          certification_id: certificationId,
+        });
+        return res.status(500).json({
+          error: "INTERNAL_ERROR",
+          message: "Failed to queue proof callback retry.",
+        });
+      }
+    },
+  );
 
   // ============================================
   // Admin: Proposed Violations Review

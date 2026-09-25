@@ -47,13 +47,106 @@ const queuedDuringDelivery = new Set<string>();
  * credentials (userinfo), and fragment are all stripped so that bearer tokens
  * embedded in URLs never reach log aggregation systems.
  */
-function redactWebhookUrl(url: string): string {
+export function redactWebhookUrl(url: string): string {
   try {
     const { origin } = new URL(url);
     return `${origin}/[redacted]`;
   } catch {
     return "[invalid-url]";
   }
+}
+
+function isRetryableFailedDelivery(cert: {
+  blockchainStatus: string | null;
+  transactionHash: string | null;
+  finalityCheckedAt: Date | null;
+  webhookStatus: string | null;
+  webhookUrl: string | null;
+  webhookSigningSecret: string | null;
+}): boolean {
+  return cert.webhookStatus === "failed" &&
+    publicProofStatus(cert) === "confirmed" &&
+    Boolean(cert.webhookUrl && isValidWebhookUrl(cert.webhookUrl)) &&
+    Boolean(cert.webhookSigningSecret);
+}
+
+export interface RetryableFailedWebhook {
+  certificationId: string;
+  fileName: string | null;
+  attempts: number;
+  lastAttempt: Date | null;
+  destination: string;
+}
+
+/**
+ * List failed callbacks that can be safely retried. Persisted signing material
+ * and full destinations stay server-side; only a redacted destination is
+ * returned to the admin UI.
+ */
+export async function listRetryableFailedWebhookDeliveries(): Promise<RetryableFailedWebhook[]> {
+  const failed = await db.select({
+    id: certifications.id,
+    fileName: certifications.fileName,
+    blockchainStatus: certifications.blockchainStatus,
+    transactionHash: certifications.transactionHash,
+    finalityCheckedAt: certifications.finalityCheckedAt,
+    webhookStatus: certifications.webhookStatus,
+    webhookUrl: certifications.webhookUrl,
+    webhookSigningSecret: certifications.webhookSigningSecret,
+    webhookAttempts: certifications.webhookAttempts,
+    webhookLastAttempt: certifications.webhookLastAttempt,
+  }).from(certifications)
+    .where(eq(certifications.webhookStatus, "failed"));
+  return failed
+    .filter(isRetryableFailedDelivery)
+    .map(cert => ({
+      certificationId: cert.id,
+      fileName: cert.fileName,
+      attempts: cert.webhookAttempts || 0,
+      lastAttempt: cert.webhookLastAttempt,
+      destination: redactWebhookUrl(cert.webhookUrl!),
+    }));
+}
+
+/**
+ * Requeue an exhausted callback using its persisted destination and signing
+ * secret. The conditional update makes the retry single-use across operators
+ * and instances; the existing delivery worker rechecks finality and uses the
+ * SSRF-safe sender. Attempts are counted per delivery round, so a manual retry
+ * starts a fresh three-attempt round.
+ */
+export async function retryFailedWebhookDelivery(
+  certificationId: string,
+): Promise<{ retried: true; previousAttempts: number } | { retried: false }> {
+  const [cert] = await db.select().from(certifications)
+    .where(eq(certifications.id, certificationId));
+  if (!cert || !isRetryableFailedDelivery(cert)) return { retried: false };
+
+  const previousAttempts = cert.webhookAttempts || 0;
+  const [requeued] = await db.update(certifications).set({
+    webhookStatus: "pending",
+    webhookAttempts: 0,
+    webhookLastAttempt: null,
+    webhookLeaseToken: null,
+    webhookLeaseExpiresAt: null,
+    updatedAt: new Date(),
+  }).where(and(
+    eq(certifications.id, certificationId),
+    eq(certifications.webhookStatus, "failed"),
+    eq(certifications.blockchainStatus, "confirmed"),
+    eq(certifications.webhookUrl, cert.webhookUrl!),
+    eq(certifications.webhookSigningSecret, cert.webhookSigningSecret!),
+  )).returning({ id: certifications.id });
+
+  if (!requeued) return { retried: false };
+
+  queueWebhookDelivery({
+    id: cert.id,
+    webhookUrl: cert.webhookUrl,
+    webhookSigningSecret: cert.webhookSigningSecret,
+    webhookBaseUrl: cert.webhookBaseUrl,
+  });
+  return { retried: true, previousAttempts };
 }
 
 function safeWebhookErrorCode(error: unknown): string {

@@ -1,11 +1,15 @@
 import { EventEmitter } from "events";
 import dns from "dns";
+import express from "express";
 import https from "https";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { pollProofFinality } from "../server/proof-finality";
 import { logger } from "../server/logger";
+import { registerAdminRoutes } from "../server/routes/admin";
 import {
+  listRetryableFailedWebhookDeliveries,
   recoverPendingWebhookDeliveries,
+  retryFailedWebhookDelivery,
   scheduleWebhookDelivery,
   verifyWebhookSignature,
 } from "../server/webhook";
@@ -78,11 +82,34 @@ const { mockDb, mockState } = vi.hoisted(() => {
   return { mockDb: db, mockState: state };
 });
 
+
 vi.mock("../server/db", () => ({ db: mockDb }));
 
 const transactionHash = "a".repeat(64);
 const fileHash = "b".repeat(64);
 const webhookSecret = "restart-safe-proof-webhook-secret";
+
+async function withAdminRoutes(run: (baseUrl: string) => Promise<void>): Promise<void> {
+  const app = express();
+  app.use((req: any, _res, next) => {
+    const walletAddress = req.header("x-test-wallet");
+    if (walletAddress) req.session = { walletAddress };
+    next();
+  });
+  registerAdminRoutes(app);
+  const server = await new Promise<ReturnType<typeof app.listen>>((resolve) => {
+    const listener = app.listen(0, () => resolve(listener));
+  });
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Expected ephemeral HTTP port");
+  try {
+    await run(`http://127.0.0.1:${address.port}`);
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      server.close(error => error ? reject(error) : resolve());
+    });
+  }
+}
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -343,5 +370,187 @@ describe("proof-certified webhook restart recovery", () => {
     expect(deliveryIds).toEqual(["certification-cross-instance-test"]);
     expect(mockState.certification?.webhookLeaseToken).toBeNull();
     expect(mockState.certification?.webhookLeaseExpiresAt).toBeNull();
+  });
+
+  it("requires an authorized admin to list or retry failed proof callbacks", async () => {
+    vi.stubEnv("ADMIN_WALLETS", "proof-callback-admin");
+    mockState.certification = {
+      id: "certification-admin-auth-test",
+      fileName: "decision.json",
+      fileHash,
+      transactionHash,
+      transactionUrl: `https://explorer.multiversx.com/transactions/${transactionHash}`,
+      blockchainStatus: "confirmed",
+      finalityCheckedAt: new Date("2026-09-25T12:00:00.000Z"),
+      finalityEvidence: {},
+      authMethod: "api_key",
+      webhookUrl: "https://callbacks.example.test/proof",
+      webhookSigningSecret: webhookSecret,
+      webhookBaseUrl: "https://provebeforeact.com",
+      webhookStatus: "failed",
+      webhookAttempts: 3,
+      webhookLastAttempt: new Date("2026-09-25T12:10:00.000Z"),
+      createdAt: new Date("2026-09-25T12:00:00.000Z"),
+      updatedAt: new Date("2026-09-25T12:00:00.000Z"),
+    };
+
+    await withAdminRoutes(async (baseUrl) => {
+      const unauthenticated = await fetch(`${baseUrl}/api/admin/proof-callbacks/failed`);
+      expect(unauthenticated.status).toBe(401);
+
+      const nonAdmin = await fetch(
+        `${baseUrl}/api/admin/proof-callbacks/certification-admin-auth-test/retry`,
+        { method: "POST", headers: { "x-test-wallet": "not-an-admin" } },
+      );
+      expect(nonAdmin.status).toBe(403);
+      expect(mockState.certification?.webhookStatus).toBe("failed");
+    });
+  });
+
+  it("lets an authorized operator retry a failed callback without exposing its URL or secret", async () => {
+    vi.stubEnv("ADMIN_WALLETS", "proof-callback-admin");
+    const callbackUrl = "https://callback-user:callback-pass@callbacks.example.test/private/proof?access_token=callback-token#fragment";
+    mockState.certification = {
+      id: "certification-manual-retry-test",
+      fileName: "decision.json",
+      fileHash,
+      transactionHash,
+      transactionUrl: `https://explorer.multiversx.com/transactions/${transactionHash}`,
+      blockchainStatus: "confirmed",
+      finalityCheckedAt: new Date("2026-09-25T12:00:00.000Z"),
+      finalityEvidence: {},
+      authMethod: "api_key",
+      webhookUrl: callbackUrl,
+      webhookSigningSecret: webhookSecret,
+      webhookBaseUrl: "https://provebeforeact.com",
+      webhookStatus: "failed",
+      webhookAttempts: 3,
+      webhookLastAttempt: new Date("2026-09-25T12:10:00.000Z"),
+      createdAt: new Date("2026-09-25T12:00:00.000Z"),
+      updatedAt: new Date("2026-09-25T12:00:00.000Z"),
+    };
+
+    const deliveryIds: string[] = [];
+    const auditInfo = vi.fn();
+    vi.spyOn(logger, "withRequest").mockReturnValue({
+      info: auditInfo,
+      warn: vi.fn(),
+      error: vi.fn(),
+    } as any);
+    vi.spyOn(dns.promises, "lookup").mockResolvedValue([
+      { address: "93.184.216.34", family: 4 },
+    ] as any);
+    vi.spyOn(https, "request").mockImplementation(((options: any) => {
+      deliveryIds.push(options.headers["X-ProveBeforeAct-Delivery"]);
+      const request = new EventEmitter() as any;
+      request.write = vi.fn();
+      request.destroy = vi.fn();
+      request.end = () => {
+        const response = new EventEmitter() as any;
+        response.statusCode = 204;
+        response.resume = () => queueMicrotask(() => response.emit("end"));
+        queueMicrotask(() => request.emit("response", response));
+      };
+      return request;
+    }) as any);
+
+    await withAdminRoutes(async (baseUrl) => {
+      const headers = { "x-test-wallet": "proof-callback-admin" };
+      const listResponse = await fetch(`${baseUrl}/api/admin/proof-callbacks/failed`, { headers });
+      expect(listResponse.status).toBe(200);
+      const listBody = await listResponse.json();
+      expect(listBody).toMatchObject({
+        total: 1,
+        callbacks: [{
+          certificationId: "certification-manual-retry-test",
+          destination: "https://callbacks.example.test/[redacted]",
+          attempts: 3,
+        }],
+      });
+      expect(JSON.stringify(listBody)).not.toContain(callbackUrl);
+      expect(JSON.stringify(listBody)).not.toContain(webhookSecret);
+      expect(JSON.stringify(listBody)).not.toContain("callback-pass");
+      expect(JSON.stringify(listBody)).not.toContain("access_token");
+
+      const retryResponse = await fetch(
+        `${baseUrl}/api/admin/proof-callbacks/certification-manual-retry-test/retry`,
+        { method: "POST", headers },
+      );
+      expect(retryResponse.status).toBe(202);
+      const retryBody = await retryResponse.json();
+      expect(retryBody).toEqual({
+        success: true,
+        certification_id: "certification-manual-retry-test",
+        status: "pending",
+      });
+      expect(JSON.stringify(retryBody)).not.toContain(callbackUrl);
+      expect(JSON.stringify(retryBody)).not.toContain(webhookSecret);
+
+      await vi.waitFor(() => expect(mockState.certification?.webhookStatus).toBe("delivered"));
+      expect(deliveryIds).toEqual(["certification-manual-retry-test"]);
+      expect(mockState.certification?.webhookAttempts).toBe(1);
+      expect(auditInfo).toHaveBeenCalledWith("Admin retried failed proof callback", {
+        action: "proof_webhook_retry",
+        operator_wallet: "proof-callback-admin",
+        certification_id: "certification-manual-retry-test",
+        previous_attempts: 3,
+      });
+      expect(JSON.stringify(auditInfo.mock.calls)).not.toContain(callbackUrl);
+      expect(JSON.stringify(auditInfo.mock.calls)).not.toContain(webhookSecret);
+    });
+  });
+
+  it("rejects ineligible failed callback records without queueing delivery", async () => {
+    vi.stubEnv("ADMIN_WALLETS", "proof-callback-admin");
+    const callbackUrl = "https://callbacks.example.test/proof";
+    mockState.certification = {
+      id: "certification-ineligible-retry-test",
+      fileName: "decision.json",
+      fileHash,
+      transactionHash,
+      transactionUrl: `https://explorer.multiversx.com/transactions/${transactionHash}`,
+      blockchainStatus: "confirmed",
+      finalityCheckedAt: new Date("2026-09-25T12:00:00.000Z"),
+      finalityEvidence: {},
+      authMethod: "api_key",
+      webhookUrl: callbackUrl,
+      webhookSigningSecret: webhookSecret,
+      webhookBaseUrl: "https://provebeforeact.com",
+      webhookStatus: "pending",
+      webhookAttempts: 3,
+      webhookLastAttempt: new Date("2026-09-25T12:10:00.000Z"),
+      createdAt: new Date("2026-09-25T12:00:00.000Z"),
+      updatedAt: new Date("2026-09-25T12:00:00.000Z"),
+    };
+    const httpsRequest = vi.spyOn(https, "request");
+
+    await withAdminRoutes(async (baseUrl) => {
+      const headers = { "x-test-wallet": "proof-callback-admin" };
+      const retryUrl = `${baseUrl}/api/admin/proof-callbacks/certification-ineligible-retry-test/retry`;
+      const attempt = async () => fetch(retryUrl, { method: "POST", headers });
+
+      const pendingResponse = await attempt();
+      expect(pendingResponse.status).toBe(409);
+      expect((await pendingResponse.json()).error).toBe("CALLBACK_NOT_RETRYABLE");
+
+      mockState.certification!.webhookStatus = "failed";
+      mockState.certification!.blockchainStatus = "failed";
+      const unconfirmedResponse = await attempt();
+      expect(unconfirmedResponse.status).toBe(409);
+
+      mockState.certification!.blockchainStatus = "confirmed";
+      mockState.certification!.webhookSigningSecret = null;
+      const missingSecretResponse = await attempt();
+      expect(missingSecretResponse.status).toBe(409);
+
+      mockState.certification!.webhookSigningSecret = webhookSecret;
+      mockState.certification!.webhookUrl = "https://127.0.0.1/private";
+      const unsafeDestinationResponse = await attempt();
+      expect(unsafeDestinationResponse.status).toBe(409);
+      expect(mockState.certification?.webhookStatus).toBe("failed");
+      expect(httpsRequest).not.toHaveBeenCalled();
+      expect(await retryFailedWebhookDelivery("missing-certification")).toEqual({ retried: false });
+      expect(await listRetryableFailedWebhookDeliveries()).toEqual([]);
+    });
   });
 });
