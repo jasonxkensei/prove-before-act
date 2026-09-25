@@ -8,6 +8,7 @@ import { format } from "date-fns";
 import { formatHash, copyToClipboard } from "@/lib/hashUtils";
 import { useToast } from "@/hooks/use-toast";
 import { PublicSiteFooter, PublicSiteHeader } from "@/components/public-site-chrome";
+import { StatusIndicator } from "@/components/status-indicator";
 import type { Certification } from "@shared/schema";
 import { safeHref } from "@shared/url";
 
@@ -105,10 +106,10 @@ export default function ProofPage() {
               <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">Proof case file</h1>
               <p className="mt-2 max-w-2xl text-muted-foreground">A recorded file commitment with its issuer and independent verification status.</p>
             </div>
-            <div className={`flex shrink-0 items-center gap-2 border px-3 py-2 text-sm font-medium ${isVerified ? "status-verified border-current/30 bg-current/10" : "status-pending border-border bg-muted/40"}`}>
+            <StatusIndicator as="div" status={isVerified ? "verified" : "pending"} className={`flex shrink-0 items-center gap-2 border px-3 py-2 text-sm font-medium ${isVerified ? "border-current/30 bg-current/10" : "border-border bg-muted/40"}`}>
               {isVerified ? <CheckCircle className="h-4 w-4" /> : <Shield className="h-4 w-4" />}
               <span>{isVerified ? "Independently verified" : "Anchoring in progress"}</span>
-            </div>
+            </StatusIndicator>
           </div>
         </header>
 

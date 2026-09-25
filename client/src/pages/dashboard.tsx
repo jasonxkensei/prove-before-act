@@ -11,6 +11,7 @@ import { format } from "date-fns";
 import { Link } from "wouter";
 import type { Certification } from "@shared/schema";
 import { ApiKeysSection } from "@/components/api-keys-section";
+import { StatusIndicator } from "@/components/status-indicator";
 
 function TrustBadgeSection({ wallet, isPublic }: { wallet: string; isPublic: boolean }) {
   const { toast } = useToast();
@@ -274,11 +275,11 @@ export default function Dashboard() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "confirmed":
-         return <Badge variant="outline" className="status-verified border-current/40 bg-current/10">Verified</Badge>;
+         return <StatusIndicator status="verified" badgeVariant="outline" className="border-current/40 bg-current/10">Verified</StatusIndicator>;
       case "pending":
-         return <Badge variant="outline" className="status-pending border-current/40 bg-current/10">Pending</Badge>;
+         return <StatusIndicator status="pending" badgeVariant="outline" className="border-current/40 bg-current/10">Pending</StatusIndicator>;
       case "failed":
-        return <Badge variant="outline" className="status-failed border-current/40 bg-current/10">Failed</Badge>;
+        return <StatusIndicator status="failed" badgeVariant="outline" className="border-current/40 bg-current/10">Failed</StatusIndicator>;
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }

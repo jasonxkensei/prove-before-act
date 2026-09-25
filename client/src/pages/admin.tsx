@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useWalletAuth } from "@/hooks/useWalletAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { StatusIndicator } from "@/components/status-indicator";
 import { Button } from "@/components/ui/button";
 import { 
   Shield, 
@@ -574,15 +575,15 @@ function StatCard({ title, value, subtitle, icon: Icon }: { title: string; value
   );
 }
 
-function StatusIndicator({ status }: { status: string }) {
+function HealthStatusIndicator({ status }: { status: string }) {
   switch (status) {
     case "ok":
     case "healthy":
-      return <Badge variant="outline" className="status-verified border-current/30 bg-current/10"><CheckCircle2 className="h-3 w-3 mr-1" /> {status === "healthy" ? "Healthy" : "OK"}</Badge>;
+      return <StatusIndicator status="verified" badgeVariant="outline" className="border-current/30 bg-current/10"><CheckCircle2 className="h-3 w-3 mr-1" /> {status === "healthy" ? "Healthy" : "OK"}</StatusIndicator>;
     case "degraded":
-      return <Badge variant="secondary" className="status-warning"><AlertTriangle className="h-3 w-3 mr-1" /> Degraded</Badge>;
+      return <StatusIndicator status="warning" badgeVariant="secondary"><AlertTriangle className="h-3 w-3 mr-1" /> Degraded</StatusIndicator>;
     case "down":
-      return <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" /> Down</Badge>;
+      return <StatusIndicator status="failed" badgeVariant="outline" className="border-current/30 bg-current/10"><XCircle className="h-3 w-3 mr-1" /> Down</StatusIndicator>;
     default:
       return <Badge variant="secondary">{status}</Badge>;
   }
@@ -767,10 +768,10 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
         {data.alerts.length > 0 && (
           <div className="space-y-1">
             {data.alerts.map((alert) => (
-              <div key={alert.condition} className="status-warning flex items-center gap-2 text-xs" data-testid={`alert-${alert.condition}`}>
+              <StatusIndicator as="div" status="warning" key={alert.condition} className="flex items-center gap-2 text-xs" data-testid={`alert-${alert.condition}`}>
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                 {alert.message}
-              </div>
+              </StatusIndicator>
             ))}
           </div>
         )}
@@ -1302,7 +1303,7 @@ export default function AdminDashboard() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            {health && <StatusIndicator status={health.status} />}
+            {health && <HealthStatusIndicator status={health.status} />}
             {isAdmin && pendingViolationCount > 0 && (
               <div className="flex items-center gap-2 border border-destructive/25 bg-destructive/10 px-3 py-1.5" data-testid="alert-pending-violations">
                 <ShieldAlert className="h-4 w-4 text-destructive" />
@@ -1468,19 +1469,19 @@ export default function AdminDashboard() {
                       <span className="text-sm text-muted-foreground flex items-center gap-2">
                         <CheckCircle2 className="status-verified h-3 w-3" /> Verified
                       </span>
-                      <span className="status-verified font-medium">{stats.certifications.by_status.confirmed || 0}</span>
+                      <StatusIndicator status="verified" className="font-medium">{stats.certifications.by_status.confirmed || 0}</StatusIndicator>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground flex items-center gap-2">
                         <Clock className="status-pending h-3 w-3" /> Pending
                       </span>
-                      <span className="status-pending font-medium">{stats.certifications.by_status.pending || 0}</span>
+                      <StatusIndicator status="pending" className="font-medium">{stats.certifications.by_status.pending || 0}</StatusIndicator>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground flex items-center gap-2">
                         <XCircle className="status-failed h-3 w-3" /> Failed
                       </span>
-                      <span className="status-failed font-medium">{stats.certifications.by_status.failed || 0}</span>
+                      <StatusIndicator status="failed" className="font-medium">{stats.certifications.by_status.failed || 0}</StatusIndicator>
                     </div>
                   </div>
                 </CardContent>
@@ -1489,7 +1490,7 @@ export default function AdminDashboard() {
               <Card data-testid="stat-card-blockchain-latency">
                 <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">Blockchain Latency</CardTitle>
-                  {health ? <StatusIndicator status={health.status} /> : <Activity className="h-4 w-4 text-muted-foreground" />}
+                  {health ? <HealthStatusIndicator status={health.status} /> : <Activity className="h-4 w-4 text-muted-foreground" />}
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
@@ -1513,7 +1514,7 @@ export default function AdminDashboard() {
                     <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t">
                       {Object.entries(health.components).map(([name, comp]) => (
                         <div key={name} className="flex items-center gap-1.5">
-                          <StatusIndicator status={comp.status} />
+                          <HealthStatusIndicator status={comp.status} />
                           <span className="text-xs text-muted-foreground capitalize">{name}</span>
                           {comp.latency_ms !== undefined && (
                             <span className="text-xs text-muted-foreground">({comp.latency_ms}ms)</span>

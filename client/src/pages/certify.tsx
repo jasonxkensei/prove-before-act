@@ -15,6 +15,7 @@ import { generateProofPDF } from "@/lib/generateProofPDF";
 import { sendCertificationTransaction, watchTransaction } from "@/lib/multiversxTransaction";
 import { Link, useLocation } from "wouter";
 import { WalletLoginModal } from "@/components/wallet-login-modal";
+import { StatusIndicator } from "@/components/status-indicator";
 
 interface CertificationData {
   id?: string;
@@ -404,30 +405,30 @@ export default function Certify() {
                 <div className="mb-6 inline-flex h-20 w-20 items-center justify-center rounded-full bg-primary/10">
                   <CheckCircle className="h-10 w-10 text-primary" />
                 </div>
-                <p className="status-verified mb-3 text-xs uppercase tracking-[0.16em]">Verified</p>
+                <StatusIndicator as="p" status="verified" className="mb-3 text-xs uppercase tracking-[0.16em]">Verified</StatusIndicator>
                 <h1 className="mb-4 text-3xl font-semibold tracking-tight" data-testid="text-cert-title">Certification confirmed</h1>
                 <p className="mb-8 text-muted-foreground">
                   Your file has been certified on the MultiversX blockchain
                 </p>
-                <div className="status-verified mb-6 justify-center" data-testid="status-tx-confirmed">
+                <StatusIndicator as="div" status="verified" className="mb-6 justify-center" data-testid="status-tx-confirmed">
                   <CheckCircle className="h-4 w-4" />
                   <span>Transaction confirmed on blockchain</span>
-                </div>
+                </StatusIndicator>
               </>
             ) : (
               <>
                 <div className="mb-6 inline-flex h-20 w-20 items-center justify-center rounded-full bg-muted">
                   <Loader2 className="h-10 w-10 text-muted-foreground animate-spin" />
                 </div>
-                <p className="status-pending mb-3 text-xs uppercase tracking-[0.16em]">Pending verification</p>
+                <StatusIndicator as="p" status="pending" className="mb-3 text-xs uppercase tracking-[0.16em]">Pending verification</StatusIndicator>
                 <h1 className="mb-4 text-3xl font-semibold tracking-tight" data-testid="text-cert-title">Certification submitted</h1>
                 <p className="mb-8 text-muted-foreground">
                   Your transaction has been sent — waiting for blockchain confirmation
                 </p>
-                <div className="status-pending mb-6 justify-center" data-testid="status-tx-pending">
+                <StatusIndicator as="div" status="pending" className="mb-6 justify-center" data-testid="status-tx-pending">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   <span>Waiting for blockchain confirmation...</span>
-                </div>
+                </StatusIndicator>
               </>
             )}
           </div>
