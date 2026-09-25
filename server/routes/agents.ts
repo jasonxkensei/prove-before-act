@@ -13,6 +13,7 @@ import { pgCheckRateLimit } from "../pgRateLimit";
 import { CANONICAL_PUBLIC_ORIGIN } from "../publicOrigin";
 import { getCertificationPriceUsd } from "../pricing";
 import { recordConversionEvent } from "../conversion-telemetry";
+import { publicProofStatus } from "../proof-finality";
 
 // ============================================
 // Builds the machine-actionable quick_start guide
@@ -740,6 +741,7 @@ export function registerAgentsRoutes(app: Express) {
           fileHash: certifications.fileHash,
           blockchainStatus: certifications.blockchainStatus,
           transactionHash: certifications.transactionHash,
+          finalityCheckedAt: certifications.finalityCheckedAt,
           createdAt: certifications.createdAt,
         })
         .from(certifications)
@@ -819,7 +821,7 @@ export function registerAgentsRoutes(app: Express) {
           last_proof: lastProof ? {
             proof_id: lastProof.id,
             verify_url: `${baseUrl}/proof/${lastProof.id}`,
-            blockchain_status: lastProof.blockchainStatus,
+            blockchain_status: publicProofStatus(lastProof),
             transaction_hash: lastProof.transactionHash,
           } : null,
           leaderboard: user.isPublicProfile
@@ -906,7 +908,7 @@ export function registerAgentsRoutes(app: Express) {
             id: lastProof.id,
             filename: lastProof.fileName,
             file_hash: lastProof.fileHash,
-            blockchain_status: lastProof.blockchainStatus,
+            blockchain_status: publicProofStatus(lastProof),
             transaction_hash: lastProof.transactionHash,
             anchored_at: lastProof.createdAt?.toISOString(),
             verify_url: `${baseUrl}/proof/${lastProof.id}`,
@@ -1068,11 +1070,12 @@ export function registerAgentsRoutes(app: Express) {
         if (trust) {
           updatedScore = { score: trust.score, level: trust.level };
           await pool.query(
-            `INSERT INTO trust_score_snapshots (wallet_address, score, level, cert_total, active_attestations, rank, snapshot_date)
-             VALUES ($1, $2, $3, $4, $5, 0, CURRENT_DATE)
+            `INSERT INTO trust_score_snapshots (wallet_address, score, level, cert_total, active_attestations, rank, snapshot_date, finality_version)
+             VALUES ($1, $2, $3, $4, $5, 0, CURRENT_DATE, 1)
              ON CONFLICT (wallet_address, snapshot_date) DO UPDATE SET
                score = EXCLUDED.score, level = EXCLUDED.level,
-               cert_total = EXCLUDED.cert_total, active_attestations = EXCLUDED.active_attestations`,
+               cert_total = EXCLUDED.cert_total, active_attestations = EXCLUDED.active_attestations,
+               finality_version = 1`,
             [realWallet, trust.score, trust.level, trust.certTotal, trust.activeAttestations ?? 0]
           );
         }

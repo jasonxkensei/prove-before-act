@@ -7,6 +7,7 @@ import { getCertificationPriceUsd } from "./pricing";
 import { getLeaderboard, computeTrustScoreByWallet, getTrustLevel } from "./trust";
 import { publicReadRateLimiter } from "./reliability";
 import { getTxExplorerUrl } from "./blockchain";
+import { publicProofStatus } from "./proof-finality";
 import { CANONICAL_PUBLIC_ORIGIN } from "./publicOrigin";
 import {
   PUBLIC_FOOTER_COLUMNS,
@@ -53,11 +54,12 @@ async function getReferenceAgentSnapshot(): Promise<ReferenceAgentSnapshot | nul
         SELECT
           COUNT(*) FILTER (
             WHERE c.blockchain_status = 'confirmed'
+              AND c.finality_checked_at IS NOT NULL
               AND c.is_public = true
               AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')
           )::int AS confirmed,
           COUNT(*) FILTER (
-            WHERE c.blockchain_status IN ('confirmed', 'failed')
+            WHERE (c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NOT NULL OR c.blockchain_status = 'failed')
               AND c.is_public = true
               AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')
           )::int AS finalized,
@@ -1201,8 +1203,9 @@ ${renderPublicFooter(baseUrl)}
 }
 
 function renderProofPage(baseUrl: string, cert: any): string {
+  cert = { ...cert, blockchainStatus: publicProofStatus(cert) };
   const title = `${cert.fileName} - Blockchain Proof | Prove Before Act`;
-  const description = `Blockchain proof for ${cert.fileName}. SHA-256: ${cert.fileHash.substring(0, 16)}... Certified on ${cert.createdAt ? new Date(cert.createdAt).toISOString().split('T')[0] : 'MultiversX blockchain'}. Status: ${cert.blockchainStatus || 'confirmed'}.`;
+  const description = `Blockchain proof for ${cert.fileName}. SHA-256: ${cert.fileHash.substring(0, 16)}... Recorded ${cert.createdAt ? new Date(cert.createdAt).toISOString().split('T')[0] : 'on MultiversX'}. Status: ${cert.blockchainStatus}.`;
   const proofUrl = `${baseUrl}/proof/${cert.id}`;
   const certDate = cert.createdAt ? new Date(cert.createdAt).toLocaleString("en-US") : "Unknown";
 

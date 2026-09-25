@@ -12,6 +12,9 @@ import {
   setupProcessErrorHandlers 
 } from "./reliability";
 import { startTxQueueWorker } from "./txQueue";
+import { startProofFinalityPoller } from "./proof-finality";
+import { db } from "./db";
+import { sql } from "drizzle-orm";
 import { ensureRateLimitTable } from "./pgRateLimit";
 import { warmCachesFromSnapshots, startTrustRefreshScheduler } from "./trust";
 import { startCoherenceDivergenceScheduler } from "./coherence-divergence";
@@ -236,6 +239,9 @@ app.use((req, res, next) => {
   // present. This idempotent migration is non-destructive and is mirrored in
   // shared/schema.ts for publish-time schema reconciliation.
   await migrateConversionEventsTable();
+  // Additive only: legacy confirmed rows remain untouched and unverified until
+  // a separately planned reconciliation. Never stamp them during deployment.
+  await db.execute(sql`ALTER TABLE certifications ADD COLUMN IF NOT EXISTS finality_checked_at timestamp`);
   try {
     await initializeStripe();
   } catch (error) {
@@ -252,6 +258,7 @@ app.use((req, res, next) => {
   }, () => {
     log(`serving on port ${port}`);
     startTxQueueWorker();
+    startProofFinalityPoller();
     migrateSystemUserCertifications();
     migrateAgentViolationsTable();
     purgeStaleSnapshotAttestationCounts();

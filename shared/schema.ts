@@ -103,6 +103,8 @@ export const certifications = pgTable("certifications", {
   transactionHash: text("transaction_hash"), // Uniqueness is enforced by the partial index below.
   transactionUrl: text("transaction_url"),
   blockchainStatus: varchar("blockchain_status").default("pending"), // pending, confirmed, failed
+  // NULL for legacy rows: they are not automatically grandfathered into verified counts.
+  finalityCheckedAt: timestamp("finality_checked_at"),
   certificateUrl: text("certificate_url"),
   isPublic: boolean("is_public").default(true),
   webhookUrl: text("webhook_url"),
@@ -641,6 +643,7 @@ export const trustScoreSnapshots = pgTable("trust_score_snapshots", {
   // Added via raw SQL migration in server/index.ts (migrateTrustSnapshotSchema).
   // Stores the complete TrustScore object so public reads never need live computation.
   fullTrustData: jsonb("full_trust_data"),
+  finalityVersion: integer("finality_version").notNull().default(0),
 }, (table) => [
   // UNIQUE on (wallet_address, snapshot_date) — required for the ON CONFLICT upsert
   // in server/trust.ts, server/index.ts, and server/routes/admin.ts.
@@ -654,6 +657,7 @@ export const leaderboardSnapshot = pgTable("leaderboard_snapshot", {
   id: integer("id").primaryKey().default(1),
   entries: jsonb("entries").notNull(),
   computedAt: timestamp("computed_at", { withTimezone: true }).notNull().defaultNow(),
+  finalityVersion: integer("finality_version").notNull().default(0),
 }, () => [
   // Single-row constraint: id must always be 1.
   check("single_row", sql`id = 1`),

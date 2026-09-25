@@ -10,6 +10,7 @@ import { getCertificationPriceEgld } from "../pricing";
 import { broadcastSignedTransaction, getTxExplorerUrl } from "../blockchain";
 import { tryDisplaceAcpReservation } from "./helpers";
 import { ensureDefaultAgent } from "../agent-identity";
+import { lookupProofFinality } from "../proof-finality";
 
 /**
  * Parses pipe-separated metadata from a certified tx data payload.
@@ -139,6 +140,10 @@ export function registerCertificationsRoutes(app: Express) {
         return res.status(402).json({ message: "Payment verification failed", error: verificationResult.error });
       } else {
         blockchainStatus = "confirmed";
+        const finality = await lookupProofFinality(transactionHash, data.fileHash, "web");
+        if (finality !== "confirmed") {
+          return res.status(402).json({ message: "Transaction finality has not been established. Retry after block inclusion.", status: finality });
+        }
         blockchainLatencyMs = Date.now() - verifyStart;
         recordTransaction(true, blockchainLatencyMs, "certification");
         // Derive transactionUrl server-side from the verified txHash. No
@@ -253,6 +258,7 @@ export function registerCertificationsRoutes(app: Express) {
             transactionHash,
             transactionUrl,
             blockchainStatus,
+            finalityCheckedAt: new Date(),
             isPublic: true,
             authMethod: "web",
             ...(blockchainLatencyMs !== null ? { blockchainLatencyMs } : {}),
@@ -606,7 +612,7 @@ export function registerCertificationsRoutes(app: Express) {
             authorSignature: validatedData.authorSignature,
             transactionHash: txHash,
             transactionUrl: explorerUrl,
-            blockchainStatus: "confirmed",
+            blockchainStatus: "pending",
             isPublic: true,
             authMethod: "web",
           })

@@ -70,16 +70,16 @@ export function registerFleetOverviewRoutes(app: Express) {
         agent_proofs AS (
           SELECT c.agent_id,
             COUNT(*)::int AS total,
-            COUNT(*) FILTER (WHERE c.blockchain_status = 'pending')::int AS pending,
-            COUNT(*) FILTER (WHERE c.blockchain_status = 'confirmed')::int AS confirmed,
+            COUNT(*) FILTER (WHERE c.blockchain_status = 'pending' OR (c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NULL))::int AS pending,
+            COUNT(*) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NOT NULL)::int AS confirmed,
             COUNT(*) FILTER (WHERE c.blockchain_status = 'failed')::int AS failed,
             COUNT(*) FILTER (WHERE c.blockchain_status = 'failed'
               AND c.created_at >= NOW() - INTERVAL '24 hours')::int AS failed_24h,
-            COUNT(*) FILTER (WHERE c.blockchain_status = 'pending'
+            COUNT(*) FILTER (WHERE (c.blockchain_status = 'pending' OR (c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NULL))
               AND c.created_at < NOW() - INTERVAL '15 minutes')::int AS pending_over_15m,
             MAX(c.created_at) AS last_proof_at,
             (ARRAY_AGG(c.id ORDER BY c.created_at DESC))[1] AS last_proof_id,
-            (ARRAY_AGG(c.blockchain_status ORDER BY c.created_at DESC))[1] AS last_proof_status
+            (ARRAY_AGG(CASE WHEN c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NULL THEN 'pending' ELSE c.blockchain_status END ORDER BY c.created_at DESC))[1] AS last_proof_status
           FROM certifications c
           INNER JOIN effective_agents effective_agent
             ON effective_agent.id = c.agent_id
@@ -88,12 +88,12 @@ export function registerFleetOverviewRoutes(app: Express) {
         ),
         historical AS (
           SELECT COUNT(*)::int AS total,
-            COUNT(*) FILTER (WHERE blockchain_status = 'pending')::int AS pending,
-            COUNT(*) FILTER (WHERE blockchain_status = 'confirmed')::int AS confirmed,
+            COUNT(*) FILTER (WHERE blockchain_status = 'pending' OR (blockchain_status = 'confirmed' AND finality_checked_at IS NULL))::int AS pending,
+            COUNT(*) FILTER (WHERE blockchain_status = 'confirmed' AND finality_checked_at IS NOT NULL)::int AS confirmed,
             COUNT(*) FILTER (WHERE blockchain_status = 'failed')::int AS failed,
             MAX(created_at) AS last_proof_at,
             (ARRAY_AGG(id ORDER BY created_at DESC))[1] AS last_proof_id,
-            (ARRAY_AGG(blockchain_status ORDER BY created_at DESC))[1] AS last_proof_status
+            (ARRAY_AGG(CASE WHEN blockchain_status = 'confirmed' AND finality_checked_at IS NULL THEN 'pending' ELSE blockchain_status END ORDER BY created_at DESC))[1] AS last_proof_status
           FROM certifications
           WHERE user_id = $1 AND agent_id IS NULL
         )
@@ -201,20 +201,20 @@ export function registerFleetOverviewRoutes(app: Express) {
         ),
         counts AS (
           SELECT COUNT(*)::int AS total,
-            COUNT(*) FILTER (WHERE c.blockchain_status = 'pending')::int AS pending,
-            COUNT(*) FILTER (WHERE c.blockchain_status = 'confirmed')::int AS confirmed,
+            COUNT(*) FILTER (WHERE c.blockchain_status = 'pending' OR (c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NULL))::int AS pending,
+            COUNT(*) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NOT NULL)::int AS confirmed,
             COUNT(*) FILTER (WHERE c.blockchain_status = 'failed')::int AS failed,
             COUNT(*) FILTER (WHERE c.blockchain_status = 'failed'
               AND c.created_at >= NOW() - INTERVAL '24 hours')::int AS failed_24h,
-            COUNT(*) FILTER (WHERE c.blockchain_status = 'pending'
+            COUNT(*) FILTER (WHERE (c.blockchain_status = 'pending' OR (c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NULL))
               AND c.created_at < NOW() - INTERVAL '15 minutes')::int AS pending_over_15m
           FROM certifications c
           INNER JOIN owned_agent a ON a.id = c.agent_id AND c.user_id = a.owner_account_id
         ),
         historical AS (
           SELECT COUNT(*)::int AS total,
-            COUNT(*) FILTER (WHERE blockchain_status = 'pending')::int AS pending,
-            COUNT(*) FILTER (WHERE blockchain_status = 'confirmed')::int AS confirmed,
+            COUNT(*) FILTER (WHERE blockchain_status = 'pending' OR (blockchain_status = 'confirmed' AND finality_checked_at IS NULL))::int AS pending,
+            COUNT(*) FILTER (WHERE blockchain_status = 'confirmed' AND finality_checked_at IS NOT NULL)::int AS confirmed,
             COUNT(*) FILTER (WHERE blockchain_status = 'failed')::int AS failed
           FROM certifications
           WHERE user_id = $1 AND agent_id IS NULL

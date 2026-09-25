@@ -134,8 +134,8 @@ describe("register_trial — registration response shape (no onboarding cert)", 
     const insertProof = async (index: number): Promise<string> => {
       const inserted = await pool.query(
         `INSERT INTO certifications
-          (user_id, agent_id, file_name, file_hash, auth_method, blockchain_status, is_public, transaction_hash)
-         VALUES ($1, $1, $2, $3, 'api_key', 'confirmed', true, $4)
+          (user_id, agent_id, file_name, file_hash, auth_method, blockchain_status, is_public, transaction_hash, finality_checked_at)
+         VALUES ($1, $1, $2, $3, 'api_key', 'confirmed', true, $4, NOW())
          RETURNING id`,
         [
           userId,
@@ -330,6 +330,15 @@ describe("two-proof activation through authenticated proof creation", () => {
       const firstCreated = await firstCreateResponse.json();
       expect(firstCreated.blockchain.transaction_hash).toMatch(/^[a-f0-9]{64}$/);
       expect(firstCreated.trial.remaining).toBe(9);
+      expect(firstCreated.status).toBe("pending");
+      const beforeFinality = await fetch(`${baseUrl}/api/proof/${firstCreated.proof_id}`);
+      expect((await beforeFinality.json()).verified).toBe(false);
+      // The signing adapter only simulates broadcast; emulate the poller's
+      // independently checked transition in this activation integration fixture.
+      await pool.query(
+        `UPDATE certifications SET blockchain_status = 'confirmed', finality_checked_at = NOW() WHERE id = $1`,
+        [firstCreated.proof_id],
+      );
 
       const firstVerifyResponse = await mcpCallAt(
         baseUrl,
@@ -358,6 +367,11 @@ describe("two-proof activation through authenticated proof creation", () => {
       expect(secondCreateEnvelope.result?.isError).not.toBe(true);
       const secondCreated = JSON.parse(secondCreateEnvelope.result.content[0].text);
       expect(secondCreated.blockchain.transaction_hash).toMatch(/^[a-f0-9]{64}$/);
+      expect(secondCreated.status).toBe("pending");
+      await pool.query(
+        `UPDATE certifications SET blockchain_status = 'confirmed', finality_checked_at = NOW() WHERE id = $1`,
+        [secondCreated.proof_id],
+      );
 
       expect(interceptedFinalityJobs).toEqual([
         expect.objectContaining({

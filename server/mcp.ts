@@ -24,6 +24,7 @@ import { isMX8004Configured } from "./mx8004";
 import { ensureDefaultAgent, resolveAgentForApiKey } from "./agent-identity";
 import type { Request } from "express";
 import { recordConversionEvent, recordProofVerificationMilestone } from "./conversion-telemetry";
+import { publicProofStatus } from "./proof-finality";
 
 interface McpContext {
   baseUrl: string;
@@ -377,7 +378,7 @@ export async function createMcpServer(ctx: McpContext) {
                     type: "text" as const,
                     text: JSON.stringify({
                       proof_id: nowExisting.id,
-                      status: nowExisting.blockchainStatus === "confirmed" ? "certified" : nowExisting.blockchainStatus,
+                      status: publicProofStatus(nowExisting) === "confirmed" ? "certified" : publicProofStatus(nowExisting),
                       file_hash: nowExisting.fileHash,
                       filename: nowExisting.fileName,
                       verify_url: `${baseUrl}/proof/${nowExisting.id}`,
@@ -397,7 +398,7 @@ export async function createMcpServer(ctx: McpContext) {
                 type: "text" as const,
                 text: JSON.stringify({
                   proof_id: existing.id,
-                  status: existing.blockchainStatus === "confirmed" ? "certified" : existing.blockchainStatus,
+                  status: publicProofStatus(existing) === "confirmed" ? "certified" : publicProofStatus(existing),
                   file_hash: existing.fileHash,
                   filename: existing.fileName,
                   verify_url: `${baseUrl}/proof/${existing.id}`,
@@ -471,7 +472,7 @@ export async function createMcpServer(ctx: McpContext) {
               // the ACP reservation would let an attacker destroy a victim's paid checkout at zero cost.
               return { content: [{ type: "text" as const, text: JSON.stringify({ error: "ACP_RESERVED", message: "This hash is reserved by a pending ACP checkout. Your credit has been refunded. Wait for the checkout to complete or expire, then retry." }) }], isError: true };
             }
-            return { content: [{ type: "text" as const, text: JSON.stringify({ proof_id: dup.id, status: dup.blockchainStatus === "confirmed" ? "certified" : dup.blockchainStatus, file_hash: dup.fileHash, filename: dup.fileName, verify_url: `${baseUrl}/proof/${dup.id}`, certificate_url: `${baseUrl}/api/certificates/${dup.id}.pdf`, blockchain: { network: "MultiversX", transaction_hash: dup.transactionHash, explorer_url: dup.transactionUrl }, timestamp: dup.createdAt?.toISOString(), message: "File already certified on MultiversX blockchain." }) }] };
+            return { content: [{ type: "text" as const, text: JSON.stringify({ proof_id: dup.id, status: publicProofStatus(dup) === "confirmed" ? "certified" : publicProofStatus(dup), file_hash: dup.fileHash, filename: dup.fileName, verify_url: `${baseUrl}/proof/${dup.id}`, certificate_url: `${baseUrl}/api/certificates/${dup.id}.pdf`, blockchain: { network: "MultiversX", transaction_hash: dup.transactionHash, explorer_url: dup.transactionUrl }, timestamp: dup.createdAt?.toISOString(), message: "Existing proof; check verification status before treating it as certified." }) }] };
           }
           return { content: [{ type: "text" as const, text: JSON.stringify({ error: "DUPLICATE_HASH", message: "File hash is already being certified by a concurrent request. Credit refunded." }) }], isError: true };
         }
@@ -492,7 +493,7 @@ export async function createMcpServer(ctx: McpContext) {
           [certification] = await db.update(certifications).set({
             transactionHash: result.transactionHash,
             transactionUrl: result.transactionUrl,
-            blockchainStatus: "confirmed",
+            blockchainStatus: "pending",
             ...(result.latencyMs != null ? { blockchainLatencyMs: result.latencyMs } : {}),
           }).where(eq(certifications.id, pendingCert.id)).returning();
         } catch (updateErr: any) {
@@ -530,6 +531,7 @@ export async function createMcpServer(ctx: McpContext) {
                 eq(certifications.userId, certUserId),
                 sql`auth_method != 'onboarding'`,
                 eq(certifications.blockchainStatus, "confirmed"),
+                sql`${certifications.finalityCheckedAt} IS NOT NULL`,
                 sql`transaction_hash ~ '^[a-fA-F0-9]{64}$'`,
               ));
             const proofOrdinal = Number(cnt);
@@ -575,7 +577,7 @@ export async function createMcpServer(ctx: McpContext) {
             type: "text" as const,
             text: JSON.stringify({
               proof_id: certification.id,
-              status: "certified",
+              status: "pending",
               file_hash: certification.fileHash,
               filename: certification.fileName,
               verify_url: `${baseUrl}/proof/${certification.id}`,
@@ -585,7 +587,7 @@ export async function createMcpServer(ctx: McpContext) {
               webhook_status: webhookStatus,
               ...(mcpWebhookSecret ? { webhook_secret: mcpWebhookSecret } : {}),
               ...(activationMilestone ?? {}),
-              message: "File certified on MultiversX blockchain. Proof is immutable and publicly verifiable.",
+              message: "Transaction broadcast. Proof is pending independent on-chain finality verification.",
             }),
           }],
         };
@@ -695,7 +697,7 @@ export async function createMcpServer(ctx: McpContext) {
                     type: "text" as const,
                     text: JSON.stringify({
                       proof_id: cwcNowExisting.id,
-                      status: cwcNowExisting.blockchainStatus === "confirmed" ? "certified" : cwcNowExisting.blockchainStatus,
+                      status: publicProofStatus(cwcNowExisting) === "confirmed" ? "certified" : publicProofStatus(cwcNowExisting),
                       file_hash: cwcNowExisting.fileHash,
                       filename: cwcNowExisting.fileName,
                       verify_url: `${baseUrl}/proof/${cwcNowExisting.id}`,
@@ -715,7 +717,7 @@ export async function createMcpServer(ctx: McpContext) {
                 type: "text" as const,
                 text: JSON.stringify({
                   proof_id: cwcExisting.id,
-                  status: cwcExisting.blockchainStatus === "confirmed" ? "certified" : cwcExisting.blockchainStatus,
+                  status: publicProofStatus(cwcExisting) === "confirmed" ? "certified" : publicProofStatus(cwcExisting),
                   file_hash: cwcExisting.fileHash,
                   filename: cwcExisting.fileName,
                   verify_url: `${baseUrl}/proof/${cwcExisting.id}`,
@@ -796,7 +798,7 @@ export async function createMcpServer(ctx: McpContext) {
               // the ACP reservation would let an attacker destroy a victim's paid checkout at zero cost.
               return { content: [{ type: "text" as const, text: JSON.stringify({ error: "ACP_RESERVED", message: "This hash is reserved by a pending ACP checkout. Your credit has been refunded. Wait for the checkout to complete or expire, then retry." }) }], isError: true };
             }
-            return { content: [{ type: "text" as const, text: JSON.stringify({ proof_id: cwcDup.id, status: cwcDup.blockchainStatus === "confirmed" ? "certified" : cwcDup.blockchainStatus, file_hash: cwcDup.fileHash, filename: cwcDup.fileName, verify_url: `${baseUrl}/proof/${cwcDup.id}`, blockchain: { network: "MultiversX", transaction_hash: cwcDup.transactionHash, explorer_url: cwcDup.transactionUrl }, timestamp: cwcDup.createdAt?.toISOString(), message: "File already certified on MultiversX blockchain." }) }] };
+            return { content: [{ type: "text" as const, text: JSON.stringify({ proof_id: cwcDup.id, status: publicProofStatus(cwcDup) === "confirmed" ? "certified" : publicProofStatus(cwcDup), file_hash: cwcDup.fileHash, filename: cwcDup.fileName, verify_url: `${baseUrl}/proof/${cwcDup.id}`, blockchain: { network: "MultiversX", transaction_hash: cwcDup.transactionHash, explorer_url: cwcDup.transactionUrl }, timestamp: cwcDup.createdAt?.toISOString(), message: "Existing proof; check verification status before treating it as certified." }) }] };
           }
           return { content: [{ type: "text" as const, text: JSON.stringify({ error: "DUPLICATE_HASH", message: "File hash is already being certified by a concurrent request. Credit refunded." }) }], isError: true };
         }
@@ -817,7 +819,7 @@ export async function createMcpServer(ctx: McpContext) {
           [certification] = await db.update(certifications).set({
             transactionHash: result.transactionHash,
             transactionUrl: result.transactionUrl,
-            blockchainStatus: "confirmed",
+            blockchainStatus: "pending",
             ...(result.latencyMs != null ? { blockchainLatencyMs: result.latencyMs } : {}),
           }).where(eq(certifications.id, cwcPendingCert.id)).returning();
         } catch (updateErr: any) {
@@ -839,6 +841,7 @@ export async function createMcpServer(ctx: McpContext) {
                 eq(certifications.userId, auth.userId),
                 sql`auth_method != 'onboarding'`,
                 eq(certifications.blockchainStatus, "confirmed"),
+                sql`${certifications.finalityCheckedAt} IS NOT NULL`,
                 sql`transaction_hash ~ '^[a-fA-F0-9]{64}$'`,
               ));
             if (Number(cnt) === 1) {
@@ -867,7 +870,7 @@ export async function createMcpServer(ctx: McpContext) {
               confidence_level,
               threshold_stage,
               ...(reversibility_class ? { reversibility_class } : {}),
-              status: "certified",
+              status: "pending",
               file_hash: certification.fileHash,
               filename: certification.fileName,
               verify_url: `${baseUrl}/proof/${certification.id}`,
@@ -875,7 +878,7 @@ export async function createMcpServer(ctx: McpContext) {
               blockchain: { network: "MultiversX", transaction_hash: result.transactionHash, explorer_url: result.transactionUrl },
               timestamp: certification.createdAt?.toISOString(),
               ...(cwcFirstProofMilestone ?? {}),
-              message: `Confidence stage '${threshold_stage}' certified at ${Math.round(confidence_level * 100)}%.${reversibility_class === "irreversible" && confidence_level < 0.95 ? " WARNING: policy_violation — irreversible action certified below 0.95 confidence threshold." : ""} Use decision_id '${decision_id}' for subsequent stages.`,
+              message: `Confidence stage '${threshold_stage}' broadcast; awaiting on-chain finality.${reversibility_class === "irreversible" && confidence_level < 0.95 ? " WARNING: policy_violation — irreversible action below 0.95 confidence threshold." : ""} Use decision_id '${decision_id}' for subsequent stages.`,
             }),
           }],
         };
@@ -919,13 +922,14 @@ export async function createMcpServer(ctx: McpContext) {
             WHERE user_id = ${cert.userId}
               AND auth_method != 'onboarding'
               AND blockchain_status = 'confirmed'
+              AND finality_checked_at IS NOT NULL
               AND transaction_hash ~ '^[a-fA-F0-9]{64}$'
           ) ranked
           WHERE id = ${cert.id}
         `);
         const ordinal = Number((ordinalResult.rows[0] as any)?.proof_ordinal ?? 0);
-        const isConfirmed = cert.blockchainStatus === "confirmed"
-          && /^[a-fA-F0-9]{64}$/.test(cert.transactionHash ?? "");
+        const status = publicProofStatus(cert);
+        const isConfirmed = status === "confirmed";
         if (request && isConfirmed && (ordinal === 1 || ordinal === 2)) {
           void recordProofVerificationMilestone(request, cert.id, ordinal);
         }
@@ -935,7 +939,7 @@ export async function createMcpServer(ctx: McpContext) {
             type: "text" as const,
             text: JSON.stringify({
               proof_id: cert.id,
-              status: cert.blockchainStatus || "pending",
+              status,
               verified: isConfirmed,
               file_hash: cert.fileHash,
               filename: cert.fileName,
@@ -951,7 +955,7 @@ export async function createMcpServer(ctx: McpContext) {
                     next_action: {
                       tool: "verify_proof",
                       arguments: { proof_id: cert.id },
-                      instruction: cert.blockchainStatus === "failed"
+                      instruction: status === "failed"
                         ? "This proof failed to confirm and cannot complete activation. Create a new proof with a different hash."
                         : "Wait for on-chain confirmation, then call verify_proof again.",
                     },
@@ -1010,7 +1014,7 @@ export async function createMcpServer(ctx: McpContext) {
 **SHA-256:** \`${cert.fileHash}\`
 **Author:** ${cert.authorName || "Unknown"}
 **Date:** ${cert.createdAt?.toISOString()}
-**Status:** ${cert.blockchainStatus || "confirmed"}
+**Status:** ${publicProofStatus(cert)}
 
 ## Blockchain Record
 - **Network:** MultiversX
@@ -1032,7 +1036,7 @@ export async function createMcpServer(ctx: McpContext) {
               file_hash: cert.fileHash,
               filename: cert.fileName,
               author: cert.authorName,
-              status: cert.blockchainStatus || "confirmed",
+              status: publicProofStatus(cert),
               blockchain: { network: "MultiversX", transaction_hash: cert.transactionHash, explorer_url: cert.transactionUrl },
               verify_url: `${baseUrl}/proof/${cert.id}`,
               certificate_url: `${baseUrl}/api/certificates/${cert.id}.pdf`,
@@ -1381,7 +1385,7 @@ export async function createMcpServer(ctx: McpContext) {
           [certification] = await db.update(certifications).set({
             transactionHash: result.transactionHash,
             transactionUrl: result.transactionUrl,
-            blockchainStatus: "confirmed",
+            blockchainStatus: "pending",
             ...(result.latencyMs != null ? { blockchainLatencyMs: result.latencyMs } : {}),
           }).where(eq(certifications.id, mcpPending.id)).returning();
         } catch (writeErr: any) {
@@ -1463,7 +1467,7 @@ export async function createMcpServer(ctx: McpContext) {
             SELECT u.wallet_address, COUNT(c.id)::int AS cert_count
             FROM users u
             LEFT JOIN certifications c
-              ON c.user_id = u.id AND c.blockchain_status = 'confirmed'
+              ON c.user_id = u.id AND c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NOT NULL
             WHERE u.wallet_address = ANY(${issuerWallets})
             GROUP BY u.wallet_address
           `);
@@ -1974,7 +1978,7 @@ export async function createMcpServer(ctx: McpContext) {
                       proof_id: nowExisting.id,
                       coherence_anchor: nowExisting.fileHash,
                       timestamp: nowExisting.createdAt?.toISOString(),
-                      blockchain_status: nowExisting.blockchainStatus,
+                      blockchain_status: publicProofStatus(nowExisting),
                       verify_url: `${baseUrl}/proof/${nowExisting.id}`,
                       metadata: { type: "coherence_check", role: "WHY" },
                       message: "Coherence check already anchored for this exact payload (idempotent).",
@@ -2002,7 +2006,7 @@ export async function createMcpServer(ctx: McpContext) {
                   proof_id: existing.id,
                   coherence_anchor: existing.fileHash,
                   timestamp: existing.createdAt?.toISOString(),
-                  blockchain_status: existing.blockchainStatus,
+                  blockchain_status: publicProofStatus(existing),
                   verify_url: `${baseUrl}/proof/${existing.id}`,
                   metadata: { type: "coherence_check", role: "WHY" },
                   message: "Coherence check already anchored for this exact payload (idempotent).",
@@ -2076,7 +2080,7 @@ export async function createMcpServer(ctx: McpContext) {
             await db.update(certifications).set({
               transactionHash: txResult.transactionHash,
               transactionUrl: txResult.transactionUrl,
-              blockchainStatus: "confirmed",
+              blockchainStatus: "pending",
               ...(txResult.latencyMs != null ? { blockchainLatencyMs: txResult.latencyMs } : {}),
             }).where(eq(certifications.id, pendingCert.id)).catch(() => {});
           })

@@ -11,6 +11,7 @@ import { IRREVERSIBLE_CONFIDENCE_THRESHOLD, buildTimingBreakdown } from "../audi
 import { getTxExplorerUrl } from "../blockchain";
 import { CANONICAL_PUBLIC_ORIGIN } from "../publicOrigin";
 import { recordProofVerificationMilestone } from "../conversion-telemetry";
+import { publicProofStatus } from "../proof-finality";
 
 // Hard cap on rows materialized by any public metadata-keyed lookup. Public
 // integration endpoints filter `certifications.metadata` with JSONB extraction
@@ -128,13 +129,14 @@ export function registerProofReadRoutes(app: Express) {
           WHERE user_id = ${certification.userId}
             AND auth_method != 'onboarding'
             AND blockchain_status = 'confirmed'
+            AND finality_checked_at IS NOT NULL
             AND transaction_hash ~ '^[a-fA-F0-9]{64}$'
         ) ranked
         WHERE id = ${certification.id}
       `);
       const proofOrdinal = Number((ordinalResult.rows[0] as any)?.proof_ordinal ?? 0);
-      const isConfirmed = certification.blockchainStatus === "confirmed"
-        && /^[a-fA-F0-9]{64}$/.test(certification.transactionHash ?? "");
+      const status = publicProofStatus(certification);
+      const isConfirmed = status === "confirmed";
       if (isConfirmed && (proofOrdinal === 1 || proofOrdinal === 2)) {
         void recordProofVerificationMilestone(req, certification.id, proofOrdinal);
       }
@@ -156,7 +158,7 @@ export function registerProofReadRoutes(app: Express) {
         authorSignature: certification.authorSignature,
         transactionHash: certification.transactionHash,
         transactionUrl: getTxExplorerUrl(certification.transactionHash),
-        blockchainStatus: certification.blockchainStatus,
+        blockchainStatus: status,
         verified: isConfirmed,
         activation: !isConfirmed
           ? {
@@ -165,7 +167,7 @@ export function registerProofReadRoutes(app: Express) {
               next_action: {
                 method: "GET",
                 url: `${CANONICAL_PUBLIC_ORIGIN}/api/proof/${certification.id}`,
-                instruction: certification.blockchainStatus === "failed"
+                instruction: status === "failed"
                   ? "This proof failed to confirm and cannot complete activation. Create a new proof with a different hash."
                   : "Wait for on-chain confirmation, then retry this URL.",
               },
@@ -236,7 +238,7 @@ export function registerProofReadRoutes(app: Express) {
         proof_id: cert.id,
         file_hash: cert.fileHash,
         filename: cert.fileName,
-        status: cert.blockchainStatus,
+        status: publicProofStatus(cert),
         created_at: cert.createdAt,
         proof_url: `https://provebeforeact.com/proof/${cert.id}`,
         blockchain: {
@@ -269,6 +271,7 @@ export function registerProofReadRoutes(app: Express) {
           transactionHash: certifications.transactionHash,
           transactionUrl: certifications.transactionUrl,
           blockchainStatus: certifications.blockchainStatus,
+          finalityCheckedAt: certifications.finalityCheckedAt,
           authorName: certifications.authorName,
           createdAt: certifications.createdAt,
         })
@@ -304,7 +307,7 @@ export function registerProofReadRoutes(app: Express) {
           blockchain: {
             transaction_hash: r.transactionHash,
             explorer_url: r.transactionUrl,
-            status: r.blockchainStatus,
+            status: publicProofStatus(r),
           },
           anchored_at: r.createdAt,
           timing_breakdown,
@@ -532,7 +535,8 @@ export function registerProofReadRoutes(app: Express) {
       const agentWallet = artifactOwner.walletAddress;
       agentTrust = await computeTrustScoreByWallet(agentWallet);
 
-      const verified = cert.blockchainStatus === "confirmed";
+      const status = publicProofStatus(cert);
+      const verified = status === "confirmed";
       const agentVerified = agentTrust ? agentTrust.score >= 100 : false;
       let score = 0;
       if (verified) score++;
@@ -546,7 +550,7 @@ export function registerProofReadRoutes(app: Express) {
         proof_id: cert.id,
         file_hash: cert.fileHash,
         anchored_at: cert.createdAt,
-        blockchain_status: cert.blockchainStatus,
+        blockchain_status: status,
         agent_wallet: agentWallet,
         agent_trust: agentTrust ? {
           score: agentTrust.score,
@@ -682,6 +686,7 @@ export function registerProofReadRoutes(app: Express) {
           metadata: certifications.metadata,
           blockchainStatus: certifications.blockchainStatus,
           transactionHash: certifications.transactionHash,
+          finalityCheckedAt: certifications.finalityCheckedAt,
         })
         .from(certifications)
         .where(
@@ -714,7 +719,7 @@ export function registerProofReadRoutes(app: Express) {
             model_hash: mh,
             strategy_hash: sh,
             proof_id: cert.id,
-            anchored: cert.blockchainStatus === "confirmed",
+            anchored: publicProofStatus(cert) === "confirmed",
           });
           if (mh) modelHashes.push(mh);
           if (sh) stratHashes.push(sh);
@@ -862,6 +867,8 @@ export function registerProofReadRoutes(app: Express) {
           userId: certifications.userId,
           createdAt: certifications.createdAt,
           blockchainStatus: certifications.blockchainStatus,
+          transactionHash: certifications.transactionHash,
+          finalityCheckedAt: certifications.finalityCheckedAt,
           metadata: certifications.metadata,
         })
         .from(certifications)
@@ -1002,6 +1009,8 @@ export function registerProofReadRoutes(app: Express) {
           userId: certifications.userId,
           createdAt: certifications.createdAt,
           blockchainStatus: certifications.blockchainStatus,
+          transactionHash: certifications.transactionHash,
+          finalityCheckedAt: certifications.finalityCheckedAt,
           metadata: certifications.metadata,
         })
         .from(certifications)
@@ -1033,7 +1042,7 @@ export function registerProofReadRoutes(app: Express) {
       }
 
       // Certs confirmed on MultiversX
-      const confirmedOnChain = linkedCerts.filter(c => c.blockchainStatus === "confirmed").length;
+      const confirmedOnChain = linkedCerts.filter(c => publicProofStatus(c) === "confirmed").length;
       const firstLinkedAt = linkedCerts[0]?.createdAt?.toISOString() ?? null;
       const lastLinkedAt = linkedCerts.at(-1)?.createdAt?.toISOString() ?? null;
 
@@ -1677,6 +1686,8 @@ export function registerProofReadRoutes(app: Express) {
           userId: certifications.userId,
           createdAt: certifications.createdAt,
           blockchainStatus: certifications.blockchainStatus,
+          transactionHash: certifications.transactionHash,
+          finalityCheckedAt: certifications.finalityCheckedAt,
           metadata: certifications.metadata,
         })
         .from(certifications)
@@ -1707,7 +1718,7 @@ export function registerProofReadRoutes(app: Express) {
         }
       }
 
-      const confirmedOnChain = linkedCerts.filter(c => c.blockchainStatus === "confirmed").length;
+      const confirmedOnChain = linkedCerts.filter(c => publicProofStatus(c) === "confirmed").length;
       const firstLinkedAt = linkedCerts[0]?.createdAt?.toISOString() ?? null;
       const lastLinkedAt = linkedCerts.at(-1)?.createdAt?.toISOString() ?? null;
 
@@ -1815,6 +1826,7 @@ export function registerProofReadRoutes(app: Express) {
           file_hash: certifications.fileHash,
           filename: certifications.fileName,
           blockchain_status: certifications.blockchainStatus,
+          finality_checked_at: certifications.finalityCheckedAt,
           transaction_hash: certifications.transactionHash,
           transaction_url: certifications.transactionUrl,
           certified_at: certifications.createdAt,
@@ -1834,6 +1846,12 @@ export function registerProofReadRoutes(app: Express) {
         if (!r) return { proof_id: id, status: "not_found", file_hash: null, filename: null, blockchain_status: null, transaction_hash: null, transaction_url: null, certified_at: null, verify_url: null };
         return {
           ...r,
+          blockchain_status: publicProofStatus({
+            blockchainStatus: r.blockchain_status,
+            transactionHash: r.transaction_hash,
+            finalityCheckedAt: r.finality_checked_at,
+          }),
+          finality_checked_at: undefined,
           status: "found",
           verify_url: `${baseUrl}/verify/${r.proof_id}`,
         };
@@ -1888,8 +1906,8 @@ export function registerProofReadRoutes(app: Express) {
         return res.status(404).json({ message: "Certificate not found" });
       }
 
-      if (certification.blockchainStatus === "pending") {
-        return res.status(402).json({ message: "Certificate not yet available — payment is still pending blockchain confirmation" });
+      if (publicProofStatus(certification) !== "confirmed") {
+        return res.status(402).json({ message: "Certificate not yet available — blockchain finality has not been verified" });
       }
 
       // Enforce the same profile-visibility gate as /api/proof/:id and

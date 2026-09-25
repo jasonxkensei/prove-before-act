@@ -1181,11 +1181,12 @@ export function registerAdminRoutes(app: Express) {
         if (trust) {
           updatedScore = { score: trust.score, level: trust.level };
           await pool.query(
-            `INSERT INTO trust_score_snapshots (wallet_address, score, level, cert_total, active_attestations, rank, snapshot_date)
-             VALUES ($1, $2, $3, $4, $5, 0, CURRENT_DATE)
+            `INSERT INTO trust_score_snapshots (wallet_address, score, level, cert_total, active_attestations, rank, snapshot_date, finality_version)
+             VALUES ($1, $2, $3, $4, $5, 0, CURRENT_DATE, 1)
              ON CONFLICT (wallet_address, snapshot_date) DO UPDATE SET
                score = EXCLUDED.score, level = EXCLUDED.level,
-               cert_total = EXCLUDED.cert_total, active_attestations = EXCLUDED.active_attestations`,
+               cert_total = EXCLUDED.cert_total, active_attestations = EXCLUDED.active_attestations,
+               finality_version = 1`,
             [target_wallet, trust.score, trust.level, trust.certTotal, trust.activeAttestations ?? 0]
           );
         }
@@ -1302,7 +1303,7 @@ export function registerAdminRoutes(app: Express) {
           COALESCE(SUM(ak.request_count), 0)::int AS total_key_requests,
           MAX(ak.last_used_at) AS key_last_used_at,
           COUNT(c.id)::int AS cert_count,
-          COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed')::int AS confirmed_count,
+          COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NOT NULL)::int AS confirmed_count,
           MIN(c.created_at) AS first_cert_at,
           MAX(c.created_at) AS last_cert_at
         FROM users u

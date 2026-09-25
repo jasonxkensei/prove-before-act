@@ -6,6 +6,7 @@ import { certifications } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 import { proofWebhookHeaders } from "./webhookHeaders";
+import { publicProofStatus } from "./proof-finality";
 
 /**
  * Prove Before Act Webhook Signature Contract
@@ -160,6 +161,7 @@ export async function deliverWebhook(
       logger.error("Certification not found", { component: "webhook", certificationId });
       return false;
     }
+    if (publicProofStatus(cert) !== "confirmed") return false;
 
     const payload: WebhookPayload = {
       event: "proof.certified",
@@ -265,7 +267,16 @@ export function scheduleWebhookDelivery(
   baseUrl: string,
   signingSecret?: string
 ): void {
-  deliverWebhook(certificationId, webhookUrl, baseUrl, signingSecret).then(async (success) => {
+  void (async () => {
+    // Never emit proof.certified for a gateway-accepted but unfinalized hash.
+    // Chain lookup outages leave the row pending; delivery remains retryable.
+    while (true) {
+      const [cert] = await db.select().from(certifications).where(eq(certifications.id, certificationId));
+      if (!cert || cert.blockchainStatus === "failed") return;
+      if (publicProofStatus(cert) === "confirmed") break;
+      await new Promise(resolve => setTimeout(resolve, 15_000));
+    }
+    const success = await deliverWebhook(certificationId, webhookUrl, baseUrl, signingSecret);
     if (!success) {
       for (let attempt = 1; attempt < MAX_WEBHOOK_ATTEMPTS; attempt++) {
         const delay = Math.pow(2, attempt) * 5000; // 10s, 20s
@@ -291,7 +302,7 @@ export function scheduleWebhookDelivery(
         if (retrySuccess) break;
       }
     }
-  });
+  })().catch(error => logger.error("Webhook scheduling failed", { component: "webhook", certificationId, error: String(error) }));
 }
 
 /**

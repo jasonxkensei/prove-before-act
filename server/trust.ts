@@ -414,6 +414,7 @@ async function computeStreakWeeks(userId: string): Promise<number> {
     FROM certifications
     WHERE user_id = ${userId}
       AND blockchain_status = 'confirmed'
+      AND finality_checked_at IS NOT NULL
       AND is_public = true
       AND (auth_method IS NULL OR auth_method != 'onboarding')
     ORDER BY week_num DESC
@@ -431,6 +432,7 @@ async function computeStreakWeeksBatch(userIds: string[]): Promise<Map<string, n
        FROM certifications
        WHERE user_id = ANY($1)
          AND blockchain_status = 'confirmed'
+         AND finality_checked_at IS NOT NULL
          AND is_public = true
          AND (auth_method IS NULL OR auth_method != 'onboarding')
        ORDER BY user_id, week_num DESC`,
@@ -458,7 +460,7 @@ async function computeAttestationBonus(walletAddress: string): Promise<{ bonus: 
     const rows = await db.execute(sql`
       SELECT
         a.issuer_wallet,
-        COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true) AS issuer_confirmed_certs
+        COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NOT NULL AND c.is_public = true) AS issuer_confirmed_certs
       FROM attestations a
       LEFT JOIN users u ON u.wallet_address = a.issuer_wallet
       LEFT JOIN certifications c ON c.user_id = u.id
@@ -495,7 +497,7 @@ async function computeAttestationBonusBatch(walletAddresses: string[]): Promise<
       `SELECT
          a.subject_wallet,
          a.issuer_wallet,
-         COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true) AS issuer_confirmed_certs
+         COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NOT NULL AND c.is_public = true) AS issuer_confirmed_certs
        FROM attestations a
        LEFT JOIN users u ON u.wallet_address = a.issuer_wallet
        LEFT JOIN certifications c ON c.user_id = u.id
@@ -541,8 +543,8 @@ async function computeTransparencyCounts(userId: string): Promise<{ metadataCoun
         // model_hash / strategy_hash must be ≥ 16 chars (shortest sensible hash fragment).
         // version_number must be ≥ 3 chars (e.g. "1.0").
         // agent_id must be ≥ 8 chars to be a meaningful reference.
-        metadataCount: sql<number>`COUNT(*) FILTER (WHERE blockchain_status = 'confirmed' AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding') AND metadata IS NOT NULL AND (length(metadata->>'model_hash') >= 16 OR length(metadata->>'strategy_hash') >= 16 OR length(metadata->>'version_number') >= 3))`,
-        auditCount: sql<number>`COUNT(*) FILTER (WHERE blockchain_status = 'confirmed' AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding') AND metadata IS NOT NULL AND length(metadata->>'agent_id') >= 8)`,
+        metadataCount: sql<number>`COUNT(*) FILTER (WHERE blockchain_status = 'confirmed' AND finality_checked_at IS NOT NULL AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding') AND metadata IS NOT NULL AND (length(metadata->>'model_hash') >= 16 OR length(metadata->>'strategy_hash') >= 16 OR length(metadata->>'version_number') >= 3))`,
+        auditCount: sql<number>`COUNT(*) FILTER (WHERE blockchain_status = 'confirmed' AND finality_checked_at IS NOT NULL AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding') AND metadata IS NOT NULL AND length(metadata->>'agent_id') >= 8)`,
       })
       .from(certifications)
       .where(eq(certifications.userId, userId));
@@ -560,10 +562,10 @@ export async function computeTrustScore(userId: string): Promise<TrustScore> {
 
   const [totals] = await db
     .select({
-      confirmed: sql<number>`COUNT(*) FILTER (WHERE blockchain_status = 'confirmed' AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding'))`,
-      last30d: sql<number>`COUNT(*) FILTER (WHERE created_at >= ${cutoff30d} AND blockchain_status = 'confirmed' AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding'))`,
-      firstAt: sql<Date>`MIN(created_at) FILTER (WHERE blockchain_status = 'confirmed' AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding'))`,
-      lastAt: sql<Date>`MAX(created_at) FILTER (WHERE blockchain_status = 'confirmed' AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding'))`,
+      confirmed: sql<number>`COUNT(*) FILTER (WHERE blockchain_status = 'confirmed' AND finality_checked_at IS NOT NULL AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding'))`,
+      last30d: sql<number>`COUNT(*) FILTER (WHERE created_at >= ${cutoff30d} AND blockchain_status = 'confirmed' AND finality_checked_at IS NOT NULL AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding'))`,
+      firstAt: sql<Date>`MIN(created_at) FILTER (WHERE blockchain_status = 'confirmed' AND finality_checked_at IS NOT NULL AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding'))`,
+      lastAt: sql<Date>`MAX(created_at) FILTER (WHERE blockchain_status = 'confirmed' AND finality_checked_at IS NOT NULL AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding'))`,
     })
     .from(certifications)
     .where(eq(certifications.userId, userId));
@@ -653,14 +655,15 @@ async function computeAndSnapshotTrustScoreByWallet(walletAddress: string): Prom
   try {
     await pool.query(
       `INSERT INTO trust_score_snapshots
-         (wallet_address, score, level, cert_total, active_attestations, rank, snapshot_date, full_trust_data)
-       VALUES ($1, $2, $3, $4, $5, 0, CURRENT_DATE, $6::jsonb)
+         (wallet_address, score, level, cert_total, active_attestations, rank, snapshot_date, full_trust_data, finality_version)
+       VALUES ($1, $2, $3, $4, $5, 0, CURRENT_DATE, $6::jsonb, 1)
        ON CONFLICT (wallet_address, snapshot_date) DO UPDATE SET
          score               = EXCLUDED.score,
          level               = EXCLUDED.level,
          cert_total          = EXCLUDED.cert_total,
          active_attestations = EXCLUDED.active_attestations,
-         full_trust_data     = EXCLUDED.full_trust_data`,
+         full_trust_data     = EXCLUDED.full_trust_data,
+         finality_version    = 1`,
       [
         walletAddress,
         trust.score,
@@ -697,6 +700,7 @@ export async function computeTrustScoreByWallet(walletAddress: string): Promise<
       `SELECT full_trust_data
        FROM trust_score_snapshots
        WHERE wallet_address = $1
+         AND finality_version = 1
          AND full_trust_data IS NOT NULL
        ORDER BY snapshot_date DESC LIMIT 1`,
       [walletAddress],
@@ -809,13 +813,13 @@ async function computeAllLeaderboardEntries(): Promise<LeaderboardEntry[]> {
         u.agent_category,
         u.agent_description,
         u.agent_website,
-        COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) AS cert_total,
-        COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding') AND c.created_at >= ${cutoff30d}) AS cert_last_30d,
-        MIN(c.created_at) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) AS first_cert_at,
-        MAX(c.created_at) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) AS last_cert_at,
+        COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NOT NULL AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) AS cert_total,
+        COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NOT NULL AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding') AND c.created_at >= ${cutoff30d}) AS cert_last_30d,
+        MIN(c.created_at) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NOT NULL AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) AS first_cert_at,
+        MAX(c.created_at) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NOT NULL AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) AS last_cert_at,
         -- TRUST-C2: require minimum field lengths (mirrors computeTransparencyCounts fix).
-        COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding') AND c.metadata IS NOT NULL AND (length(c.metadata->>'model_hash') >= 16 OR length(c.metadata->>'strategy_hash') >= 16 OR length(c.metadata->>'version_number') >= 3)) AS metadata_count,
-        COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding') AND c.metadata IS NOT NULL AND length(c.metadata->>'agent_id') >= 8) AS audit_count,
+        COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NOT NULL AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding') AND c.metadata IS NOT NULL AND (length(c.metadata->>'model_hash') >= 16 OR length(c.metadata->>'strategy_hash') >= 16 OR length(c.metadata->>'version_number') >= 3)) AS metadata_count,
+        COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NOT NULL AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding') AND c.metadata IS NOT NULL AND length(c.metadata->>'agent_id') >= 8) AS audit_count,
         -- active_attest_count is a correlated subquery against the attestations table — it counts
         -- active, non-expired attestations whose issuer has a public profile, matching the filter
         -- used by computeAttestationBonusBatch.  The correlated subquery runs once per post-HAVING
@@ -835,7 +839,7 @@ async function computeAllLeaderboardEntries(): Promise<LeaderboardEntry[]> {
       WHERE u.is_public_profile = true
         AND u.wallet_address NOT LIKE 'erd1trial%'
       GROUP BY u.id, u.wallet_address, u.agent_name, u.agent_category, u.agent_description, u.agent_website
-      HAVING COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) > 0
+      HAVING COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NOT NULL AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) > 0
     ) ranked
     -- TRUST-H4: cap at 200 so the leaderboard job doesn't scale with total user count.
     -- We order by a composite score proxy so that all trust-score components are represented
@@ -1003,14 +1007,15 @@ export async function runTrustRefreshCycle(): Promise<void> {
           setTrustCache(wallet_address, trust);
           await pool.query(
             `INSERT INTO trust_score_snapshots
-               (wallet_address, score, level, cert_total, active_attestations, rank, snapshot_date, full_trust_data)
-             VALUES ($1, $2, $3, $4, $5, 0, CURRENT_DATE, $6::jsonb)
+               (wallet_address, score, level, cert_total, active_attestations, rank, snapshot_date, full_trust_data, finality_version)
+             VALUES ($1, $2, $3, $4, $5, 0, CURRENT_DATE, $6::jsonb, 1)
              ON CONFLICT (wallet_address, snapshot_date) DO UPDATE
                SET full_trust_data      = EXCLUDED.full_trust_data,
                    score                = EXCLUDED.score,
                    level                = EXCLUDED.level,
                    cert_total           = EXCLUDED.cert_total,
-                   active_attestations  = EXCLUDED.active_attestations`,
+                   active_attestations  = EXCLUDED.active_attestations,
+                   finality_version     = 1`,
             [
               wallet_address,
               trust.score,
@@ -1058,11 +1063,12 @@ export async function runLeaderboardRefreshCycle(): Promise<void> {
     const entries = await computeAllLeaderboardEntries();
     const computedAt = Date.now();
     await pool.query(
-      `INSERT INTO leaderboard_snapshot (id, entries, computed_at)
-       VALUES (1, $1::jsonb, NOW())
+      `INSERT INTO leaderboard_snapshot (id, entries, computed_at, finality_version)
+       VALUES (1, $1::jsonb, NOW(), 1)
        ON CONFLICT (id) DO UPDATE
          SET entries     = EXCLUDED.entries,
-             computed_at = EXCLUDED.computed_at`,
+             computed_at = EXCLUDED.computed_at,
+             finality_version = 1`,
       [JSON.stringify(entries)],
     );
     leaderboardCache = { allEntries: entries, cachedAt: Date.now(), computedAt };
@@ -1085,7 +1091,7 @@ export async function runLeaderboardRefreshCycle(): Promise<void> {
 export async function warmCachesFromSnapshots(): Promise<void> {
   try {
     const snap = await pool.query<{ entries: LeaderboardEntry[]; computed_at: string }>(
-      `SELECT entries, computed_at FROM leaderboard_snapshot WHERE id = 1`,
+      `SELECT entries, computed_at FROM leaderboard_snapshot WHERE id = 1 AND finality_version = 1`,
     );
     if (snap.rows.length > 0) {
       const computedAt = new Date(snap.rows[0].computed_at).getTime();
@@ -1141,7 +1147,7 @@ export async function getLeaderboard(filters: LeaderboardFilters = {}): Promise<
     // This NEVER calls computeAllLeaderboardEntries().
     try {
       const snap = await pool.query<{ entries: LeaderboardEntry[]; computed_at: string }>(
-        `SELECT entries, computed_at FROM leaderboard_snapshot WHERE id = 1`,
+        `SELECT entries, computed_at FROM leaderboard_snapshot WHERE id = 1 AND finality_version = 1`,
       );
       if (snap.rows.length > 0) {
         const computedAt = new Date(snap.rows[0].computed_at).getTime();
@@ -1291,7 +1297,7 @@ async function getOldScoreBatch(wallets: string[], cutoff: Date): Promise<Map<st
     const result = await pool.query<{ wallet_address: string; score: string }>(
       `SELECT DISTINCT ON (wallet_address) wallet_address, score
        FROM trust_score_snapshots
-       WHERE wallet_address = ANY($1) AND snapshot_date <= $2
+       WHERE wallet_address = ANY($1) AND snapshot_date <= $2 AND finality_version = 1
        ORDER BY wallet_address, snapshot_date DESC`,
       [wallets, cutoff.toISOString().split("T")[0]],
     );
@@ -1314,7 +1320,7 @@ async function getPreviousLevelBatch(wallets: string[]): Promise<Map<string, Tru
          SELECT wallet_address, level,
                 ROW_NUMBER() OVER (PARTITION BY wallet_address ORDER BY snapshot_date DESC) AS rn
          FROM trust_score_snapshots
-         WHERE wallet_address = ANY($1)
+         WHERE wallet_address = ANY($1) AND finality_version = 1
        ) ranked
        WHERE rn = 2`,
       [wallets],

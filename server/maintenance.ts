@@ -91,15 +91,16 @@ export async function runDailyMaintenance() {
       try {
         await pool.query(
           `INSERT INTO trust_score_snapshots
-             (wallet_address, score, level, cert_total, active_attestations, rank, snapshot_date, full_trust_data)
-           VALUES ($1, $2, $3, $4, $5, $6, CURRENT_DATE, $7::jsonb)
+             (wallet_address, score, level, cert_total, active_attestations, rank, snapshot_date, full_trust_data, finality_version)
+           VALUES ($1, $2, $3, $4, $5, $6, CURRENT_DATE, $7::jsonb, 1)
            ON CONFLICT (wallet_address, snapshot_date) DO UPDATE SET
              score               = EXCLUDED.score,
              level               = EXCLUDED.level,
              cert_total          = EXCLUDED.cert_total,
              active_attestations = EXCLUDED.active_attestations,
              rank                = EXCLUDED.rank,
-             full_trust_data     = EXCLUDED.full_trust_data`,
+             full_trust_data     = EXCLUDED.full_trust_data,
+             finality_version    = 1`,
           [a.wallet, a.score, a.level, a.certTotal, a.activeAttestations, i + 1, a.fullData]
         );
         snapshots++;
@@ -339,7 +340,7 @@ export async function migrateAgentViolationsTable() {
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_certs_trust_lookup
         ON certifications (user_id, created_at DESC)
-        WHERE blockchain_status = 'confirmed' AND is_public = true
+        WHERE blockchain_status = 'confirmed' AND finality_checked_at IS NOT NULL AND is_public = true
     `);
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_attestations_subject_active
@@ -508,6 +509,7 @@ export async function migrateTrustSnapshotSchema() {
       ALTER TABLE trust_score_snapshots
         ADD COLUMN IF NOT EXISTS full_trust_data JSONB
     `);
+    await pool.query(`ALTER TABLE trust_score_snapshots ADD COLUMN IF NOT EXISTS finality_version INTEGER NOT NULL DEFAULT 0`);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS leaderboard_snapshot (
         id          INTEGER PRIMARY KEY DEFAULT 1,
@@ -516,6 +518,7 @@ export async function migrateTrustSnapshotSchema() {
         CONSTRAINT single_row CHECK (id = 1)
       )
     `);
+    await pool.query(`ALTER TABLE leaderboard_snapshot ADD COLUMN IF NOT EXISTS finality_version INTEGER NOT NULL DEFAULT 0`);
     logger.info("trust snapshot schema ready", { component: "migration" });
   } catch (err: any) {
     logger.error("trust snapshot schema migration error", { component: "migration", error: err.message });

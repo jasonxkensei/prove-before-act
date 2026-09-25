@@ -59,6 +59,7 @@ export function registerAttestationsRoutes(app: Express) {
         JOIN users u ON u.id = c.user_id
         WHERE u.wallet_address = ${issuerWallet}
           AND c.blockchain_status = 'confirmed'
+          AND c.finality_checked_at IS NOT NULL
       `);
       const issuerConfirmedCerts = Number((issuerCertCheck.rows[0] as any)?.cnt || 0);
       if (issuerConfirmedCerts < 3) {
@@ -409,6 +410,7 @@ export function registerAttestationsRoutes(app: Express) {
         JOIN users u ON u.id = c.user_id
         WHERE u.wallet_address = ${issuerWallet}
           AND c.blockchain_status = 'confirmed'
+          AND c.finality_checked_at IS NOT NULL
       `);
       const issuerConfirmedCerts = Number((issuerCertCheck.rows[0] as any)?.cnt || 0);
       if (issuerConfirmedCerts < 3) {
@@ -488,6 +490,7 @@ export function registerAttestationsRoutes(app: Express) {
         SELECT score, level, cert_total, rank, snapshot_date
         FROM trust_score_snapshots
         WHERE wallet_address = ${wallet}
+          AND finality_version = 1
           AND snapshot_date >= CURRENT_DATE - (${days} || ' days')::interval
         ORDER BY snapshot_date ASC
       `);

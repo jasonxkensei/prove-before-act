@@ -10,6 +10,7 @@ import { isMX8004Configured, getContractAddresses } from "../mx8004";
 import { TRIAL_QUOTA, getNetworkLabel, buildCanonicalId } from "./helpers";
 import { getTxExplorerUrl } from "../blockchain";
 import { CANONICAL_PUBLIC_ORIGIN } from "../publicOrigin";
+import { publicProofStatus } from "../proof-finality";
 
 const CANONICAL_SPECIFICATION_URL = `${CANONICAL_PUBLIC_ORIGIN}/standard`;
 
@@ -1146,7 +1147,7 @@ This genesis certification demonstrates:
       const baseUrl = `https://${req.get('host')}`;
       const chainId = process.env.MULTIVERSX_CHAIN_ID || "1";
       const txHash = certification.transactionHash || null;
-      const isConfirmed = certification.blockchainStatus === "confirmed" && txHash;
+      const isConfirmed = publicProofStatus(certification) === "confirmed" && txHash;
       
       const proof = {
         canonical_id: buildCanonicalId(chainId, txHash),
@@ -1166,7 +1167,7 @@ This genesis certification demonstrates:
           // Always server-derived so stored client-supplied URLs cannot present
           // an attacker-controlled link as the canonical MultiversX explorer URL.
           explorer_url: getTxExplorerUrl(txHash),
-          status: certification.blockchainStatus
+          status: publicProofStatus(certification)
         },
         verification: {
           method: "SHA-256 hash comparison",
@@ -1219,7 +1220,7 @@ This genesis certification demonstrates:
         statusColor = "#3B3B3B";
         statusColorDark = "#2A2A2A";
         dotColor = "#666";
-      } else if (cert.blockchainStatus === "confirmed") {
+      } else if (publicProofStatus(cert) === "confirmed") {
         statusText = "Verified";
         statusColor = "#0D9B6A";
         statusColorDark = "#0A7D55";
@@ -1306,7 +1307,7 @@ This genesis certification demonstrates:
 
       // Use the server-derived explorer URL when confirmed; fall back to the
       // proof page. Never trust cert.transactionUrl (could be attacker-controlled).
-      const derivedExplorerUrl = cert.blockchainStatus === "confirmed"
+      const derivedExplorerUrl = publicProofStatus(cert) === "confirmed"
         ? getTxExplorerUrl(cert.transactionHash)
         : null;
       const linkUrl = derivedExplorerUrl ?? `${baseUrl}/proof/${certId}`;
@@ -1351,7 +1352,7 @@ This genesis certification demonstrates:
       const timestamp = certification.createdAt?.toISOString() || 'Unknown';
       const txHash = certification.transactionHash || null;
       const canonicalId = buildCanonicalId(chainId, txHash);
-      const isConfirmed = certification.blockchainStatus === "confirmed" && txHash;
+      const isConfirmed = publicProofStatus(certification) === "confirmed" && txHash;
       
       const markdown = `# Prove Before Act Certification
 
@@ -1368,7 +1369,7 @@ This genesis certification demonstrates:
 | **File Name** | ${certification.fileName} |
 | **Author** | ${certification.authorName || 'Not specified'} |
 | **Timestamp** | ${timestamp} |
-| **Status** | ${certification.blockchainStatus} |
+| **Status** | ${publicProofStatus(certification)} |
 
 ## Cryptographic Proof
 

@@ -6,6 +6,7 @@ import { coherenceChecks, certifications, users, fleets, fleetMembers } from "@s
 import { eq, and, sql, isNull } from "drizzle-orm";
 import { validateApiKey } from "./helpers";
 import { publicReadRateLimiter } from "../reliability";
+import { publicProofStatus } from "../proof-finality";
 
 // ── Coherence scoring ─────────────────────────────────────────────────────────
 // How well did the WHAT (actual result) stay aligned with the WHY (stated
@@ -161,7 +162,7 @@ export function registerCoherenceRoutes(app: Express) {
       const anchorAt = checkRow.createdAt ? new Date(checkRow.createdAt).getTime() : Date.now();
       const whatAt = whatCert.createdAt ? new Date(whatCert.createdAt).getTime() : Date.now();
       const score = computeCoherenceScore({
-        whatConfirmed: whatCert.blockchainStatus === "confirmed",
+        whatConfirmed: publicProofStatus(whatCert) === "confirmed",
         whatReferencesWhy: whatMeta.why_proof_id === why_proof_id,
         deltaMs: whatAt - anchorAt,
       });
@@ -192,7 +193,7 @@ export function registerCoherenceRoutes(app: Express) {
           linked: true,
           what_within_1h: whatAt - anchorAt >= 0 && whatAt - anchorAt <= COHERENCE_LINK_WINDOW_MS,
           what_references_why: whatMeta.why_proof_id === why_proof_id,
-          what_confirmed_on_chain: whatCert.blockchainStatus === "confirmed",
+          what_confirmed_on_chain: publicProofStatus(whatCert) === "confirmed",
           execution_preceded_intent: whatAt - anchorAt < 0,
         },
         message: `WHY→WHAT link recorded. Coherence score: ${score}/100.`,

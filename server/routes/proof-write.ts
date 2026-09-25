@@ -14,6 +14,7 @@ import { isMX8004Configured, recordCertificationAsJob } from "../mx8004";
 import { checkRateLimit, isAdminWallet, getTrialUser, consumeTrialCredit, getUserCreditBalance, consumeCredit, atomicConsumeCredit, atomicConsumeTrialCredit, refundCredit, refundTrialCredit, getApiKeyOwnerWallet, TRIAL_QUOTA, RATE_LIMIT_MAX_VALUE, buildCanonicalId, tryDisplaceAcpReservation, buildX402Block, buildPrepaidCreditsBlock, buildTrialExhaustedMessage, buildPaymentRequiredMessage } from "./helpers";
 import { inArray } from "drizzle-orm";
 import { resolveAgentForApiKey } from "../agent-identity";
+import { publicProofStatus } from "../proof-finality";
 
 function build4WField(metadata: unknown, baseUrl: string, certId: number | string): Record<string, unknown> {
   if (!metadata || typeof metadata !== "object") return {};
@@ -236,6 +237,7 @@ export function registerProofWriteRoutes(app: Express) {
           metadata: certifications.metadata,
           blockchainStatus: certifications.blockchainStatus,
           transactionHash: certifications.transactionHash,
+          finalityCheckedAt: certifications.finalityCheckedAt,
           createdAt: certifications.createdAt,
           walletAddress: users.walletAddress,
         })
@@ -254,7 +256,7 @@ export function registerProofWriteRoutes(app: Express) {
           file_hash: r.file_hash || r.fileHash,
           filename: r.file_name || r.fileName,
           metadata: r.metadata,
-          blockchain_status: r.blockchain_status || r.blockchainStatus,
+          blockchain_status: publicProofStatus(r),
           transaction_hash: r.transaction_hash || r.transactionHash,
           wallet_address: r.wallet_address || null,
           verify_url: `${baseUrl}/proof/${r.id}`,
@@ -572,7 +574,7 @@ export function registerProofWriteRoutes(app: Express) {
         !occupant.transactionHash;
 
       if (occupant && !occupantIsAcpReservation) {
-        const derivedStatus = occupant.blockchainStatus === "confirmed" ? "certified" : occupant.blockchainStatus;
+        const derivedStatus = publicProofStatus(occupant) === "confirmed" ? "certified" : publicProofStatus(occupant);
         logger.withRequest(req).info("File already certified", { fileHash: data.file_hash, certificationId: occupant.id });
         return res.status(200).json({
           proof_id: occupant.id,
@@ -640,7 +642,7 @@ export function registerProofWriteRoutes(app: Express) {
           else if (creditInfo) await refundCredit(creditInfo.userId).catch(() => {});
           const [refreshed] = await db.select().from(certifications).where(eq(certifications.fileHash, data.file_hash));
           const target = refreshed ?? occupant;
-          const derivedStatus = target.blockchainStatus === "confirmed" ? "certified" : target.blockchainStatus;
+          const derivedStatus = publicProofStatus(target) === "confirmed" ? "certified" : publicProofStatus(target);
           return res.status(200).json({
             proof_id: target.id,
             status: derivedStatus,
@@ -728,7 +730,7 @@ export function registerProofWriteRoutes(app: Express) {
           logger.withRequest(req).info("Concurrent duplicate proof request detected, credit refunded", { fileHash: data.file_hash, certificationId: existing.id });
           return res.status(200).json({
             proof_id: existing.id,
-            status: existing.blockchainStatus === "confirmed" ? "certified" : existing.blockchainStatus,
+            status: publicProofStatus(existing) === "confirmed" ? "certified" : publicProofStatus(existing),
             file_hash: existing.fileHash,
             filename: existing.fileName,
             metadata: existing.metadata || null,
@@ -770,7 +772,7 @@ export function registerProofWriteRoutes(app: Express) {
           .set({
             transactionHash: result.transactionHash,
             transactionUrl: result.transactionUrl,
-            blockchainStatus: "confirmed",
+            blockchainStatus: "pending",
             ...(result.latencyMs != null ? { blockchainLatencyMs: result.latencyMs } : {}),
           })
           .where(eq(certifications.id, pendingCertification.id))
@@ -847,7 +849,7 @@ export function registerProofWriteRoutes(app: Express) {
 
       return res.status(201).json({
         proof_id: certification.id,
-        status: "certified",
+        status: "pending",
         file_hash: certification.fileHash,
         filename: certification.fileName,
         metadata: certification.metadata || null,
@@ -876,7 +878,7 @@ export function registerProofWriteRoutes(app: Express) {
         } : {}),
         ...(creditInfo ? { credits: { remaining: Math.max(0, creditInfo.balance - 1) } } : {}),
         ...build4WField(certification.metadata, baseUrl, certification.id),
-        message: "File certified on MultiversX blockchain. Proof is immutable and publicly verifiable.",
+        message: "Transaction broadcast. Proof is pending independent on-chain finality verification.",
         ...await (async () => {
           // Build the full guidance block for every proof response.
           // No gating on cert count — every agent gets all information from cert #1.
@@ -889,6 +891,7 @@ export function registerProofWriteRoutes(app: Express) {
                   eq(certifications.userId, ownerUserId),
                   sql`auth_method != 'onboarding'`,
                   eq(certifications.blockchainStatus, "confirmed"),
+                  sql`${certifications.finalityCheckedAt} IS NOT NULL`,
                   sql`transaction_hash ~ '^[a-fA-F0-9]{64}$'`,
                 )),
               db.select({
@@ -1334,7 +1337,7 @@ export function registerProofWriteRoutes(app: Express) {
           }
           logger.withRequest(req).info("Concurrent duplicate audit request detected, credit refunded", { fileHash, certificationId: existingOnConflict.id });
           return res.status(200).json({
-            status: existingOnConflict.blockchainStatus === "confirmed" ? "already_certified" : existingOnConflict.blockchainStatus,
+            status: publicProofStatus(existingOnConflict) === "confirmed" ? "already_certified" : publicProofStatus(existingOnConflict),
             proof_id: existingOnConflict.id,
             audit_url: `${baseUrl}/audit/${existingOnConflict.id}`,
             proof_url: `${baseUrl}/proof/${existingOnConflict.id}`,
@@ -1376,7 +1379,7 @@ export function registerProofWriteRoutes(app: Express) {
           .set({
             transactionHash: result.transactionHash,
             transactionUrl: result.transactionUrl,
-            blockchainStatus: "confirmed",
+            blockchainStatus: "pending",
             ...(result.latencyMs != null ? { blockchainLatencyMs: result.latencyMs } : {}),
           })
           .where(eq(certifications.id, auditPending.id))
@@ -1407,7 +1410,7 @@ export function registerProofWriteRoutes(app: Express) {
         proof_id: certification.id,
         audit_url: `${baseUrl}/audit/${certification.id}`,
         proof_url: `${baseUrl}/proof/${certification.id}`,
-        status: "certified",
+        status: "pending",
         decision: data.decision,
         risk_level: data.risk_level,
         action_type: data.action_type,
@@ -1432,7 +1435,7 @@ export function registerProofWriteRoutes(app: Express) {
           }
         } : {}),
         ...(creditInfo ? { credits: { remaining: Math.max(0, creditInfo.balance - 1) } } : {}),
-        message: `Agent audit log certified on MultiversX. The proof_id is your compliance certificate — the agent was authorized to ${data.action_type} with decision: ${data.decision}.`,
+        message: `Agent audit log broadcast on MultiversX; proof ${certification.id} is pending finality verification.`,
         schema: `${baseUrl}/.well-known/agent-audit-schema.json`,
       });
     } catch (error) {
@@ -1870,7 +1873,7 @@ export function registerProofWriteRoutes(app: Express) {
             .set({
               transactionHash: result.transactionHash,
               transactionUrl: result.transactionUrl,
-              blockchainStatus: "confirmed",
+              blockchainStatus: "pending",
               ...(result.latencyMs != null ? { blockchainLatencyMs: result.latencyMs } : {}),
             })
             .where(eq(certifications.id, batchPending.id))

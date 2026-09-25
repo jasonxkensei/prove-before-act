@@ -13,6 +13,7 @@ import { isAdminWallet, getApiKeyOwnerWallet, getNetworkLabel, buildCanonicalId,
 import { Address } from "@multiversx/sdk-core";
 import { pgCheckRateLimit } from "../pgRateLimit";
 import { CANONICAL_PUBLIC_ORIGIN } from "../publicOrigin";
+import { getProofFinalityApiUrl, lookupProofFinality } from "../proof-finality";
 
 // Bounds how many unpaid ACP checkouts a single proven payer wallet may create within the
 // window. Deliberately independent of the generic per-API-key rate limiter, since the DoS
@@ -671,9 +672,7 @@ export function registerAcpRoutes(app: Express) {
 
       // Verify transaction on MultiversX
       const chainId = process.env.MULTIVERSX_CHAIN_ID || "1";
-      const apiUrl = chainId === "1"
-        ? "https://api.multiversx.com"
-        : "https://devnet-api.multiversx.com";
+      const apiUrl = getProofFinalityApiUrl();
       const explorerUrl = chainId === "1"
         ? "https://explorer.multiversx.com"
         : "https://devnet-explorer.multiversx.com";
@@ -733,6 +732,14 @@ export function registerAcpRoutes(app: Express) {
           });
         }
 
+        // Independently confirm block inclusion, not just an API "success" label.
+        if (await lookupProofFinality(data.tx_hash, checkout.fileHash, "acp") !== "confirmed") {
+          return res.status(402).json({
+            error: "PAYMENT_VERIFICATION_FAILED",
+            message: "Transaction finality is not established. Retry confirmation after block inclusion.",
+            retry: true,
+          });
+        }
         // At this point txData.status === "success" — proceed with field-level verification.
         if (isAdminExempt) {
           txVerified = true;
@@ -914,6 +921,7 @@ export function registerAcpRoutes(app: Express) {
               transactionHash: data.tx_hash,
               transactionUrl: `${explorerUrl}/transactions/${data.tx_hash}`,
               blockchainStatus: "confirmed",
+              finalityCheckedAt: new Date(),
               authMethod: "acp",
               // Deliberately do not write agentId here. The pending reservation
               // carries the checkout-time authenticated agent attribution, and a
@@ -1003,6 +1011,7 @@ export function registerAcpRoutes(app: Express) {
               transactionHash: data.tx_hash,
               transactionUrl: `${explorerUrl}/transactions/${data.tx_hash}`,
               blockchainStatus: "confirmed",
+              finalityCheckedAt: new Date(),
               isPublic: true,
               authMethod: "acp",
               ...(legacyAgentId ? { agentId: legacyAgentId } : {}),
