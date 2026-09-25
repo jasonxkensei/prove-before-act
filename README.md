@@ -251,7 +251,53 @@ curl -X POST https://provebeforeact.com/api/batch \
 
 ### Webhooks
 
-When a proof is anchored on-chain, Prove Before Act sends a POST to your `webhook_url` with HMAC-SHA256 signature in the `X-Webhook-Signature` header. Retry policy: 3 attempts with exponential backoff.
+When a proof is confirmed on-chain, Prove Before Act sends a POST to your
+`webhook_url`. Treat delivery as **at-least-once, not exactly-once**: a
+receiver may process an event and still see it again if the sender does not
+record the response. The sender makes up to three total attempts with backoff;
+delivery is not guaranteed if all attempts fail.
+
+Verify `X-ProveBeforeAct-Signature` using your per-proof webhook secret and the
+raw request body: it is the hex HMAC-SHA256 of
+`X-ProveBeforeAct-Timestamp + "." + rawBody`. The timestamp is Unix epoch
+seconds. Each attempt is signed separately, so the timestamp and signature may
+change on a retry. `X-ProveBeforeAct-Event` identifies the event, and
+`X-ProveBeforeAct-Delivery` is the certification ID and remains the same across
+retries. The legacy `X-xProof-*` headers are also sent with identical values.
+Verify the signature and timestamp before trusting the delivery ID.
+
+Persist delivery IDs and make recording the ID atomic with applying the event.
+For example, with Express and PostgreSQL, after signature verification:
+
+```sql
+CREATE TABLE webhook_deliveries (
+  delivery_id text PRIMARY KEY
+);
+```
+
+```js
+app.post("/webhook", async (req, res) => {
+  const deliveryId = req.get("X-ProveBeforeAct-Delivery");
+  if (!deliveryId) return res.sendStatus(400);
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { rowCount } = await client.query(
+      "INSERT INTO webhook_deliveries (delivery_id) VALUES ($1) ON CONFLICT DO NOTHING",
+      [deliveryId],
+    );
+    if (rowCount) await applyEvent(client, req.body); // same transaction
+    await client.query("COMMIT");
+    return res.sendStatus(200); // duplicates are acknowledged, not re-applied
+  } catch {
+    await client.query("ROLLBACK");
+    return res.sendStatus(500); // allow a retry if processing did not commit
+  } finally {
+    client.release();
+  }
+});
+```
 
 ### API Keys
 

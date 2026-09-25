@@ -18,9 +18,13 @@ import { CANONICAL_PUBLIC_ORIGIN } from "./publicOrigin";
  *   X-ProveBeforeAct-Signature  — hex-encoded HMAC-SHA256
  *   X-ProveBeforeAct-Timestamp  — unix epoch seconds (string)
  *   X-ProveBeforeAct-Event      — event type (e.g. "proof.certified")
- *   X-ProveBeforeAct-Delivery   — unique delivery ID (certification ID)
+ *   X-ProveBeforeAct-Delivery   — stable delivery ID (certification ID), reused on retries
  *
  * The historical X-xProof-* names are sent as identical legacy aliases.
+ * Delivery uses at-least-once semantics: up to three attempts may be sent,
+ * and a receiver can accept one even if the sender fails to record its response.
+ * Each attempt has a fresh timestamp and signature, so receivers should
+ * deduplicate using the verified delivery ID rather than either value.
  *
  * Verification steps (in order):
  *   1. Check X-ProveBeforeAct-Timestamp is present and valid integer
