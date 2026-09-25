@@ -34,6 +34,7 @@ interface Endpoint {
   description: string;
   body?: Record<string, string>;
   response?: string;
+  responseLabel?: string;
   curl: string;
 }
 
@@ -55,7 +56,7 @@ const DOC_STYLES = `
   .pba-docs-root a:focus-visible, .pba-docs-root button:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 3px; }
 `;
 
-const ENDPOINT_GROUPS: EndpointGroup[] = [
+export const ENDPOINT_GROUPS: EndpointGroup[] = [
   {
     id: "getting-started",
     title: "Getting Started",
@@ -540,39 +541,45 @@ const ENDPOINT_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "(your webhook URL)",
         auth: "HMAC-SHA256 signature",
-        description: `When you provide a webhook_url in POST /api/proof or /api/batch, Prove Before Act sends a POST request to your URL when the proof is confirmed on-chain. The request includes an X-ProveBeforeAct-Signature header containing an HMAC-SHA256 signature of the body. X-xProof-Signature remains an identical legacy alias while existing integrations migrate. For per-proof and per-batch webhooks the signing secret is returned as webhook_secret in the API response — store it securely and use it to verify the signature. For account-level webhooks (set at /api/agents/register) the secret you configured at registration is used instead.`,
+        description: `When you provide a webhook_url in POST /api/proof or /api/batch, Prove Before Act sends this POST body to your URL after the proof is confirmed on-chain. For per-proof and per-batch webhooks the signing secret is returned as webhook_secret in the API response — store it securely. For account-level webhooks (set at /api/agents/register) use the secret configured at registration. Verify the signature and timestamp before trusting the event or delivery ID. Delivery is at least once, not exactly once: the sender makes up to three attempts per delivery round with backoff; if all fail, an operator may start a new round. X-ProveBeforeAct-Delivery is the certification ID and stays the same across attempts and manual retries, even though the timestamp and signature change. Deduplicate by that verified delivery ID: persist it atomically with applying the event, and return success for duplicates without applying them again. If processing fails, return an error so delivery can be retried. Legacy X-xProof-* headers carry identical values during migration.`,
+        responseLabel: "Webhook POST body",
         response: `{
-  "event": "proof.confirmed",
+  "event": "proof.certified",
   "proof_id": "uuid",
+  "status": "certified",
   "file_hash": "abc123...",
-  "tx_hash": "0x...",
-  "timestamp": "2025-01-01T00:00:00Z"
-}
-
-// POST /api/proof response (when webhook_url supplied):
-{
-  "proof_id": "...",
-  "webhook_status": "pending",
-  "webhook_secret": "<unique-32-byte-hex-secret>",
-  ...
+  "filename": "report.pdf",
+  "verify_url": "https://provebeforeact.com/proof/uuid",
+  "certificate_url": "https://provebeforeact.com/api/certificates/uuid.pdf",
+  "proof_json_url": "https://provebeforeact.com/proof/uuid.json",
+  "blockchain": {
+    "network": "MultiversX",
+    "transaction_hash": "abc123...",
+    "explorer_url": "https://explorer.multiversx.com/transactions/abc123..."
+  },
+  "timestamp": "2025-01-01T00:00:00.000Z"
 }`,
-        curl: `# Verify webhook signature in your handler:
+        curl: `# Verify webhook signature in your handler. Canonical request headers:
+# X-ProveBeforeAct-Signature: hex HMAC-SHA256 of timestamp + "." + raw body
+# X-ProveBeforeAct-Timestamp: Unix epoch seconds (check freshness)
+# X-ProveBeforeAct-Event: proof.certified
+# X-ProveBeforeAct-Delivery: stable certification ID (deduplication key)
 # The signing secret is returned as webhook_secret in the /api/proof (or /api/batch) response.
-# Signed message = timestamp + "." + raw_request_body
-# signature = HMAC-SHA256(webhook_secret, signed_message)
-# Compare with X-ProveBeforeAct-Signature; also validate X-ProveBeforeAct-Timestamp (unix seconds)
-# to guard against replay attacks (reject if > 5 minutes old).
+# Sign the exact raw bytes, before JSON parsing. Reject timestamps older than
+# 5 minutes or more than 60 seconds in the future (clock skew).
 
 # Python example:
 import hmac, hashlib, time
 webhook_secret = b"<your webhook_secret from API response>"
 timestamp = request.headers["X-ProveBeforeAct-Timestamp"]
 raw_body = request.body  # raw bytes before JSON parsing
-if abs(time.time() - int(timestamp)) > 300:
-    raise ValueError("Timestamp too old — possible replay attack")
-signed_message = (timestamp + "." + raw_body.decode()).encode()
+if int(timestamp) < time.time() - 300 or int(timestamp) > time.time() + 60:
+    raise ValueError("Timestamp outside allowed window")
+signed_message = timestamp.encode("ascii") + b"." + raw_body
 expected = hmac.new(webhook_secret, signed_message, hashlib.sha256).hexdigest()
-assert hmac.compare_digest(expected, request.headers["X-ProveBeforeAct-Signature"])`,
+assert hmac.compare_digest(expected, request.headers["X-ProveBeforeAct-Signature"])
+# Only now trust X-ProveBeforeAct-Event and X-ProveBeforeAct-Delivery.
+# Record the delivery ID atomically with applying the event; acknowledge duplicates.`,
       },
     ],
   },
@@ -769,7 +776,7 @@ function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
 
           {endpoint.response && (
             <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Response</h4>
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">{endpoint.responseLabel || "Response"}</h4>
               <pre className="bg-muted/50 rounded-md p-3 text-xs font-mono overflow-x-auto whitespace-pre-wrap break-all text-muted-foreground">
                 {endpoint.response}
               </pre>

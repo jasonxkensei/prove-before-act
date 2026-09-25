@@ -2718,13 +2718,14 @@ Include \`webhook_url\` in your request to receive a POST callback when the proo
 }
 \`\`\`
 
-**Security:** Each webhook is signed with HMAC-SHA256. Verify using:
-- Header: \`X-ProveBeforeAct-Signature\` (hex-encoded HMAC of the JSON body)
-- Header: \`X-ProveBeforeAct-Event\` (always \`proof.certified\`)
-- Header: \`X-ProveBeforeAct-Delivery\` (certification ID)
-- Legacy aliases: \`X-xProof-Signature\`, \`X-xProof-Event\`, and \`X-xProof-Delivery\` are sent with identical values during migration.
+**Security:** Verify the four canonical headers before processing:
+- \`X-ProveBeforeAct-Signature\`: hex HMAC-SHA256 using the webhook secret over \`timestamp + "." + rawBody\` (the exact request body bytes before JSON parsing, not a reserialized JSON object).
+- \`X-ProveBeforeAct-Timestamp\`: Unix epoch seconds; reject values older than 300 seconds or more than 60 seconds in the future.
+- \`X-ProveBeforeAct-Event\`: \`proof.certified\`.
+- \`X-ProveBeforeAct-Delivery\`: certification ID, stable across attempts and operator-initiated retries.
+The legacy \`X-xProof-*\` aliases carry identical values. For per-proof and per-batch webhooks, use the \`webhook_secret\` returned by the API; for account-level webhooks use the secret configured at registration. Verify the signature and timestamp before trusting the delivery ID.
 
-**Retry policy:** Up to 3 attempts with exponential backoff (immediate, 10s, 20s). Status updates: pending → delivered or failed.
+**Retry policy:** At-least-once delivery: up to 3 attempts per round, with 10s before the second attempt and 20s before the third. If a round fails, an operator may start a new round with the same delivery ID; delivery is not guaranteed if attempts fail. Each attempt has a new timestamp and signature. Deduplicate by verified delivery ID, recording it atomically with applying the event; acknowledge duplicates without reapplying. Status updates: pending → delivered or failed.
 
 ## Authentication
 - API keys are prefixed with \`pm_\` (e.g. \`pm_abc123...\`)

@@ -156,7 +156,7 @@ function safeWebhookErrorCode(error: unknown): string {
   return /^[A-Z][A-Z0-9_]{0,39}$/.test(code) ? code : "unknown";
 }
 
-interface WebhookPayload {
+export interface WebhookPayload {
   event: "proof.certified";
   proof_id: string;
   status: "certified";
@@ -171,6 +171,28 @@ interface WebhookPayload {
     explorer_url: string | null;
   };
   timestamp: string;
+}
+
+export function buildWebhookPayload(
+  cert: Pick<typeof certifications.$inferSelect, "id" | "fileHash" | "fileName" | "transactionHash" | "transactionUrl" | "createdAt">,
+  baseUrl: string,
+): WebhookPayload {
+  return {
+    event: "proof.certified",
+    proof_id: cert.id,
+    status: "certified",
+    file_hash: cert.fileHash,
+    filename: cert.fileName,
+    verify_url: `${baseUrl}/proof/${cert.id}`,
+    certificate_url: `${baseUrl}/api/certificates/${cert.id}.pdf`,
+    proof_json_url: `${baseUrl}/proof/${cert.id}.json`,
+    blockchain: {
+      network: "MultiversX",
+      transaction_hash: cert.transactionHash,
+      explorer_url: cert.transactionUrl,
+    },
+    timestamp: cert.createdAt?.toISOString() || new Date().toISOString(),
+  };
 }
 
 /**
@@ -272,22 +294,7 @@ export async function deliverWebhook(
     }
     if (publicProofStatus(cert) !== "confirmed") return false;
 
-    const payload: WebhookPayload = {
-      event: "proof.certified",
-      proof_id: cert.id,
-      status: "certified",
-      file_hash: cert.fileHash,
-      filename: cert.fileName,
-      verify_url: `${baseUrl}/proof/${cert.id}`,
-      certificate_url: `${baseUrl}/api/certificates/${cert.id}.pdf`,
-      proof_json_url: `${baseUrl}/proof/${cert.id}.json`,
-      blockchain: {
-        network: "MultiversX",
-        transaction_hash: cert.transactionHash,
-        explorer_url: cert.transactionUrl,
-      },
-      timestamp: cert.createdAt?.toISOString() || new Date().toISOString(),
-    };
+    const payload = buildWebhookPayload(cert, baseUrl);
 
     const payloadStr = JSON.stringify(payload);
     const timestamp = Math.floor(Date.now() / 1000).toString();
