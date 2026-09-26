@@ -346,6 +346,61 @@ describeWithPostgres("PostgreSQL webhook delivery leases", () => {
     expect(outboundDeliveryIds).toEqual([certificationId]);
   }, 30_000);
 
+  it("fails a pending callback and releases its lease when chain finality fails", async () => {
+    const certificationId = `webhook-pg-failed-finality-${runId}`;
+    const previousLeaseToken = "lease-from-failed-finality-worker";
+    await createCertification(
+      certificationId,
+      {
+        token: previousLeaseToken,
+        expiresAt: new Date(Date.now() - 1_000),
+      },
+      "pending",
+    );
+    mockOutboundHttpsRequests();
+    const transactionHash = (await testPool!.query<{ transaction_hash: string }>(
+      "SELECT transaction_hash FROM certifications WHERE id = $1",
+      [certificationId],
+    )).rows[0]!.transaction_hash;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const requestedHash = new URL(String(input)).pathname.split("/").pop()!;
+      return new Response(JSON.stringify({
+        txHash: requestedHash,
+        status: requestedHash === transactionHash ? "fail" : "pending",
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+
+    await loadWorker("webhook-pg-failed-finality");
+    const { pollProofFinality } = await import("../server/proof-finality");
+    await pollProofFinality();
+
+    await vi.waitFor(async () => {
+      const row = await testPool!.query<{
+        blockchain_status: string;
+        webhook_status: string;
+        webhook_attempts: number;
+        webhook_lease_token: string | null;
+        webhook_lease_expires_at: Date | null;
+      }>(
+        `SELECT blockchain_status, webhook_status, webhook_attempts,
+                webhook_lease_token, webhook_lease_expires_at
+           FROM certifications WHERE id = $1`,
+        [certificationId],
+      );
+      expect(row.rows[0]).toMatchObject({
+        blockchain_status: "failed",
+        webhook_status: "failed",
+        webhook_attempts: 0,
+        webhook_lease_token: null,
+        webhook_lease_expires_at: null,
+      });
+    });
+    expect(outboundDeliveryIds).toEqual([]);
+  }, 30_000);
+
   it("extends an active lease before retrying a callback", async () => {
     const certificationId = `webhook-pg-renew-${runId}`;
     await createCertification(certificationId);
