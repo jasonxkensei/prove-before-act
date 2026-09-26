@@ -9,6 +9,7 @@
     "start": "NODE_ENV=production node dist/index.js",
     "check": "tsc",
     "smoke:mx8004": "tsx scripts/mx8004-mainnet-smoke.ts",
+    "smoke:standard-crawler": "node scripts/check-production-standard-crawler.mjs",
     "test": "vitest run",
     "db:push": "drizzle-kit push",
     "proofs:reconcile-legacy-finality": "tsx scripts/reconcile-legacy-proof-finality.ts",

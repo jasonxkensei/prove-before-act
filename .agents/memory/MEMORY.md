@@ -33,3 +33,4 @@
 - [Off-chain PBA witness boundary](pba-off-chain-witness-boundary.md) — distinguish recipient-accepted HTTP delivery from downstream effects; independent witness claims need public signed preimages.
 - [Vitest explicit paths and JSX](vitest-explicit-paths-jsx.md) — an explicit test path still obeys the include glob; SSR imports can use a different JSX transform from the browser.
 - [Conversion health outage boundary](conversion-health-outage-boundary.md) — shared failure counts cannot survive a full database outage without an independent sink; report unknown, not healthy.
+- [Production crawler smoke target](production-crawler-smoke-target.md) — deployment primary can be a retired host; verify and check the canonical published domain directly.
