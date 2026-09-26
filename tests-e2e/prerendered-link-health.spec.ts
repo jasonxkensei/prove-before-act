@@ -77,6 +77,12 @@ function extractInternalPaths(html: string): string[] {
   return [...unique];
 }
 
+function publicHeader(html: string): string {
+  const header = html.match(/<header class="public-site-header[^"]*"[^>]*>[\s\S]*?<\/header>/)?.[0];
+  expect(header, "crawler page should include the shared public header").toBeDefined();
+  return header!;
+}
+
 /**
  * Return true for paths that should not be asserted to return HTTP 200:
  *   - /api/…         — POST-only or auth-gated API endpoints
@@ -272,10 +278,8 @@ test.describe("/agent-context — prerendered link health", () => {
     expect(html).toContain("Prove Before Act");
   });
 
-  test("nav contains a link to /standard (The PBA Specification)", async () => {
-    // The nav emits: <a href="https://provebeforeact.com/standard">The PBA Specification</a>
-    expect(html).toContain("provebeforeact.com/standard");
-    expect(html).toContain("The PBA Specification");
+  test("nav links to /standard with the shared Standard label", async () => {
+    expect(publicHeader(html)).toContain('<a href="https://provebeforeact.com/standard">Standard</a>');
   });
 
   test("nav contains a link to /agent-context.md (machine-readable)", async () => {
@@ -363,15 +367,14 @@ test.describe("/fleet — prerendered link health", () => {
     expect(html).toContain("Fleet Coherence");
   });
 
-  test("nav contains 'Prove Before Act' brand text linking to home", async () => {
-    // Nav: <a href="https://provebeforeact.com" …>← Prove Before Act</a>
-    expect(html).toContain("Prove Before Act");
-    expect(html).toContain("← Prove Before Act");
+  test("shared brand logo links home with an accessible name", async () => {
+    const header = publicHeader(html);
+    expect(header).toContain('<a class="public-site-brand" href="https://provebeforeact.com">');
+    expect(header).toMatch(/<img[^>]+alt="Prove Before Act"/);
   });
 
-  test("nav contains a link to /coherence (Coherence Layer)", async () => {
-    expect(html).toContain("provebeforeact.com/coherence");
-    expect(html).toContain("Coherence Layer");
+  test("nav links to /coherence with the shared Coherence label", async () => {
+    expect(publicHeader(html)).toContain('<a href="https://provebeforeact.com/coherence">Coherence</a>');
   });
 
   test("resources section contains a link to /agent-context", async () => {
@@ -428,9 +431,10 @@ test.describe("/coherence — prerendered link health", () => {
     expect(html).toContain("Coherence Layer");
   });
 
-  test("nav contains 'Prove Before Act' brand text linking to home", async () => {
-    expect(html).toContain("Prove Before Act");
-    expect(html).toContain("← Prove Before Act");
+  test("shared brand logo links home with an accessible name", async () => {
+    const header = publicHeader(html);
+    expect(header).toContain('<a class="public-site-brand" href="https://provebeforeact.com">');
+    expect(header).toMatch(/<img[^>]+alt="Prove Before Act"/);
   });
 
   test("resources section contains 'Fleet view' linking to /fleet", async () => {
@@ -495,9 +499,9 @@ test.describe("/agents — prerendered link health", () => {
   const EXPECTED_LINKS = [
     { location: "nav", path: "/agent-context" },
     { location: "nav", path: "/docs" },
-    { location: "nav", path: "/mcp" },
     { location: "nav", path: "/leaderboard" },
     { location: "resources", path: "/skill.md" },
+    { location: "resources", path: "/.well-known/mcp.json" },
     { location: "footer", path: "/legal/mentions" },
     { location: "footer", path: "/legal/privacy" },
     { location: "footer", path: "/legal/terms" },
@@ -512,6 +516,11 @@ test.describe("/agents — prerendered link health", () => {
       expect(res.status(), `${location} link ${path} should return 200`).toBe(200);
     });
   }
+
+  test("documents the POST-only MCP endpoint without linking to it as a page", () => {
+    expect(html).toContain("https://provebeforeact.com/mcp");
+    expect(extractInternalPaths(html)).not.toContain("/mcp");
+  });
 
   test("all collected internal links resolve to HTTP 200", async ({ request }) => {
     const paths = extractInternalPaths(html).filter((path) => !shouldSkip(path));
@@ -639,14 +648,13 @@ test.describe("cross-page consistency — prerendered pages", () => {
     expect(fleetBody).toContain("provebeforeact.com/agent-context");
   });
 
-  test("/agent-context nav links to /standard with anchor text 'The PBA Specification'", async ({
+  test("/agent-context nav links to /standard with the shared Standard label", async ({
     request,
   }) => {
     const res = await request.get("/agent-context");
     expect(res.status()).toBe(200);
     const body = await res.text();
-    expect(body).toContain("provebeforeact.com/standard");
-    expect(body).toContain("The PBA Specification");
+    expect(publicHeader(body)).toContain('<a href="https://provebeforeact.com/standard">Standard</a>');
   });
 
   test("/standard resolves to HTTP 200 (spec page reachable from /agent-context nav)", async ({
