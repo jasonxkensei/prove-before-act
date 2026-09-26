@@ -90,6 +90,7 @@ const STATS_CACHE_TTL_MS = 60_000;
 const TRAFFIC_SOURCES_WINDOW_DAYS = 30;
 const ACTIVATION_FUNNEL_WINDOW_DAYS = 30;
 const CAMPAIGN_RECOMMENDATION_MIN_ENTRY_VISITORS = 10;
+const ACTIVATION_RECOMMENDATION_MIN_FROM_VISITORS = 10;
 const DIRECT_UNKNOWN_CAMPAIGN = "direct / unknown";
 let statsCache: { body: object; cachedAt: number } | null = null;
 let statsInflight: Promise<object> | null = null;
@@ -149,23 +150,32 @@ function buildActivationAnalysis(
   // Non-browser traffic can have registrations or proofs without entering the
   // activation page. Keep its counts visible, but do not recommend product
   // changes from that incomparable population.
-  const largestDropOff = isComparableActivationSegment(trafficSegment, stages)
-    ? (comparableDrops[0] ?? null)
+  const isComparable = isComparableActivationSegment(trafficSegment, stages);
+  const largestDropOff = isComparable
+    ? comparableDrops.find((row) => row.from_previous! >= ACTIVATION_RECOMMENDATION_MIN_FROM_VISITORS)
+    : null;
+  const lowConfidenceDropOff = isComparable
+    ? comparableDrops.find((row) => row.from_previous! < ACTIVATION_RECOMMENDATION_MIN_FROM_VISITORS)
+    : null;
+  const describeDrop = (row: typeof stageRows[number] | null | undefined) => row
+    ? {
+        from_stage: ACTIVATION_STAGE_ORDER[stageRows.indexOf(row) - 1],
+        to_stage: row.stage,
+        from_visitors: row.from_previous,
+        to_visitors: row.visitors,
+        lost_visitors: row.drop_off,
+        drop_off_rate: row.drop_off_rate,
+      }
     : null;
 
   return {
     traffic_segment: trafficSegment,
     stages: stageRows,
-    largest_drop_off: largestDropOff
-      ? {
-          from_stage: ACTIVATION_STAGE_ORDER[stageRows.indexOf(largestDropOff) - 1],
-          to_stage: largestDropOff.stage,
-          from_visitors: largestDropOff.from_previous,
-          to_visitors: largestDropOff.visitors,
-          lost_visitors: largestDropOff.drop_off,
-          drop_off_rate: largestDropOff.drop_off_rate,
-        }
-      : null,
+    largest_drop_off: describeDrop(largestDropOff),
+    low_confidence_drop_off: describeDrop(lowConfidenceDropOff),
+    recommendation_sample_size: isComparable
+      ? largestDropOff?.from_previous ?? Math.max(0, ...comparableDrops.map((row) => row.from_previous ?? 0))
+      : 0,
   };
 }
 
@@ -672,8 +682,10 @@ export function registerAdminRoutes(app: Express) {
         return totals;
       }, emptyStages());
       const overallAnalysis = buildActivationAnalysis(overallStages, "all");
-      const largestSegmentDropOff = comparableSegments
-        .map((segment) => buildActivationAnalysis(segment.stages, segment.traffic_segment))
+      const segmentReviews = segmentAnalysis.map((segment) =>
+        buildActivationAnalysis(segment.stages, segment.traffic_segment)
+      );
+      const largestSegmentDropOff = segmentReviews
         .filter((segment) => segment.largest_drop_off !== null)
         .sort((a, b) => {
           const aDrop = a.largest_drop_off!;
@@ -694,15 +706,18 @@ export function registerAdminRoutes(app: Express) {
           second_proof: parseCount(row, "second_proof"),
         };
         const entryVisitors = parseCount(row, "entry_visitors");
-        const recommendationEligible = entryVisitors >= CAMPAIGN_RECOMMENDATION_MIN_ENTRY_VISITORS;
         const analysis = buildActivationAnalysis(stages, "campaign");
+        const recommendationEligible = entryVisitors >= CAMPAIGN_RECOMMENDATION_MIN_ENTRY_VISITORS
+          && analysis.largest_drop_off !== null;
         return {
           campaign_source: String(row.campaign_source || DIRECT_UNKNOWN_CAMPAIGN),
           original_sources: Array.isArray(row.original_sources) ? row.original_sources as string[] : [],
           entry_visitors: entryVisitors,
           recommendation_eligible: recommendationEligible,
+          recommendation_sample_size: analysis.recommendation_sample_size,
           stages: analysis.stages,
           largest_drop_off: recommendationEligible ? analysis.largest_drop_off : null,
+          low_confidence_drop_off: analysis.low_confidence_drop_off,
         };
       });
       const largestCampaignDropOff = campaignAnalysis
@@ -719,10 +734,16 @@ export function registerAdminRoutes(app: Express) {
         })[0] ?? null;
       const totalEvents = parseCount(totalsRow, "events");
       const funnelReview = {
-        status: totalEvents > 0 ? "ready" : "awaiting_traffic",
-        message: totalEvents > 0
-          ? "Review the largest transition drop before changing the product."
-          : "No published conversion traffic is recorded in this window. Republish with analytics enabled, then review after at least 7 complete days.",
+        status: totalEvents === 0 ? "awaiting_traffic"
+          : largestSegmentDropOff ? "ready" : "low_confidence",
+        message: totalEvents === 0
+          ? "No published conversion traffic is recorded in this window. Republish with analytics enabled, then review after at least 7 complete days."
+          : largestSegmentDropOff
+            ? "Review the largest qualifying transition drop before changing the product."
+            : `No comparable transition has ${ACTIVATION_RECOMMENDATION_MIN_FROM_VISITORS} starting visitors yet. Wait for more traffic before changing the product.`,
+        minimum_sample_size: ACTIVATION_RECOMMENDATION_MIN_FROM_VISITORS,
+        sample_size: largestSegmentDropOff?.largest_drop_off?.from_visitors
+          ?? Math.max(0, ...segmentReviews.map((segment) => segment.recommendation_sample_size)),
         hypothesis: largestSegmentDropOff?.largest_drop_off
           ? `Test only the ${largestSegmentDropOff.traffic_segment} ${largestSegmentDropOff.largest_drop_off.from_stage} → ${largestSegmentDropOff.largest_drop_off.to_stage} transition; keep SEO, pricing, branding, and feature scope unchanged.`
           : null,
@@ -773,11 +794,10 @@ export function registerAdminRoutes(app: Express) {
         },
         activation_review: {
           window_days: ACTIVATION_FUNNEL_WINDOW_DAYS,
+          minimum_transition_visitors: ACTIVATION_RECOMMENDATION_MIN_FROM_VISITORS,
           stage_order: ACTIVATION_STAGE_ORDER,
           overall: overallAnalysis,
-          by_traffic_segment: segmentAnalysis.map((segment) =>
-            buildActivationAnalysis(segment.stages, segment.traffic_segment),
-          ),
+          by_traffic_segment: segmentReviews,
           largest_segment_drop_off: largestSegmentDropOff,
           campaign_attribution: {
             model: "first_touch_30d",

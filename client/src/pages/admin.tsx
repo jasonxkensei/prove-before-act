@@ -229,6 +229,7 @@ interface ConversionFunnelData {
   };
   activation_review: {
     window_days: number;
+    minimum_transition_visitors: number;
     stage_order: Array<"scenario_selected" | "primary_cta_clicked" | "registered" | "first_proof" | "second_proof">;
     overall: ActivationReviewSegment;
     by_traffic_segment: ActivationReviewSegment[];
@@ -241,13 +242,24 @@ interface ConversionFunnelData {
     by_utm_source: CampaignActivationReview[];
     largest_campaign_drop_off: CampaignActivationReview | null;
     recommendation: {
-      status: "ready" | "awaiting_traffic";
+      status: "ready" | "low_confidence" | "awaiting_traffic";
       message: string;
       hypothesis: string | null;
+      minimum_sample_size: number;
+      sample_size: number;
     };
   };
   alerts: Array<{ severity: "warning"; condition: string; message: string }>;
   generated_at: string;
+}
+
+interface ActivationReviewDrop {
+  from_stage: string;
+  to_stage: string;
+  from_visitors: number | null;
+  to_visitors: number;
+  lost_visitors: number | null;
+  drop_off_rate: number | null;
 }
 
 interface ActivationReviewSegment {
@@ -260,14 +272,9 @@ interface ActivationReviewSegment {
     drop_off: number | null;
     drop_off_rate: number | null;
   }>;
-  largest_drop_off: {
-    from_stage: string;
-    to_stage: string;
-    from_visitors: number | null;
-    to_visitors: number;
-    lost_visitors: number | null;
-    drop_off_rate: number | null;
-  } | null;
+  largest_drop_off: ActivationReviewDrop | null;
+  low_confidence_drop_off: ActivationReviewDrop | null;
+  recommendation_sample_size: number;
 }
 
 interface CampaignActivationReview {
@@ -275,8 +282,10 @@ interface CampaignActivationReview {
   original_sources: string[];
   entry_visitors: number;
   recommendation_eligible: boolean;
+  recommendation_sample_size: number;
   stages: ActivationReviewSegment["stages"];
   largest_drop_off: ActivationReviewSegment["largest_drop_off"];
+  low_confidence_drop_off: ActivationReviewSegment["low_confidence_drop_off"];
 }
 
 const ACTIVATION_STAGE_LABELS: Record<string, string> = {
@@ -813,15 +822,22 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
               <p className="text-sm font-medium">Activation review</p>
               <p className="text-xs text-muted-foreground">
                 {data.collection.confirmed
-                  ? `Largest relative drop across the ${review.window_days}-day window`
+                  ? `Largest qualifying relative drop across the ${review.window_days}-day window`
                   : "A decision will be available after the published app receives traffic"}
               </p>
             </div>
             <Badge variant={review.recommendation.status === "ready" ? "secondary" : "outline"}>
-              {review.recommendation.status === "ready" ? "Review ready" : "Awaiting traffic"}
+              {review.recommendation.status === "ready"
+                ? "Review ready"
+                : review.recommendation.status === "low_confidence" ? "Low confidence" : "Awaiting traffic"}
             </Badge>
           </div>
           <p className="mt-3 text-sm text-muted-foreground">{review.recommendation.message}</p>
+          <p className="mt-1 text-xs text-muted-foreground" data-testid="activation-transition-sample">
+            {largestDropOff ? "Recommended" : "Largest observed"} transition:{" "}
+            {review.recommendation.sample_size} starting visitors (minimum{" "}
+            {review.recommendation.minimum_sample_size}).
+          </p>
           {largestDropOff && review.largest_segment_drop_off && (
             <div className="mt-3 rounded border bg-background p-3 text-sm" data-testid="largest-funnel-dropoff">
               <span className="font-medium">Largest segment drop-off: </span>
@@ -831,7 +847,7 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
                 {ACTIVATION_STAGE_LABELS[largestDropOff.to_stage] ?? largestDropOff.to_stage}
               </span>
               <span className="ml-2 text-muted-foreground">
-                ({largestDropOff.lost_visitors ?? 0} visitors, {largestDropOff.drop_off_rate ?? 0}%)
+                ({largestDropOff.lost_visitors ?? 0} lost / {largestDropOff.from_visitors ?? 0} starting, {largestDropOff.drop_off_rate ?? 0}%)
               </span>
             </div>
           )}
@@ -869,8 +885,16 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
                         <td className="py-2 px-2 text-right tabular-nums">{stageValue("second_proof")}</td>
                         <td className="py-2 pl-2">
                           {drop
-                            ? `${ACTIVATION_STAGE_LABELS[drop.from_stage] ?? drop.from_stage} → ${ACTIVATION_STAGE_LABELS[drop.to_stage] ?? drop.to_stage} (${drop.drop_off_rate ?? 0}%)`
-                            : "—"}
+                            ? `${ACTIVATION_STAGE_LABELS[drop.from_stage] ?? drop.from_stage} → ${ACTIVATION_STAGE_LABELS[drop.to_stage] ?? drop.to_stage} (${drop.from_visitors ?? 0} starting, ${drop.drop_off_rate ?? 0}%)`
+                            : segment.low_confidence_drop_off
+                              ? `Low confidence (${segment.low_confidence_drop_off.from_visitors ?? 0} / ${review.minimum_transition_visitors} starting visitors)`
+                              : "—"}
+                          {segment.low_confidence_drop_off && drop && (
+                            <p className="text-muted-foreground">
+                              Excluded {segment.low_confidence_drop_off.drop_off_rate}% drop from{" "}
+                              {segment.low_confidence_drop_off.from_visitors} visitors (low confidence)
+                            </p>
+                          )}
                         </td>
                       </tr>
                     );
@@ -902,12 +926,13 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
                 →{" "}
                 {ACTIVATION_STAGE_LABELS[review.largest_campaign_drop_off.largest_drop_off.to_stage]
                   ?? review.largest_campaign_drop_off.largest_drop_off.to_stage}{" "}
-                ({review.largest_campaign_drop_off.largest_drop_off.lost_visitors ?? 0} visitors,{" "}
+                ({review.largest_campaign_drop_off.largest_drop_off.lost_visitors ?? 0} lost /{" "}
+                {review.largest_campaign_drop_off.largest_drop_off.from_visitors ?? 0} starting,{" "}
                 {review.largest_campaign_drop_off.largest_drop_off.drop_off_rate ?? 0}%)
               </p>
             ) : (
               <p className="mt-3 text-xs text-muted-foreground">
-                No campaign source has enough entry visitors for a recommendation yet.
+                No campaign has enough entry and transition visitors for a recommendation yet.
               </p>
             )}
             {review.by_utm_source.length > 0 && (
@@ -948,14 +973,22 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
                           <td className="py-2 px-2 text-right tabular-nums">{stageValue("second_proof")}</td>
                           <td className="py-2 pl-2">
                             {!campaign.recommendation_eligible
-                              ? `Insufficient sample (${campaign.entry_visitors})`
+                              ? campaign.entry_visitors < review.campaign_attribution.minimum_entry_visitors
+                                ? `Insufficient entry sample (${campaign.entry_visitors} / ${review.campaign_attribution.minimum_entry_visitors})`
+                                : `Low confidence transition (${campaign.low_confidence_drop_off?.from_visitors ?? campaign.recommendation_sample_size} / ${review.minimum_transition_visitors} starting visitors)`
                               : campaign.largest_drop_off
                                 ? `${ACTIVATION_STAGE_LABELS[campaign.largest_drop_off.from_stage]
                                   ?? campaign.largest_drop_off.from_stage} → ${
                                   ACTIVATION_STAGE_LABELS[campaign.largest_drop_off.to_stage]
                                   ?? campaign.largest_drop_off.to_stage
-                                } (${campaign.largest_drop_off.drop_off_rate ?? 0}%)`
+                                } (${campaign.largest_drop_off.from_visitors ?? 0} starting, ${campaign.largest_drop_off.drop_off_rate ?? 0}%)`
                                 : "—"}
+                            {campaign.low_confidence_drop_off && campaign.recommendation_eligible && (
+                              <p className="text-muted-foreground">
+                                Excluded {campaign.low_confidence_drop_off.drop_off_rate}% drop from{" "}
+                                {campaign.low_confidence_drop_off.from_visitors} visitors (low confidence)
+                              </p>
+                            )}
                           </td>
                         </tr>
                       );

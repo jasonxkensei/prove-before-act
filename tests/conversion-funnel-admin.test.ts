@@ -662,13 +662,21 @@ describe("GET /api/admin/conversion-funnel", () => {
           },
         },
         activation_review: {
-          recommendation: { status: "ready" },
+          minimum_transition_visitors: 10,
+          recommendation: {
+            status: "low_confidence",
+            minimum_sample_size: 10,
+            sample_size: 1,
+            hypothesis: null,
+          },
           by_traffic_segment: [
             expect.objectContaining({
               traffic_segment: "human_browser",
-              largest_drop_off: expect.objectContaining({
+              largest_drop_off: null,
+              low_confidence_drop_off: expect.objectContaining({
                 from_stage: "first_proof",
                 to_stage: "second_proof",
+                from_visitors: 1,
               }),
             }),
           ],
@@ -852,6 +860,130 @@ describe("GET /api/admin/conversion-funnel", () => {
     }
   });
 
+  it("ignores a one-visitor 100% drop when another segment has a qualifying transition", async () => {
+    const executeSpy = stubActivationQueries([
+      {
+        traffic_segment: "human_browser",
+        scenario_selected: "1",
+        primary_cta_clicked: "0",
+        registered: "0",
+        first_proof: "0",
+        second_proof: "0",
+      },
+      {
+        traffic_segment: "declared_agent",
+        scenario_selected: "20",
+        primary_cta_clicked: "8",
+        registered: "8",
+        first_proof: "8",
+        second_proof: "8",
+      },
+    ]);
+    try {
+      const body = await getAuthorizedFunnel();
+      expect(body.activation_review.largest_segment_drop_off).toMatchObject({
+        traffic_segment: "declared_agent",
+        largest_drop_off: {
+          from_visitors: 20,
+          lost_visitors: 12,
+          drop_off_rate: 60,
+        },
+      });
+      expect(body.activation_review.recommendation).toMatchObject({
+        status: "ready",
+        minimum_sample_size: 10,
+        sample_size: 20,
+        hypothesis: expect.stringContaining("declared_agent"),
+      });
+      expect(body.activation_review.by_traffic_segment).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          traffic_segment: "human_browser",
+          largest_drop_off: null,
+          low_confidence_drop_off: expect.objectContaining({
+            from_visitors: 1,
+            lost_visitors: 1,
+            drop_off_rate: 100,
+          }),
+          recommendation_sample_size: 1,
+        }),
+      ]));
+    } finally {
+      executeSpy.mockRestore();
+    }
+  });
+
+  it("chooses a qualifying transition before ranking a later tiny drop within the same segment", async () => {
+    const executeSpy = stubActivationQueries([{
+      traffic_segment: "human_browser",
+      scenario_selected: "40",
+      primary_cta_clicked: "20",
+      registered: "1",
+      first_proof: "0",
+      second_proof: "0",
+    }]);
+    try {
+      const body = await getAuthorizedFunnel();
+      expect(body.activation_review.largest_segment_drop_off).toMatchObject({
+        traffic_segment: "human_browser",
+        largest_drop_off: {
+          from_stage: "primary_cta_clicked",
+          to_stage: "registered",
+          from_visitors: 20,
+          lost_visitors: 19,
+          drop_off_rate: 95,
+        },
+        low_confidence_drop_off: {
+          from_stage: "registered",
+          to_stage: "first_proof",
+          from_visitors: 1,
+          drop_off_rate: 100,
+        },
+      });
+    } finally {
+      executeSpy.mockRestore();
+    }
+  });
+
+  it("does not recommend any experiment when only tiny transitions have visitors", async () => {
+    const executeSpy = stubActivationQueries([{
+      traffic_segment: "human_browser",
+      scenario_selected: "1",
+      primary_cta_clicked: "0",
+      registered: "0",
+      first_proof: "0",
+      second_proof: "0",
+    }]);
+    try {
+      const body = await getAuthorizedFunnel();
+      expect(body.activation_review.largest_segment_drop_off).toBeNull();
+      expect(body.activation_review.recommendation).toMatchObject({
+        status: "low_confidence",
+        sample_size: 1,
+        minimum_sample_size: 10,
+        hypothesis: null,
+      });
+      expect(body.activation_review.overall.largest_drop_off).toBeNull();
+    } finally {
+      executeSpy.mockRestore();
+    }
+  });
+
+  it("still breaks qualifying equal-rate ties by absolute visitor loss", async () => {
+    const executeSpy = stubActivationQueries([
+      { traffic_segment: "human_browser", scenario_selected: "20", primary_cta_clicked: "10", registered: "10", first_proof: "10", second_proof: "10" },
+      { traffic_segment: "declared_agent", scenario_selected: "40", primary_cta_clicked: "20", registered: "20", first_proof: "20", second_proof: "20" },
+    ]);
+    try {
+      const body = await getAuthorizedFunnel();
+      expect(body.activation_review.largest_segment_drop_off).toMatchObject({
+        traffic_segment: "declared_agent",
+        largest_drop_off: { from_visitors: 40, lost_visitors: 20, drop_off_rate: 50 },
+      });
+    } finally {
+      executeSpy.mockRestore();
+    }
+  });
+
   it("uses exact rates when distinct drops round to the same display percentage", async () => {
     const executeSpy = stubActivationQueries([
       {
@@ -990,7 +1122,7 @@ describe("GET /api/admin/conversion-funnel", () => {
         campaign_source: "newsletter",
         entry_visitors: "10",
         scenario_selected: "10",
-        primary_cta_clicked: "8",
+        primary_cta_clicked: "7",
         registered: "4",
         first_proof: "3",
         second_proof: "2",
@@ -1020,6 +1152,13 @@ describe("GET /api/admin/conversion-funnel", () => {
           campaign_source: "newsletter",
           entry_visitors: 10,
           recommendation_eligible: true,
+          recommendation_sample_size: 10,
+          low_confidence_drop_off: expect.objectContaining({
+            from_stage: "primary_cta_clicked",
+            to_stage: "registered",
+            from_visitors: 7,
+            drop_off_rate: 42.9,
+          }),
           stages: expect.arrayContaining([
             expect.objectContaining({ stage: "first_proof", visitors: 3 }),
             expect.objectContaining({ stage: "second_proof", visitors: 2 }),
@@ -1029,11 +1168,57 @@ describe("GET /api/admin/conversion-funnel", () => {
       expect(body.activation_review.largest_campaign_drop_off).toMatchObject({
         campaign_source: "newsletter",
         largest_drop_off: {
-          from_stage: "primary_cta_clicked",
-          to_stage: "registered",
-          lost_visitors: 4,
-          drop_off_rate: 50,
+          from_stage: "scenario_selected",
+          to_stage: "primary_cta_clicked",
+          from_visitors: 10,
+          lost_visitors: 3,
+          drop_off_rate: 30,
         },
+      });
+    } finally {
+      executeSpy.mockRestore();
+    }
+  });
+
+  it("does not recommend a tiny campaign transition just because its entry sample is large", async () => {
+    const executeSpy = stubActivationQueries([], undefined, undefined, [
+      {
+        campaign_source: "thin-transition",
+        entry_visitors: "25",
+        scenario_selected: "1",
+        primary_cta_clicked: "0",
+        registered: "0",
+        first_proof: "0",
+        second_proof: "0",
+      },
+      {
+        campaign_source: "useful-transition",
+        entry_visitors: "25",
+        scenario_selected: "20",
+        primary_cta_clicked: "10",
+        registered: "10",
+        first_proof: "10",
+        second_proof: "10",
+      },
+    ]);
+    try {
+      const body = await getAuthorizedFunnel();
+      expect(body.activation_review.by_utm_source).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          campaign_source: "thin-transition",
+          entry_visitors: 25,
+          recommendation_eligible: false,
+          recommendation_sample_size: 1,
+          largest_drop_off: null,
+          low_confidence_drop_off: expect.objectContaining({
+            from_visitors: 1,
+            drop_off_rate: 100,
+          }),
+        }),
+      ]));
+      expect(body.activation_review.largest_campaign_drop_off).toMatchObject({
+        campaign_source: "useful-transition",
+        largest_drop_off: { from_visitors: 20, lost_visitors: 10, drop_off_rate: 50 },
       });
     } finally {
       executeSpy.mockRestore();
