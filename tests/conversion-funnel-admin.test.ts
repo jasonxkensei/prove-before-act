@@ -12,11 +12,12 @@ import crypto from "crypto";
 import express from "express";
 import type { Server } from "http";
 import { db, pool } from "../server/db";
+import { logger } from "../server/logger";
 import { getSession } from "../server/replitAuth";
 import { registerAdminRoutes } from "../server/routes/admin";
 import * as metrics from "../server/metrics";
 import * as mx8004 from "../server/mx8004";
-import { recordProofVerificationMilestone } from "../server/conversion-telemetry";
+import { recordConversionEvent, recordProofVerificationMilestone } from "../server/conversion-telemetry";
 import {
   migrateConversionEventsTable,
   purgeExpiredConversionEvents,
@@ -209,6 +210,95 @@ describe("GET /api/admin/conversion-funnel", () => {
   it("rejects a request without an authenticated admin session", async () => {
     const response = await fetch(`${baseUrl}/api/admin/conversion-funnel`);
     expect(response.status).toBe(401);
+  });
+
+  it("shows a real rejected conversion write, then clears its warning after the health window", async () => {
+    const before = await getAuthorizedFunnel();
+    expect(before.collection.telemetry_write_health).toMatchObject({
+      status: "healthy",
+      recent_failures: 0,
+    });
+
+    const eventType = `test:rejected:${crypto.randomUUID()}`;
+    const warningLog = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    let persistedAt: Date | null = null;
+    let expiredAt: Date | null = null;
+    try {
+      // The database rejects this event via its real http_status/http_class
+      // constraints. No table-wide failure injection or request data is saved.
+      recordConversionEvent({
+        query: {},
+        path: "/api/conversion-events",
+        headers: { "user-agent": "integration-outage-user-agent" },
+        get: (name: string) => name === "user-agent" ? "integration-outage-user-agent" : null,
+        socket: { remoteAddress: "203.0.113.99" },
+      } as any, {
+        eventType,
+        stage: "cta",
+        outcome: "seen",
+        httpStatus: 600,
+      });
+
+      let warned: any;
+      await vi.waitFor(async () => {
+        warned = await getAuthorizedFunnel();
+        expect(warned.collection.telemetry_write_health).toMatchObject({
+          status: "warning",
+          recent_failures: 1,
+          window_minutes: 15,
+        });
+      }, { timeout: 10_000, interval: 100 });
+      persistedAt = new Date(warned.collection.telemetry_write_health.last_failure_at);
+      expect(warned.alerts).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          condition: "conversion_telemetry_write_failures",
+          severity: "warning",
+          message: expect.stringContaining("failed to write 1 time(s)"),
+        }),
+      ]));
+      expect(JSON.stringify(warned)).not.toContain(eventType);
+      expect(JSON.stringify(warned)).not.toContain("203.0.113.99");
+      expect(JSON.stringify(warned)).not.toContain("integration-outage-user-agent");
+      expect(warningLog).toHaveBeenCalledWith(
+        "Conversion telemetry write failed",
+        expect.objectContaining({ component: "conversion-telemetry", errorCode: expect.any(String) }),
+      );
+      const logged = JSON.stringify(warningLog.mock.calls);
+      expect(logged).not.toContain(eventType);
+      expect(logged).not.toContain("203.0.113.99");
+      expect(logged).not.toContain("integration-outage-user-agent");
+      const rejected = await pool.query(
+        `SELECT COUNT(*)::int AS events FROM conversion_events WHERE event_type = $1`,
+        [eventType],
+      );
+      expect(rejected.rows[0].events).toBe(0);
+
+      // Age only this test's timestamp instead of waiting fifteen real minutes.
+      expiredAt = new Date(persistedAt.getTime() - 16 * 60_000);
+      const aged = await pool.query(
+        `UPDATE conversion_telemetry_write_failures
+         SET occurred_at = $1 WHERE occurred_at = $2`,
+        [expiredAt, persistedAt],
+      );
+      expect(aged.rowCount).toBe(1);
+      const recovered = await getAuthorizedFunnel();
+      expect(recovered.collection.telemetry_write_health).toMatchObject({
+        status: "healthy",
+        recent_failures: 0,
+      });
+      expect(recovered.alerts).not.toContainEqual(
+        expect.objectContaining({ condition: "conversion_telemetry_write_failures" }),
+      );
+    } finally {
+      warningLog.mockRestore();
+      if (persistedAt) {
+        await pool.query(
+          `DELETE FROM conversion_telemetry_write_failures
+           WHERE occurred_at = $1 OR occurred_at = $2`,
+          [persistedAt, expiredAt ?? persistedAt],
+        );
+      }
+    }
   });
 
   it("returns real daily funnel totals for telemetry rows to an authorized admin", async () => {

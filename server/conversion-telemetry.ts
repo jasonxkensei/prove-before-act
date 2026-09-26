@@ -119,9 +119,18 @@ export function recordConversionEvent(
 
 function reportConversionTelemetryWriteFailure(error: unknown): void {
   const failedAt = new Date();
+  // Drizzle's error.message can include the full INSERT parameter list,
+  // including the visitor hash. Only a database error code is safe to log.
+  const safeErrorCode = (failure: unknown): string => {
+    const cause = failure && typeof failure === "object" && "cause" in failure
+      ? failure.cause : failure;
+    const code = cause && typeof cause === "object" && "code" in cause
+      ? cause.code : null;
+    return typeof code === "string" && /^[0-9A-Z]{5}$/.test(code) ? code : "unknown";
+  };
   logger.warn("Conversion telemetry write failed", {
     component: "conversion-telemetry",
-    error: error instanceof Error ? error.message : String(error),
+    errorCode: safeErrorCode(error),
   });
   // The conversion response never waits for this second, privacy-safe write.
   // If the shared store is also down, keep a bounded in-process warning.
@@ -130,7 +139,7 @@ function reportConversionTelemetryWriteFailure(error: unknown): void {
       recordConversionTelemetryWriteFailure(failedAt.getTime());
       logger.warn("Conversion telemetry health storage unavailable", {
         component: "conversion-telemetry",
-        error: storageError instanceof Error ? storageError.message : String(storageError),
+        errorCode: safeErrorCode(storageError),
       });
     })
     .finally(() => {
