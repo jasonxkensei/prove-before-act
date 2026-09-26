@@ -87,7 +87,7 @@ export function PublicSiteHeader({
 
   return (
     <>
-      <a href="#main-content" className="skip-link">Skip to content</a>
+      <a href="#main-content" className="skip-link" onClick={() => setMobileOpen(false)}>Skip to content</a>
       <header
         ref={headerRef}
         className={`public-site-header ${paper ? "public-site-header--paper" : ""} sticky top-0 z-50 border-b backdrop-blur ${headerClass}`}

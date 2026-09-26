@@ -368,6 +368,80 @@ test.describe("public-site chrome — skip link across React routes", () => {
   }
 });
 
+test.describe("public-site chrome — skip destination clears the sticky header", () => {
+  for (const { name, viewport } of [
+    { name: "desktop", viewport: { width: 1280, height: 800 } },
+    { name: "mobile", viewport: { width: 390, height: 844 } },
+  ]) {
+    test.describe(name, () => {
+      test.use({ viewport, reducedMotion: "reduce" });
+
+      for (const { route, style } of [
+        { route: "/agents", style: "regular" },
+        { route: "/standard", style: "paper" },
+      ]) {
+        test(`${style} page ${route} keeps skipped-to content below navigation`, async ({ page }) => {
+          await page.goto(route);
+          const skipLink = page.getByRole("link", { name: "Skip to content" });
+          const mainContent = page.locator("#main-content");
+          await expect(skipLink).toBeVisible();
+          await expect(mainContent).toHaveAttribute("tabindex", "-1");
+
+          await page.keyboard.press("Tab");
+          await expect(skipLink).toBeFocused();
+          await page.keyboard.press("Enter");
+          await expect(mainContent).toBeFocused();
+
+          const position = await page.evaluate(() => {
+            const target = document.getElementById("main-content");
+            const header = document.querySelector(".public-site-header");
+            if (!target || !header) throw new Error("Shared header or skip destination is missing");
+            return {
+              targetTop: target.getBoundingClientRect().top,
+              headerTop: header.getBoundingClientRect().top,
+              headerBottom: header.getBoundingClientRect().bottom,
+              viewportHeight: window.innerHeight,
+            };
+          });
+          expect(position.headerTop, `${name} ${style} header must be pinned to viewport top`).toBeCloseTo(0, 0);
+          expect(position.targetTop, `${name} ${style} skip destination is obscured by the sticky header`)
+            .toBeGreaterThanOrEqual(position.headerBottom - 1);
+          expect(position.targetTop, `${name} ${style} skip destination must be in view`)
+            .toBeLessThan(position.viewportHeight);
+        });
+      }
+    });
+  }
+});
+
+test.describe("public-site chrome — skip link with mobile menu open", () => {
+  test.use({ viewport: { width: 390, height: 844 }, reducedMotion: "reduce" });
+
+  test("closes the expanded navigation before showing the main destination", async ({ page }) => {
+    await page.goto("/agents");
+    const skipLink = page.getByRole("link", { name: "Skip to content" });
+    const trigger = page.getByTestId("button-mobile-menu");
+    const menu = page.getByRole("navigation", { name: "Mobile navigation" });
+    const mainContent = page.locator("#main-content");
+    await expect(skipLink).toBeVisible();
+    await expect(mainContent).toHaveAttribute("tabindex", "-1");
+    await trigger.focus();
+    await page.keyboard.press("Enter");
+    await expect(menu).toBeVisible();
+    await skipLink.focus();
+    await page.keyboard.press("Enter");
+
+    await expect(menu).not.toBeVisible();
+    await expect(mainContent).toBeFocused();
+    const position = await page.evaluate(() => ({
+      targetTop: document.getElementById("main-content")!.getBoundingClientRect().top,
+      headerBottom: document.querySelector(".public-site-header")!.getBoundingClientRect().bottom,
+    }));
+    expect(position.targetTop, "the skip destination must clear the collapsed sticky header")
+      .toBeGreaterThanOrEqual(position.headerBottom - 1);
+  });
+});
+
 test.describe("public-site chrome — exact Tab count to More button", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 

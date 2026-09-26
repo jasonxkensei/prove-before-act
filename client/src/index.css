@@ -229,6 +229,9 @@
   .skip-link {
     @apply fixed left-4 top-4 z-[100] -translate-y-24 rounded-md bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground transition-transform focus:translate-y-0;
   }
+  /* Leave room for the shared 4rem sticky header when its skip link scrolls
+     to the main landmark, on both paper and regular public pages. */
+  #main-content { scroll-margin-top: 5rem; }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
   }
