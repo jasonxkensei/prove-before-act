@@ -22,6 +22,7 @@ import { requestIdMiddleware, logger } from "./logger";
 import { x402PriceConfigWarning, x402NetworkConfigWarning } from "./routes/helpers";
 import { conversionOutcomeMiddleware, conversionVisitorMiddleware } from "./conversion-telemetry";
 import { initializeStripe } from "./stripe";
+import { checkStalledPbaPayments, migratePbaReconciliationAlerts } from "./routes/pba-verification";
 import { getCanonicalPublicUrl, isLegacyPublicHost } from "./publicOrigin";
 import {
   runDailyMaintenance,
@@ -252,6 +253,7 @@ app.use((req, res, next) => {
   await db.execute(sql`ALTER TABLE certifications ADD COLUMN IF NOT EXISTS webhook_base_url text`);
   await migrateProofFinalityReconciliationSchema();
   await migratePbaHttpWitnessRevocations();
+  await migratePbaReconciliationAlerts();
   try {
     await initializeStripe();
   } catch (error) {
@@ -302,6 +304,8 @@ app.use((req, res, next) => {
     setInterval(() => checkMx8004WalletBalance().catch((err) => Sentry.captureException(err, { tags: { component: "mx8004-balance" } })), 5 * 60 * 1000);
     sweepExpiredAcpReservations().catch((err) => Sentry.captureException(err, { tags: { component: "acp-sweep" } }));
     setInterval(() => sweepExpiredAcpReservations().catch((err) => Sentry.captureException(err, { tags: { component: "acp-sweep" } })), 5 * 60 * 1000);
+    checkStalledPbaPayments().catch((err) => Sentry.captureException(err, { tags: { component: "pba-reconciliation-alert" } }));
+    setInterval(() => checkStalledPbaPayments().catch((err) => Sentry.captureException(err, { tags: { component: "pba-reconciliation-alert" } })), 60 * 1000);
   });
 
   setupGracefulShutdown(server);

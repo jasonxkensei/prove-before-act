@@ -10,7 +10,8 @@ import {
   pbaVerificationKeys,
   pbaVerificationRequests,
 } from "@shared/schema";
-import { db } from "../db";
+import { db, pool } from "../db";
+import { alertPbaPaymentReconciliation } from "../alerts";
 import { isWalletAuthenticated } from "../walletAuth";
 import { ReconciliationEvidenceError, verifyPbaReconciliation } from "../pba-payment-reconciliation";
 import { logger } from "../logger";
@@ -52,6 +53,9 @@ const ATTESTATION_DOMAIN = "PBA-VERIFIED-ATTESTATION|v1\n";
 const LIFECYCLE_DOMAIN = "PBA-VERIFIED-LIFECYCLE|v1\n";
 const PROCESSING_LEASE_MS = 90_000;
 const PAYMENT_LEASE_MS = 120_000;
+const RECONCILIATION_STALE_MS = 5 * 60_000;
+const RECONCILIATION_ALERT_CLAIM_MS = 2 * 60_000;
+let missingReconciliationAlertChannelLogged = false;
 const MAX_PAYMENT_HEADER_LENGTH = 64 * 1024;
 const MAX_KEY_REVOCATION_ATTESTATIONS = 500;
 const WITNESS_ID_REGEX = /^[A-Za-z0-9._:-]{1,128}$/;
@@ -397,6 +401,79 @@ function sendCurrentRequestState(
       retryable: true,
       request_digest: row.requestDigest,
     });
+  }
+}
+
+/** Additive startup migration, mirrored in the Drizzle schema for schema pushes. */
+export async function migratePbaReconciliationAlerts(): Promise<void> {
+  await pool.query(`ALTER TABLE pba_verification_requests
+    ADD COLUMN IF NOT EXISTS reconciliation_alert_claim_until TIMESTAMPTZ`);
+  await pool.query(`ALTER TABLE pba_verification_requests
+    ADD COLUMN IF NOT EXISTS reconciliation_alerted_at TIMESTAMPTZ`);
+}
+
+/** Notification-only sweep: never changes payment status or invokes settlement. */
+export async function checkStalledPbaPayments(): Promise<void> {
+  if (!process.env.PBA_RECONCILIATION_ALERT_WEBHOOK_URL && !process.env.TX_ALERT_WEBHOOK_URL) {
+    if (!missingReconciliationAlertChannelLogged) {
+      logger.error("PBA reconciliation operator alerts are not configured", { component: "pba-verification" });
+      missingReconciliationAlertChannelLogged = true;
+    }
+    return;
+  }
+  missingReconciliationAlertChannelLogged = false;
+  const now = new Date();
+  const staleBefore = new Date(now.getTime() - RECONCILIATION_STALE_MS);
+  const eligible = and(
+    inArray(pbaVerificationRequests.status, ["settling", "settlement_unknown"]),
+    lt(pbaVerificationRequests.updatedAt, staleBefore),
+    or(
+      eq(pbaVerificationRequests.status, "settlement_unknown"),
+      and(eq(pbaVerificationRequests.status, "settling"),
+        or(isNull(pbaVerificationRequests.leaseUntil), lt(pbaVerificationRequests.leaseUntil, now))),
+    ),
+    isNull(pbaVerificationRequests.reconciliationAlertedAt),
+    or(isNull(pbaVerificationRequests.reconciliationAlertClaimUntil),
+      lt(pbaVerificationRequests.reconciliationAlertClaimUntil, now)),
+  );
+  const candidates = await db.select({
+    requestDigest: pbaVerificationRequests.requestDigest,
+    status: pbaVerificationRequests.status,
+    leaseUntil: pbaVerificationRequests.leaseUntil,
+    updatedAt: pbaVerificationRequests.updatedAt,
+  }).from(pbaVerificationRequests).where(eligible)
+    .orderBy(pbaVerificationRequests.updatedAt).limit(50);
+
+  for (const candidate of candidates) {
+    const claimUntil = new Date(Date.now() + RECONCILIATION_ALERT_CLAIM_MS);
+    // CAS protects against another app instance, a concurrent human decision,
+    // or a status change between the scan and the attempted delivery.
+    const [claimed] = await db.update(pbaVerificationRequests)
+      .set({ reconciliationAlertClaimUntil: claimUntil })
+      .where(and(eligible,
+        eq(pbaVerificationRequests.requestDigest, candidate.requestDigest),
+        eq(pbaVerificationRequests.updatedAt, candidate.updatedAt)))
+      .returning({ requestDigest: pbaVerificationRequests.requestDigest });
+    if (!claimed) continue;
+    let delivered = false;
+    try {
+      delivered = await alertPbaPaymentReconciliation(candidate);
+    } catch (error) {
+      logger.error("PBA reconciliation operator alert failed", {
+        component: "pba-verification",
+        requestDigest: candidate.requestDigest,
+        error: error instanceof Error ? error.name : "unknown",
+      });
+    }
+    await db.update(pbaVerificationRequests).set({
+      reconciliationAlertClaimUntil: null,
+      ...(delivered ? { reconciliationAlertedAt: new Date() } : {}),
+    }).where(and(
+      eq(pbaVerificationRequests.requestDigest, candidate.requestDigest),
+      eq(pbaVerificationRequests.reconciliationAlertClaimUntil, claimUntil),
+      // Never acknowledge a resolved request as still requiring reconciliation.
+      inArray(pbaVerificationRequests.status, ["settling", "settlement_unknown"]),
+    ));
   }
 }
 

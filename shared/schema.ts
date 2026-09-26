@@ -801,6 +801,9 @@ export const pbaVerificationRequests = pgTable("pba_verification_requests", {
   // must never be deleted as a side effect of removing mutable request state.
   attestationId: varchar("attestation_id", { length: 36 }),
   leaseUntil: timestamp("lease_until", { withTimezone: true }),
+  // Operator notification only; neither field grants permission to retry settlement.
+  reconciliationAlertClaimUntil: timestamp("reconciliation_alert_claim_until", { withTimezone: true }),
+  reconciliationAlertedAt: timestamp("reconciliation_alerted_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [

@@ -67,6 +67,28 @@ async function sendAlertWebhook(
   }
 }
 
+/** A failed or unconfigured delivery is not an acknowledged operator alert. */
+export async function alertPbaPaymentReconciliation(request: {
+  requestDigest: string;
+  status: string;
+  leaseUntil: Date | null;
+  updatedAt: Date;
+}): Promise<boolean> {
+  const webhookUrl = process.env.PBA_RECONCILIATION_ALERT_WEBHOOK_URL || process.env.TX_ALERT_WEBHOOK_URL;
+  if (!webhookUrl) return false;
+  return sendAlertWebhook(webhookUrl, "pba_payment_reconciliation_stalled", {
+    alert: "pba_payment_reconciliation_stalled",
+    severity: "critical",
+    timestamp: new Date().toISOString(),
+    request_digest: request.requestDigest,
+    status: request.status,
+    lease_until: request.leaseUntil?.toISOString() ?? null,
+    uncertain_since: request.updatedAt.toISOString(),
+    review_path: "/api/admin/pba/payments/uncertain",
+    action: "Review the bound receipt and chain evidence; resolve with the authenticated operator reconciliation endpoint. Do not resubmit payment.",
+  });
+}
+
 // A successful delivery belongs to one low-balance episode. A healthy reading
 // re-arms it; an API error does not (it may contain a stale cached reading).
 let alertedLowBalanceAddress: string | null = null;
