@@ -32,3 +32,7 @@
 - Toute extension aux actions hors chaîne nécessite un profil de témoin indépendant propre à ces actions : elle n’est **pas** accordée par le profil actuel.
 
 **Décision demandée au propriétaire :** examiner ce rapport et le périmètre limité aux transactions observables. La mise en paiement publique reste désactivée tant qu’une autorisation distincte n’est pas donnée.
+
+## Complément ultérieur : livraison HTTP attestée par un destinataire
+
+Un second profil distinct, `pba-http-delivery-v1`, permet maintenant d’examiner un **POST accepté par un destinataire témoin indépendant**, dont la clé et l’origine HTTPS ont été vérifiées et enregistrées par l’opérateur. Sa déclaration signée, le contenu divulgué et les preuves WHY/WHAT peuvent être contrôlés à partir de la réponse publique. Cette extension ne prouve pas les effets métier ultérieurs du POST et ne modifie pas le profil de transaction précédent. Elle exige un accusé explicite de publication des preuves ; le corps du POST n’est jamais publié. Aucun témoin tiers ni clé officielle n’a été provisionné dans cette session ; l’émission et les paiements publics en production restent désactivés. Voir `docs/pba-http-delivery-profile.md`.

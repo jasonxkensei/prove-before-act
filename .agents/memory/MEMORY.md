@@ -30,3 +30,4 @@
 - [PostgreSQL lock observation in tests](postgres-lock-observation.md) — lock-wait tests should not rely on pg_stat_activity query text being enabled
 - [Cross-language webhook generation](cross-language-webhook-generation.md) — Java emits webhook types but synthesizes a client path; Python webhook generation may emit invalid code.
 - [Drizzle push CLI on this workspace](drizzle-push-cli.md) — config-file push cannot combine with CLI table filters; avoid force and inspect schema drift before applying.
+- [Off-chain PBA witness boundary](pba-off-chain-witness-boundary.md) — distinguish recipient-accepted HTTP delivery from downstream effects; independent witness claims need public signed preimages.

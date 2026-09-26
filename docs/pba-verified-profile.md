@@ -4,6 +4,11 @@
 **Status:** implementation profile for independent examination of PBA v1 evidence  
 **License:** CC0 1.0 Universal
 
+For independently witnessed **HTTPS POST delivery**, use the separate
+[`pba-http-delivery-v1` profile](pba-http-delivery-profile.md). It proves
+recipient acceptance of a delivered request, not downstream business effects.
+Neither profile grants green on a producer assertion or an anchor hash alone.
+
 PBA v1 is an open proof format. This profile defines a deliberately narrow set
 of evidence that this verifier can examine. It does not change `/api/standard`
 validation, xProof's existing certification semantics, or the open standard.

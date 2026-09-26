@@ -6,18 +6,36 @@ import {
   pbaVerificationAttestations,
   pbaVerificationEvents,
   pbaVerificationKeys,
+  pbaVerificationRequests,
 } from "@shared/schema";
 import {
   signPbaLifecycleEvent,
   signPbaPayload,
   verifyPbaSignedRecord,
 } from "../server/pba-attestation";
+import {
+  digestPbaHttpDeliveryReceipt,
+  digestPbaHttpDeliveryRequest,
+  parsePbaHttpDeliveryRequest,
+  PBA_HTTP_DELIVERY_PROFILE,
+} from "../server/pba-http-delivery";
+import {
+  digestPbaRequest,
+  parsePbaRequest,
+  PBA_VERIFICATION_PROFILE,
+} from "../server/pba-verifier";
 
 const dbMock = vi.hoisted(() => ({
   select: vi.fn(),
   insert: vi.fn(),
   update: vi.fn(),
   transaction: vi.fn(),
+}));
+const routeMocks = vi.hoisted(() => ({
+  examineLegacy: vi.fn(),
+  examineHttpDelivery: vi.fn(),
+  settlePayment: vi.fn(),
+  signedPayloads: [] as Array<Record<string, unknown>>,
 }));
 
 vi.mock("../server/db", () => ({ db: dbMock }));
@@ -28,6 +46,28 @@ vi.mock("../server/reliability", () => ({
 vi.mock("../server/routes/helpers", () => ({
   requireAdmin: (_req: unknown, _res: unknown, next: () => void) => next(),
 }));
+vi.mock("../server/pba-verifier", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../server/pba-verifier")>();
+  return { ...actual, examinePbaRequest: routeMocks.examineLegacy };
+});
+vi.mock("../server/pba-http-delivery", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../server/pba-http-delivery")>();
+  return { ...actual, examinePbaHttpDeliveryRequest: routeMocks.examineHttpDelivery };
+});
+vi.mock("../server/pba-payment", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../server/pba-payment")>();
+  return { ...actual, settlePbaPayment: routeMocks.settlePayment };
+});
+vi.mock("../server/pba-attestation", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../server/pba-attestation")>();
+  return {
+    ...actual,
+    signPbaPayload: (payload: Record<string, unknown>) => {
+      routeMocks.signedPayloads.push(payload);
+      return actual.signPbaPayload(payload);
+    },
+  };
+});
 
 import {
   getPublicVerification,
@@ -67,6 +107,144 @@ function validEnvelope() {
   };
 }
 
+function validHttpDeliveryEnvelope() {
+  const legacy = validEnvelope();
+  const deliveryAction = {
+    recipient_origin: "https://recipient.example",
+    method: "POST",
+    path: "/api/action",
+    request_body_digest: `sha256:${"2".repeat(64)}`,
+    nonce: "nonce-0123456789012345",
+  };
+  const actionContent = JSON.stringify(deliveryAction);
+  const receipt = {
+    version: "1" as const,
+    witness_id: "recipient-witness",
+    recipient_origin: deliveryAction.recipient_origin,
+    method: "POST" as const,
+    path: deliveryAction.path,
+    request_body_digest: deliveryAction.request_body_digest,
+    nonce: deliveryAction.nonce,
+    why_tx_hash: legacy.why.anchor.tx_hash,
+    observed_at: null,
+    response_status: 200,
+    signature: SIGNATURE,
+  };
+  return {
+    ...legacy,
+    profile: PBA_HTTP_DELIVERY_PROFILE,
+    public_disclosure_acknowledged: true,
+    what: {
+      ...legacy.what,
+      proof: {
+        ...legacy.what.proof,
+        metadata: { pba_http_delivery_receipt_digest: digestPbaHttpDeliveryReceipt(receipt) },
+      },
+    },
+    action: {
+      content: actionContent,
+      anchor: legacy.action.anchor,
+      receipt,
+    },
+  };
+}
+
+function installVerificationRequestDb() {
+  const rows = new Map<string, Record<string, any>>();
+  let latestDigest = "";
+  dbMock.insert.mockImplementation((table: unknown) => {
+    const builder: any = {
+      values(values: Record<string, any>) { builder.insertValues = values; return builder; },
+      async onConflictDoNothing() {
+        if (table === pbaVerificationRequests) {
+          latestDigest = builder.insertValues.requestDigest;
+          if (!rows.has(latestDigest)) rows.set(latestDigest, { ...builder.insertValues });
+        }
+        return [];
+      },
+    };
+    return builder;
+  });
+  dbMock.select.mockImplementation(() => {
+    let table: unknown;
+    const query: any = {
+      from(value: unknown) { table = value; return query; },
+      where() { return query; },
+      limit() {
+        return Promise.resolve(table === pbaVerificationRequests && rows.has(latestDigest)
+          ? [rows.get(latestDigest)]
+          : []);
+      },
+    };
+    return query;
+  });
+  dbMock.update.mockImplementation((table: unknown) => {
+    const builder: any = {
+      set(values: Record<string, any>) { builder.updateValues = values; return builder; },
+      where() { return builder; },
+      async returning() {
+        if (table !== pbaVerificationRequests) return [];
+        const row = rows.get(latestDigest);
+        if (!row) return [];
+        Object.assign(row, builder.updateValues);
+        return [row];
+      },
+    };
+    return builder;
+  });
+  return rows;
+}
+
+function installEnvironment(values: Record<string, string | undefined>) {
+  const previous = new Map<string, string | undefined>();
+  for (const [key, value] of Object.entries(values)) {
+    previous.set(key, process.env[key]);
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+  return () => {
+    for (const [key, value] of previous) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  };
+}
+
+function makeHttpDeliveryExamination(
+  parsed: ReturnType<typeof parsePbaHttpDeliveryRequest>,
+  witnessSignatureValid: boolean | null,
+  statuses: { why: string; what: string; link: string } = {
+    why: "inconclusive",
+    what: "inconclusive",
+    link: "inconclusive",
+  },
+) {
+  return {
+    profile: PBA_HTTP_DELIVERY_PROFILE,
+    subject: parsed.subject.agent_id,
+    origin: "multiversx:mainnet",
+    request_digest: digestPbaHttpDeliveryRequest(parsed),
+    verified: statuses.why === "verified" && statuses.what === "verified" && statuses.link === "verified",
+    verdicts: {
+      why: { status: statuses.why, reason: "test" },
+      what: { status: statuses.what, reason: "test" },
+      link: { status: statuses.link, reason: "test" },
+    },
+    evidence: {
+      receipt: {
+        digest: "sha256:" + "3".repeat(64),
+        witness_id: "recipient-witness",
+        recipient_origin: "https://recipient.example",
+        observed_at: null,
+        response_status: 200,
+        witness_signature_valid: witnessSignatureValid,
+        witness_independent: witnessSignatureValid === null ? null : true,
+      },
+      delivery_anchors: {},
+    },
+  };
+}
+
 function emptyQuery() {
   const query: Record<string, ReturnType<typeof vi.fn>> = {};
   for (const method of ["from", "where", "orderBy", "limit", "for"]) {
@@ -83,6 +261,14 @@ function createApp() {
   registerPbaVerificationRoutes(app);
   return app;
 }
+
+beforeEach(() => {
+  routeMocks.examineLegacy.mockReset();
+  routeMocks.examineHttpDelivery.mockReset();
+  routeMocks.settlePayment.mockReset();
+  routeMocks.signedPayloads.length = 0;
+  dbMock.transaction.mockClear();
+});
 
 function makeEd25519Key() {
   const pair = generateKeyPairSync("ed25519");
@@ -311,7 +497,9 @@ describe("PBA verification public API", () => {
     });
   });
 
-  it("keeps a revoked-key attestation out of current green state", async () => {
+  it.each([PBA_VERIFICATION_PROFILE, PBA_HTTP_DELIVERY_PROFILE])(
+    "loads the signed %s profile while keeping a revoked key out of current green state",
+    async (profile) => {
     const oldKey = makeEd25519Key();
     const activeKey = makeEd25519Key();
     const issuedAt = new Date("2025-03-01T00:00:00Z");
@@ -330,7 +518,7 @@ describe("PBA verification public API", () => {
       verified: true,
       evidence: {},
       issued_at: issuedAt.toISOString(),
-      profile: "pba-verified-v1",
+      profile,
     });
     restore();
     restore = installSigningEnvironment(ACTIVE_KEY_ID, activeKey.privatePem);
@@ -385,9 +573,11 @@ describe("PBA verification public API", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.attestation.verified).toBe(true);
+    expect(response.body.attestation.profile).toBe(profile);
     expect(response.body.current.status).toBe("revoked");
     expect(response.body.current.signing_key_revoked).toBe(true);
-  });
+    },
+  );
 
   it("rejects malformed record identifiers before querying storage", async () => {
     const response = await request(createApp())
@@ -395,6 +585,192 @@ describe("PBA verification public API", () => {
 
     expect(response.status).toBe(400);
     expect(dbMock.select).not.toHaveBeenCalled();
+  });
+});
+
+describe("PBA HTTP-delivery profile route dispatch", () => {
+  it("dispatches each supported profile and stores distinct profile-bound digests", async () => {
+    const signingKey = makeEd25519Key();
+    const restoreEnv = installEnvironment({
+      NODE_ENV: "test",
+      PBA_VERIFIED_DEV_PREVIEW: "true",
+      PBA_VERIFIED_DEV_PAYMENTS: undefined,
+      PBA_VERIFIED_SIGNING_KEY_PEM: signingKey.privatePem,
+      PBA_VERIFIED_KEY_ID: "delivery-dispatch-test",
+    });
+    const rows = installVerificationRequestDb();
+    const legacyParsed = parsePbaRequest(validEnvelope());
+    const httpParsed = parsePbaHttpDeliveryRequest(validHttpDeliveryEnvelope());
+    routeMocks.examineLegacy.mockResolvedValue({
+      profile: PBA_VERIFICATION_PROFILE,
+      subject: legacyParsed.subject.agent_id,
+      origin: "multiversx:mainnet",
+      request_digest: digestPbaRequest(legacyParsed),
+      verified: false,
+      verdicts: {
+        why: { status: "inconclusive", reason: "test" },
+        what: { status: "inconclusive", reason: "test" },
+        link: { status: "inconclusive", reason: "test" },
+      },
+      evidence: {},
+    });
+    routeMocks.examineHttpDelivery.mockResolvedValue(
+      makeHttpDeliveryExamination(httpParsed, true),
+    );
+    try {
+      const legacyResponse = await request(createApp())
+        .post("/api/pba/verify")
+        .send(validEnvelope());
+      const httpResponse = await request(createApp())
+        .post("/api/pba/verify")
+        .send(validHttpDeliveryEnvelope());
+
+      expect(legacyResponse.status).toBe(503);
+      expect(httpResponse.status).toBe(503);
+      expect(routeMocks.examineLegacy).toHaveBeenCalledOnce();
+      expect(routeMocks.examineHttpDelivery).toHaveBeenCalledOnce();
+      expect(routeMocks.examineHttpDelivery.mock.calls[0][0].profile).toBe(PBA_HTTP_DELIVERY_PROFILE);
+      const storedDigests = [...rows.keys()];
+      expect(storedDigests).toContain(digestPbaRequest(legacyParsed));
+      expect(storedDigests).toContain(digestPbaHttpDeliveryRequest(httpParsed));
+      expect(digestPbaHttpDeliveryRequest(httpParsed)).not.toBe(digestPbaRequest({
+        ...httpParsed,
+        profile: PBA_VERIFICATION_PROFILE,
+        action: {
+          content: httpParsed.action.content,
+          anchor: httpParsed.action.anchor,
+        },
+      }));
+      expect(routeMocks.settlePayment).not.toHaveBeenCalled();
+    } finally {
+      restoreEnv();
+    }
+  });
+
+  it("signs the HTTP-delivery examination profile and its full request digest", async () => {
+    const signingKey = makeEd25519Key();
+    const restoreEnv = installEnvironment({
+      NODE_ENV: "test",
+      PBA_VERIFIED_DEV_PREVIEW: "true",
+      PBA_VERIFIED_DEV_PAYMENTS: undefined,
+      PBA_VERIFIED_SIGNING_KEY_PEM: signingKey.privatePem,
+      PBA_VERIFIED_KEY_ID: "delivery-sign-test",
+    });
+    installVerificationRequestDb();
+    const httpParsed = parsePbaHttpDeliveryRequest(validHttpDeliveryEnvelope());
+    routeMocks.examineHttpDelivery.mockResolvedValue(
+      makeHttpDeliveryExamination(httpParsed, true, {
+        why: "rejected",
+        what: "inconclusive",
+        link: "inconclusive",
+      }),
+    );
+    dbMock.transaction.mockRejectedValue(new Error("test persistence failure"));
+    try {
+      const response = await request(createApp())
+        .post("/api/pba/verify")
+        .send(validHttpDeliveryEnvelope());
+
+      expect(response.status).toBe(503);
+      const payload = routeMocks.signedPayloads.find(
+        (entry) => entry.profile === PBA_HTTP_DELIVERY_PROFILE,
+      );
+      expect(payload).toBeDefined();
+      expect(payload?.request_digest).toBe(digestPbaHttpDeliveryRequest(httpParsed));
+      expect(payload?.request_digest).not.toBe(digestPbaRequest({
+        ...httpParsed,
+        profile: PBA_VERIFICATION_PROFILE,
+        action: {
+          content: httpParsed.action.content,
+          anchor: httpParsed.action.anchor,
+        },
+      }));
+      expect(routeMocks.settlePayment).not.toHaveBeenCalled();
+    } finally {
+      restoreEnv();
+    }
+  });
+
+  it("keeps a missing or unconfigured witness inconclusive, unsigned, and unpaid", async () => {
+    const signingKey = makeEd25519Key();
+    const restoreEnv = installEnvironment({
+      NODE_ENV: "test",
+      PBA_VERIFIED_DEV_PREVIEW: undefined,
+      PBA_VERIFIED_DEV_PAYMENTS: "true",
+      PBA_VERIFIED_SIGNING_KEY_PEM: signingKey.privatePem,
+      PBA_VERIFIED_KEY_ID: "delivery-witness-test",
+      X402_PAY_TO: "0x1111111111111111111111111111111111111111",
+      X402_NETWORK: "eip155:8453",
+      PBA_HTTP_DELIVERY_WITNESSES_JSON: undefined,
+    });
+    const rows = installVerificationRequestDb();
+    const parsed = parsePbaHttpDeliveryRequest(validHttpDeliveryEnvelope());
+    routeMocks.examineHttpDelivery.mockResolvedValue(
+      makeHttpDeliveryExamination(parsed, null, {
+        why: "rejected",
+        what: "inconclusive",
+        link: "inconclusive",
+      }),
+    );
+    routeMocks.settlePayment.mockResolvedValue({ externalId: "must-not-settle" });
+    try {
+      const response = await request(createApp())
+        .post("/api/pba/verify")
+        .set("X-PAYMENT", Buffer.from('{"x402Version":1}').toString("base64"))
+        .send(validHttpDeliveryEnvelope());
+
+      expect(response.status).toBe(503);
+      expect(response.body.error).toBe("EXAMINATION_INCONCLUSIVE");
+      expect(response.body.same_receipt_required).toBe(false);
+      expect(routeMocks.settlePayment).not.toHaveBeenCalled();
+      expect(routeMocks.signedPayloads.some(
+        (entry) => entry.profile === PBA_HTTP_DELIVERY_PROFILE,
+      )).toBe(false);
+      const row = [...rows.values()][0];
+      expect(row.status).toBe("quoted");
+      expect(row.paymentHeaderHash).toBeUndefined();
+    } finally {
+      restoreEnv();
+    }
+  });
+
+  it("accepts an HTTP-delivery profile in a signed attestation payload", () => {
+    const signingKey = makeEd25519Key();
+    const restoreEnv = installSigningEnvironment("delivery-profile-validation", signingKey.privatePem);
+    try {
+      const digest = "4".repeat(64);
+      const signed = signPbaPayload({
+        id: UUID,
+        request_digest: digest,
+        subject: "agent-1",
+        origin: "multiversx:mainnet",
+        verdicts: {
+          why: { status: "verified", reason: "ok" },
+          what: { status: "verified", reason: "ok" },
+          link: { status: "verified", reason: "ok" },
+        },
+        verified: true,
+        evidence: {},
+        issued_at: new Date("2025-05-01T00:00:00Z").toISOString(),
+        profile: PBA_HTTP_DELIVERY_PROFILE,
+      });
+      const payload = JSON.parse(signed.canonical.slice("PBA-VERIFIED-ATTESTATION|v1\n".length));
+
+      expect(() => __pbaVerificationTestUtils.validateAttestationPayload(
+        payload,
+        UUID,
+        digest,
+        signed.keyId,
+      )).not.toThrow();
+      expect(() => __pbaVerificationTestUtils.validateAttestationPayload(
+        { ...payload, profile: "unknown-profile" },
+        UUID,
+        digest,
+        signed.keyId,
+      )).toThrow();
+    } finally {
+      restoreEnv();
+    }
   });
 });
 

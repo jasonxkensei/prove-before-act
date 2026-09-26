@@ -23,6 +23,14 @@ import {
   type PbaRequest,
 } from "../pba-verifier";
 import {
+  digestPbaHttpDeliveryRequest,
+  examinePbaHttpDeliveryRequest,
+  parsePbaHttpDeliveryRequest,
+  PBA_HTTP_DELIVERY_PROFILE,
+  type PbaHttpDeliveryExamination,
+  type PbaHttpDeliveryRequest,
+} from "../pba-http-delivery";
+import {
   signPbaLifecycleEvent,
   signPbaPayload,
   verifyPbaSignedRecord,
@@ -43,6 +51,8 @@ const MAX_PAYMENT_HEADER_LENGTH = 64 * 1024;
 const MAX_KEY_REVOCATION_ATTESTATIONS = 500;
 
 type PublicStatus = "verified" | "not_verified" | "revoked" | "superseded";
+type PbaVerificationRequest = PbaRequest | PbaHttpDeliveryRequest;
+type PbaVerificationExamination = PbaExamination | PbaHttpDeliveryExamination;
 
 class PublicRecordError extends Error {
   constructor(readonly statusCode: number, message: string) {
@@ -83,7 +93,8 @@ function validateAttestationPayload(
     payload.id !== id ||
     payload.request_digest !== requestDigest ||
     payload.key_id !== keyId ||
-    payload.profile !== PBA_VERIFICATION_PROFILE ||
+    (payload.profile !== PBA_VERIFICATION_PROFILE &&
+      payload.profile !== PBA_HTTP_DELIVERY_PROFILE) ||
     !["string"].includes(typeof payload.subject) ||
     typeof payload.origin !== "string" ||
     !payload.verdicts ||
@@ -131,7 +142,11 @@ function signingKeyPreflight(): void {
   });
 }
 
-function isConcludedExamination(examination: PbaExamination): boolean {
+function isConcludedExamination(examination: PbaVerificationExamination): boolean {
+  if (examination.profile === PBA_HTTP_DELIVERY_PROFILE &&
+      examination.evidence.receipt?.witness_signature_valid == null) {
+    return false;
+  }
   const verdicts = Object.values(examination.verdicts);
   return verdicts.some((verdict) => verdict.status === "rejected") ||
     verdicts.every((verdict) => verdict.status === "verified");
@@ -314,13 +329,18 @@ function sendCurrentRequestState(
 export function registerPbaVerificationRoutes(app: Express): void {
   app.post("/api/pba/verify", paymentRateLimiter, async (req, res) => {
     responseNoStore(res);
-    let request: PbaRequest;
+    let request: PbaVerificationRequest;
     try {
       const serialized = JSON.stringify(req.body);
       if (typeof serialized !== "string" || Buffer.byteLength(serialized, "utf8") > 256 * 1024) {
         return res.status(413).json({ error: "REQUEST_TOO_LARGE", message: "The PBA evidence envelope exceeds 256 KiB." });
       }
-      request = parsePbaRequest(req.body);
+      const profile = req.body && typeof req.body === "object" && !Array.isArray(req.body)
+        ? (req.body as Record<string, unknown>).profile
+        : undefined;
+      request = profile === PBA_HTTP_DELIVERY_PROFILE
+        ? parsePbaHttpDeliveryRequest(req.body)
+        : parsePbaRequest(req.body);
     } catch (error: any) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({
@@ -360,7 +380,9 @@ export function registerPbaVerificationRoutes(app: Express): void {
       return res.status(503).json({ error: "OFFICIAL_SIGNING_UNAVAILABLE", message: "The configured PBA signing key is unavailable or invalid." });
     }
 
-    const digest = digestPbaRequest(request);
+    const digest = request.profile === PBA_HTTP_DELIVERY_PROFILE
+      ? digestPbaHttpDeliveryRequest(request)
+      : digestPbaRequest(request);
     const now = new Date();
     const preview = previewMode;
     let paymentQuote: PbaPaymentQuote | null = null;
@@ -462,12 +484,14 @@ export function registerPbaVerificationRoutes(app: Express): void {
       // Evidence is examined before revealing a quote or accepting payment.
       // Provider failures and unsupported anchors therefore remain uncharged
       // and unsigned; settled retries reuse their receipt without settling again.
-      let examination: PbaExamination;
+      let examination: PbaVerificationExamination;
       try {
-        examination = await examinePbaRequest(request);
+        examination = request.profile === PBA_HTTP_DELIVERY_PROFILE
+          ? await examinePbaHttpDeliveryRequest(request)
+          : await examinePbaRequest(request);
       } catch {
         examination = {
-          profile: PBA_VERIFICATION_PROFILE,
+          profile: request.profile,
           subject: request.subject.agent_id,
           origin: "unknown",
           request_digest: digest,
@@ -477,8 +501,8 @@ export function registerPbaVerificationRoutes(app: Express): void {
             what: { status: "inconclusive", reason: "evidence_provider_unavailable" },
             link: { status: "inconclusive", reason: "evidence_provider_unavailable" },
           },
-          evidence: {} as PbaExamination["evidence"],
-        };
+          evidence: {} as PbaVerificationExamination["evidence"],
+        } as PbaVerificationExamination;
       }
       if (!isConcludedExamination(examination)) {
         const retryStatus = preview
@@ -654,7 +678,7 @@ export function registerPbaVerificationRoutes(app: Express): void {
       const issuedAt = new Date().toISOString();
       const payload = {
         id: attestationId,
-        profile: PBA_VERIFICATION_PROFILE,
+        profile: examination.profile,
         request_digest: digest,
         subject: examination.subject,
         origin: examination.origin,
@@ -699,9 +723,7 @@ export function registerPbaVerificationRoutes(app: Express): void {
     } catch (error: any) {
       logger.error("PBA verification request failed", {
         component: "pba-verification",
-        requestDigest: (() => {
-          try { return digestPbaRequest(request); } catch { return undefined; }
-        })(),
+        requestDigest: digest,
         error: error instanceof Error ? error.message : "unknown",
       });
       return res.status(503).json({
@@ -1057,6 +1079,7 @@ export function registerPbaVerificationRoutes(app: Express): void {
 export const __pbaVerificationTestUtils = {
   isVerifiedVerdictSet,
   isConcludedExamination,
+  validateAttestationPayload,
   renderIndicatorSvg,
   parseSignedPayload,
 };

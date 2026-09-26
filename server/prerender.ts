@@ -10,6 +10,7 @@ import { getTxExplorerUrl } from "./blockchain";
 import { publicProofStatus } from "./proof-finality";
 import { CANONICAL_PUBLIC_ORIGIN } from "./publicOrigin";
 import { getPublicVerification } from "./routes/pba-verification";
+import { PBA_HTTP_DELIVERY_PROFILE } from "./pba-http-delivery";
 import {
   PUBLIC_FOOTER_COLUMNS,
   PUBLIC_MORE_NAV,
@@ -1315,8 +1316,9 @@ function renderPbaVerificationPage(
 
   const { attestation, current } = record;
   const status = current.status;
+  const httpDelivery = attestation.profile === PBA_HTTP_DELIVERY_PROFILE;
   const title = `PBA verification: ${status.replace("_", " ")} | Prove Before Act`;
-  const description = `Official signed examination of WHY, observed ACTION and WHAT for ${attestation.subject}. Current state: ${status}.`;
+  const description = `Official signed examination of WHY, ${httpDelivery ? "recipient-acknowledged HTTPS delivery" : "observed MultiversX ACTION"} and WHAT for ${attestation.subject}. Current state: ${status}.`;
   const verdicts = attestation.verdicts as Record<string, { status: string; reason: string }>;
   const segments = (["why", "what", "link"] as const).map((name) => {
     const verdict = verdicts[name];
@@ -1338,7 +1340,9 @@ ${renderPublicHeader(baseUrl)}
 <p style="color:#00cf87;text-transform:uppercase;letter-spacing:.1em">Official signed examination · ${escapeHtml(attestation.profile)}</p>
 <h1>PBA verification</h1>
 <p><strong>Current status:</strong> ${escapeHtml(status.replace("_", " "))}</p>
-<p>This result concerns a self-certifying agent and a directly observed MultiversX transaction. It does not establish intent, legal identity, or the outcome of an off-chain action.</p>
+<p>${httpDelivery
+    ? "This profile examines a POST accepted by a separately registered recipient witness and recorded between finalized chain commitments. It does not prove that the recipient performed any later business action."
+    : "This profile concerns a self-certifying agent and a directly observed MultiversX transaction. It does not establish the outcome of an off-chain action."} Neither profile establishes intent or legal identity.</p>
 <img src="${escapeHtml(`${baseUrl}/api/pba/verification/${id}/indicator.svg`)}" width="80" height="80" alt="Current WHY, WHAT and LINK verification indicator">
 <h2>WHY · WHAT · LINK</h2><ul style="list-style:none;padding:0">${segments}</ul>
 <h2>Record and signing key</h2>

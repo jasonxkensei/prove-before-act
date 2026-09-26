@@ -181,6 +181,11 @@ export default function VerifyPage() {
                 <p className="verify-overview__note">
                   {currentDescription}
                 </p>
+                <p className="verify-overview__note">
+                  {attestation.profile === "pba-http-delivery-v1"
+                    ? "This profile checks an HTTPS POST accepted by a registered independent recipient witness. It does not prove a later file write, trade, publication, or other business effect."
+                    : "This profile checks an observed MultiversX transaction. It does not prove an off-chain action or its outcome."}
+                </p>
               </section>
 
               <section className="verify-section" aria-labelledby="fourw-title">
