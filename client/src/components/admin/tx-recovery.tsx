@@ -13,6 +13,12 @@ type RecoveryJob = {
   known_hash: string | null;
   signer_nonce: string | null;
   intent_at: string | null;
+  manual_reconciliation: {
+    status: "manual_reconciliation_required";
+    reason: "broadcast_without_claimed_nonce";
+    age_minutes: number;
+    guidance: string;
+  } | null;
   lastError: string | null;
   recovery_audit: Array<{ at: string; operator: string; decision: string; hash: string }>;
 };
@@ -61,6 +67,12 @@ export function TxRecoveryCard() {
             <p className="font-medium break-all">Job {job.jobId} · {job.status} · Step {job.step + 1}: {job.step_name ?? "unknown"}</p>
             <p>Claimed nonce: {job.signer_nonce ?? "unknown"} · Intent: {job.intent_at ?? "unknown"}</p>
             <p className="break-all">Known hash: {job.known_hash ?? "none"}</p>
+            {job.manual_reconciliation && (
+              <p role="alert" className="text-amber-600 dark:text-amber-400">
+                Manual reconciliation required · broadcast {job.manual_reconciliation.age_minutes} minutes ago.
+                {" "}{job.manual_reconciliation.guidance}
+              </p>
+            )}
             <p className="text-muted-foreground">Recent chain history for this nonce (absence is not proof of rejection):</p>
             {data.history.filter(tx => tx.nonce === job.signer_nonce).map((tx, index) => (
               <p key={index} className="break-all font-mono">{tx.status ?? "unknown"} · {tx.hash ?? "no hash"}</p>
@@ -72,11 +84,11 @@ export function TxRecoveryCard() {
               onChange={event => setHashes({ ...hashes, [job.id]: event.target.value.trim() })}
               maxLength={64} />
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" disabled={mutation.isPending || !job.signer_nonce}
+              <Button size="sm" disabled={mutation.isPending || !job.signer_nonce || !!job.manual_reconciliation}
                 onClick={() => mutation.mutate({ id: job.id, hash: hashes[job.id] ?? job.known_hash ?? "", decision: "confirmed" })}>
                 Verify success and advance
               </Button>
-              <Button size="sm" variant="outline" disabled={mutation.isPending || !job.signer_nonce}
+              <Button size="sm" variant="outline" disabled={mutation.isPending || !job.signer_nonce || !!job.manual_reconciliation}
                 onClick={() => {
                   if (window.confirm("Only a finalized failed transaction permits a retry. Verify this hash on chain?")) {
                     mutation.mutate({ id: job.id, hash: hashes[job.id] ?? job.known_hash ?? "", decision: "rejected" });

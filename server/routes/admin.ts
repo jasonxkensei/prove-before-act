@@ -13,7 +13,7 @@ import {
   getSharedConversionTelemetryWriteFailureStats,
   CONVERSION_TELEMETRY_FAILURE_HEALTH_WINDOW_MS,
 } from "../metrics";
-import { getTxQueueStats, getMx8004NonceStall, reconcileMx8004Job, RecoveryConflict } from "../txQueue";
+import { getTxQueueStats, getMx8004NonceStall, assessMx8004LegacyBroadcast, MX8004_LEGACY_BROADCAST_REVIEW_MS, reconcileMx8004Job, RecoveryConflict } from "../txQueue";
 import { getMx8004SignerBalance, getMx8004SignerBalanceReport, getMx8004FreshSignerNonce, getMx8004RecentSignerTransactions, isMX8004Configured } from "../mx8004";
 import { requireAdmin, EXCLUDED_IP_HASHES, getClientIp, safeErrMsg } from "./helpers";
 import { reconstructAuditTrail } from "../audit-trail";
@@ -1271,12 +1271,19 @@ export function registerAdminRoutes(app: Express) {
     try {
       const page = Number(req.query.page ?? 0);
       if (!Number.isSafeInteger(page) || page < 0 || page > 10000) return res.status(400).json({ error: "Invalid page" });
+      const now = Date.now();
+      const legacyCutoff = new Date(now - MX8004_LEGACY_BROADCAST_REVIEW_MS).toISOString();
       const jobs = await db.select({
         id: txQueueTable.id, jobId: txQueueTable.jobId, status: txQueueTable.status,
         payload: txQueueTable.payload, lastError: txQueueTable.lastError, createdAt: txQueueTable.createdAt,
       }).from(txQueueTable).where(and(
         eq(txQueueTable.jobType, "mx8004_validation_loop"),
-        sql`${txQueueTable.status} IN ('recovery_required', 'failed')`,
+        sql`(${txQueueTable.status} IN ('recovery_required', 'failed')
+          OR (${txQueueTable.status} IN ('pending', 'processing', 'awaiting_finality')
+            AND ${txQueueTable.payload}->'activeTx'->>'nonce' IS NULL
+            AND ${txQueueTable.payload}->'broadcastIntent'->>'nonce' IS NULL
+            AND ${txQueueTable.payload}->'activeTx'->>'hash' IS NOT NULL
+            AND ${txQueueTable.payload}->'activeTx'->>'broadcastAt' <= ${legacyCutoff}))`,
       )).orderBy(desc(txQueueTable.createdAt), desc(txQueueTable.id)).limit(51).offset(page * 50);
       const [chainNonce, history] = await Promise.all([getMx8004FreshSignerNonce(), getMx8004RecentSignerTransactions()]);
       res.json({
@@ -1288,12 +1295,14 @@ export function registerAdminRoutes(app: Express) {
         })),
         jobs: jobs.slice(0, 50).map(({ payload: raw, ...job }) => {
           const payload = raw as Record<string, any>;
+          const manualReconciliation = assessMx8004LegacyBroadcast({ status: job.status, payload }, now);
           return {
             ...job, step: payload.currentStep,
             step_name: ["init_job", "submit_proof", "validation_request", "validation_response", "append_response"][payload.currentStep] ?? null,
             known_hash: payload.activeTx?.hash ?? null,
             signer_nonce: payload.activeTx?.nonce ?? payload.broadcastIntent?.nonce ?? null,
             intent_at: payload.broadcastIntent?.startedAt ?? payload.activeTx?.broadcastAt ?? null,
+            manual_reconciliation: manualReconciliation,
             recovery_audit: payload.recoveryAudit ?? [],
           };
         }),

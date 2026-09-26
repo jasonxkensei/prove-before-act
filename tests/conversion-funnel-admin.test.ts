@@ -40,6 +40,7 @@ const seededTelemetryHashes: string[] = [];
 const seededUtmSources: string[] = [];
 const seededDedupKeys: string[] = [];
 const seededUserIds: string[] = [];
+const seededTxQueueIds: string[] = [];
 
 async function createAdminSession(walletAddress: string): Promise<string> {
   const sid = crypto.randomUUID().replace(/-/g, "");
@@ -96,6 +97,9 @@ afterAll(async () => {
   }
   if (seededUserIds.length > 0) {
     await pool.query(`DELETE FROM users WHERE id = ANY($1)`, [seededUserIds]);
+  }
+  if (seededTxQueueIds.length > 0) {
+    await pool.query(`DELETE FROM tx_queue WHERE id = ANY($1)`, [seededTxQueueIds]);
   }
   if (seededSessionIds.length > 0) {
     await pool.query(`DELETE FROM sessions WHERE sid = ANY($1)`, [seededSessionIds]);
@@ -206,6 +210,82 @@ describe("GET /api/admin/stats signer balance", () => {
       });
     } finally {
       balanceSpy.mockRestore();
+    }
+  });
+});
+
+describe("GET /api/admin/tx-queue/recovery legacy broadcasts", () => {
+  it("limits legacy broadcast diagnostics to admins and labels only unresolved jobs without a nonce", async () => {
+    const chainNonceSpy = vi.spyOn(mx8004, "getMx8004FreshSignerNonce").mockResolvedValue(11);
+    const historySpy = vi.spyOn(mx8004, "getMx8004RecentSignerTransactions").mockResolvedValue([]);
+    const old = new Date(Date.now() - 31 * 60_000).toISOString();
+    const recent = new Date(Date.now() - 2 * 60_000).toISOString();
+    const cases = [
+      { id: crypto.randomUUID(), status: "awaiting_finality", broadcastAt: old },
+      { id: crypto.randomUUID(), status: "awaiting_finality", broadcastAt: recent },
+      { id: crypto.randomUUID(), status: "recovery_required", broadcastAt: recent },
+    ];
+    try {
+      for (const entry of cases) {
+        await pool.query(
+          `INSERT INTO tx_queue (id, job_type, job_id, status, payload, next_retry_at, created_at)
+           VALUES ($1, 'mx8004_validation_loop', $2, $3, $4::jsonb, NOW() + INTERVAL '1 hour', NOW())`,
+          [entry.id, `legacy-${entry.id}`, entry.status,
+            JSON.stringify({ currentStep: 0, activeTx: { step: 0, hash: "a".repeat(64), broadcastAt: entry.broadcastAt } })],
+        );
+        seededTxQueueIds.push(entry.id);
+      }
+      const noSession = await fetch(`${baseUrl}/api/admin/tx-queue/recovery`);
+      expect(noSession.status).toBe(401);
+      const nonAdminCookie = await createAdminSession(`erd1nonadminqueue${crypto.randomBytes(10).toString("hex")}`);
+      const nonAdmin = await fetch(`${baseUrl}/api/admin/tx-queue/recovery`, {
+        headers: { Cookie: nonAdminCookie },
+      });
+      expect(nonAdmin.status).toBe(403);
+      expect(JSON.stringify(await nonAdmin.json())).not.toContain(cases[0].id);
+
+      const response = await fetch(`${baseUrl}/api/admin/tx-queue/recovery`, {
+        headers: { Cookie: cookie },
+      });
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      const findJob = (id: string) => body.jobs.find((job: any) => job.id === id);
+      expect(findJob(cases[0].id)).toMatchObject({
+        signer_nonce: null,
+        known_hash: "a".repeat(64),
+        manual_reconciliation: {
+          status: "manual_reconciliation_required",
+          reason: "broadcast_without_claimed_nonce",
+          known_hash: "a".repeat(64),
+          guidance: expect.stringContaining("do not automatically rebroadcast"),
+        },
+      });
+      expect(findJob(cases[1].id)).toBeUndefined();
+      expect(findJob(cases[2].id)?.manual_reconciliation)
+        .toMatchObject({ status: "manual_reconciliation_required" });
+      const recoveryAttempt = await fetch(`${baseUrl}/api/admin/tx-queue/recovery/${cases[0].id}`, {
+        method: "POST",
+        headers: { Cookie: cookie, "Content-Type": "application/json" },
+        body: JSON.stringify({ hash: "a".repeat(64), decision: "confirmed" }),
+      });
+      expect(recoveryAttempt.status).toBe(409);
+      expect((await recoveryAttempt.json()).error).toMatch(/not awaiting manual recovery/);
+      const terminalAttempt = await fetch(`${baseUrl}/api/admin/tx-queue/recovery/${cases[2].id}`, {
+        method: "POST",
+        headers: { Cookie: cookie, "Content-Type": "application/json" },
+        body: JSON.stringify({ hash: "a".repeat(64), decision: "confirmed" }),
+      });
+      expect(terminalAttempt.status).toBe(409);
+      expect((await terminalAttempt.json()).error).toMatch(/No persisted signer nonce/);
+      const unchanged = await pool.query("SELECT status FROM tx_queue WHERE id = $1", [cases[0].id]);
+      expect(unchanged.rows[0].status).toBe("awaiting_finality");
+      const terminalUnchanged = await pool.query("SELECT status FROM tx_queue WHERE id = $1", [cases[2].id]);
+      expect(terminalUnchanged.rows[0].status).toBe("recovery_required");
+      expect(chainNonceSpy).toHaveBeenCalled();
+      expect(historySpy).toHaveBeenCalled();
+    } finally {
+      chainNonceSpy.mockRestore();
+      historySpy.mockRestore();
     }
   });
 });

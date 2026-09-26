@@ -56,6 +56,7 @@ const VALIDATION_STEPS = [
 ] as const;
 const FINALITY_POLL_MS = 15_000;
 const FINALITY_RECOVERY_MS = 30 * 60_000;
+export const MX8004_LEGACY_BROADCAST_REVIEW_MS = FINALITY_RECOVERY_MS;
 
 type ActiveTx = { step: number; hash: string; broadcastAt: string; nonce?: string };
 
@@ -488,6 +489,46 @@ type UnresolvedMx8004Task = {
   createdAt: Date | null;
   payload: unknown;
 };
+
+export type Mx8004LegacyBroadcastReview = {
+  status: "manual_reconciliation_required";
+  reason: "broadcast_without_claimed_nonce";
+  known_hash: string;
+  broadcast_at: string;
+  age_minutes: number;
+  guidance: string;
+};
+
+/**
+ * Legacy broadcasts can have chain evidence without a persisted signer nonce.
+ * Do not infer that nonce from a hash, job order, or the current chain account.
+ */
+export function assessMx8004LegacyBroadcast(
+  task: Pick<UnresolvedMx8004Task, "status" | "payload">,
+  now = Date.now(),
+): Mx8004LegacyBroadcastReview | null {
+  if (!["pending", "processing", "awaiting_finality", "recovery_required", "failed"].includes(task.status)) return null;
+  const payload = task.payload as {
+    activeTx?: { hash?: unknown; broadcastAt?: unknown; nonce?: unknown } | null;
+    broadcastIntent?: { nonce?: unknown } | null;
+  } | null;
+  const active = payload?.activeTx;
+  if (active?.nonce != null || payload?.broadcastIntent?.nonce != null ||
+      typeof active?.hash !== "string" || !/^[a-fA-F0-9]{64}$/.test(active.hash) ||
+      typeof active.broadcastAt !== "string") return null;
+  const broadcastAt = Date.parse(active.broadcastAt);
+  if (!Number.isFinite(broadcastAt) || broadcastAt > now ||
+      (!["recovery_required", "failed"].includes(task.status) &&
+       now - broadcastAt < MX8004_LEGACY_BROADCAST_REVIEW_MS)) return null;
+  return {
+    status: "manual_reconciliation_required",
+    reason: "broadcast_without_claimed_nonce",
+    known_hash: active.hash,
+    broadcast_at: new Date(broadcastAt).toISOString(),
+    age_minutes: Math.floor((now - broadcastAt) / 60_000),
+    guidance: "A broadcast hash and time were recorded before claimed nonces were tracked. Manually inspect transaction finality and the signer account. No nonce can be assigned to this job from these records; do not automatically rebroadcast or resync the signer.",
+  };
+}
 
 export type Mx8004NonceStall = {
   signer_address: string;

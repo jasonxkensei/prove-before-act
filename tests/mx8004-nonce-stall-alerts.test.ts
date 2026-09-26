@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { assessMx8004NonceStall, MX8004_NONCE_STALL_MS } from "../server/txQueue";
+import {
+  assessMx8004NonceStall, assessMx8004LegacyBroadcast,
+  MX8004_NONCE_STALL_MS, MX8004_LEGACY_BROADCAST_REVIEW_MS,
+} from "../server/txQueue";
 import { pool } from "../server/db";
 import { migrateMx8004NonceAlertState } from "../server/maintenance";
 
@@ -42,6 +45,42 @@ describe("MX-8004 stalled signer nonce", () => {
     };
     expect(assessMx8004NonceStall([intent], address, 19, now)?.job_ids).toEqual(["uncertain"]);
     expect(assessMx8004NonceStall([{ ...intent, payload: { broadcastIntent: { startedAt: at(8) } } }], address, 19, now)).toBeNull();
+  });
+});
+
+describe("legacy broadcasts without a persisted signer nonce", () => {
+  const legacy = {
+    status: "awaiting_finality",
+    payload: { activeTx: { step: 0, hash: "a".repeat(64), broadcastAt: at(31) } },
+  };
+
+  it("requires manual review after the finality timeout without guessing a nonce", () => {
+    expect(MX8004_LEGACY_BROADCAST_REVIEW_MS).toBe(30 * 60_000);
+    expect(assessMx8004LegacyBroadcast(legacy, now)).toMatchObject({
+      status: "manual_reconciliation_required",
+      reason: "broadcast_without_claimed_nonce",
+      known_hash: "a".repeat(64),
+      age_minutes: 31,
+      guidance: expect.stringContaining("do not automatically rebroadcast"),
+    });
+    expect(assessMx8004LegacyBroadcast(legacy, now)).not.toHaveProperty("nonce");
+    expect(assessMx8004LegacyBroadcast(legacy, now - 2 * 60_000)).toBeNull();
+    expect(assessMx8004LegacyBroadcast({ ...legacy, status: "recovery_required",
+      payload: { activeTx: { ...legacy.payload.activeTx, broadcastAt: at(2) } } }, now))
+      .toMatchObject({ status: "manual_reconciliation_required", age_minutes: 2 });
+  });
+
+  it("does not relabel known nonces, invalid hashes, or completed work", () => {
+    expect(assessMx8004LegacyBroadcast({
+      ...legacy, payload: { activeTx: { ...legacy.payload.activeTx, nonce: "12" } },
+    }, now)).toBeNull();
+    expect(assessMx8004LegacyBroadcast({
+      ...legacy, payload: { ...legacy.payload, broadcastIntent: { nonce: "12" } },
+    }, now)).toBeNull();
+    expect(assessMx8004LegacyBroadcast({
+      ...legacy, payload: { activeTx: { ...legacy.payload.activeTx, hash: "bad" } },
+    }, now)).toBeNull();
+    expect(assessMx8004LegacyBroadcast({ ...legacy, status: "completed" }, now)).toBeNull();
   });
 });
 
