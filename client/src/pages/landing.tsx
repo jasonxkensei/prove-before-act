@@ -192,6 +192,7 @@ export default function Landing() {
   const [trialAgentName, setTrialAgentName] = useState<string>("");
   const [copied, setCopied] = useState(false);
   const [trialError, setTrialError] = useState<string | null>(null);
+  const trialErrorRef = useRef<HTMLParagraphElement>(null);
   const [trialKeyHandled, setTrialKeyHandled] = useState(false);
   const heroTrialCtaRef = useAgentCtaExposure<HTMLAnchorElement>("landing", "hero_free_trial");
   const heroScenariosRef = useAgentCtaExposure<HTMLDivElement>("landing", "hero_scenarios");
@@ -243,6 +244,10 @@ export default function Landing() {
     return () => window.removeEventListener("beforeunload", warnBeforeLeaving);
   }, [trialKey, trialKeyHandled]);
 
+  useEffect(() => {
+    if (trialError) trialErrorRef.current?.focus();
+  }, [trialError]);
+
   const registerMutation = useMutation({
     mutationFn: async (name: string) => {
       await ensureConversionVisitor();
@@ -250,9 +255,22 @@ export default function Landing() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ agent_name: name }),
+      }).catch(() => {
+        throw new Error("Network connection failed. Check your connection and try again.");
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Registration failed. Please try a different name.");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (res.status === 409 && data.error === "DUPLICATE_AGENT_NAME") {
+          throw new Error("That agent name is already taken. Choose another name and try again.");
+        }
+        if (res.status === 429) {
+          throw new Error("Too many registration attempts. Please wait and try again.");
+        }
+        throw new Error("Registration is temporarily unavailable. Please try again.");
+      }
+      if (typeof data.api_key !== "string" || !data.api_key.startsWith("pm_")) {
+        throw new Error("Registration did not return a valid API key. Please try again.");
+      }
       return data;
     },
     onSuccess: (data, name) => {
@@ -274,6 +292,7 @@ export default function Landing() {
   const submitTrialRegistration = () => {
     const name = agentName.trim();
     if (name.length < 2 || registerMutation.isPending) return;
+    setTrialError(null);
     trackAgentCta("cta_clicked", "landing", "trial_register");
     trackEvent("trial_registration_started", { location: "landing" });
     registerMutation.mutate(name);
@@ -650,7 +669,12 @@ export default function Landing() {
                   <Input
                     placeholder="Agent name (e.g. my-agent)"
                     value={agentName}
-                    onChange={(e) => setAgentName(e.target.value)}
+                    onChange={(e) => {
+                      setAgentName(e.target.value);
+                      setTrialError(null);
+                    }}
+                    aria-invalid={!!trialError}
+                    aria-describedby={trialError ? "trial-register-error" : undefined}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         submitTrialRegistration();
@@ -679,7 +703,14 @@ export default function Landing() {
                   </Button>
                 </div>
                 {trialError && (
-                  <p className="mt-3 text-sm text-destructive text-left" data-testid="text-trial-error">
+                  <p
+                    id="trial-register-error"
+                    ref={trialErrorRef}
+                    role="alert"
+                    tabIndex={-1}
+                    className="mt-3 text-sm text-destructive text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    data-testid="text-trial-error"
+                  >
                     {trialError}
                   </p>
                 )}

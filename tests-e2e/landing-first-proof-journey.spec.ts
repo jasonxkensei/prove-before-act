@@ -111,6 +111,66 @@ async function mockTrialApis(page: Page) {
 test.describe("landing first-proof journey — desktop", () => {
   test.use({ viewport: DESKTOP_VIEWPORT });
 
+  test("rejected names and temporary failures can be corrected and retried by keyboard", async ({
+    page,
+  }) => {
+    const submittedNames: string[] = [];
+    await page.route("**/api/agent/register", async (route) => {
+      const name = route.request().postDataJSON().agent_name;
+      submittedNames.push(name);
+      const attempt = submittedNames.length;
+      await route.fulfill({
+        status: attempt === 1 ? 409 : attempt === 2 ? 503 : 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          attempt === 1
+            ? { error: "DUPLICATE_AGENT_NAME", message: `An agent named "${name}" already exists.` }
+            : attempt === 2
+              ? { message: "Service unavailable" }
+              : { api_key: "pm_e2e_retry_trial_key" },
+        ),
+      });
+    });
+    await page.goto("/");
+    await page.getByTestId("button-free-trial-hero").click();
+    await expectFreeTrialInViewport(page);
+
+    const nameInput = page.getByTestId("input-trial-agent-name");
+    const registerButton = page.getByTestId("button-register-trial");
+    const error = page.getByTestId("text-trial-error");
+    await nameInput.focus();
+    await page.keyboard.type("taken-agent");
+    await page.keyboard.press("Enter");
+    await expect(error).toHaveText("That agent name is already taken. Choose another name and try again.");
+    await expect(error).toHaveAttribute("role", "alert");
+    await expect(error).toBeFocused();
+    await expect(nameInput).toHaveAttribute("aria-invalid", "true");
+    await expect(nameInput).toHaveAttribute("aria-describedby", "trial-register-error");
+    await expect(nameInput).toHaveValue("taken-agent");
+
+    await page.keyboard.press("Shift+Tab");
+    await expect(registerButton).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(nameInput).toBeFocused();
+    await page.keyboard.press("ControlOrMeta+A");
+    await page.keyboard.type("new-agent");
+    await expect(error).toHaveCount(0);
+    await expect(nameInput).toHaveAttribute("aria-invalid", "false");
+    await page.keyboard.press("Tab");
+    await expect(registerButton).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(error).toHaveText("Registration is temporarily unavailable. Please try again.");
+    await expect(error).toBeFocused();
+    await expect(nameInput).toHaveValue("new-agent");
+    await page.keyboard.press("Shift+Tab");
+    await expect(registerButton).toBeFocused();
+    await page.keyboard.press("Enter");
+
+    await expect(page.getByTestId("text-trial-key")).toHaveText("pm_e2e_retry_trial_key");
+    await expect(page.getByTestId("dropzone-proof")).toBeVisible();
+    expect(submittedNames).toEqual(["taken-agent", "new-agent", "new-agent"]);
+  });
+
   test("hero CTA reaches the free-trial form", async ({ page }) => {
     await page.goto("/");
 
