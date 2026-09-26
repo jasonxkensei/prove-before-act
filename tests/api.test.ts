@@ -52,6 +52,11 @@ describe("Prove Before Act API", () => {
         target: "/.well-known/provebeforeact.md",
         contentType: "text/markdown",
       },
+      {
+        alias: "/.well-known/proofmint.md",
+        target: "/.well-known/provebeforeact.md",
+        contentType: "text/markdown",
+      },
     ])("GET $alias permanently redirects to $target and serves its canonical content", async ({
       alias, target, contentType,
     }) => {
