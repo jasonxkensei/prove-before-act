@@ -14,24 +14,11 @@ import { getTrustSnapshotWriteStats, recordTrustSnapshotWriteFailure, recordTrus
 export { getRateLimitAlertConfig } from "./rateLimitAlerts";
 export const checkAndAlertRateLimit = checkAndAlertRateLimitImpl;
 
-/**
- * Return a redacted representation of a webhook URL safe for structured logs.
- * Only the origin (scheme + host + port) is retained; path, query string,
- * credentials, and fragment are stripped to prevent secret leakage.
- */
-function redactWebhookUrl(url: string): string {
-  try {
-    const { origin } = new URL(url);
-    return `${origin}/[redacted]`;
-  } catch {
-    return "[invalid-url]";
-  }
-}
-
 async function sendAlertWebhook(
   webhookUrl: string,
   alertType: string,
   payload: unknown,
+  deliveryId?: string,
 ): Promise<boolean> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
@@ -41,6 +28,7 @@ async function sendAlertWebhook(
       headers: {
         "Content-Type": "application/json",
         ...alertWebhookHeaders(alertType),
+        ...(deliveryId ? { "Idempotency-Key": deliveryId } : {}),
         "User-Agent": "ProveBeforeAct-Alert/1.0",
       },
       body: JSON.stringify(payload),
@@ -52,7 +40,6 @@ async function sendAlertWebhook(
         component: "alerts",
         alertType,
         status: response.status,
-        url: redactWebhookUrl(webhookUrl),
       });
     }
     return response.ok;
@@ -309,6 +296,7 @@ interface WebhookDeliveryExhaustedPayload {
   certification_id: string;
   destination: string;
   attempts: number;
+  delivery_id: string;
 }
 
 function redactWebhookDestination(url: string): string {
@@ -327,7 +315,8 @@ export async function alertWebhookDeliveryExhausted(
   certificationId: string,
   webhookUrl: string,
   attempts: number,
-): Promise<void> {
+  deliveryId: string,
+): Promise<boolean> {
   const payload: WebhookDeliveryExhaustedPayload = {
     alert: "proof_webhook_delivery_exhausted",
     severity: "critical",
@@ -335,17 +324,12 @@ export async function alertWebhookDeliveryExhausted(
     certification_id: certificationId,
     destination: redactWebhookDestination(webhookUrl),
     attempts,
+    delivery_id: deliveryId,
   };
 
-  logger.error("Proof callback delivery retries exhausted", {
-    component: "webhook-delivery-alerts",
-    ...payload,
-  });
-
   const alertWebhookUrl = process.env.TX_ALERT_WEBHOOK_URL;
-  if (alertWebhookUrl) {
-    await sendAlertWebhook(alertWebhookUrl, payload.alert, payload);
-  }
+  if (!alertWebhookUrl) return false;
+  return sendAlertWebhook(alertWebhookUrl, payload.alert, payload, deliveryId);
 }
 
 // ============================================================

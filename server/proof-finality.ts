@@ -234,6 +234,11 @@ export function startProofFinalityPoller(): void {
       .catch(error => logger.error("Pending webhook recovery failed", {
         component: "proof-finality", error: String(error),
       }));
+    void import("./proofCallbackAlerts")
+      .then(({ recoverPendingProofCallbackAlerts }) => recoverPendingProofCallbackAlerts())
+      .catch(error => logger.error("Pending operator alert recovery failed", {
+        component: "proof-finality", error: error instanceof Error ? error.name : "unknown",
+      }));
   };
   const timer = setInterval(() => {
     recoverPendingCallbacks();

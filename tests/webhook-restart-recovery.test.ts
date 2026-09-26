@@ -4,6 +4,7 @@ import express from "express";
 import https from "https";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { pollProofFinality } from "../server/proof-finality";
+import { markProofCallbackExhausted, recoverPendingProofCallbackAlerts } from "../server/proofCallbackAlerts";
 import { logger } from "../server/logger";
 import { registerAdminRoutes } from "../server/routes/admin";
 import {
@@ -14,8 +15,11 @@ import {
   verifyWebhookSignature,
 } from "../server/webhook";
 
-const { mockDb, mockState } = vi.hoisted(() => {
-  const state: { certification: Record<string, any> | null } = { certification: null };
+const { mockDb, mockState, mockPool } = vi.hoisted(() => {
+  const state: {
+    certification: Record<string, any> | null;
+    alerts: Array<Record<string, any>>;
+  } = { certification: null, alerts: [] };
   const makeRows = (selection?: Record<string, unknown>) => {
     if (!state.certification) return [];
     if (!selection) return [{ ...state.certification }];
@@ -79,11 +83,59 @@ const { mockDb, mockState } = vi.hoisted(() => {
       return query;
     },
   };
-  return { mockDb: db, mockState: state };
+  const pool = {
+    query: vi.fn(async (query: string, params: any[] = []) => {
+      if (query.includes("WITH transitioned AS")) {
+        if (!state.certification || state.certification.id !== params[0] ||
+            state.certification.webhookStatus !== "pending") return { rows: [] };
+        state.certification.webhookStatus = "failed";
+        const alert = {
+          id: `alert-${state.alerts.length + 1}`,
+          certification_id: params[0],
+          destination: params[1],
+          callback_attempts: params[2],
+          delivery_attempts: 0,
+          status: "pending",
+          next_attempt_at: Date.now(),
+          lease_token: null,
+          lease_expires_at: null,
+        };
+        state.alerts.push(alert);
+        return { rows: [{ id: alert.id }] };
+      }
+      if (query.includes("UPDATE proof_callback_alert_outbox") && query.includes("SET lease_token")) {
+        const alert = state.alerts.find(row => row.id === params[0] && row.status === "pending" &&
+          row.next_attempt_at <= Date.now() &&
+          (row.lease_expires_at === null || row.lease_expires_at <= Date.now()));
+        if (!alert) return { rows: [] };
+        alert.lease_token = params[1];
+        alert.lease_expires_at = Date.now() + params[2];
+        return { rows: [{ ...alert }] };
+      }
+      if (query.includes("UPDATE proof_callback_alert_outbox") && query.includes("SET status")) {
+        const alert = state.alerts.find(row => row.id === params[0] &&
+          row.lease_token === params[1] && row.status === "pending");
+        if (!alert) return { rows: [] };
+        alert.status = params[2] ? "delivered" : "pending";
+        alert.delivery_attempts++;
+        alert.next_attempt_at = params[2] ? alert.next_attempt_at : Date.now() + params[3];
+        alert.lease_token = null;
+        alert.lease_expires_at = null;
+        return { rows: [] };
+      }
+      if (query.includes("SELECT id FROM proof_callback_alert_outbox")) {
+        return { rows: state.alerts.filter(row => row.status === "pending" &&
+          row.next_attempt_at <= Date.now() &&
+          (row.lease_expires_at === null || row.lease_expires_at <= Date.now()))
+          .slice(0, 50).map(row => ({ id: row.id })) };
+      }
+      throw new Error("Unexpected mock query");
+    }),
+  };
+  return { mockDb: db, mockState: state, mockPool: pool };
 });
 
-
-vi.mock("../server/db", () => ({ db: mockDb }));
+vi.mock("../server/db", () => ({ db: mockDb, pool: mockPool }));
 
 const transactionHash = "a".repeat(64);
 const fileHash = "b".repeat(64);
@@ -112,6 +164,7 @@ async function withAdminRoutes(run: (baseUrl: string) => Promise<void>): Promise
 }
 
 afterEach(() => {
+  mockState.alerts = [];
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
@@ -303,6 +356,102 @@ describe("proof-certified webhook restart recovery", () => {
     expect(JSON.stringify(exhaustionLog?.[1])).not.toContain(webhookSecret);
     expect(JSON.stringify(exhaustionLog?.[1])).not.toContain("callback-pass");
     expect(JSON.stringify(exhaustionLog?.[1])).not.toContain("/private/proof");
+  });
+
+  it("retries only the operator alert after an outage and never resends it once acknowledged", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-25T12:00:00.000Z"));
+    const alertUrl = "https://ops.example.test/alerts/private-token?key=alert-secret";
+    const callbackUrl = "https://callback-user:callback-pass@callbacks.example.test/private/proof?access_token=callback-token";
+    vi.stubEnv("TX_ALERT_WEBHOOK_URL", alertUrl);
+    const alertFetch = vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 503 })
+      .mockResolvedValueOnce({ ok: true, status: 204 });
+    vi.stubGlobal("fetch", alertFetch);
+    const errorLog = vi.spyOn(logger, "error");
+    mockState.certification = {
+      id: "certification-alert-restart",
+      webhookStatus: "pending",
+      webhookAttempts: 3,
+    };
+
+    await markProofCallbackExhausted("certification-alert-restart", callbackUrl, 3);
+    expect(mockState.certification.webhookStatus).toBe("failed");
+    expect(mockState.certification.webhookAttempts).toBe(3);
+    expect(mockState.alerts).toMatchObject([{ status: "pending", delivery_attempts: 1 }]);
+    expect(alertFetch).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(errorLog.mock.calls)).not.toMatch(/callback-pass|callback-token|\/private\/proof|alert-secret|\/alerts\/private-token/);
+
+    // The first failure persists across recovery ticks; an early tick is a no-op.
+    await recoverPendingProofCallbackAlerts();
+    expect(alertFetch).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(30_000);
+    await Promise.all([recoverPendingProofCallbackAlerts(), recoverPendingProofCallbackAlerts()]);
+    expect(alertFetch).toHaveBeenCalledTimes(2);
+    expect(mockState.alerts[0].status).toBe("delivered");
+    expect(mockState.certification.webhookStatus).toBe("failed");
+    expect(mockState.certification.webhookAttempts).toBe(3);
+    const first = JSON.parse(alertFetch.mock.calls[0][1].body);
+    const second = JSON.parse(alertFetch.mock.calls[1][1].body);
+    expect(first.destination).toBe("https://callbacks.example.test/[redacted]");
+    expect(first.delivery_id).toBe(second.delivery_id);
+    expect(alertFetch.mock.calls[0][1].headers["Idempotency-Key"]).toBe(first.delivery_id);
+    expect(JSON.stringify(first)).not.toMatch(/callback-pass|callback-token|\/private\/proof/);
+    await vi.advanceTimersByTimeAsync(3_600_000);
+    await recoverPendingProofCallbackAlerts();
+    expect(alertFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps an earlier alert when a manually retried callback exhausts again", async () => {
+    vi.stubEnv("TX_ALERT_WEBHOOK_URL", "https://ops.example.test/alerts");
+    const alertFetch = vi.fn().mockResolvedValue({ ok: true, status: 204 });
+    vi.stubGlobal("fetch", alertFetch);
+    mockState.certification = { id: "certification-second-episode", webhookStatus: "pending" };
+    await markProofCallbackExhausted("certification-second-episode", "https://callbacks.example.test/secret", 3);
+    mockState.certification.webhookStatus = "pending"; // the admin's manual retry
+    await markProofCallbackExhausted("certification-second-episode", "https://callbacks.example.test/secret", 3);
+    expect(mockState.alerts).toHaveLength(2);
+    expect(mockState.alerts.map(alert => alert.status)).toEqual(["delivered", "delivered"]);
+    expect(alertFetch.mock.calls.map(call => JSON.parse(call[1].body).delivery_id))
+      .toEqual(["alert-1", "alert-2"]);
+    await recoverPendingProofCallbackAlerts();
+    expect(alertFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("reclaims an expired operator-alert lease after restart without replaying callbacks", async () => {
+    vi.stubEnv("TX_ALERT_WEBHOOK_URL", "https://ops.example.test/alerts");
+    const alertFetch = vi.fn().mockResolvedValue({ ok: true, status: 204 });
+    vi.stubGlobal("fetch", alertFetch);
+    mockState.certification = { id: "certification-orphaned-alert", webhookStatus: "failed", webhookAttempts: 3 };
+    mockState.alerts.push({
+      id: "alert-orphaned",
+      certification_id: "certification-orphaned-alert",
+      destination: "https://callbacks.example.test/[redacted]",
+      callback_attempts: 3,
+      delivery_attempts: 0,
+      status: "pending",
+      next_attempt_at: Date.now() - 120_000,
+      lease_token: "crashed-worker",
+      lease_expires_at: Date.now() - 1000,
+    });
+    await Promise.all([recoverPendingProofCallbackAlerts(), recoverPendingProofCallbackAlerts()]);
+    expect(alertFetch).toHaveBeenCalledTimes(1);
+    expect(mockState.alerts[0].status).toBe("delivered");
+    expect(mockState.certification.webhookStatus).toBe("failed");
+  });
+
+  it("retains an unsent alert until the operator endpoint is configured", async () => {
+    vi.stubEnv("TX_ALERT_WEBHOOK_URL", "");
+    mockState.certification = { id: "certification-unconfigured-alert", webhookStatus: "pending" };
+    await markProofCallbackExhausted("certification-unconfigured-alert", "https://callbacks.example.test/private", 3);
+    expect(mockState.alerts).toMatchObject([{ status: "pending", delivery_attempts: 0 }]);
+
+    const alertFetch = vi.fn().mockResolvedValue({ ok: true, status: 204 });
+    vi.stubGlobal("fetch", alertFetch);
+    vi.stubEnv("TX_ALERT_WEBHOOK_URL", "https://ops.example.test/alerts");
+    await recoverPendingProofCallbackAlerts();
+    expect(alertFetch).toHaveBeenCalledTimes(1);
+    expect(mockState.alerts[0].status).toBe("delivered");
   });
 
   it("reclaims an expired lease but only lets one recovery worker send the callback", async () => {

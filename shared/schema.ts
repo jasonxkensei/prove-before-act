@@ -182,6 +182,25 @@ export const certifications = pgTable("certifications", {
 
 export type Certification = typeof certifications.$inferSelect;
 
+// One durable operator notification per exhausted callback episode. A manual
+// callback retry creates a new episode without discarding any earlier alert.
+export const proofCallbackAlertOutbox = pgTable("proof_callback_alert_outbox", {
+  id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
+  // Keep the alert if a certification is later removed during an outage.
+  certificationId: varchar("certification_id").notNull(),
+  destination: text("destination").notNull(),
+  callbackAttempts: integer("callback_attempts").notNull(),
+  status: varchar("status").notNull().default("pending"),
+  deliveryAttempts: integer("delivery_attempts").notNull().default(0),
+  nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull().defaultNow(),
+  leaseToken: text("lease_token"),
+  leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+}, (table) => [
+  index("idx_proof_callback_alert_outbox_due").on(table.status, table.nextAttemptAt),
+]);
+
 export const FINALITY_SNAPSHOT_VERSION = 2;
 
 // Append-only operator history for legacy proof-finality reconciliation.

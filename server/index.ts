@@ -37,6 +37,7 @@ import {
   migrateConversionEventsTable,
   migrateMx8004BalanceAlertState,
   migrateProofFinalityReconciliationSchema,
+  migrateProofCallbackAlertOutbox,
   migratePbaHttpWitnessRevocations,
   checkMx8004WalletBalance,
 } from "./maintenance";
@@ -255,6 +256,7 @@ app.use((req, res, next) => {
   // context after a process restart. These fields are internal delivery state.
   await db.execute(sql`ALTER TABLE certifications ADD COLUMN IF NOT EXISTS webhook_signing_secret text`);
   await db.execute(sql`ALTER TABLE certifications ADD COLUMN IF NOT EXISTS webhook_base_url text`);
+  await migrateProofCallbackAlertOutbox();
   await migrateProofFinalityReconciliationSchema();
   await migratePbaHttpWitnessRevocations();
   await migratePbaReconciliationAlerts();

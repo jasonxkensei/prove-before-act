@@ -8,7 +8,7 @@ import { logger } from "./logger";
 import { proofWebhookHeaders } from "./webhookHeaders";
 import { publicProofStatus } from "./proof-finality";
 import { CANONICAL_PUBLIC_ORIGIN } from "./publicOrigin";
-import { alertWebhookDeliveryExhausted } from "./alerts";
+import { markProofCallbackExhausted } from "./proofCallbackAlerts";
 
 /**
  * Prove Before Act Webhook Signature Contract
@@ -378,19 +378,7 @@ async function markWebhookFailed(certificationId: string, webhookUrl: string) {
 }
 
 async function markWebhookExhausted(certificationId: string, webhookUrl: string): Promise<void> {
-  const [transitioned] = await db
-    .update(certifications)
-    .set({ webhookStatus: "failed" })
-    .where(and(
-      eq(certifications.id, certificationId),
-      eq(certifications.webhookStatus, "pending"),
-    ))
-    .returning({ id: certifications.id });
-
-  // The durable status transition deduplicates alerts across workers and restarts.
-  if (transitioned) {
-    await alertWebhookDeliveryExhausted(certificationId, webhookUrl, MAX_WEBHOOK_ATTEMPTS);
-  }
+  await markProofCallbackExhausted(certificationId, webhookUrl, MAX_WEBHOOK_ATTEMPTS);
 }
 
 type PendingWebhook = {

@@ -87,6 +87,29 @@ export async function migrateMx8004BalanceAlertState(): Promise<void> {
   `);
 }
 
+/** Install the independent operator-alert outbox before callback workers start. */
+export async function migrateProofCallbackAlertOutbox(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS proof_callback_alert_outbox (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      certification_id VARCHAR NOT NULL,
+      destination TEXT NOT NULL,
+      callback_attempts INTEGER NOT NULL,
+      status VARCHAR NOT NULL DEFAULT 'pending',
+      delivery_attempts INTEGER NOT NULL DEFAULT 0,
+      next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      lease_token TEXT,
+      lease_expires_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      delivered_at TIMESTAMPTZ
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_proof_callback_alert_outbox_due
+    ON proof_callback_alert_outbox(status, next_attempt_at)
+  `);
+}
+
 export async function purgeExpiredConversionEvents(): Promise<number> {
   // Proof-verification deduplication markers intentionally live in
   // conversion_event_dedup_keys beyond this reporting retention window.
