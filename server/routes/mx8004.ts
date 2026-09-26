@@ -115,7 +115,21 @@ export function registerMx8004Routes(app: Express) {
           });
         }
       }
-      const jobData = await getJobData(req.params.jobId);
+      let jobData;
+      try {
+        jobData = await getJobData(req.params.jobId);
+      } catch (err) {
+        logger.error("MX-8004 job registry read failed", {
+          jobId: req.params.jobId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return res.status(503).json({
+          error: "MX8004_REGISTRY_UNAVAILABLE",
+          job_id: req.params.jobId,
+          ...queue,
+          message: "Validation Registry status is temporarily unavailable; the job's on-chain status could not be checked",
+        });
+      }
       if (!jobData) {
         if (queueItem) {
           return res.status(["failed", "recovery_required"].includes(queueItem.status) ? 409 : 202)

@@ -557,13 +557,9 @@ export async function getJobData(jobId: string): Promise<{
 } | null> {
   if (!isMX8004Configured()) throw new Error("MX-8004 not configured");
 
-  try {
-    const returnData = await vmQuery(VALIDATION_REGISTRY!, "get_job_data", [toHex(jobId)]);
-    if (!returnData || returnData.length === 0 || !returnData[0]) return null;
-    return decodeJobData(returnData[0]);
-  } catch {
-    return null;
-  }
+  const returnData = await vmQuery(VALIDATION_REGISTRY!, "get_job_data", [toHex(jobId)]);
+  if (!returnData || returnData.length === 0 || !returnData[0]) return null;
+  return decodeJobData(returnData[0]);
 }
 
 /** Minimal reader for MultiversX nested-encoded structs returned by VM queries. */
