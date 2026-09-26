@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "wouter";
+import { startVisibilityAwarePolling } from "@/hooks/visible-polling";
 
 type Verdict = { status?: unknown; reason?: unknown };
 type MarkPayload = {
@@ -39,24 +40,41 @@ export function PbaMark({ id, className = "", size = 112 }: PbaMarkProps) {
   const [selected, setSelected] = useState<SegmentKey | null>(null);
 
   useEffect(() => {
-    const controller = new AbortController();
+    let disposed = false;
+    let inFlight = false;
+    let controller: AbortController | undefined;
     setPayload(null);
     setUnavailable(false);
-    fetch(`/api/pba/verification/${encodeURIComponent(id)}`, {
-      credentials: "same-origin",
-      headers: { Accept: "application/json" },
-      signal: controller.signal,
-    })
-      .then((response) => {
+    const refresh = async () => {
+      if (disposed || inFlight) return;
+      inFlight = true;
+      controller = new AbortController();
+      try {
+        const response = await fetch(`/api/pba/verification/${encodeURIComponent(id)}`, {
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+          signal: controller.signal,
+        });
         if (!response.ok) throw new Error("Verification state unavailable");
-        return response.json() as Promise<MarkPayload>;
-      })
-      .then(setPayload)
-      .catch((error: unknown) => {
-        if (error instanceof Error && error.name === "AbortError") return;
+        const nextPayload = await response.json() as MarkPayload;
+        if (disposed) return;
+        setPayload(nextPayload);
+        setUnavailable(false);
+      } catch (error: unknown) {
+        if (disposed || (error instanceof Error && error.name === "AbortError")) return;
         setUnavailable(true);
-      });
-    return () => controller.abort();
+      } finally {
+        inFlight = false;
+      }
+    };
+
+    void refresh();
+    const stopPolling = startVisibilityAwarePolling(refresh);
+    return () => {
+      disposed = true;
+      stopPolling();
+      controller?.abort();
+    };
   }, [id]);
 
   const verdicts = payload?.attestation?.verdicts;

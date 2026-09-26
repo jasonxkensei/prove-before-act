@@ -3,6 +3,7 @@ import { useParams } from "wouter";
 import { ArrowUpRight, Check, Copy, FileKey2, RotateCw, ShieldAlert } from "lucide-react";
 import { PublicSiteFooter, PublicSiteHeader } from "@/components/public-site-chrome";
 import { PbaMark } from "@/components/pba-mark";
+import { startVisibilityAwarePolling } from "@/hooks/visible-polling";
 import "./verify.css";
 
 type Verdict = { status?: string; reason?: string };
@@ -43,7 +44,7 @@ type LoadState =
   | { kind: "loading" }
   | { kind: "not-found" }
   | { kind: "error"; message: string }
-  | { kind: "ready"; data: VerificationResponse };
+  | { kind: "ready"; data: VerificationResponse; refreshError?: string };
 
 const verdictKeys = ["why", "what", "link"] as const;
 
@@ -128,39 +129,66 @@ export default function VerifyPage() {
   const [retry, setRetry] = useState(0);
 
   useEffect(() => {
-    const controller = new AbortController();
+    let disposed = false;
+    let hasLoaded = false;
+    let inFlight = false;
+    let controller: AbortController | undefined;
     setState({ kind: "loading" });
-    fetch(`/api/pba/verification/${encodeURIComponent(id)}`, {
-      credentials: "same-origin",
-      headers: { Accept: "application/json" },
-      signal: controller.signal,
-    }).then(async (response) => {
-      if (response.status === 404) {
-        setState({ kind: "not-found" });
-        return;
+    const refresh = async () => {
+      if (disposed || inFlight) return;
+      inFlight = true;
+      controller = new AbortController();
+      try {
+        const response = await fetch(`/api/pba/verification/${encodeURIComponent(id)}`, {
+          credentials: "same-origin",
+          headers: { Accept: "application/json" },
+          signal: controller.signal,
+        });
+        if (response.status === 404) {
+          if (!disposed) setState({ kind: "not-found" });
+          return;
+        }
+        if (!response.ok) throw new Error(`The verification service returned ${response.status}.`);
+        const data = await response.json() as VerificationResponse;
+        if (!data?.attestation || !data?.current) throw new Error("The verification response was incomplete.");
+        if (disposed) return;
+        hasLoaded = true;
+        setState({ kind: "ready", data });
+      } catch (error: unknown) {
+        if (disposed || (error instanceof Error && error.name === "AbortError")) return;
+        const message = error instanceof Error ? error.message : "Could not retrieve this verification record.";
+        if (!hasLoaded) setState({ kind: "error", message });
+        else setState((current) => current.kind === "ready"
+          ? { ...current, refreshError: message }
+          : current);
+      } finally {
+        inFlight = false;
       }
-      if (!response.ok) throw new Error(`The verification service returned ${response.status}.`);
-      const data = await response.json() as VerificationResponse;
-      if (!data?.attestation || !data?.current) throw new Error("The verification response was incomplete.");
-      setState({ kind: "ready", data });
-    }).catch((error: unknown) => {
-      if (error instanceof Error && error.name === "AbortError") return;
-      setState({ kind: "error", message: error instanceof Error ? error.message : "Could not retrieve this verification record." });
-    });
-    return () => controller.abort();
+    };
+
+    void refresh();
+    const stopPolling = startVisibilityAwarePolling(refresh);
+    return () => {
+      disposed = true;
+      stopPolling();
+      controller?.abort();
+    };
   }, [id, retry]);
 
   const reload = useCallback(() => setRetry((value) => value + 1), []);
   const recordId = id || "unknown";
   const ready = state.kind === "ready" ? state.data : null;
+  const refreshError = state.kind === "ready" ? state.refreshError : undefined;
   const attestation = ready?.attestation;
-  const currentStatus = (ready?.current.status ?? "").toLowerCase();
+  const currentStatus = ready && !refreshError ? (ready.current.status ?? "").toLowerCase() : "";
   const isRetired = currentStatus === "revoked" || currentStatus === "superseded";
   const isActiveNegative = currentStatus === "not_verified";
   const isCurrentVerified = currentStatus === "verified" && attestation?.verified === true;
   const currentTone = isCurrentVerified ? "verified" : isRetired ? "rejected" : "pending";
   const currentDescription = isCurrentVerified
     ? "The server currently reports this record as verified. Independently verify its signature and payload before relying on it."
+    : refreshError
+      ? "Current status could not be refreshed. Treat this record as inconclusive until the public verification service is available."
     : ready?.current.witness_key_revocation
       ? `The recipient witness key was revoked: ${ready.current.witness_key_revocation.reason}. This historic record is no longer valid, even though its original signature remains intact.`
     : isRetired
@@ -215,7 +243,7 @@ export default function VerifyPage() {
                   </div>
                   <div className="verify-current-status">
                     <span className="verify-kicker">CURRENT STATUS</span>
-                    <StatusPill status={ready.current.status} tone={currentTone} />
+                    <StatusPill status={refreshError ? undefined : ready.current.status} tone={currentTone} />
                   </div>
                 </div>
                 <p className="verify-overview__note">
