@@ -341,6 +341,24 @@ test.describe("public-site chrome — exact Tab count to More button", () => {
 // hand before committing.
 const EXPECTED_TABS_TO_MOBILE_START_FREE = 3;
 
+// With the menu open, the close control (button-mobile-menu) precedes these
+// links in keyboard order. Keep this list independent of PUBLIC_*_NAV so
+// adding, removing, or reordering a link requires a conscious test update.
+const EXPECTED_MOBILE_MENU_TAB_ORDER = [
+  { label: "How it works", href: "/#how-it-works" },
+  { label: "Standard", href: "/standard" },
+  { label: "Interactive demo", href: "/demo" },
+  { label: "60-second overview", href: "/learn" },
+  { label: "For AI Agents", href: "/agents" },
+  { label: "Trust Leaderboard", href: "/leaderboard" },
+  { label: "Metrics", href: "/stats" },
+  { label: "API Docs", href: "/docs" },
+  { label: "Agent Context", href: "/agent-context" },
+  { label: "Coherence", href: "/coherence" },
+  { label: "About the founder", href: "/founder" },
+  { label: "FAQ", href: "/#faq" },
+];
+
 /** Returns the number of Tab presses needed to focus the mobile Start free CTA,
  * or -1 when the element is not reached within `limit` presses. */
 async function countTabsToMobileStartFree(page: Page, limit = 20): Promise<number> {
@@ -427,6 +445,47 @@ test.describe("public-site chrome — mobile viewport", () => {
     await expect(menu).not.toBeVisible();
     await expect(trigger).toHaveAttribute("aria-expanded", "false");
     await expect(trigger).toBeFocused();
+  });
+
+  test("keyboard Tab reaches every mobile menu link in order and Shift+Tab returns to close", async ({ page }) => {
+    const trigger = page.getByTestId("button-mobile-menu");
+    const menu = page.getByRole("navigation", { name: "Mobile navigation" });
+    await trigger.focus();
+    await page.keyboard.press("Enter");
+    await expect(menu).toBeVisible();
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+    await expect(trigger).toHaveAttribute("aria-label", "Close navigation menu");
+    await expect(trigger).toBeFocused();
+
+    const links = menu.getByRole("link");
+    const actualOrder = await links.evaluateAll((elements) =>
+      elements.map((element) => ({
+        label: element.textContent?.trim(),
+        href: element.getAttribute("href"),
+      })),
+    );
+    expect(actualOrder, "Mobile menu links were added, removed, or reordered").toEqual(
+      EXPECTED_MOBILE_MENU_TAB_ORDER,
+    );
+
+    await page.keyboard.press("Tab");
+    await expect(links.first()).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
+    await expect(trigger, "Shift+Tab from the first menu link must reach the close control").toBeFocused();
+
+    for (const [index, { label, href }] of EXPECTED_MOBILE_MENU_TAB_ORDER.entries()) {
+      await page.keyboard.press("Tab");
+      await expect(
+        links.nth(index),
+        `Mobile menu Tab ${index + 1} must focus ${label} (${href})`,
+      ).toBeFocused();
+    }
+
+    await page.keyboard.press("Tab");
+    const stillInMenu = await page.evaluate(
+      () => document.activeElement?.closest("#public-mobile-navigation") !== null,
+    );
+    expect(stillInMenu, "An unexpected focusable control follows the last mobile menu link").toBe(false);
   });
 
   test("logo link is visible on mobile", async ({ page }) => {
