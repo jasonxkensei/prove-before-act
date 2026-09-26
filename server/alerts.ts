@@ -139,18 +139,77 @@ export async function checkAndAlertMx8004LowBalance(balance: Mx8004SignerBalance
   }
 }
 
-let alertedNonceSequence: string | null = null;
-let nonceStallDelivery: Promise<void> | null = null;
+// A webhook times out after 10 seconds; a crashed sender's claim expires.
+const NONCE_STALL_LEASE_MS = 30_000;
 
-export async function checkAndAlertMx8004NonceStall(stall: Mx8004NonceStall | null): Promise<void> {
+export async function checkAndAlertMx8004NonceStall(
+  stall: Mx8004NonceStall | null,
+  observation: { signerAddress: string; observedAt: Date },
+): Promise<void> {
+  if (!Number.isFinite(observation.observedAt.getTime())) {
+    throw new Error("Invalid signer nonce observation time");
+  }
+  if (stall && stall.signer_address !== observation.signerAddress) {
+    throw new Error("Signer nonce observation does not match stalled signer");
+  }
   if (!stall) {
-    alertedNonceSequence = null;
+    // Persist the clear, including when this instance never saw the stall.
+    // An older observation cannot undo a newer episode.
+    await pool.query(`
+      INSERT INTO mx8004_nonce_alert_state
+        (signer_address, observed_at, pending_nonce, episode_id, notified)
+      VALUES ($1, $2, NULL, $3, FALSE)
+      ON CONFLICT (signer_address) DO UPDATE
+        SET observed_at = EXCLUDED.observed_at, pending_nonce = NULL,
+            notified = FALSE, lease_token = NULL, lease_until = NULL
+      WHERE mx8004_nonce_alert_state.observed_at <= EXCLUDED.observed_at
+    `, [observation.signerAddress, observation.observedAt, crypto.randomUUID()]);
     return;
   }
-  const sequence = `${stall.signer_address}:${stall.oldest_pending_nonce}`;
-  if (alertedNonceSequence === sequence) return;
-  if (nonceStallDelivery) return nonceStallDelivery;
-  nonceStallDelivery = (async () => {
+
+  const token = crypto.randomUUID();
+  const claimed = await pool.query<{ episode_id: string; lease_token: string | null }>(`
+    INSERT INTO mx8004_nonce_alert_state
+      (signer_address, observed_at, pending_nonce, episode_id, notified, lease_token, lease_until)
+    VALUES ($1, $2, $3, $4, FALSE, $5, NOW() + ($6::double precision * INTERVAL '1 millisecond'))
+    ON CONFLICT (signer_address) DO UPDATE
+      SET observed_at = EXCLUDED.observed_at,
+          pending_nonce = EXCLUDED.pending_nonce,
+          episode_id = CASE
+            WHEN mx8004_nonce_alert_state.pending_nonce IS DISTINCT FROM EXCLUDED.pending_nonce
+              THEN EXCLUDED.episode_id
+            ELSE mx8004_nonce_alert_state.episode_id END,
+          notified = CASE
+            WHEN mx8004_nonce_alert_state.pending_nonce IS DISTINCT FROM EXCLUDED.pending_nonce
+              THEN FALSE
+            ELSE mx8004_nonce_alert_state.notified END,
+          lease_token = CASE
+            WHEN mx8004_nonce_alert_state.pending_nonce IS DISTINCT FROM EXCLUDED.pending_nonce
+              OR (mx8004_nonce_alert_state.notified = FALSE
+                  AND (mx8004_nonce_alert_state.lease_until IS NULL
+                       OR mx8004_nonce_alert_state.lease_until <= NOW()))
+              THEN EXCLUDED.lease_token
+            ELSE mx8004_nonce_alert_state.lease_token END,
+          lease_until = CASE
+            WHEN mx8004_nonce_alert_state.pending_nonce IS DISTINCT FROM EXCLUDED.pending_nonce
+              OR (mx8004_nonce_alert_state.notified = FALSE
+                  AND (mx8004_nonce_alert_state.lease_until IS NULL
+                       OR mx8004_nonce_alert_state.lease_until <= NOW()))
+              THEN EXCLUDED.lease_until
+            ELSE mx8004_nonce_alert_state.lease_until END
+    WHERE mx8004_nonce_alert_state.observed_at <= EXCLUDED.observed_at
+    RETURNING episode_id, lease_token
+  `, [
+    observation.signerAddress, observation.observedAt, stall.oldest_pending_nonce,
+    crypto.randomUUID(), token, NONCE_STALL_LEASE_MS,
+  ]);
+  const episodeId = claimed.rows[0]?.episode_id;
+  // A suppressed same-nonce observation still advances observed_at, but must
+  // never inherit another instance's claim or reset its notified flag.
+  if (!episodeId || claimed.rows[0].lease_token !== token) return;
+
+  let delivered = false;
+  try {
     const payload = {
       alert: "mx8004_signer_nonce_stalled",
       severity: "critical",
@@ -158,14 +217,16 @@ export async function checkAndAlertMx8004NonceStall(stall: Mx8004NonceStall | nu
       ...stall,
     };
     const webhookUrl = process.env.MX8004_NONCE_ALERT_WEBHOOK_URL || process.env.TX_ALERT_WEBHOOK_URL;
-    if (webhookUrl && !await sendAlertWebhook(webhookUrl, payload.alert, payload)) return;
-    logger.error("MX-8004 signer nonce sequence stalled", { component: "alerts", ...payload });
-    alertedNonceSequence = sequence;
-  })();
-  try {
-    await nonceStallDelivery;
+    delivered = !webhookUrl || await sendAlertWebhook(webhookUrl, payload.alert, payload, episodeId);
+    if (delivered) logger.error("MX-8004 signer nonce sequence stalled", { component: "alerts", ...payload });
   } finally {
-    nonceStallDelivery = null;
+    // A newer clear or episode may have replaced this claim during delivery.
+    await pool.query(`
+      UPDATE mx8004_nonce_alert_state
+      SET lease_token = NULL, lease_until = NULL, notified = $3
+      WHERE signer_address = $1 AND lease_token = $2
+        AND pending_nonce = $4 AND episode_id = $5
+    `, [observation.signerAddress, token, delivered, stall.oldest_pending_nonce, episodeId]);
   }
 }
 

@@ -36,6 +36,7 @@ import {
   sweepExpiredAcpReservations,
   migrateConversionEventsTable,
   migrateMx8004BalanceAlertState,
+  migrateMx8004NonceAlertState,
   migrateProofFinalityReconciliationSchema,
   migrateProofCallbackAlertOutbox,
   migratePbaHttpWitnessRevocations,
@@ -247,6 +248,7 @@ app.use((req, res, next) => {
   // shared/schema.ts for publish-time schema reconciliation.
   await migrateConversionEventsTable();
   await migrateMx8004BalanceAlertState();
+  await migrateMx8004NonceAlertState();
   // Additive only: legacy confirmed rows remain untouched and unverified until
   // a separately planned reconciliation. Never stamp them during deployment.
   await db.execute(sql`ALTER TABLE certifications ADD COLUMN IF NOT EXISTS finality_checked_at timestamp`);

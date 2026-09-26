@@ -585,6 +585,18 @@ export const mx8004BalanceAlertState = pgTable("mx8004_balance_alert_state", {
   leaseUntil: timestamp("lease_until", { withTimezone: true }),
 });
 
+// One durable nonce-stall episode per signer; lease and episode ID coordinate
+// cross-instance delivery and stable receiver-side deduplication on retries.
+export const mx8004NonceAlertState = pgTable("mx8004_nonce_alert_state", {
+  signerAddress: text("signer_address").primaryKey(),
+  observedAt: timestamp("observed_at", { withTimezone: true }).notNull(),
+  pendingNonce: text("pending_nonce"),
+  episodeId: text("episode_id").notNull(),
+  notified: boolean("notified").notNull().default(false),
+  leaseToken: text("lease_token"),
+  leaseUntil: timestamp("lease_until", { withTimezone: true }),
+});
+
 export type ConversionEvent = typeof conversionEvents.$inferSelect;
 
 // Proof-scoped idempotency markers. These contain no visitor, request,

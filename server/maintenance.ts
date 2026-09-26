@@ -50,7 +50,10 @@ export async function checkMx8004WalletBalance() {
   // An unavailable account reading must not clear a previous alert episode.
   if (balance.nonce !== null && balance.address) {
     try {
-      await checkAndAlertMx8004NonceStall(await getMx8004NonceStall(balance.address, balance.nonce));
+      await checkAndAlertMx8004NonceStall(
+        await getMx8004NonceStall(balance.address, balance.nonce),
+        { signerAddress: balance.address, observedAt: new Date(balance.checkedAt!) },
+      );
     } catch (error) {
       logger.error("MX-8004 nonce stall check failed", {
         component: "maintenance",
@@ -80,6 +83,21 @@ export async function migrateMx8004BalanceAlertState(): Promise<void> {
       signer_address TEXT PRIMARY KEY,
       observed_at TIMESTAMPTZ NOT NULL,
       low BOOLEAN NOT NULL,
+      notified BOOLEAN NOT NULL DEFAULT FALSE,
+      lease_token TEXT,
+      lease_until TIMESTAMPTZ
+    )
+  `);
+}
+
+/** Install shared nonce-stall episode state before the wallet scheduler starts. */
+export async function migrateMx8004NonceAlertState(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS mx8004_nonce_alert_state (
+      signer_address TEXT PRIMARY KEY,
+      observed_at TIMESTAMPTZ NOT NULL,
+      pending_nonce TEXT,
+      episode_id TEXT NOT NULL,
       notified BOOLEAN NOT NULL DEFAULT FALSE,
       lease_token TEXT,
       lease_until TIMESTAMPTZ
