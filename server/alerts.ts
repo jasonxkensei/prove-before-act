@@ -4,6 +4,7 @@ import { txQueue } from "@shared/schema";
 import { eq, and, gte, sql } from "drizzle-orm";
 import { checkAndAlert as checkAndAlertRateLimitImpl } from "./rateLimitAlerts";
 import { alertWebhookHeaders } from "./webhookHeaders";
+import type { Mx8004SignerBalance } from "./mx8004";
 
 // Rate-limit fail-open alerting now lives in its own module (server/
 // rateLimitAlerts.ts) so it carries no DB/drizzle import. Re-exported here
@@ -61,6 +62,48 @@ async function sendAlertWebhook(
       error: err instanceof Error ? err.name : "unknown",
     });
     return false;
+  }
+}
+
+// A successful delivery belongs to one low-balance episode. A healthy reading
+// re-arms it; an API error does not (it may contain a stale cached reading).
+let alertedLowBalanceAddress: string | null = null;
+let lowBalanceDelivery: Promise<void> | null = null;
+
+export async function checkAndAlertMx8004LowBalance(balance: Mx8004SignerBalance): Promise<void> {
+  if (balance.error || balance.balanceEgld === null || !balance.address) return;
+  if (!balance.lowBalance) {
+    alertedLowBalanceAddress = null;
+    return;
+  }
+
+  const webhookUrl = process.env.MX8004_BALANCE_ALERT_WEBHOOK_URL || process.env.TX_ALERT_WEBHOOK_URL;
+  if (!webhookUrl || alertedLowBalanceAddress === balance.address) return;
+  if (lowBalanceDelivery) return lowBalanceDelivery;
+
+  lowBalanceDelivery = (async () => {
+    try {
+      const delivered = await sendAlertWebhook(webhookUrl, "mx8004_signer_low_balance", {
+        alert: "mx8004_signer_low_balance",
+        severity: "warning",
+        timestamp: new Date().toISOString(),
+        signer_address: balance.address,
+        balance_egld: balance.balanceEgld,
+        threshold_egld: balance.thresholdEgld,
+        top_up_action: `Transfer EGLD to signer wallet ${balance.address} before MX-8004 validation jobs stall.`,
+      });
+      if (delivered) alertedLowBalanceAddress = balance.address;
+    } catch (error) {
+      logger.error("MX-8004 balance alert delivery failed", {
+        component: "alerts",
+        error: error instanceof Error ? error.name : "unknown",
+      });
+    }
+  })();
+  try {
+    await lowBalanceDelivery;
+  } finally {
+    lowBalanceDelivery = null;
   }
 }
 

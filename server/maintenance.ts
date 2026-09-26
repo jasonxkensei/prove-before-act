@@ -7,7 +7,7 @@ import { FINALITY_SNAPSHOT_VERSION, users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { computeTrustScore } from "./trust";
 import { purgeExpiredRateLimitRows } from "./pgRateLimit";
-import { checkAndAlertViolationQueue } from "./alerts";
+import { checkAndAlertMx8004LowBalance, checkAndAlertViolationQueue } from "./alerts";
 import { logger } from "./logger";
 import { getMx8004SignerBalance, isMX8004Configured } from "./mx8004";
 import {
@@ -34,6 +34,16 @@ export async function checkMx8004WalletBalance() {
       error: balance.error,
     });
     return balance;
+  }
+
+  // Alert delivery must never interrupt the balance check or certification.
+  try {
+    await checkAndAlertMx8004LowBalance(balance);
+  } catch (error) {
+    logger.error("MX-8004 balance alert check failed", {
+      component: "maintenance",
+      error: error instanceof Error ? error.name : "unknown",
+    });
   }
 
   if (balance.lowBalance && Date.now() - lastMx8004LowBalanceWarningAt >= 60 * 60 * 1000) {
