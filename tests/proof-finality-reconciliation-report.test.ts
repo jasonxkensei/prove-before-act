@@ -118,6 +118,25 @@ describe("proof finality reconciliation report mode", () => {
       })
       .mockResolvedValueOnce({
         rows: [{ total: "5" }],
+      })
+      .mockResolvedValueOnce({
+        rows: [{
+          id: "run-123",
+          mode: "dry_run",
+          status: "paused",
+          operator: "reviewer",
+          approved_dry_run_id: null,
+          cursor_id: "cert-5",
+          counts: { confirmed: 3, failed: 1, missing: 0, unavailable: 1, pending: 0, stale: 0 },
+        }],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          { certification_id: "cert-5", transaction_hash: "e".repeat(64), file_hash: "5".repeat(64), result: "confirmed", reason: null, applied: false, checked_at: new Date() },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [{ total: "5" }],
       });
     const output = vi.spyOn(console, "log").mockImplementation(() => {});
 
@@ -143,6 +162,29 @@ describe("proof finality reconciliation report mode", () => {
       .toEqual(["cert-3", "cert-4"]);
     expect(mockPool.query.mock.calls[1][0]).toContain("ORDER BY certification_id");
     expect(mockPool.query.mock.calls[1][1]).toEqual(["run-123", "cert-2", 3]);
+
+    process.argv = [
+      "node",
+      "reconcile-legacy-proof-finality.ts",
+      "--report",
+      "run-123",
+      "--limit",
+      "2",
+      "--after",
+      report.pagination.nextCursor,
+    ];
+    await run();
+    const nextPage = JSON.parse(output.mock.calls[1][0] as string);
+    expect(nextPage.proofs.map((proof: { certificationId: string }) => proof.certificationId))
+      .toEqual(["cert-5"]);
+    expect(nextPage.pagination).toMatchObject({
+      limit: 2,
+      after: "cert-4",
+      nextCursor: null,
+      hasMore: false,
+      totalProofs: 5,
+    });
+    expect(mockPool.query.mock.calls[4][1]).toEqual(["run-123", "cert-4", 3]);
     for (const [sql] of mockPool.query.mock.calls) {
       expect(sql.trimStart().toUpperCase()).toMatch(/^SELECT\b/);
     }
