@@ -29,7 +29,7 @@ async function sendAlertWebhook(
   webhookUrl: string,
   alertType: string,
   payload: unknown,
-): Promise<void> {
+): Promise<boolean> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
   try {
@@ -52,6 +52,7 @@ async function sendAlertWebhook(
         url: redactWebhookUrl(webhookUrl),
       });
     }
+    return response.ok;
   } catch (err: any) {
     clearTimeout(timeout);
     logger.error("Alert webhook network error", {
@@ -59,6 +60,82 @@ async function sendAlertWebhook(
       alertType,
       error: err instanceof Error ? err.name : "unknown",
     });
+    return false;
+  }
+}
+
+// Only fixed labels and validated SQLSTATE codes are allowed into public health
+// and webhook payloads. Driver messages/detail can include SQL parameters,
+// connection URLs or user-provided values and must stay in restricted logs.
+function safeLeaderboardDbError(error: unknown): string {
+  const labels: Record<string, string> = {
+    "42P01": "snapshot table missing",
+    "42703": "column missing",
+    "23505": "unique constraint violation",
+    "53300": "database connection limit",
+    "57P01": "database shutting down",
+    "08006": "database connection failure",
+  };
+  let current: unknown = error;
+  for (let depth = 0; depth < 4 && current && typeof current === "object"; depth++) {
+    const code = (current as { code?: unknown }).code;
+    if (typeof code === "string" && /^[0-9A-Z]{5}$/.test(code)) {
+      return `PostgreSQL ${code}: ${labels[code] ?? "database operation failed"}`;
+    }
+    current = (current as { cause?: unknown }).cause;
+  }
+  return "Database operation failed (SQLSTATE unavailable)";
+}
+
+const LEADERBOARD_REFRESH_FAILURE_THRESHOLD = 3;
+const LEADERBOARD_ALERT_COOLDOWN_MS = 30 * 60_000;
+let leaderboardConsecutiveFailures = 0;
+let leaderboardLastError: string | null = null;
+let leaderboardSnapshotAt: number | null = null;
+let leaderboardLastAlertAt = 0;
+
+export function recordLeaderboardSnapshot(computedAt: number): void {
+  if (Number.isFinite(computedAt)) {
+    leaderboardSnapshotAt = Math.max(leaderboardSnapshotAt ?? 0, computedAt);
+  }
+}
+
+export function recordLeaderboardRefreshSuccess(computedAt: number): void {
+  recordLeaderboardSnapshot(computedAt);
+  leaderboardConsecutiveFailures = 0;
+  leaderboardLastError = null;
+  leaderboardLastAlertAt = 0;
+}
+
+export function getLeaderboardRefreshHealth(now = Date.now()) {
+  return {
+    status: leaderboardConsecutiveFailures >= LEADERBOARD_REFRESH_FAILURE_THRESHOLD ? "degraded" : "ok",
+    consecutive_failures: leaderboardConsecutiveFailures,
+    threshold: LEADERBOARD_REFRESH_FAILURE_THRESHOLD,
+    last_database_error: leaderboardLastError,
+    snapshot_at: leaderboardSnapshotAt === null ? null : new Date(leaderboardSnapshotAt).toISOString(),
+    snapshot_age_seconds: leaderboardSnapshotAt === null ? null : Math.max(0, Math.floor((now - leaderboardSnapshotAt) / 1000)),
+  };
+}
+
+export async function recordLeaderboardRefreshFailure(error: unknown): Promise<void> {
+  leaderboardConsecutiveFailures++;
+  leaderboardLastError = safeLeaderboardDbError(error);
+  const health = getLeaderboardRefreshHealth();
+  if (health.status !== "degraded") return;
+
+  const now = Date.now();
+  if (now - leaderboardLastAlertAt < LEADERBOARD_ALERT_COOLDOWN_MS) return;
+  const payload = {
+    alert: "leaderboard_refresh_failures",
+    severity: "warning",
+    timestamp: new Date(now).toISOString(),
+    ...health,
+  };
+  logger.warn("Leaderboard refresh repeatedly failed", { component: "alerts", ...payload });
+  const webhookUrl = process.env.LEADERBOARD_ALERT_WEBHOOK_URL || process.env.TX_ALERT_WEBHOOK_URL;
+  if (webhookUrl && await sendAlertWebhook(webhookUrl, payload.alert, payload)) {
+    leaderboardLastAlertAt = now;
   }
 }
 

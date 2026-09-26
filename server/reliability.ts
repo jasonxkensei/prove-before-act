@@ -9,6 +9,7 @@ import { execSync } from "child_process";
 import { logger } from "./logger";
 import { buildAgentTrialOnboarding, getClientIp } from "./routes/helpers";
 import { Sentry } from "./instrument";
+import { getLeaderboardRefreshHealth } from "./alerts";
 
 // SECURITY: All IP-based rate limiters MUST key on getClientIp() rather than
 // the express-rate-limit default (which uses `req.ip`). Under
@@ -414,6 +415,7 @@ export async function healthCheck(_req: Request, res: Response) {
     status: isMX8004Configured() ? "ok" : "not_configured",
     details: { configured: isMX8004Configured() },
   };
+  checks.leaderboard_refresh = getLeaderboardRefreshHealth();
 
   // EGLD signer balance check — low balance is the #1 silent cause of 100% certification failure
   const signerAddress = process.env.MULTIVERSX_SENDER_ADDRESS;

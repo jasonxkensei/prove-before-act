@@ -2,6 +2,7 @@ import { db, pool } from "./db";
 import { certifications, users, agentViolations, FINALITY_SNAPSHOT_VERSION } from "@shared/schema";
 import { eq, sql, and } from "drizzle-orm";
 import { logger } from "./logger";
+import { getLeaderboardRefreshHealth, recordLeaderboardRefreshFailure, recordLeaderboardRefreshSuccess, recordLeaderboardSnapshot } from "./alerts";
 
 export type TrustLevel = "Newcomer" | "Active" | "Trusted" | "Verified";
 
@@ -932,7 +933,6 @@ async function computeAllLeaderboardEntries(): Promise<LeaderboardEntry[]> {
   entries.sort((a, b) => b.trustScore - a.trustScore);
   entries.forEach((e, i) => { e.rank = i + 1; });
 
-  leaderboardCache = { allEntries: entries, cachedAt: Date.now(), computedAt: Date.now() };
   return entries;
 }
 
@@ -1074,15 +1074,17 @@ export async function runLeaderboardRefreshCycle(): Promise<void> {
       [JSON.stringify(entries)],
     );
     leaderboardCache = { allEntries: entries, cachedAt: Date.now(), computedAt };
+    recordLeaderboardRefreshSuccess(computedAt);
     logger.info("Leaderboard refresh cycle complete", {
       component: "trust-scheduler",
       entries: entries.length,
       durationMs: Date.now() - cycleStart,
     });
   } catch (err: any) {
+    await recordLeaderboardRefreshFailure(err);
     logger.error("Leaderboard refresh cycle error", {
       component: "trust-scheduler",
-      ...databaseErrorDetails(err),
+      databaseError: getLeaderboardRefreshHealth().last_database_error,
       durationMs: Date.now() - cycleStart,
     });
   } finally { _leaderboardRefreshRunning = false; }
@@ -1102,6 +1104,7 @@ export async function warmCachesFromSnapshots(): Promise<void> {
         cachedAt: Date.now(),
         computedAt: Number.isFinite(computedAt) ? computedAt : Date.now(),
       };
+      if (Number.isFinite(computedAt)) recordLeaderboardSnapshot(computedAt);
       logger.info("Leaderboard cache warmed from snapshot", {
         component: "trust-scheduler",
         entries: snap.rows[0].entries.length,
@@ -1158,6 +1161,7 @@ export async function getLeaderboard(filters: LeaderboardFilters = {}): Promise<
           cachedAt: Date.now(),
           computedAt: Number.isFinite(computedAt) ? computedAt : Date.now(),
         };
+        if (Number.isFinite(computedAt)) recordLeaderboardSnapshot(computedAt);
         allEntries = leaderboardCache.allEntries;
       } else {
         // No snapshot yet — first scheduled refresh hasn't run.
