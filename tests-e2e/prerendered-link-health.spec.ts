@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
  *   /fleet          — renderFleetPage()
  *   /coherence      — renderCoherencePage()
  *   /agents         — renderAgentsPage()
+ *   /agents/zh      — redirects to /agent-context/zh (renderAgentsPageZh())
  *
  * These pages are served as static HTML by prerenderMiddleware() when the
  * request comes from a crawler.  All navigational and resource links are
@@ -525,6 +526,76 @@ test.describe("/agents — prerendered link health", () => {
         res.status(),
         `Expected /agents link ${path} to return 200, got ${res.status()}`,
       ).toBe(200);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 4a. /agents/zh → /agent-context/zh (canonical Chinese crawler page)
+// ---------------------------------------------------------------------------
+
+test.describe("/agents/zh — prerendered link health", () => {
+  let html = "";
+
+  test.beforeAll(async ({ request }) => {
+    // Do not follow the absolute production redirect: inspect it, then fetch
+    // the canonical path on the local server with the same crawler headers.
+    const redirect = await request.get("/agents/zh", {
+      headers: CRAWLER_HEADERS,
+      maxRedirects: 0,
+    });
+    expect(redirect.status(), "/agents/zh should redirect to its Chinese canonical page").toBe(301);
+    expect(redirect.headers().location, "/agents/zh redirect destination").toBe(
+      "https://provebeforeact.com/agent-context/zh",
+    );
+
+    const res = await request.get("/agent-context/zh", { headers: CRAWLER_HEADERS });
+    expect(res.status(), "/agents/zh canonical crawler page /agent-context/zh should return 200").toBe(200);
+    expect(res.headers()["content-type"], "/agent-context/zh should serve HTML").toContain("text/html");
+    html = await res.text();
+  });
+
+  test("serves a non-empty Chinese crawler page", () => {
+    expect(html.length).toBeGreaterThan(500);
+    expect(html).toContain("自主智能体的执行前问责模式");
+  });
+
+  const EXPECTED_LINKS = [
+    { location: "navigation", section: /<header\b[^>]*>[\s\S]*?<\/header>/i, path: "/standard" },
+    { location: "navigation", section: /<header\b[^>]*>[\s\S]*?<\/header>/i, path: "/agents" },
+    { location: "navigation", section: /<header\b[^>]*>[\s\S]*?<\/header>/i, path: "/docs" },
+    { location: "navigation", section: /<header\b[^>]*>[\s\S]*?<\/header>/i, path: "/leaderboard" },
+    { location: "Chinese guide", section: /<main\b[^>]*>[\s\S]*?<\/main>/i, path: "/agent-context/zh" },
+    { location: "machine-readable resource", section: /<main\b[^>]*>[\s\S]*?<\/main>/i, path: "/agent-context.md" },
+    { location: "machine-readable resource", section: /<main\b[^>]*>[\s\S]*?<\/main>/i, path: "/.well-known/mcp.json" },
+    { location: "machine-readable resource", section: /<main\b[^>]*>[\s\S]*?<\/main>/i, path: "/api/acp/openapi.json" },
+    { location: "machine-readable resource", section: /<main\b[^>]*>[\s\S]*?<\/main>/i, path: "/llms.txt" },
+    { location: "legal footer", section: /<footer\b[^>]*>[\s\S]*?<\/footer>/i, path: "/legal/mentions" },
+    { location: "legal footer", section: /<footer\b[^>]*>[\s\S]*?<\/footer>/i, path: "/legal/privacy" },
+    { location: "legal footer", section: /<footer\b[^>]*>[\s\S]*?<\/footer>/i, path: "/legal/terms" },
+  ];
+
+  for (const { location, section, path } of EXPECTED_LINKS) {
+    test(`${location} link ${path} is present and resolves to HTTP 200`, async ({ request }) => {
+      const markup = html.match(section)?.[0];
+      expect(markup, `/agents/zh canonical page should contain a ${location} section`).toBeDefined();
+      expect(
+        extractInternalPaths(markup!),
+        `/agents/zh ${location} should link to ${path}`,
+      ).toContain(path);
+
+      const res = await request.get(path, { headers: CRAWLER_HEADERS });
+      expect(res.status(), `/agents/zh ${location} link ${path} should return 200`).toBe(200);
+    });
+  }
+
+  test("all collected safe-to-GET internal links resolve to HTTP 200", async ({ request }) => {
+    const paths = extractInternalPaths(html).filter((path) => !shouldSkip(path));
+    expect(paths.length, "/agents/zh canonical page should contain internal links").toBeGreaterThan(0);
+
+    for (const path of paths) {
+      const res = await request.get(path, { headers: CRAWLER_HEADERS });
+      expect(res.status(), `/agents/zh link ${path} should return 200, got ${res.status()}`).toBe(200);
     }
   });
 });
