@@ -18,10 +18,10 @@ const legacyDirectStatusUses: Record<string, number> = {
   "admin.tsx": 3, // certification row icons; the adjacent counts use StatusIndicator
   "agent-calibration.tsx": 19, // calibration visualizations and chips
   "agent-compare.tsx": 7, // comparison visualizations
-  "agent-profile.tsx": 47, // trust diagrams and specialized chips
-  "attestation-detail.tsx": 1, // existing inline active marker
+  "agent-profile.tsx": 46, // trust diagrams and specialized chips
+  "attestation-detail.tsx": 0, // validity badges use StatusIndicator
   "demo.tsx": 4, // example state illustrations
-  "fleet-manage.tsx": 2, // existing inline feedback
+  "fleet-manage.tsx": 0, // ownership feedback uses StatusIndicator
   "fleet-overview.tsx": 4, // existing fleet treatment
   "fleet.tsx": 3, // existing fleet treatment
   "issuer-profile.tsx": 3, // existing issuer treatment
@@ -98,6 +98,27 @@ describe("semantic status color contract", () => {
     expect(surfaces.admin).toContain('<CheckCircle2 className="status-verified h-3 w-3" /> Verified');
     expect(surfaces.admin).toContain('<Clock className="status-pending h-3 w-3" /> Pending');
     expect(surfaces.admin).toContain('<XCircle className="status-failed h-3 w-3" /> Failed');
+  });
+
+  it("uses shared treatment for operational labels without changing specialist encodings", () => {
+    const agent = read("client/src/pages/agent-profile.tsx");
+    const attestation = read("client/src/pages/attestation-detail.tsx");
+    const fleet = read("client/src/pages/fleet-manage.tsx");
+
+    expect(attestation).toContain('status="failed" className="inline-flex items-center gap-1.5 rounded-md border border-current/30 bg-current/10 px-2.5 py-1 text-xs font-semibold" data-testid="badge-revoked"');
+    expect(attestation).toContain('status="warning" className="inline-flex items-center gap-1.5 rounded-md border border-current/30 bg-current/10 px-2.5 py-1 text-xs font-semibold" data-testid="badge-expired"');
+    expect(attestation).toContain('status="verified" className="inline-flex items-center gap-1.5 rounded-md border border-current/30 bg-current/10 px-2.5 py-1 text-xs font-semibold" data-testid="badge-active"');
+    expect(agent).toContain('status={status === "confirmed" ? "verified" : status === "failed" ? "failed" : "pending"}');
+    expect(agent).toContain('linked:    { status: "verified", label: "Linked" }');
+    expect(agent).toContain('pending:   { status: "pending", label: "Pending" }');
+    expect(agent).toContain('divergent: { status: "failed", label: "Divergent" }');
+    expect(agent).toContain('status="warning" badgeVariant="outline"');
+    expect(agent).toContain('status="verified" badgeVariant="outline"');
+    expect(agent).toContain('status={v.status === "confirmed" ? "warning" : v.status === "rejected" ? "verified" : "pending"}');
+    expect(agent).toContain('status-chip status-chip--calibrated');
+    expect(agent).toContain('stopColor="hsl(var(--status-verified))"');
+    expect(fleet).toContain('status="verified" as="p" className="flex items-center gap-1.5"');
+    expect(fleet).toContain('status="verified" as="p">Copied!</StatusIndicator>');
   });
 
   it("preserves inline tags, badge markup, labels, and accessibility attributes", () => {

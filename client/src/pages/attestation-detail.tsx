@@ -11,6 +11,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatusIndicator } from "@/components/status-indicator";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { PublicSiteFooter, PublicSiteHeader } from "@/components/public-site-chrome";
@@ -116,18 +117,18 @@ export default function AttestationDetailPage() {
                     {/* Status badge */}
                     <div className="flex items-center gap-2">
                       {isRevoked ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-md border border-destructive/30 bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive" data-testid="badge-revoked">
+                        <StatusIndicator status="failed" className="inline-flex items-center gap-1.5 rounded-md border border-current/30 bg-current/10 px-2.5 py-1 text-xs font-semibold" data-testid="badge-revoked">
                           Revoked
-                        </span>
+                        </StatusIndicator>
                       ) : isExpired ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground" data-testid="badge-expired">
+                        <StatusIndicator status="warning" className="inline-flex items-center gap-1.5 rounded-md border border-current/30 bg-current/10 px-2.5 py-1 text-xs font-semibold" data-testid="badge-expired">
                           Expired
-                        </span>
+                        </StatusIndicator>
                       ) : (
-                        <span className="status-verified rounded-md border border-primary/30 bg-primary/10 px-2.5 py-1 text-xs" data-testid="badge-active">
+                        <StatusIndicator status="verified" className="inline-flex items-center gap-1.5 rounded-md border border-current/30 bg-current/10 px-2.5 py-1 text-xs font-semibold" data-testid="badge-active">
                           <BadgeCheck className="h-3.5 w-3.5" />
                           Active attestation
-                        </span>
+                        </StatusIndicator>
                       )}
                       <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${domainStyle.color}`} data-testid="badge-domain">
                         {domainStyle.label}

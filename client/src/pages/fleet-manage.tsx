@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { StatusIndicator } from "@/components/status-indicator";
 import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -137,10 +138,10 @@ function AddMemberForm({ fleet, sessionWallet, onClose }: AddMemberFormProps) {
       {/* Ownership proof section */}
       {trimmedWallet && (
         isOwnWallet ? (
-          <p className="status-verified flex items-center gap-1.5">
+          <StatusIndicator status="verified" as="p" className="flex items-center gap-1.5">
             <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
             This is your connected wallet — no additional proof needed.
-          </p>
+          </StatusIndicator>
         ) : (
           <div className="space-y-3">
             {/* Proof type toggle */}
@@ -186,7 +187,7 @@ function AddMemberForm({ fleet, sessionWallet, onClose }: AddMemberFormProps) {
                     <Copy className="h-3.5 w-3.5" />
                   </Button>
                 </div>
-                {copied && <p className="status-verified">Copied!</p>}
+                {copied && <StatusIndicator status="verified" as="p">Copied!</StatusIndicator>}
                 <Input
                   placeholder="0a1b2c3d… (hex-encoded Ed25519 signature)"
                   value={signature}

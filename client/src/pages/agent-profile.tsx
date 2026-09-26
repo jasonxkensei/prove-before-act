@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { StatusIndicator } from "@/components/status-indicator";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
@@ -207,9 +208,19 @@ const DOMAIN_STYLES: Record<string, { color: string; label: string }> = {
 };
 
 function StatusIcon({ status }: { status: string | null }) {
-  if (status === "confirmed") return <CheckCircle2 className="h-3.5 w-3.5 text-[hsl(var(--status-verified))]" />;
-  if (status === "failed") return <XCircle className="h-3.5 w-3.5 text-destructive" />;
-  return <Clock className="h-3.5 w-3.5 text-yellow-500" />;
+  return (
+    <StatusIndicator
+      status={status === "confirmed" ? "verified" : status === "failed" ? "failed" : "pending"}
+      role="img"
+      aria-label={`Blockchain ${status ?? "pending"}`}
+    >
+      {status === "confirmed"
+        ? <CheckCircle2 className="h-3.5 w-3.5" />
+        : status === "failed"
+          ? <XCircle className="h-3.5 w-3.5" />
+          : <Clock className="h-3.5 w-3.5" />}
+    </StatusIndicator>
+  );
 }
 
 function DomainBadge({ domain }: { domain: string }) {
@@ -1403,21 +1414,21 @@ function BadgeEmbedPanel({ wallet }: { wallet: string }) {
   );
 }
 
-const COHERENCE_STATUS_STYLES: Record<CoherenceCheckEntry["status"], { badge: string; label: string }> = {
-  linked:    { badge: "status-chip status-chip--calibrated", label: "Linked" },
-  pending:   { badge: "bg-yellow-500/15 text-yellow-700 dark:text-yellow-400 border-yellow-500/30", label: "Pending" },
-  divergent: { badge: "bg-destructive/15 text-destructive border-destructive/30", label: "Divergent" },
-};
+const COHERENCE_STATUS_STYLES = {
+  linked:    { status: "verified", label: "Linked" },
+  pending:   { status: "pending", label: "Pending" },
+  divergent: { status: "failed", label: "Divergent" },
+} as const;
 
 function CoherenceStatusBadge({ status }: { status: CoherenceCheckEntry["status"] }) {
   const style = COHERENCE_STATUS_STYLES[status];
   return (
-    <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-medium ${style.badge}`}>
+    <StatusIndicator status={style.status} className="inline-flex items-center gap-1 rounded-md border border-current/30 bg-current/10 px-2 py-0.5 text-xs font-medium">
       {status === "linked" && <CheckCircle2 className="h-3 w-3" />}
       {status === "pending" && <Clock className="h-3 w-3" />}
       {status === "divergent" && <AlertTriangle className="h-3 w-3" />}
       {style.label}
-    </span>
+    </StatusIndicator>
   );
 }
 
@@ -1972,15 +1983,15 @@ export default function AgentProfilePage() {
                     Execution context coherence
                     <span className="ml-auto">
                       {agent.execution_context_summary.has_recent_drift ? (
-                        <Badge className="bg-destructive/15 text-destructive" data-testid="badge-profile-drift">
+                        <StatusIndicator status="warning" badgeVariant="outline" className="border-current/30 bg-current/10" data-testid="badge-profile-drift">
                           <AlertTriangle className="mr-1 h-3 w-3" />
                           Drift detected
-                        </Badge>
+                        </StatusIndicator>
                       ) : (
-                        <Badge className="bg-chart-2/15 text-chart-2" data-testid="badge-profile-coherent">
+                        <StatusIndicator status="verified" badgeVariant="outline" className="border-current/30 bg-current/10" data-testid="badge-profile-coherent">
                           <CheckCircle2 className="mr-1 h-3 w-3" />
                           Fully coherent
-                        </Badge>
+                        </StatusIndicator>
                       )}
                     </span>
                   </CardTitle>
@@ -2190,14 +2201,14 @@ export default function AgentProfilePage() {
                       Audit Flags
                       <span className="ml-auto flex items-center gap-2">
                         {confirmed.length > 0 && (
-                          <span className="inline-flex items-center rounded-md border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700 dark:text-amber-400" data-testid="badge-confirmed-violations">
+                          <StatusIndicator status="warning" className="inline-flex items-center rounded-md border border-current/30 bg-current/10 px-2 py-0.5 text-xs font-medium" data-testid="badge-confirmed-violations">
                             {confirmed.length} confirmed
-                          </span>
+                          </StatusIndicator>
                         )}
                         {proposed.length > 0 && (
-                          <span className="inline-flex items-center rounded-md border border-muted-foreground/30 bg-muted/50 px-2 py-0.5 text-xs font-medium text-muted-foreground" data-testid="badge-proposed-violations">
+                          <StatusIndicator status="pending" className="inline-flex items-center rounded-md border border-current/30 bg-current/10 px-2 py-0.5 text-xs font-medium" data-testid="badge-proposed-violations">
                             {proposed.length} under review
-                          </span>
+                          </StatusIndicator>
                         )}
                         <Button
                           size="icon"
@@ -2221,28 +2232,29 @@ export default function AgentProfilePage() {
                         >
                           <div className="flex flex-wrap items-start justify-between gap-2">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span
-                                data-testid={`badge-violation-type-${v.id}`}
-                                className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold ${
-                                  v.type === "breach"
-                                    ? "border-amber-600/40 bg-amber-600/10 text-amber-700 dark:text-amber-400"
-                                    : "border-muted-foreground/30 bg-muted/50 text-muted-foreground"
-                                }`}
-                              >
-                                {v.type === "breach" ? "Confirmed breach" : "Structural anomaly"}
-                              </span>
-                              <span
+                              {v.type === "breach" ? (
+                                <StatusIndicator
+                                  status="warning"
+                                  data-testid={`badge-violation-type-${v.id}`}
+                                  className="inline-flex items-center rounded-md border border-current/30 bg-current/10 px-2 py-0.5 text-xs font-semibold"
+                                >
+                                  Confirmed breach
+                                </StatusIndicator>
+                              ) : (
+                                <span
+                                  data-testid={`badge-violation-type-${v.id}`}
+                                  className="inline-flex items-center rounded-md border border-muted-foreground/30 bg-muted/50 px-2 py-0.5 text-xs font-semibold"
+                                >
+                                  Structural anomaly
+                                </span>
+                              )}
+                              <StatusIndicator
+                                status={v.status === "confirmed" ? "warning" : v.status === "rejected" ? "verified" : "pending"}
                                 data-testid={`badge-violation-status-${v.id}`}
-                                className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${
-                                  v.status === "confirmed"
-                                    ? "border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400"
-                                    : v.status === "rejected"
-                                    ? "border-border bg-muted text-muted-foreground"
-                                    : "border-muted-foreground/30 bg-muted/50 text-muted-foreground"
-                                }`}
+                                className="inline-flex items-center rounded-md border border-current/30 bg-current/10 px-2 py-0.5 text-xs font-medium"
                               >
                                 {v.status === "confirmed" && v.auto_confirmed ? "Auto-certified" : v.status === "confirmed" ? "Certified" : v.status === "rejected" ? "Cleared" : "Under review"}
-                              </span>
+                              </StatusIndicator>
                             </div>
                             <span className="text-xs text-muted-foreground whitespace-nowrap" data-testid={`text-violation-time-${v.id}`}>
                               {formatDistanceToNow(new Date(v.detected_at), { addSuffix: true })}
