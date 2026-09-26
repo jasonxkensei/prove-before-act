@@ -226,6 +226,7 @@ export default function LandingZh() {
 
   return (
     <div className="min-h-[100dvh] min-w-0 max-w-full overflow-x-hidden bg-background">
+      <a href="#main-content" className="skip-link">跳转到主要内容</a>
       {/* Header */}
           <header className="public-site-header sticky top-0 z-50 border-b backdrop-blur">
         <div className="container flex h-16 items-center justify-between">
@@ -274,6 +275,7 @@ export default function LandingZh() {
         </div>
       </header>
 
+      <main id="main-content" tabIndex={-1}>
       {/* Hero */}
       <section className="container pt-14 pb-20 md:pt-20 md:pb-28">
         <div className="mx-auto max-w-5xl text-center">
@@ -1167,6 +1169,7 @@ print(proof["verify_url"])  # 链上可验证`}
           </div>
         </div>
       </section>
+      </main>
 
       {/* Footer */}
       <footer className="border-t py-8">

@@ -368,6 +368,45 @@ test.describe("public-site chrome — skip link across React routes", () => {
   }
 });
 
+for (const { name, viewport } of [
+  { name: "desktop", viewport: { width: 1280, height: 800 } },
+  { name: "mobile", viewport: { width: 390, height: 844 } },
+]) {
+  test.describe(`standalone public pages — ${name} keyboard skip link`, () => {
+    test.use({ viewport, reducedMotion: "reduce" });
+
+    for (const { route, label } of [
+      { route: "/zh", label: "跳转到主要内容" },
+      { route: "/fleet", label: "Skip to content" },
+    ]) {
+      test(`${route} skips its navigation and focuses main content`, async ({ page }) => {
+        await page.goto(route);
+        const skipLink = page.getByRole("link", { name: label, exact: true });
+        const mainContent = page.locator("#main-content");
+
+        await expect(skipLink).toHaveCount(1);
+        await expect(skipLink).toHaveAttribute("href", "#main-content");
+        await expect(mainContent).toHaveCount(1);
+        await expect(page.getByRole("main")).toHaveCount(1);
+        await expect(mainContent).toHaveAttribute("tabindex", "-1");
+
+        await page.keyboard.press("Tab");
+        await expect(skipLink).toBeFocused();
+        await expect(skipLink).toBeInViewport();
+        await page.keyboard.press("Enter");
+        await expect(mainContent).toBeFocused();
+
+        const position = await page.evaluate(() => ({
+          targetTop: document.getElementById("main-content")!.getBoundingClientRect().top,
+          headerBottom: document.querySelector("header")!.getBoundingClientRect().bottom,
+        }));
+        expect(position.targetTop, `${route} ${name} skip destination should clear its sticky header`)
+          .toBeGreaterThanOrEqual(position.headerBottom - 1);
+      });
+    }
+  });
+}
+
 test.describe("public-site chrome — skip destination clears the sticky header", () => {
   for (const { name, viewport } of [
     { name: "desktop", viewport: { width: 1280, height: 800 } },
