@@ -22,10 +22,30 @@ import { test, expect, type Page } from "@playwright/test";
 
 // ── 1. Header / footer presence on every public consumer route ──────────────
 
-// Routes served by pages that use PublicSiteHeader + PublicSiteFooter.
-// /agent-context is tested separately below because it is a large lazy component
-// that can take longer to mount than the default expect timeout.
-const PUBLIC_ROUTES = ["/", "/agents", "/standard", "/docs", "/learn"];
+// Static browser routes using PublicSiteHeader + PublicSiteFooter. Keep this
+// list in sync with the unauthenticated route table in client/src/App.tsx.
+// /agent-context, /agent-context/zh and /coherence are always server-prerendered
+// and do not mount this React header. /zh and /fleet use different page chrome.
+// Redirects and auth-gated routes likewise do not render PublicSiteHeader.
+const PUBLIC_ROUTES = [
+  "/", "/agents", "/leaderboard", "/docs", "/docs/trading",
+  "/docs/4w", "/docs/base-violations", "/founder", "/standard", "/learn",
+  "/demo", "/legal/mentions", "/legal/privacy", "/legal/terms",
+];
+
+// Dynamic routes and /compare need URL parameters or data to show their shared
+// header. Synthetic identifiers and intercepted reads avoid live user records.
+const DYNAMIC_PUBLIC_ROUTES = [
+  "/compare?wallets=erd1skiplinka,erd1skiplinkb",
+  "/verify/00000000-0000-0000-0000-000000000000",
+  "/agent/erd1skiplinkfixture",
+  "/agent/erd1skiplinkfixture/calibration",
+  "/attestation/skip-link-fixture",
+  "/issuer/erd1skiplinkfixture",
+  // Proof and audit need a successful API fixture to render their shared header.
+  "/proof/skip-link-fixture",
+  "/audit/skip-link-fixture",
+];
 
 test.describe("public-site chrome — header/footer presence", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
@@ -285,26 +305,71 @@ async function countTabsToMoreButton(page: Page, limit = 20): Promise<number> {
   return -1;
 }
 
-test.describe("public-site chrome — exact Tab count to More button", () => {
+test.describe("public-site chrome — skip link across React routes", () => {
   test.use({ viewport: { width: 1280, height: 800 } });
 
-  test("first Tab reaches the skip link and activating it focuses main content", async ({ page }) => {
-    await page.goto("/");
+  for (const route of [...PUBLIC_ROUTES, ...DYNAMIC_PUBLIC_ROUTES]) {
+    test(`${route} skip link targets and focuses main content`, async ({ page }) => {
+      if (route.startsWith("/compare?")) {
+        await page.route("**/api/agents/compare?wallets=*", (request) => request.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            agents: ["erd1skiplinka", "erd1skiplinkb"].map((walletAddress) => ({
+              walletAddress, agentName: "Skip link fixture", agentCategory: null,
+              agentDescription: null, agentWebsite: null, score: 10,
+              level: "Newcomer", certTotal: 0, certLast30d: 0, streakWeeks: 0,
+              activeAttestations: 0, firstCertAt: null, lastCertAt: null,
+            })),
+          }),
+        }));
+      }
+      if (route.startsWith("/issuer/")) {
+        await page.route("**/api/issuer/erd1skiplinkfixture", (request) => request.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            issuerWallet: "erd1skiplinkfixture", issuerName: "Skip link fixture",
+            activeCount: 0, revokedCount: 0, domainCount: 0, agentsAttested: 0,
+            firstIssuedAt: null, lastIssuedAt: null, attestations: [],
+          }),
+        }));
+      }
+      if (route === "/proof/skip-link-fixture" || route === "/audit/skip-link-fixture") {
+        await page.route("**/api/proof/skip-link-fixture", (request) => request.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            id: "skip-link-fixture",
+            fileName: "skip-link-fixture.txt",
+            fileHash: "a".repeat(64),
+            createdAt: "2026-09-26T00:00:00.000Z",
+            blockchainStatus: "pending",
+            metadata: { action_type: "other", decision: "approved", risk_level: "low" },
+          }),
+        }));
+      }
+      await page.goto(route);
+      const skipLink = page.getByRole("link", { name: "Skip to content" });
+      const mainContent = page.locator("#main-content");
 
-    const skipLink = page.getByRole("link", { name: "Skip to content" });
-    const mainContent = page.locator("#main-content");
+      // Wait for the React header before sending Tab, including on lazy routes.
+      await expect(skipLink, `${route} must render a skip link`).toBeVisible();
+      await page.keyboard.press("Tab");
+      await expect(skipLink, `${route} must put the skip link first in keyboard order`).toBeFocused();
+      await expect(skipLink, `${route} skip link target`).toHaveAttribute("href", "#main-content");
+      await expect(mainContent, `${route} must have exactly one skip target`).toHaveCount(1);
+      await expect(mainContent, `${route} skip target must accept programmatic focus`)
+        .toHaveAttribute("tabindex", "-1");
 
-    // WebKit can accept Tab presses while the React shell is still restoring
-    // the session, before the shared header has mounted.
-    await expect(skipLink).toBeVisible();
-    await page.keyboard.press("Tab");
-    await expect(skipLink).toBeFocused();
-    await expect(skipLink).toHaveAttribute("href", "#main-content");
-    await expect(mainContent).toHaveAttribute("tabindex", "-1");
+      await page.keyboard.press("Enter");
+      await expect(mainContent, `${route} must focus the matching content region`).toBeFocused();
+    });
+  }
+});
 
-    await page.keyboard.press("Enter");
-    await expect(mainContent).toBeFocused();
-  });
+test.describe("public-site chrome — exact Tab count to More button", () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
 
   test(
     `More button is reached in exactly ${EXPECTED_TABS_TO_MORE} Tab presses from document start`,
