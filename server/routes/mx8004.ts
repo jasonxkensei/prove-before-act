@@ -1,7 +1,7 @@
 import { type Express } from "express";
 import { safeErrMsg } from "./helpers";
 import { logger } from "../logger";
-import { isMX8004Configured, getReputationScore, getAgentDetails, getContractAddresses, getJobData, getValidationStatus, hasGivenFeedback, getAgentResponse, readFeedback, getAgentsExplorerUrl, getMx8004SignerBalance, getMx8004SignerBalanceReport } from "../mx8004";
+import { isMX8004Configured, getReputationScore, getAgentDetails, getContractAddresses, getJobData, getValidationStatus, hasGivenFeedback, getAgentResponse, readFeedback, getAgentsExplorerUrl, getMx8004SignerBalance, getMx8004SignerBalanceReport, getMx8004NetworkConfiguration } from "../mx8004";
 import { publicReadRateLimiter } from "../reliability";
 import { db } from "../db";
 import { txQueue } from "@shared/schema";
@@ -40,6 +40,7 @@ export function registerMx8004Routes(app: Express) {
       supported: true,
       active: true,
       status: "active",
+      network: getMx8004NetworkConfiguration(),
       role: "validation_oracle",
       ...balanceFields,
       description: "Prove Before Act acts as a validation oracle: each certification is registered as a validated job in the MX-8004 Validation Registry, with the configured validation loop (init_job → submit_proof → validation_request → validation_response → append_response).",
@@ -84,7 +85,12 @@ export function registerMx8004Routes(app: Express) {
           ? (queueItem.payload as any)?.finalityTracked ? "confirmed" : "unverified"
           : queueItem.status === "failed" && (queueItem.payload as any)?.activeTx ? "failed" : "pending",
         transaction_hash: (queueItem.payload as any)?.activeTx?.hash ?? null,
+        finalized_transactions: (queueItem.payload as any)?.finalizedTransactions ?? [],
+        current_step: (queueItem.payload as any)?.currentStep ?? 0,
         recovery_reason: queueItem.status === "recovery_required" ? queueItem.lastError : null,
+        queue_error: queueItem.lastError ?? null,
+        failure_category: (queueItem.payload as any)?.failureCategory ?? null,
+        claimed_nonce: (queueItem.payload as any)?.activeTx?.nonce ?? (queueItem.payload as any)?.broadcastIntent?.nonce ?? null,
       } : {};
       const jobData = await getJobData(req.params.jobId);
       if (!jobData) {

@@ -42,6 +42,10 @@ export function isMX8004Configured(): boolean {
   return !!(PRIVATE_KEY && SENDER_ADDRESS && IDENTITY_REGISTRY && VALIDATION_REGISTRY && REPUTATION_REGISTRY && XPROOF_AGENT_NONCE);
 }
 
+export function getMx8004NetworkConfiguration() {
+  return { chain_id: CHAIN_ID, api_url: API_URL, gateway_url: GATEWAY_URL };
+}
+
 export interface Mx8004SignerBalance {
   address: string | null;
   balanceRaw: string | null;

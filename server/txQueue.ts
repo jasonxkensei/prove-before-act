@@ -273,7 +273,13 @@ async function executeTask(
           return "waiting";
         }
         await db.update(txQueue).set({
-          payload: sql`payload || ${JSON.stringify({ currentStep: startStep + 1, activeTx: null, broadcastIntent: null, finalityTracked: true })}::jsonb`,
+          payload: sql`payload || ${JSON.stringify({
+            currentStep: startStep + 1, activeTx: null, broadcastIntent: null, finalityTracked: true,
+            finalizedTransactions: [
+              ...(Array.isArray(payload.finalizedTransactions) ? payload.finalizedTransactions : []),
+              { step: VALIDATION_STEPS[startStep], hash: active.hash },
+            ],
+          })}::jsonb`,
           status: startStep === 4 ? "completed" : "pending",
           completedAt: startStep === 4 ? new Date() : null,
           nextRetryAt: null,
@@ -311,6 +317,14 @@ async function executeTask(
           lastError: null,
         }).where(eq(txQueue.id, taskId));
       } catch (error) {
+        const message = String(error).toLowerCase();
+        const failureCategory = /nonce/.test(message) ? "nonce"
+          : /balance|funds|egld/.test(message) ? "balance"
+          : /gateway|transaction|fetch|timeout|network/.test(message) ? "gateway"
+          : "broadcast_unknown";
+        await db.update(txQueue).set({
+          payload: sql`payload || ${JSON.stringify({ failureCategory })}::jsonb`,
+        }).where(eq(txQueue.id, taskId));
         logger.error("Broadcast outcome uncertain; manual recovery required", {
           component: "tx-queue", jobId, step: startStep + 1, error: String(error),
         });
