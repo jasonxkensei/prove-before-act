@@ -661,6 +661,76 @@ test.describe("/agents/zh — prerendered link health", () => {
     expect(html).toContain("自主智能体的执行前问责模式");
   });
 
+  test("uses Chinese navigation and footer labels without changing destinations", () => {
+    expect(html).toContain('<html lang="zh-CN">');
+    const header = publicHeader(html);
+    const footer = html.match(/<footer\b[^>]*>[\s\S]*?<\/footer>/i)?.[0];
+    expect(footer, "Chinese guide should include the shared footer").toBeDefined();
+    expect(header).toContain('aria-label="主导航"');
+    expect(header).toContain('aria-label="更多页面"');
+
+    const navLabels = [
+      ["/#how-it-works", "如何运作"],
+      ["/standard", "标准"],
+      ["/demo", "互动演示"],
+      ["/learn", "60 秒概览"],
+      ["/agents", "面向 AI 智能体"],
+      ["/leaderboard", "信任排行榜"],
+      ["/stats", "数据指标"],
+      ["/docs", "API 文档"],
+      ["/agent-context", "智能体指南"],
+      ["/coherence", "一致性"],
+      ["/founder", "关于创始人"],
+      ["/#faq", "常见问题"],
+    ] as const;
+    for (const [path, label] of navLabels) {
+      expect(header, `Chinese navigation for ${path}`).toContain(
+        `<a href="https://provebeforeact.com${path}">${label}</a>`,
+      );
+    }
+    expect(header).toContain(
+      '<a class="public-site-cta" href="https://provebeforeact.com/#free-trial">免费开始</a>',
+    );
+
+    expect(footer).toContain("<h2>探索</h2>");
+    expect(footer).toContain("<h2>开发者</h2>");
+    const footerLabels = [
+      ["/learn", "60 秒概览"],
+      ["/demo", "互动演示"],
+      ["/standard", "PBA 标准"],
+      ["/agents", "面向 AI 智能体"],
+      ["/leaderboard", "信任排行榜"],
+      ["/stats", "数据指标"],
+      ["/docs", "API 文档"],
+      ["/agent-context", "智能体指南"],
+      ["/legal/mentions", "法律声明"],
+      ["/legal/privacy", "隐私政策"],
+      ["/legal/terms", "服务条款"],
+    ] as const;
+    for (const [path, label] of footerLabels) {
+      expect(footer, `Chinese footer for ${path}`).toContain(
+        `<a href="https://provebeforeact.com${path}">${label}</a>`,
+      );
+    }
+    expect(footer).toContain("面向现实世界执行任务的智能体问责模式。");
+    expect(footer).toContain('由 <a href="https://multiversx.com">MultiversX</a> 提供支持');
+  });
+
+  test("keeps English labels on the English agent guide", async ({ request }) => {
+    const response = await request.get("/agent-context", { headers: CRAWLER_HEADERS });
+    expect(response.status()).toBe(200);
+    const english = await response.text();
+    expect(english).toContain('<html lang="en">');
+    expect(publicHeader(english)).toContain(
+      '<a href="https://provebeforeact.com/standard">Standard</a>',
+    );
+    const footer = english.match(/<footer\b[^>]*>[\s\S]*?<\/footer>/i)?.[0];
+    expect(footer).toContain(
+      '<a href="https://provebeforeact.com/legal/privacy">Privacy</a>',
+    );
+    expect(footer).toContain("<h2>Explore</h2>");
+  });
+
   const EXPECTED_LINKS = [
     { location: "navigation", section: /<header\b[^>]*>[\s\S]*?<\/header>/i, path: "/standard" },
     { location: "navigation", section: /<header\b[^>]*>[\s\S]*?<\/header>/i, path: "/agents" },

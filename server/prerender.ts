@@ -17,6 +17,7 @@ import {
   PUBLIC_PRIMARY_CTA,
   PUBLIC_PRIMARY_NAV,
   PUBLIC_SITE_NAME,
+  PUBLIC_SITE_ZH,
 } from "@shared/public-site";
 
 const CRAWLER_USER_AGENTS = [
@@ -144,12 +145,12 @@ function publicHref(baseUrl: string, path: string): string {
   return `${baseUrl}${path}`;
 }
 
-function renderPublicHeader(baseUrl: string, { paper = false }: { paper?: boolean } = {}): string {
+function renderPublicHeader(baseUrl: string, { paper = false, locale = "en" }: { paper?: boolean; locale?: "en" | "zh" } = {}): string {
   const primaryLinks = PUBLIC_PRIMARY_NAV.map(({ href, label }) =>
-    `<a href="${escapeHtml(publicHref(baseUrl, href))}">${escapeHtml(label)}</a>`,
+    `<a href="${escapeHtml(publicHref(baseUrl, href))}">${escapeHtml(locale === "zh" ? PUBLIC_SITE_ZH.primaryNav[href] : label)}</a>`,
   ).join("");
   const moreLinks = PUBLIC_MORE_NAV.map(({ href, label }) =>
-    `<a href="${escapeHtml(publicHref(baseUrl, href))}">${escapeHtml(label)}</a>`,
+    `<a href="${escapeHtml(publicHref(baseUrl, href))}">${escapeHtml(locale === "zh" ? PUBLIC_SITE_ZH.moreNav[href] : label)}</a>`,
   ).join("");
 
   return `<header class="public-site-header${paper ? " public-site-header--paper" : ""}" data-brand-surface="${paper ? "paper" : "dark"}" data-brand-logo="${paper ? "light" : "dark"}" data-brand-fonts="Inter|DM Mono" data-brand-palette="anchor">
@@ -157,17 +158,17 @@ function renderPublicHeader(baseUrl: string, { paper = false }: { paper?: boolea
     <a class="public-site-brand" href="${escapeHtml(baseUrl)}">
       <img src="${escapeHtml(publicHref(baseUrl, paper ? "/pba-logo-on-light.png" : "/pba-logo.png"))}" alt="${PUBLIC_SITE_NAME}" />
     </a>
-    <nav class="public-site-nav" aria-label="Primary navigation">
+    <nav class="public-site-nav" aria-label="${locale === "zh" ? PUBLIC_SITE_ZH.primaryNavigation : "Primary navigation"}">
       ${primaryLinks}
       <details class="public-site-more">
-        <summary aria-label="More pages">
+        <summary aria-label="${locale === "zh" ? PUBLIC_SITE_ZH.morePages : "More pages"}">
           <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
             <circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>
           </svg>
         </summary>
         <div class="public-site-more-menu">${moreLinks}</div>
       </details>
-      <a class="public-site-cta" href="${escapeHtml(publicHref(baseUrl, PUBLIC_PRIMARY_CTA.href))}">${escapeHtml(PUBLIC_PRIMARY_CTA.label)}</a>
+      <a class="public-site-cta" href="${escapeHtml(publicHref(baseUrl, PUBLIC_PRIMARY_CTA.href))}">${escapeHtml(locale === "zh" ? PUBLIC_SITE_ZH.primaryCta : PUBLIC_PRIMARY_CTA.label)}</a>
     </nav>
     <div class="public-site-actions">
       <a class="public-site-language" href="${escapeHtml(publicHref(baseUrl, "/zh"))}">中文</a>
@@ -176,12 +177,12 @@ function renderPublicHeader(baseUrl: string, { paper = false }: { paper?: boolea
 </header>`;
 }
 
-function renderPublicFooter(baseUrl: string, { paper = false }: { paper?: boolean } = {}): string {
+function renderPublicFooter(baseUrl: string, { paper = false, locale = "en" }: { paper?: boolean; locale?: "en" | "zh" } = {}): string {
   const columns = PUBLIC_FOOTER_COLUMNS.map(({ heading, links }) => `
     <div>
-      <h2>${escapeHtml(heading)}</h2>
+      <h2>${escapeHtml(locale === "zh" ? PUBLIC_SITE_ZH.footerHeadings[heading] : heading)}</h2>
       <ul>${links.map(({ href, label }) =>
-        `<li><a href="${escapeHtml(publicHref(baseUrl, href))}">${escapeHtml(label)}</a></li>`,
+        `<li><a href="${escapeHtml(publicHref(baseUrl, href))}">${escapeHtml(locale === "zh" ? PUBLIC_SITE_ZH.footerLinks[href] : label)}</a></li>`,
       ).join("")}</ul>
     </div>`).join("");
 
@@ -190,13 +191,13 @@ function renderPublicFooter(baseUrl: string, { paper = false }: { paper?: boolea
     <div class="public-site-footer-grid">
       <div class="public-site-footer-about">
         <a href="${escapeHtml(baseUrl)}"><img src="${escapeHtml(publicHref(baseUrl, paper ? "/pba-logo-on-light.png" : "/pba-logo.png"))}" alt="${PUBLIC_SITE_NAME}" /></a>
-        <p>The accountability pattern for agents that act in the world.</p>
+        <p>${locale === "zh" ? PUBLIC_SITE_ZH.tagline : "The accountability pattern for agents that act in the world."}</p>
       </div>
       ${columns}
     </div>
     <div class="public-site-footer-bottom">
       <span>© ${new Date().getFullYear()} ${PUBLIC_SITE_NAME}</span>
-      <span>Powered by <a href="https://multiversx.com">MultiversX</a></span>
+      <span>${locale === "zh" ? PUBLIC_SITE_ZH.poweredByPrefix : "Powered by"} <a href="https://multiversx.com">MultiversX</a>${locale === "zh" ? ` ${PUBLIC_SITE_ZH.poweredBySuffix}` : ""}</span>
     </div>
   </div>
 </footer>`;
@@ -285,9 +286,9 @@ const PUBLIC_SITE_CHROME_STYLES = `
   }
 `;
 
-function commonHead(title: string, description: string, canonicalUrl: string, ogType: string = "website") {
+function commonHead(title: string, description: string, canonicalUrl: string, ogType: string = "website", lang: "en" | "zh-CN" = "en") {
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${lang}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
@@ -1517,9 +1518,9 @@ async function renderAgentsPageZh(baseUrl: string): Promise<string> {
   const title = "Prove Before Act — AI 智能体的执行前问责模式";
   const description = `Prove Before Act 是自主智能体的问责模式，xProof 是其参考实现。支持 MCP、x402、ACP、REST：执行前锚定声明的决策依据（WHY），执行后锚定实际结果（WHAT）。每次存证 $${priceUsd.toFixed(2)}，通过 x402 无需账户即可使用。`;
 
-  return `${commonHead(title, description, `${baseUrl}/agent-context/zh`)}
+  return `${commonHead(title, description, `${baseUrl}/agent-context/zh`, "website", "zh-CN")}
 <body>
-${renderPublicHeader(baseUrl)}
+${renderPublicHeader(baseUrl, { locale: "zh" })}
 
 <main>
   <h1>Prove Before Act：自主智能体的执行前问责模式</h1>
@@ -1656,7 +1657,7 @@ resp = requests.post("${baseUrl}/api/batch",
   </section>
 </main>
 
-${renderPublicFooter(baseUrl)}
+${renderPublicFooter(baseUrl, { locale: "zh" })}
 </body>
 </html>`;
 }
