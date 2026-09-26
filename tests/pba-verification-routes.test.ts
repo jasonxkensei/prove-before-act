@@ -598,12 +598,33 @@ describe("PBA verification public API", () => {
     expect(response.headers["cache-control"]).toContain("no-store");
   });
 
-  it("does not return an SVG indicator for a missing server record", async () => {
+  it("renders an inconclusive SVG for a missing server record", async () => {
     const response = await request(createApp())
       .get(`/api/pba/verification/${UUID}/indicator.svg`);
 
-    expect(response.status).toBe(404);
-    expect(response.headers["content-type"]).toContain("text/plain");
+    const svg = Buffer.isBuffer(response.body) ? response.body.toString("utf8") : response.text;
+    expect(response.status).toBe(200);
+    expect(response.headers["content-type"]).toContain("image/svg+xml");
+    expect(response.headers["cache-control"]).toContain("no-store");
+    expect(svg).toContain("record not found");
+    expect(svg.match(/stroke="#A8B0B6"/g)).toHaveLength(3);
+    expect(svg).not.toContain('stroke="#00FF9D"');
+    expect(svg).not.toContain('stroke="#F05A67"');
+  });
+
+  it("renders an inconclusive SVG if the verification store is unavailable", async () => {
+    dbMock.select.mockImplementationOnce(() => { throw new Error("database unavailable"); });
+    const response = await request(createApp())
+      .get(`/api/pba/verification/${UUID}/indicator.svg`);
+
+    const svg = Buffer.isBuffer(response.body) ? response.body.toString("utf8") : response.text;
+    expect(response.status).toBe(200);
+    expect(response.headers["content-type"]).toContain("image/svg+xml");
+    expect(response.headers["cache-control"]).toContain("no-store");
+    expect(svg).toContain("status unavailable");
+    expect(svg.match(/stroke="#A8B0B6"/g)).toHaveLength(3);
+    expect(svg).not.toContain('stroke="#00FF9D"');
+    expect(svg).not.toContain('stroke="#F05A67"');
   });
 
   it("publishes only public keys and explicit revoked state", async () => {

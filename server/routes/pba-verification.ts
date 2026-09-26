@@ -348,9 +348,12 @@ export async function getPublicVerification(id: string) {
   };
 }
 
-function renderIndicatorSvg(record: NonNullable<Awaited<ReturnType<typeof getPublicVerification>>>): string {
-  const verdicts = record.attestation.verdicts as Record<string, { status?: string }>;
-  const retired = record.current.status === "revoked" || record.current.status === "superseded";
+function renderIndicatorSvg(
+  record: NonNullable<Awaited<ReturnType<typeof getPublicVerification>>> | null,
+  fallback: "missing" | "unavailable" = "unavailable",
+): string {
+  const verdicts = record?.attestation.verdicts as Record<string, { status?: string }> | undefined;
+  const retired = record?.current.status === "revoked" || record?.current.status === "superseded";
   const segments: Array<{ key: "why" | "what" | "link"; label: string; rotation: number }> = [
     { key: "why", label: "WHY", rotation: -91 },
     { key: "what", label: "WHAT", rotation: 29 },
@@ -362,11 +365,14 @@ function renderIndicatorSvg(record: NonNullable<Awaited<ReturnType<typeof getPub
     if (status === "rejected") return "#F05A67";
     return "#A8B0B6";
   };
-  const title = `PBA verification: ${record.current.status}`;
+  const title = record ? `PBA verification: ${record.current.status}` : `PBA verification: ${fallback === "missing" ? "record not found" : "status unavailable"}`;
+  const description = record
+    ? `Server-derived PBA WHY, WHAT and LINK verification state for record ${record.attestation.id}`
+    : "No official verification state is available. WHY, WHAT and LINK are inconclusive.";
   const arcs = segments.map(({ key, label, rotation }) =>
-    `<circle cx="40" cy="40" r="25" fill="none" stroke="${colorFor(verdicts[key]?.status)}" stroke-width="7" stroke-linecap="round" stroke-dasharray="39 118" transform="rotate(${rotation} 40 40)"><title>${label}: ${retired ? record.current.status : verdicts[key]?.status ?? "inconclusive"}</title></circle>`,
+    `<circle cx="40" cy="40" r="25" fill="none" stroke="${colorFor(verdicts?.[key]?.status)}" stroke-width="7" stroke-linecap="round" stroke-dasharray="39 118" transform="rotate(${rotation} 40 40)"><title>${label}: ${retired ? record?.current.status : verdicts?.[key]?.status ?? "inconclusive"}</title></circle>`,
   ).join("");
-  return `<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-labelledby="title desc"><title id="title">${title}</title><desc id="desc">Server-derived PBA WHY, WHAT and LINK verification state for record ${record.attestation.id}</desc><circle cx="40" cy="40" r="33" fill="#0D1117"/>${arcs}<circle cx="40" cy="40" r="9" fill="#FFFFFF"/></svg>`;
+  return `<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-labelledby="title desc"><title id="title">${title}</title><desc id="desc">${description}</desc><circle cx="40" cy="40" r="33" fill="#0D1117"/>${arcs}<circle cx="40" cy="40" r="9" fill="#FFFFFF"/></svg>`;
 }
 
 function validUuid(value: string): boolean {
@@ -1387,11 +1393,13 @@ export function registerPbaVerificationRoutes(app: Express): void {
     }
     try {
       const record = await getPublicVerification(req.params.id);
-      if (!record) return res.status(404).type("text/plain").send("Verification record not found.");
+      if (!record) return res.status(200).type("image/svg+xml").send(renderIndicatorSvg(null, "missing"));
       return res.status(200).type("image/svg+xml").send(renderIndicatorSvg(record));
     } catch (error) {
       const status = error instanceof PublicRecordError ? error.statusCode : 503;
-      return res.status(status).type("text/plain").send(status === 404 ? "Verification record not found." : "Verification state unavailable.");
+      // Embedded <img> elements cannot display a text error. Fail visibly neutral,
+      // never green or red, while the JSON record endpoint retains error statuses.
+      return res.status(200).type("image/svg+xml").send(renderIndicatorSvg(null, status === 404 ? "missing" : "unavailable"));
     }
   });
 
