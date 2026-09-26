@@ -190,6 +190,26 @@ describe("Prove Before Act API", () => {
         ).toBe(canonicalSpecificationUrl);
       }
     });
+
+    it.each(["/llms.txt", "/llms-full.txt", "/agent-context.md"])(
+      "GET %s links crawlers to the canonical specification",
+      async (path) => {
+        const res = await fetch(`${BASE_URL}${path}`);
+        expect(res.status, `${path} must remain available`).toBe(200);
+        expect(res.headers.get("content-type"), `${path} must remain a text document`)
+          .toMatch(/^text\/(?:plain|markdown)/);
+        const text = await res.text();
+        const specificationLine = text.split("\n").find(
+          (line) => /Prove Before Act specification/i.test(line) && /https?:\/\//.test(line),
+        );
+        expect(specificationLine, `${path} must contain a specification link`).toBeDefined();
+        const links = [...(specificationLine ?? "").matchAll(/https?:\/\/[^\s<>)\]]+/g)]
+          .map(([url]) => url.replace(/[.,;!?]+$/, ""));
+        expect(links, `${path} must link only to the canonical specification URL`).toEqual([
+          "https://provebeforeact.com/standard",
+        ]);
+      },
+    );
   });
 
   describe("POST /api/proof (auth required)", () => {
