@@ -387,8 +387,17 @@ export default function FleetPage() {
                       <tr
                         key={agent.wallet_address}
                         data-testid={`row-fleet-agent-${agent.wallet_address}`}
-                        className="border-b border-border last:border-0 cursor-pointer transition-colors hover:bg-muted"
+                        className="border-b border-border last:border-0 cursor-pointer transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary"
+                        tabIndex={0}
+                        role="link"
+                        aria-label={`View ${agent.agent_name || "Unnamed agent"} profile (${agent.wallet_address})`}
                         onClick={() => navigate(`/agent/${agent.wallet_address}`)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            navigate(`/agent/${agent.wallet_address}`);
+                          }
+                        }}
                       >
                         <td className="px-4 py-3">
                           <p className="font-medium">{agent.agent_name || "Unnamed agent"}</p>
