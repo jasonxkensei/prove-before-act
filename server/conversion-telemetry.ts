@@ -4,7 +4,7 @@ import { db } from "./db";
 import { conversionEventDedupKeys, conversionEvents } from "@shared/schema";
 import { getClientIp } from "./routes/helpers";
 import { logger } from "./logger";
-import { recordConversionTelemetryWriteFailure } from "./metrics";
+import { persistConversionTelemetryWriteFailure, recordConversionTelemetryWriteFailure } from "./metrics";
 import { checkAndAlertConversionTelemetry } from "./conversionTelemetryAlerts";
 
 export const CTA_EVENT_NAMES = ["cta_seen", "cta_clicked"] as const;
@@ -114,14 +114,28 @@ export function recordConversionEvent(
     ipHash,
     referrerHost: getReferrerHost(req),
     utmSource,
-  }).catch((error: unknown) => {
-    recordConversionTelemetryWriteFailure();
-    logger.warn("Conversion telemetry write failed", {
-      component: "conversion-telemetry",
-      error: error instanceof Error ? error.message : String(error),
-    });
-    checkAndAlertConversionTelemetry().catch(() => {});
+  }).catch(reportConversionTelemetryWriteFailure);
+}
+
+function reportConversionTelemetryWriteFailure(error: unknown): void {
+  const failedAt = new Date();
+  logger.warn("Conversion telemetry write failed", {
+    component: "conversion-telemetry",
+    error: error instanceof Error ? error.message : String(error),
   });
+  // The conversion response never waits for this second, privacy-safe write.
+  // If the shared store is also down, keep a bounded in-process warning.
+  void persistConversionTelemetryWriteFailure(failedAt)
+    .catch((storageError: unknown) => {
+      recordConversionTelemetryWriteFailure(failedAt.getTime());
+      logger.warn("Conversion telemetry health storage unavailable", {
+        component: "conversion-telemetry",
+        error: storageError instanceof Error ? storageError.message : String(storageError),
+      });
+    })
+    .finally(() => {
+      void checkAndAlertConversionTelemetry();
+    });
 }
 
 export async function recordProofVerificationMilestone(
@@ -162,12 +176,7 @@ export async function recordProofVerificationMilestone(
       return true;
     });
   } catch (error: unknown) {
-    recordConversionTelemetryWriteFailure();
-    logger.warn("Conversion telemetry write failed", {
-      component: "conversion-telemetry",
-      error: error instanceof Error ? error.message : String(error),
-    });
-    checkAndAlertConversionTelemetry().catch(() => {});
+    reportConversionTelemetryWriteFailure(error);
     return false;
   }
 }

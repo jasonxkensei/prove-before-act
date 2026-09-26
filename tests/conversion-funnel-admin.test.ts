@@ -429,11 +429,12 @@ describe("GET /api/admin/conversion-funnel", () => {
     // then the last seven complete days. Stubbing those query results
     // makes alert coverage independent from any shared test-database history.
     const executeSpy = vi.spyOn(db, "execute") as any;
-    const telemetryHealthSpy = vi.spyOn(metrics, "getConversionTelemetryWriteFailureStats")
-      .mockReturnValue({
+    const telemetryHealthSpy = vi.spyOn(metrics, "getSharedConversionTelemetryWriteFailureStats")
+      .mockResolvedValue({
         recent_failures: 2,
         last_failure_at: "2026-09-07T21:00:00.000Z",
         window_minutes: 15,
+        storage_unavailable: false,
       });
     executeSpy
       .mockResolvedValueOnce({
@@ -541,6 +542,36 @@ describe("GET /api/admin/conversion-funnel", () => {
         }),
       ]));
       expect(executeSpy).toHaveBeenCalledTimes(6);
+    } finally {
+      executeSpy.mockRestore();
+      telemetryHealthSpy.mockRestore();
+    }
+  });
+
+  it("does not claim healthy telemetry when shared health is unavailable", async () => {
+    const executeSpy = stubActivationQueries([]);
+    const telemetryHealthSpy = vi.spyOn(metrics, "getSharedConversionTelemetryWriteFailureStats")
+      .mockResolvedValue({
+        recent_failures: 0,
+        last_failure_at: null,
+        window_minutes: 15,
+        storage_unavailable: true,
+      });
+    try {
+      const body = await getAuthorizedFunnel();
+      expect(body.collection.telemetry_write_health).toMatchObject({
+        status: "unknown",
+        recent_failures: 0,
+      });
+      expect(body.alerts).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          condition: "conversion_telemetry_health_unavailable",
+          severity: "warning",
+        }),
+      ]));
+      expect(body.alerts).not.toContainEqual(
+        expect.objectContaining({ condition: "conversion_telemetry_write_failures" }),
+      );
     } finally {
       executeSpy.mockRestore();
       telemetryHealthSpy.mockRestore();

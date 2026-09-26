@@ -1,3 +1,5 @@
+import { pool } from "./db";
+
 const startTime = Date.now();
 
 interface TransactionRecord {
@@ -51,6 +53,22 @@ export const CONVERSION_TELEMETRY_FAILURE_HEALTH_WINDOW_MS = 15 * 60 * 1000;
 const CONVERSION_TELEMETRY_FAILURE_EVENTS_MAX_AGE_MS = 60 * 60 * 1000;
 const CONVERSION_TELEMETRY_FAILURE_EVENTS_SAFETY_CAP = 10000;
 const conversionTelemetryWriteFailureEvents: number[] = [];
+
+function pruneConversionTelemetryWriteFailures(now: number): void {
+  const cutoff = now - CONVERSION_TELEMETRY_FAILURE_EVENTS_MAX_AGE_MS;
+  while (
+    conversionTelemetryWriteFailureEvents.length > 0
+    && conversionTelemetryWriteFailureEvents[0] < cutoff
+  ) {
+    conversionTelemetryWriteFailureEvents.shift();
+  }
+  if (conversionTelemetryWriteFailureEvents.length > CONVERSION_TELEMETRY_FAILURE_EVENTS_SAFETY_CAP) {
+    conversionTelemetryWriteFailureEvents.splice(
+      0,
+      conversionTelemetryWriteFailureEvents.length - CONVERSION_TELEMETRY_FAILURE_EVENTS_SAFETY_CAP / 2,
+    );
+  }
+}
 
 // Read-through snapshot writes are best-effort for the caller, but repeated
 // failures must remain visible even when the individual request succeeds.
@@ -126,23 +144,9 @@ export function getConversionTelemetryPurgeStats(): {
   };
 }
 
-export function recordConversionTelemetryWriteFailure(): void {
-  const now = Date.now();
+export function recordConversionTelemetryWriteFailure(now = Date.now()): void {
   conversionTelemetryWriteFailureEvents.push(now);
-
-  const cutoff = now - CONVERSION_TELEMETRY_FAILURE_EVENTS_MAX_AGE_MS;
-  while (
-    conversionTelemetryWriteFailureEvents.length > 0
-    && conversionTelemetryWriteFailureEvents[0] < cutoff
-  ) {
-    conversionTelemetryWriteFailureEvents.shift();
-  }
-  if (conversionTelemetryWriteFailureEvents.length > CONVERSION_TELEMETRY_FAILURE_EVENTS_SAFETY_CAP) {
-    conversionTelemetryWriteFailureEvents.splice(
-      0,
-      conversionTelemetryWriteFailureEvents.length - CONVERSION_TELEMETRY_FAILURE_EVENTS_SAFETY_CAP / 2,
-    );
-  }
+  pruneConversionTelemetryWriteFailures(now);
 }
 
 export function getConversionTelemetryWriteFailureStats(
@@ -152,7 +156,9 @@ export function getConversionTelemetryWriteFailureStats(
   last_failure_at: string | null;
   window_minutes: number;
 } {
-  const cutoff = Date.now() - windowMs;
+  const now = Date.now();
+  pruneConversionTelemetryWriteFailures(now);
+  const cutoff = now - windowMs;
   let recentFailures = 0;
   for (let i = conversionTelemetryWriteFailureEvents.length - 1; i >= 0; i--) {
     if (conversionTelemetryWriteFailureEvents[i] < cutoff) break;
@@ -164,6 +170,53 @@ export function getConversionTelemetryWriteFailureStats(
     last_failure_at: lastFailure ? new Date(lastFailure).toISOString() : null,
     window_minutes: Math.ceil(windowMs / 60_000),
   };
+}
+
+/** Store a timestamp only. Callers do not await this on the conversion path. */
+export async function persistConversionTelemetryWriteFailure(occurredAt: Date): Promise<void> {
+  await pool.query(
+    `INSERT INTO conversion_telemetry_write_failures (occurred_at) VALUES ($1)`,
+    [occurredAt],
+  );
+}
+
+/** Shared, exact rolling count; local events are only failures of the health write itself. */
+export async function getSharedConversionTelemetryWriteFailureStats(
+  windowMs = CONVERSION_TELEMETRY_FAILURE_HEALTH_WINDOW_MS,
+): Promise<{
+  recent_failures: number;
+  last_failure_at: string | null;
+  window_minutes: number;
+  storage_unavailable: boolean;
+}> {
+  const local = getConversionTelemetryWriteFailureStats(windowMs);
+  try {
+    const result = await pool.query<{
+      recent_failures: string | number;
+      last_failure_at: Date | string | null;
+    }>(`
+      SELECT COUNT(*) FILTER (
+        WHERE occurred_at >= NOW() - ($1::double precision * INTERVAL '1 millisecond')
+      )::bigint AS recent_failures,
+      MAX(occurred_at) AS last_failure_at
+      FROM conversion_telemetry_write_failures
+      WHERE occurred_at >= NOW() - INTERVAL '1 hour'
+    `, [windowMs]);
+    const row = result.rows[0];
+    const sharedCount = Number(row?.recent_failures ?? 0);
+    const sharedLast = row?.last_failure_at
+      ? new Date(row.last_failure_at).getTime() : null;
+    const localLast = local.last_failure_at ? Date.parse(local.last_failure_at) : null;
+    const lastFailure = Math.max(sharedLast ?? 0, localLast ?? 0);
+    return {
+      recent_failures: sharedCount + local.recent_failures,
+      last_failure_at: lastFailure > 0 ? new Date(lastFailure).toISOString() : null,
+      window_minutes: Math.ceil(windowMs / 60_000),
+      storage_unavailable: false,
+    };
+  } catch {
+    return { ...local, storage_unavailable: true };
+  }
 }
 
 export function recordRateLimitFailOpen(op: RateLimitFailOpenOp): void {

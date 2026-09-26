@@ -39,15 +39,21 @@ describe("conversion telemetry write health", () => {
       recent_failures: 0,
       last_failure_at: "2026-09-07T21:00:00.000Z",
     });
+    vi.advanceTimersByTime(45 * 60 * 1000);
+    expect(metrics.getConversionTelemetryWriteFailureStats()).toMatchObject({
+      recent_failures: 0,
+      last_failure_at: null,
+    });
   });
 
   it("records a rejected fire-and-forget insert without retaining event data", async () => {
     const metrics = await import("../server/metrics");
-    const { db } = await import("../server/db");
+    const { db, pool } = await import("../server/db");
     const { recordConversionEvent } = await import("../server/conversion-telemetry");
     vi.spyOn(db, "insert").mockReturnValue({
       values: () => Promise.reject(new Error("conversion_events unavailable")),
     } as any);
+    vi.spyOn(pool, "query").mockRejectedValue(new Error("health storage unavailable"));
 
     recordConversionEvent({
       query: {},
@@ -60,12 +66,113 @@ describe("conversion telemetry write health", () => {
       stage: "cta",
       outcome: "seen",
     });
-    await Promise.resolve();
-    await Promise.resolve();
+    // The rejected event insert and the rejected best-effort health insert
+    // settle on separate microtask turns.
+    for (let i = 0; i < 8; i++) await Promise.resolve();
 
     expect(metrics.getConversionTelemetryWriteFailureStats()).toMatchObject({
       recent_failures: 1,
       last_failure_at: "2026-09-07T21:00:00.000Z",
+    });
+  });
+
+  it("does not wait for durable health storage on the conversion path", async () => {
+    const metrics = await import("../server/metrics");
+    const { db, pool } = await import("../server/db");
+    const { recordConversionEvent } = await import("../server/conversion-telemetry");
+    vi.spyOn(db, "insert").mockReturnValue({
+      values: () => Promise.reject(new Error("conversion_events unavailable")),
+    } as any);
+    let finishWrite!: (value: unknown) => void;
+    const pendingWrite = new Promise((resolve) => { finishWrite = resolve; });
+    const healthQuery = vi.spyOn(pool, "query").mockImplementation(async (statement: string) => {
+      if (statement.includes("INSERT INTO conversion_telemetry_write_failures")) {
+        return pendingWrite as any;
+      }
+      return {
+        rows: [{ recent_failures: "1", last_failure_at: new Date("2026-09-07T21:00:00.000Z") }],
+        rowCount: 1,
+      } as any;
+    });
+
+    expect(recordConversionEvent({
+      query: {},
+      path: "/api/conversion-events",
+      headers: { "user-agent": "test-agent" },
+      get: (name: string) => name === "user-agent" ? "test-agent" : null,
+      socket: { remoteAddress: "203.0.113.10" },
+    } as any, {
+      eventType: "landing:trial_register",
+      stage: "cta",
+      outcome: "seen",
+    })).toBeUndefined();
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    expect(healthQuery).toHaveBeenCalledWith(
+      expect.stringContaining("INSERT INTO conversion_telemetry_write_failures"),
+      [new Date("2026-09-07T21:00:00.000Z")],
+    );
+    finishWrite({ rows: [], rowCount: 1 });
+    for (let i = 0; i < 5; i++) await Promise.resolve();
+    expect(await metrics.getSharedConversionTelemetryWriteFailureStats()).toMatchObject({
+      recent_failures: 1,
+      storage_unavailable: false,
+    });
+  });
+
+  it("shares timestamp-only health across process restarts and sums local fallback once", async () => {
+    const metrics = await import("../server/metrics");
+    const { pool } = await import("../server/db");
+    const stored: Date[] = [];
+    vi.spyOn(pool, "query").mockImplementation(async (statement: string, values?: unknown[]) => {
+      if (statement.includes("INSERT INTO conversion_telemetry_write_failures")) {
+        stored.push(values![0] as Date);
+        return { rows: [], rowCount: 1 } as any;
+      }
+      return {
+        rows: [{
+          recent_failures: String(stored.length),
+          last_failure_at: stored.at(-1) ?? null,
+        }],
+        rowCount: 1,
+      } as any;
+    });
+    await metrics.persistConversionTelemetryWriteFailure(new Date("2026-09-07T21:00:00.000Z"));
+    await metrics.persistConversionTelemetryWriteFailure(new Date("2026-09-07T21:00:01.000Z"));
+    expect(stored).toHaveLength(2);
+    expect(stored[0]).toBeInstanceOf(Date);
+    expect(await metrics.getSharedConversionTelemetryWriteFailureStats()).toMatchObject({
+      recent_failures: 2,
+      last_failure_at: "2026-09-07T21:00:01.000Z",
+      storage_unavailable: false,
+    });
+
+    // A new import has no process-local failures but reads the same shared store.
+    vi.resetModules();
+    const restartedMetrics = await import("../server/metrics");
+    const restartedDb = await import("../server/db");
+    vi.spyOn(restartedDb.pool, "query").mockResolvedValue({
+      rows: [{ recent_failures: "2", last_failure_at: stored[1] }],
+      rowCount: 1,
+    } as any);
+    expect(await restartedMetrics.getSharedConversionTelemetryWriteFailureStats()).toMatchObject({
+      recent_failures: 2,
+      storage_unavailable: false,
+    });
+    restartedMetrics.recordConversionTelemetryWriteFailure();
+    expect(await restartedMetrics.getSharedConversionTelemetryWriteFailureStats()).toMatchObject({
+      recent_failures: 3,
+      storage_unavailable: false,
+    });
+  });
+
+  it("does not report a healthy shared store when its health query fails", async () => {
+    const metrics = await import("../server/metrics");
+    const { pool } = await import("../server/db");
+    vi.spyOn(pool, "query").mockRejectedValue(new Error("shared health unavailable"));
+    metrics.recordConversionTelemetryWriteFailure();
+    expect(await metrics.getSharedConversionTelemetryWriteFailureStats()).toMatchObject({
+      recent_failures: 1,
+      storage_unavailable: true,
     });
   });
 });
@@ -93,6 +200,11 @@ describe("conversion telemetry sustained-failure alerts", () => {
     vi.stubGlobal("fetch", fetchSpy);
 
     const metrics = await import("../server/metrics");
+    const { pool } = await import("../server/db");
+    vi.spyOn(pool, "query").mockResolvedValue({
+      rows: [{ recent_failures: "0", last_failure_at: null }],
+      rowCount: 1,
+    } as any);
     const { checkAndAlertConversionTelemetry, getConversionTelemetryAlertConfig } =
       await import("../server/conversionTelemetryAlerts");
 

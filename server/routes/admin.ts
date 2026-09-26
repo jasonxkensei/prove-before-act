@@ -10,7 +10,7 @@ import { computeTrustScoreByWallet, runLeaderboardRefreshCycle, runTrustRefreshC
 import { getAlertConfig, getRateLimitAlertConfig, getViolationQueueAlertConfig, getTrustSnapshotWriteHealth } from "../alerts";
 import {
   getMetrics,
-  getConversionTelemetryWriteFailureStats,
+  getSharedConversionTelemetryWriteFailureStats,
   CONVERSION_TELEMETRY_FAILURE_HEALTH_WINDOW_MS,
 } from "../metrics";
 import { getTxQueueStats, getMx8004NonceStall } from "../txQueue";
@@ -614,9 +614,16 @@ export function registerAdminRoutes(app: Express) {
           message: "No new proof (HTTP 201) in the last 7 complete days.",
         });
       }
-      const telemetryWriteHealth = getConversionTelemetryWriteFailureStats(
+      const telemetryWriteHealth = await getSharedConversionTelemetryWriteFailureStats(
         CONVERSION_TELEMETRY_FAILURE_HEALTH_WINDOW_MS,
       );
+      if (telemetryWriteHealth.storage_unavailable) {
+        alerts.push({
+          severity: "warning",
+          condition: "conversion_telemetry_health_unavailable",
+          message: "Conversion telemetry write health could not be checked across instances. Funnel data may be incomplete.",
+        });
+      }
       if (telemetryWriteHealth.recent_failures > 0) {
         alerts.push({
           severity: "warning",
@@ -740,7 +747,9 @@ export function registerAdminRoutes(app: Express) {
           first_event_at: totalsRow?.first_event_at ?? null,
           last_event_at: totalsRow?.last_event_at ?? null,
           telemetry_write_health: {
-            status: telemetryWriteHealth.recent_failures > 0 ? "warning" : "healthy",
+            status: telemetryWriteHealth.storage_unavailable
+              ? "unknown"
+              : telemetryWriteHealth.recent_failures > 0 ? "warning" : "healthy",
             recent_failures: telemetryWriteHealth.recent_failures,
             last_failure_at: telemetryWriteHealth.last_failure_at,
             window_minutes: telemetryWriteHealth.window_minutes,

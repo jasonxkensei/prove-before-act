@@ -1,7 +1,7 @@
 import { logger } from "./logger";
 import {
   getConversionTelemetryPurgeStats,
-  getConversionTelemetryWriteFailureStats,
+  getSharedConversionTelemetryWriteFailureStats,
   CONVERSION_TELEMETRY_FAILURE_HEALTH_WINDOW_MS,
 } from "./metrics";
 import { alertWebhookHeaders } from "./webhookHeaders";
@@ -100,7 +100,7 @@ async function checkAndAlertConversionTelemetryImpl(): Promise<void> {
     return;
   }
 
-  const stats = getConversionTelemetryWriteFailureStats(
+  const stats = await getSharedConversionTelemetryWriteFailureStats(
     conversionTelemetryAlertConfig.windowMinutes * 60_000,
   );
   if (stats.recent_failures < conversionTelemetryAlertConfig.failureThreshold) return;
