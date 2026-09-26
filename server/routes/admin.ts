@@ -148,10 +148,10 @@ const ACTIVATION_COHORT_COUNTS = sql`
 `;
 
 const ACTIVATION_VISITOR_LATEST = sql`
-  SELECT ip_hash, ${ACTIVATION_COHORT_LAST_TIMES}
+  SELECT visitor_key, ${ACTIVATION_COHORT_LAST_TIMES}
   FROM conversion_events
-  WHERE created_at >= NOW() - INTERVAL '30 days'
-  GROUP BY ip_hash
+  WHERE created_at >= NOW() - INTERVAL '30 days' AND visitor_key IS NOT NULL
+  GROUP BY visitor_key
 `;
 
 const NON_BROWSER_ACTIVATION_SEGMENTS = new Set(["api_client", "crawler_scanner"]);
@@ -505,7 +505,8 @@ export function registerAdminRoutes(app: Express) {
           http_class,
           traffic_segment,
           COUNT(*)::int AS events,
-          COUNT(DISTINCT ip_hash)::int AS visitors
+          COUNT(DISTINCT visitor_key)::int AS visitors,
+          COUNT(*) FILTER (WHERE visitor_key IS NULL)::int AS unlinked_events
         FROM conversion_events
         WHERE created_at >= NOW() - INTERVAL '30 days'
         GROUP BY 1, 2, 3, 4, 5
@@ -514,30 +515,34 @@ export function registerAdminRoutes(app: Express) {
       const totalsResult = await db.execute(sql`
         SELECT
           COUNT(*)::int AS events,
-          COUNT(DISTINCT ip_hash)::int AS visitors,
+          COUNT(DISTINCT visitor_key)::int AS visitors,
+          COUNT(*) FILTER (WHERE visitor_key IS NULL)::int AS unlinked_events,
+          COUNT(*) FILTER (
+            WHERE visitor_key IS NULL AND traffic_segment = 'api_client'
+          )::int AS unlinked_api_events,
           MIN(created_at) AS first_event_at,
           MAX(created_at) AS last_event_at,
           COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours')::int AS events_last_24h,
-          COUNT(DISTINCT ip_hash) FILTER (
+          COUNT(DISTINCT visitor_key) FILTER (
             WHERE stage = 'cta' AND outcome = 'seen'
           )::int AS cta_views,
-          COUNT(DISTINCT ip_hash) FILTER (
+          COUNT(DISTINCT visitor_key) FILTER (
             WHERE stage = 'cta' AND outcome = 'clicked'
           )::int AS cta_clicks,
-          COUNT(DISTINCT ip_hash) FILTER (
+          COUNT(DISTINCT visitor_key) FILTER (
             WHERE stage = 'cta'
               AND outcome = 'clicked'
               AND event_type NOT LIKE '%:scenario_%'
           )::int AS primary_cta_clicks,
-          COUNT(DISTINCT ip_hash) FILTER (
+          COUNT(DISTINCT visitor_key) FILTER (
             WHERE stage = 'cta'
               AND outcome = 'clicked'
               AND event_type LIKE '%:scenario_%'
           )::int AS scenario_engagements,
-          COUNT(DISTINCT ip_hash) FILTER (
+          COUNT(DISTINCT visitor_key) FILTER (
             WHERE stage = 'registration' AND outcome = 'success' AND http_class = '2xx'
           )::int AS registrations,
-          COUNT(DISTINCT ip_hash) FILTER (
+          COUNT(DISTINCT visitor_key) FILTER (
             WHERE stage = 'proof' AND outcome = 'success' AND http_status = 201
           )::int AS successful_proofs
         FROM conversion_events
@@ -547,8 +552,8 @@ export function registerAdminRoutes(app: Express) {
         WITH visitor_latest AS (${ACTIVATION_VISITOR_LATEST}),
         visitor_metrics AS (
           SELECT
-            traffic_segment,
-            ip_hash,
+            CASE WHEN GROUPING(traffic_segment) = 1 THEN 'all' ELSE traffic_segment END AS traffic_segment,
+            visitor_key,
             BOOL_OR(
               stage = 'cta'
               AND outcome = 'clicked'
@@ -568,8 +573,8 @@ export function registerAdminRoutes(app: Express) {
             BOOL_OR(event_type = 'external_agent_second_proof_verified') AS second_proof_verified,
             ${ACTIVATION_COHORT_FIRST_TIMES}
           FROM conversion_events
-          WHERE created_at >= NOW() - INTERVAL '30 days'
-          GROUP BY traffic_segment, ip_hash
+          WHERE created_at >= NOW() - INTERVAL '30 days' AND visitor_key IS NOT NULL
+          GROUP BY GROUPING SETS ((traffic_segment, visitor_key), (visitor_key))
         )
         SELECT
           traffic_segment,
@@ -580,7 +585,7 @@ export function registerAdminRoutes(app: Express) {
           COUNT(*) FILTER (WHERE second_proof_verified)::int AS second_proof,
           ${ACTIVATION_COHORT_COUNTS}
         FROM visitor_metrics
-        JOIN visitor_latest USING (ip_hash)
+        JOIN visitor_latest USING (visitor_key)
         GROUP BY traffic_segment
         ORDER BY traffic_segment
       `);
@@ -590,19 +595,20 @@ export function registerAdminRoutes(app: Express) {
           FROM conversion_events
           WHERE created_at >= NOW() - INTERVAL '30 days'
             AND traffic_segment IN ('human_browser', 'declared_agent')
+            AND visitor_key IS NOT NULL
         ),
         visitor_latest AS (${ACTIVATION_VISITOR_LATEST}),
         first_touch_source AS (
-          SELECT DISTINCT ON (ip_hash)
-            ip_hash,
+          SELECT DISTINCT ON (visitor_key)
+            visitor_key,
             utm_source AS original_source
           FROM window_events
           WHERE NULLIF(BTRIM(utm_source), '') IS NOT NULL
-          ORDER BY ip_hash, created_at ASC
+          ORDER BY visitor_key, created_at ASC
         ),
         normalized_source AS (
           SELECT
-            ip_hash,
+            visitor_key,
             original_source,
             -- Only explicit aliases collapse punctuation; all other sources
             -- differ only by surrounding whitespace and case.
@@ -615,7 +621,7 @@ export function registerAdminRoutes(app: Express) {
         visitor_metrics AS (
           SELECT
             COALESCE(normalized_source.campaign_source, ${DIRECT_UNKNOWN_CAMPAIGN}) AS campaign_source,
-            window_events.ip_hash,
+            window_events.visitor_key,
             MAX(normalized_source.original_source) AS original_source,
             BOOL_OR(
               stage = 'cta'
@@ -636,8 +642,8 @@ export function registerAdminRoutes(app: Express) {
             BOOL_OR(event_type = 'external_agent_second_proof_verified') AS second_proof_verified,
             ${ACTIVATION_COHORT_FIRST_TIMES}
           FROM window_events
-          LEFT JOIN normalized_source USING (ip_hash)
-          GROUP BY campaign_source, window_events.ip_hash
+          LEFT JOIN normalized_source USING (visitor_key)
+          GROUP BY campaign_source, window_events.visitor_key
         )
         SELECT
           campaign_source,
@@ -651,16 +657,16 @@ export function registerAdminRoutes(app: Express) {
           COUNT(*) FILTER (WHERE second_proof_verified)::int AS second_proof,
           ${ACTIVATION_COHORT_COUNTS}
         FROM visitor_metrics
-        JOIN visitor_latest USING (ip_hash)
+        JOIN visitor_latest USING (visitor_key)
         GROUP BY campaign_source
         ORDER BY campaign_source
       `);
       const proofActivationResult = await db.execute(sql`
         SELECT
-          COUNT(DISTINCT ip_hash) FILTER (
+          COUNT(DISTINCT visitor_key) FILTER (
             WHERE event_type = 'first_proof_verified'
           )::int AS first_proof_visitors,
-          COUNT(DISTINCT ip_hash) FILTER (
+          COUNT(DISTINCT visitor_key) FILTER (
             WHERE event_type = 'external_agent_second_proof_verified'
           )::int AS repeat_proof_visitors
         FROM conversion_events
@@ -668,10 +674,10 @@ export function registerAdminRoutes(app: Express) {
       `);
       const lastSevenDaysResult = await db.execute(sql`
         SELECT
-          COUNT(DISTINCT ip_hash) FILTER (
+          COUNT(*) FILTER (
             WHERE stage = 'registration' AND outcome = 'success' AND http_class = '2xx'
           )::int AS registrations,
-          COUNT(DISTINCT ip_hash) FILTER (
+          COUNT(*) FILTER (
             WHERE stage = 'proof' AND outcome = 'success' AND http_status = 201
           )::int AS successful_proofs
         FROM conversion_events
@@ -734,7 +740,8 @@ export function registerAdminRoutes(app: Express) {
         first_proof: 0,
         second_proof: 0,
       });
-      const segmentAnalysis = segmentRows.map((row) => ({
+      const allSegmentRow = segmentRows.find((row) => row.traffic_segment === "all");
+      const segmentAnalysis = segmentRows.filter((row) => row.traffic_segment !== "all").map((row) => ({
         stages: {
           scenario_selected: parseCount(row, "scenario_selected"),
           primary_cta_clicked: parseCount(row, "primary_cta_clicked"),
@@ -748,11 +755,18 @@ export function registerAdminRoutes(app: Express) {
       const comparableSegments = segmentAnalysis.filter((segment) =>
         isComparableActivationSegment(segment.traffic_segment, segment.stages)
       );
-      const overallStages = comparableSegments.reduce((totals, segment) => {
+      const overallStages = allSegmentRow ? {
+        scenario_selected: parseCount(allSegmentRow, "scenario_selected"),
+        primary_cta_clicked: parseCount(allSegmentRow, "primary_cta_clicked"),
+        registered: parseCount(allSegmentRow, "registered"),
+        first_proof: parseCount(allSegmentRow, "first_proof"),
+        second_proof: parseCount(allSegmentRow, "second_proof"),
+      } : comparableSegments.reduce((totals, segment) => {
         for (const stage of ACTIVATION_STAGE_ORDER) totals[stage] += segment.stages[stage];
         return totals;
       }, emptyStages());
-      const overallCohorts = comparableSegments.reduce((totals, segment) => {
+      const overallCohorts = allSegmentRow ? cohortCountsFromRow(allSegmentRow)
+        : comparableSegments.reduce((totals, segment) => {
         for (const key of Object.keys(totals) as Array<keyof ActivationCohortCounts>) {
           totals[key] += segment.cohorts[key];
         }
@@ -843,10 +857,13 @@ export function registerAdminRoutes(app: Express) {
           traffic_segment: row.traffic_segment,
           events: parseCount(row, "events"),
           visitors: parseCount(row, "visitors"),
+          unlinked_events: parseCount(row, "unlinked_events"),
         })),
         totals: {
           events: parseCount(totalsRow, "events"),
           visitors: parseCount(totalsRow, "visitors"),
+          unlinked_events: parseCount(totalsRow, "unlinked_events"),
+          unlinked_api_events: parseCount(totalsRow, "unlinked_api_events"),
           cta_views: parseCount(totalsRow, "cta_views"),
           cta_clicks: parseCount(totalsRow, "cta_clicks"),
           primary_cta_clicks: parseCount(totalsRow, "primary_cta_clicks"),
@@ -879,10 +896,11 @@ export function registerAdminRoutes(app: Express) {
           window_days: ACTIVATION_FUNNEL_WINDOW_DAYS,
           minimum_transition_visitors: ACTIVATION_RECOMMENDATION_MIN_FROM_VISITORS,
           counting_model: {
-            stage_totals: "directional_distinct_visitors",
-            conversions: "same_visitor_adjacent_stages_in_order",
+            stage_totals: "directional_distinct_identified_browsers",
+            conversions: "same_browser_cookie_adjacent_stages_in_order",
             sequence_window_days: ACTIVATION_FUNNEL_WINDOW_DAYS,
             transition_attribution: "upstream_traffic_segment",
+            unlinked_activity: "events_only_excluded_from_visitors_and_transitions",
           },
           stage_order: ACTIVATION_STAGE_ORDER,
           overall: overallAnalysis,

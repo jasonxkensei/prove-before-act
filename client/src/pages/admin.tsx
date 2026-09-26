@@ -202,10 +202,13 @@ interface ConversionFunnelData {
     traffic_segment: "human_browser" | "declared_agent" | "crawler_scanner" | "api_client";
     events: number;
     visitors: number;
+    unlinked_events: number;
   }>;
   totals: {
     events: number;
     visitors: number;
+    unlinked_events: number;
+    unlinked_api_events: number;
     cta_views: number;
     cta_clicks: number;
     primary_cta_clicks: number;
@@ -230,10 +233,11 @@ interface ConversionFunnelData {
     window_days: number;
     minimum_transition_visitors: number;
     counting_model: {
-      stage_totals: "directional_distinct_visitors";
-      conversions: "same_visitor_adjacent_stages_in_order";
+      stage_totals: "directional_distinct_identified_browsers";
+      conversions: "same_browser_cookie_adjacent_stages_in_order";
       sequence_window_days: number;
       transition_attribution: "upstream_traffic_segment";
+      unlinked_activity: "events_only_excluded_from_visitors_and_transitions";
     };
     stage_order: Array<"scenario_selected" | "primary_cta_clicked" | "registered" | "first_proof" | "second_proof">;
     overall: ActivationReviewSegment;
@@ -778,6 +782,10 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
   );
   const review = data.activation_review;
   const largestDropOff = review.largest_segment_drop_off?.largest_drop_off;
+  const unlinkedApiSuccesses = (stage: "registration" | "proof") =>
+    data.rows.reduce((sum, row) =>
+      sum + (row.traffic_segment === "api_client" && row.stage === stage && row.outcome === "success"
+        ? row.unlinked_events : 0), 0);
 
   return (
     <Card data-testid="card-conversion-funnel">
@@ -791,7 +799,7 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
               <Badge variant={data.collection.confirmed ? "default" : "outline"} data-testid="badge-funnel-collection">
                 {data.collection.confirmed ? "Collection confirmed" : "Awaiting published traffic"}
               </Badge>
-              <span className="text-muted-foreground">Server-derived, no request data retained</span>
+               <span className="text-muted-foreground">No raw IP or credentials retained</span>
             </div>
         </div>
         {data.alerts.length > 0 && (
@@ -806,6 +814,14 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
         )}
       </CardHeader>
       <CardContent className="space-y-5">
+        <p className="text-xs text-muted-foreground" data-testid="conversion-identity-confidence">
+          Visitor counts and ordered transitions use only a signed, 30-day browser identifier.
+          {" "}{data.totals.unlinked_events} event(s), including {data.totals.unlinked_api_events} API-client event(s),
+          have no browser identifier. They remain in event totals but cannot be counted as distinct
+          visitors or joined into a conversion journey. Older IP-only events are also unlinked.
+          {" "}Unlinked API activity includes {unlinkedApiSuccesses("registration")} successful registration event(s)
+          and {unlinkedApiSuccesses("proof")} successful proof event(s), not unique people.
+        </p>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {[
             ["CTA seen", data.totals.cta_views],
@@ -840,9 +856,9 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
           </div>
           <p className="mt-3 text-sm text-muted-foreground">{review.recommendation.message}</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Stage totals count visitors at each step independently. Conversion and drop rates count the
-            same privacy-safe visitor at both adjacent steps in order within{" "}
-            {review.counting_model.sequence_window_days} days, even if their client changes. Transitions
+             Stage totals count identified browsers at each step independently. Conversion and drop rates count the
+             same browser identifier at both adjacent steps in order within{" "}
+             {review.counting_model.sequence_window_days} days. Transitions
             belong to the earlier step's traffic segment; repeat visits count once per transition.
           </p>
           <p className="mt-1 text-xs text-muted-foreground" data-testid="activation-transition-sample">
@@ -872,7 +888,7 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
           {review.by_traffic_segment.length > 0 && (
             <div className="mt-4 overflow-x-auto">
               <table className="w-full min-w-[680px] text-xs">
-                <caption className="pb-2 text-left text-muted-foreground">Directional stage visitors; largest drop uses ordered cohorts.</caption>
+                  <caption className="pb-2 text-left text-muted-foreground">Directional identified browsers; largest drop uses ordered cohorts.</caption>
                 <thead>
                   <tr className="border-b text-left text-muted-foreground">
                     <th className="pb-2 pr-3 font-medium">Traffic segment</th>
@@ -924,7 +940,8 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
                 <p className="text-xs text-muted-foreground">
                   First known UTM source in this {review.window_days}-day window; missing values are{" "}
                   <span className="font-medium">{review.campaign_attribution.missing_source_label}</span>.
-                  Sources are grouped ignoring case and surrounding whitespace; product-hunt is grouped with producthunt.
+                   Bounded campaign labels are retained; unsafe-looking values appear as direct / unknown.
+                   Sources are grouped ignoring case and surrounding whitespace; product-hunt is grouped with producthunt.
                 </p>
               </div>
               <Badge variant="outline">
@@ -952,7 +969,7 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
             {review.by_utm_source.length > 0 && (
               <div className="mt-3 overflow-x-auto">
                 <table className="w-full min-w-[720px] text-xs">
-                  <caption className="pb-2 text-left text-muted-foreground">Directional campaign visitors; largest drop uses ordered cohorts.</caption>
+                  <caption className="pb-2 text-left text-muted-foreground">Directional identified browsers by campaign; largest drop uses ordered cohorts.</caption>
                   <thead>
                     <tr className="border-b text-left text-muted-foreground">
                       <th className="pb-2 pr-3 font-medium">UTM source</th>

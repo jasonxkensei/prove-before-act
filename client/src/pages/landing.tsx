@@ -33,7 +33,7 @@ import {
 import { WalletLoginModal } from "@/components/wallet-login-modal";
 import { ProofLookupForm } from "@/components/proof-lookup-form";
 import { PublicSiteFooter, PublicSiteHeader } from "@/components/public-site-chrome";
-import { trackAgentCta, useAgentCtaExposure } from "@/lib/conversionTracking";
+import { ensureConversionVisitor, trackAgentCta, useAgentCtaExposure } from "@/lib/conversionTracking";
 import { trackEvent } from "@/lib/analytics";
 import {
   clearStoredTrialKey,
@@ -245,6 +245,7 @@ export default function Landing() {
 
   const registerMutation = useMutation({
     mutationFn: async (name: string) => {
+      await ensureConversionVisitor();
       const res = await fetch("/api/agent/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

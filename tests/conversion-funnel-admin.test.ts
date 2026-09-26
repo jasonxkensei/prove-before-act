@@ -17,7 +17,14 @@ import { getSession } from "../server/replitAuth";
 import { registerAdminRoutes } from "../server/routes/admin";
 import * as metrics from "../server/metrics";
 import * as mx8004 from "../server/mx8004";
-import { recordConversionEvent, recordProofVerificationMilestone } from "../server/conversion-telemetry";
+import {
+  conversionOutcomeMiddleware,
+  conversionVisitorMiddleware,
+  recordConversionEvent,
+  recordProofVerificationMilestone,
+} from "../server/conversion-telemetry";
+import { registerConversionRoutes } from "../server/routes/conversion";
+import { safeConversionSource } from "../server/conversion-source";
 import {
   migrateConversionEventsTable,
   purgeExpiredConversionEvents,
@@ -30,6 +37,7 @@ let cookie: string;
 let sid: string;
 let originalAdminWallets: string | undefined;
 const seededTelemetryHashes: string[] = [];
+const seededUtmSources: string[] = [];
 const seededDedupKeys: string[] = [];
 const seededUserIds: string[] = [];
 
@@ -60,6 +68,10 @@ beforeAll(async () => {
 
   const app = express();
   app.use(getSession());
+  app.use(conversionVisitorMiddleware, conversionOutcomeMiddleware);
+  app.use(express.json());
+  registerConversionRoutes(app);
+  app.post("/api/agent/register", (_req, res) => res.status(201).json({ ok: true }));
   registerAdminRoutes(app);
   server = await new Promise<Server>((resolve) => {
     const listener = app.listen(0, () => resolve(listener));
@@ -71,10 +83,14 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  if (seededUtmSources.length > 0) {
+    await pool.query(`DELETE FROM conversion_events WHERE utm_source = ANY($1)`, [seededUtmSources]);
+  }
   if (seededTelemetryHashes.length > 0) {
-    await pool.query(`DELETE FROM conversion_events WHERE ip_hash = ANY($1)`, [seededTelemetryHashes]);
+    await pool.query(`DELETE FROM conversion_events WHERE visitor_key = ANY($1)`, [seededTelemetryHashes]);
   }
   if (seededDedupKeys.length > 0) {
+    await pool.query(`DELETE FROM conversion_events WHERE dedup_key = ANY($1)`, [seededDedupKeys]);
     await pool.query(`DELETE FROM conversion_event_dedup_keys WHERE dedup_key = ANY($1)`, [seededDedupKeys]);
   }
   if (seededUserIds.length > 0) {
@@ -230,7 +246,7 @@ describe("GET /api/admin/conversion-funnel", () => {
       await pool.query(
         `INSERT INTO conversion_events (
           event_type, stage, outcome, http_status, http_class,
-          traffic_segment, ip_hash, utm_source, created_at
+          traffic_segment, visitor_key, utm_source, created_at
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
         [
           event.eventType, event.stage, clicked ? "clicked" : "success",
@@ -241,6 +257,216 @@ describe("GET /api/admin/conversion-funnel", () => {
       );
     }
   }
+
+  it("keeps two browsers on one IP separate and leaves API-only requests unlinked", async () => {
+    const source = `shared-network-${crypto.randomBytes(8).toString("hex")}`;
+    seededUtmSources.push(source);
+    const url = (path: string) => `${baseUrl}${path}?utm_source=${source}`;
+    const browserHeaders = {
+      "Content-Type": "application/json",
+      "User-Agent": "Mozilla/5.0 (conversion browser test)",
+      "Sec-Fetch-Site": "same-origin",
+    };
+    const firstSetup = await fetch(`${baseUrl}/api/conversion-visitor`, { headers: browserHeaders });
+    expect(firstSetup.status).toBe(204);
+    const browserA = firstSetup.headers.get("set-cookie")?.split(";")[0];
+    expect(browserA).toMatch(/^pba_conversion_v2=v2\./);
+    expect(firstSetup.headers.get("set-cookie")).toContain("HttpOnly");
+    expect(firstSetup.headers.get("set-cookie")).toContain("SameSite=Lax");
+    expect(firstSetup.headers.get("set-cookie")).toContain("Max-Age=2592000");
+    const secondSetup = await fetch(`${baseUrl}/api/conversion-visitor`, { headers: browserHeaders });
+    expect(secondSetup.status).toBe(204);
+    const browserB = secondSetup.headers.get("set-cookie")?.split(";")[0];
+    expect(browserB).toMatch(/^pba_conversion_v2=v2\./);
+    expect(browserB).not.toBe(browserA);
+
+    const [ctaClick, ctaExposure] = await Promise.all([
+      fetch(url("/api/conversion-events"), {
+        method: "POST", headers: { ...browserHeaders, Cookie: browserA! },
+        body: JSON.stringify({ event: "cta_clicked", page: "landing", cta: "hero_free_trial" }),
+      }),
+      fetch(url("/api/conversion-events"), {
+        method: "POST", headers: { ...browserHeaders, Cookie: browserA! },
+        body: JSON.stringify({ event: "cta_seen", page: "landing", cta: "hero_free_trial" }),
+      }),
+    ]);
+    expect(ctaClick.status).toBe(202);
+    expect(ctaExposure.status).toBe(202);
+    expect(ctaClick.headers.get("set-cookie")).toBeNull();
+    expect(ctaExposure.headers.get("set-cookie")).toBeNull();
+    const secondBrowser = await fetch(url("/api/agent/register"), {
+      method: "POST", headers: { ...browserHeaders, Cookie: browserB! }, body: "{}",
+    });
+    expect(secondBrowser.status).toBe(201);
+    expect(secondBrowser.headers.get("set-cookie")).toBeNull();
+    await vi.waitFor(async () => {
+      const rows = await pool.query(`SELECT COUNT(*)::int AS count FROM conversion_events WHERE utm_source = $1`, [source]);
+      expect(rows.rows[0].count).toBe(4);
+    });
+    const separated = await getAuthorizedFunnel();
+    const campaign = separated.activation_review.by_utm_source.find((row: any) => row.campaign_source === source);
+    expect(campaign).toMatchObject({
+      entry_visitors: 1,
+      stages: expect.arrayContaining([
+        expect.objectContaining({ stage: "primary_cta_clicked", visitors: 1 }),
+        expect.objectContaining({ stage: "registered", visitors: 1 }),
+      ]),
+      cohort_transitions: expect.arrayContaining([
+        expect.objectContaining({
+          from_stage: "primary_cta_clicked",
+          to_stage: "registered",
+          converted_visitors: 0,
+        }),
+      ]),
+    });
+
+    const continued = await fetch(url("/api/agent/register"), {
+      method: "POST",
+      headers: { ...browserHeaders, Cookie: browserA! },
+      body: "{}",
+    });
+    expect(continued.status).toBe(201);
+    expect(continued.headers.get("set-cookie")).toBeNull();
+    const apiOnly = await fetch(url("/api/agent/register"), {
+      method: "POST",
+      headers: { "User-Agent": "curl/8.0", "Content-Type": "application/json" },
+      body: "{}",
+    });
+    expect(apiOnly.status).toBe(201);
+    expect(apiOnly.headers.get("set-cookie")).toBeNull();
+    await vi.waitFor(async () => {
+      const rows = await pool.query(`SELECT COUNT(*)::int AS count FROM conversion_events WHERE utm_source = $1`, [source]);
+      expect(rows.rows[0].count).toBe(8);
+    });
+    const joined = await getAuthorizedFunnel();
+    const updated = joined.activation_review.by_utm_source.find((row: any) => row.campaign_source === source);
+    expect(updated.cohort_transitions.find((row: any) => row.from_stage === "primary_cta_clicked"))
+      .toMatchObject({ converted_visitors: 1 });
+    const stored = await pool.query(
+      `SELECT visitor_key, ip_hash, traffic_segment FROM conversion_events WHERE utm_source = $1`,
+      [source],
+    );
+    expect(stored.rows.every((row) => row.ip_hash === null)).toBe(true);
+    expect(new Set(stored.rows.map((row) => row.visitor_key).filter(Boolean)).size).toBe(2);
+    expect(stored.rows.filter((row) => row.traffic_segment === "api_client"))
+      .toEqual(expect.arrayContaining([expect.objectContaining({ visitor_key: null })]));
+    expect(joined.totals.unlinked_api_events).toBeGreaterThanOrEqual(2);
+    expect(joined.totals.unlinked_events).toBeGreaterThanOrEqual(2);
+    expect(JSON.stringify(joined)).not.toContain(browserA!.split("=")[1]);
+
+    // A known browser can switch client type without becoming two people in
+    // the overall review, even though it appears in two segment summaries.
+    const switchedClient = await fetch(url("/api/agent/register"), {
+      method: "POST",
+      headers: {
+        Cookie: browserA!, "User-Agent": "curl/8.0",
+        "Sec-Fetch-Site": "same-origin", "Content-Type": "application/json",
+      },
+      body: "{}",
+    });
+    expect(switchedClient.status).toBe(201);
+    await vi.waitFor(async () => {
+      const rows = await pool.query(`SELECT COUNT(*)::int AS count FROM conversion_events WHERE utm_source = $1`, [source]);
+      expect(rows.rows[0].count).toBe(10);
+    });
+    const afterSwitch = await getAuthorizedFunnel();
+    expect(afterSwitch.totals.visitors).toBe(joined.totals.visitors);
+    expect(afterSwitch.activation_review.overall.stages)
+      .toEqual(joined.activation_review.overall.stages);
+    expect(afterSwitch.activation_review.overall.cohort_transitions)
+      .toEqual(joined.activation_review.overall.cohort_transitions);
+  });
+
+  it("preserves bounded custom campaign labels without accepting sensitive-looking values", () => {
+    expect(safeConversionSource(" ProductHunt ")).toBe("ProductHunt");
+    expect(safeConversionSource("github")).toBe("github");
+    expect(safeConversionSource("partner-launch-2026")).toBe("partner-launch-2026");
+    expect(safeConversionSource("community_referral")).toBe("community_referral");
+    expect(safeConversionSource("sk_live_secret_value")).toBeNull();
+    expect(safeConversionSource("erd1accountidentifier")).toBeNull();
+    expect(safeConversionSource("person@example.com")).toBeNull();
+    expect(safeConversionSource(["producthunt"])).toBeNull();
+  });
+
+  it("preserves historical custom campaign and referrer values during schema migration", async () => {
+    const key = crypto.randomBytes(32).toString("hex");
+    seededTelemetryHashes.push(key);
+    await pool.query(
+      `INSERT INTO conversion_events
+         (event_type, stage, outcome, http_class, traffic_segment,
+          visitor_key, utm_source, referrer_host)
+       VALUES ('landing:hero_free_trial', 'cta', 'clicked', '0xx', 'human_browser',
+               $1, 'partner-launch-2026', 'partner.example.com')`,
+      [key],
+    );
+    await migrateConversionEventsTable();
+    const rows = await pool.query(
+      `SELECT utm_source, referrer_host FROM conversion_events WHERE visitor_key = $1`,
+      [key],
+    );
+    expect(rows.rows).toEqual([{ utm_source: "partner-launch-2026", referrer_host: "partner.example.com" }]);
+  });
+
+  it("excludes old IP-only rows from ordered journeys while retaining their event counts", async () => {
+    const before = await getAuthorizedFunnel();
+    const source = `legacy-shared-ip-${crypto.randomBytes(8).toString("hex")}`;
+    seededUtmSources.push(source);
+    const legacyHash = crypto.randomBytes(32).toString("hex");
+    await pool.query(
+      `INSERT INTO conversion_events
+         (event_type, stage, outcome, http_class, traffic_segment, ip_hash, utm_source, created_at)
+       VALUES
+         ('landing:hero_free_trial', 'cta', 'clicked', '0xx', 'human_browser', $1, $2, NOW() - INTERVAL '1 minute'),
+         ('registration_request', 'registration', 'success', '2xx', 'human_browser', $1, $2, NOW())`,
+      [legacyHash, source],
+    );
+    const body = await getAuthorizedFunnel();
+    expect(body.totals.events).toBe(before.totals.events + 2);
+    expect(body.totals.unlinked_events).toBe(before.totals.unlinked_events + 2);
+    expect(body.activation_review.by_utm_source.find((row: any) => row.campaign_source === source))
+      .toBeUndefined();
+  });
+
+  it("replaces an expired signed browser cookie rather than extending its identity", async () => {
+    const source = `expired-visitor-${crypto.randomBytes(8).toString("hex")}`;
+    seededUtmSources.push(source);
+    const issuedAt = Date.now() - 31 * 24 * 60 * 60 * 1000;
+    const random = crypto.randomBytes(16).toString("hex");
+    const payload = `v2.${issuedAt.toString(36)}.${random}`;
+    const signature = crypto.createHmac("sha256", process.env.SESSION_SECRET!)
+      .update("pba-conversion-cookie\0").update(payload).digest("hex");
+    const expired = `${payload}.${signature}`;
+    const response = await fetch(`${baseUrl}/api/conversion-visitor`, {
+      headers: {
+        Cookie: `pba_conversion_v2=${expired}`,
+        "User-Agent": "Mozilla/5.0 (conversion browser test)",
+        "Sec-Fetch-Site": "same-origin",
+      },
+    });
+    expect(response.status).toBe(204);
+    const fresh = response.headers.get("set-cookie")?.split(";")[0];
+    expect(fresh).toMatch(/^pba_conversion_v2=v2\./);
+    expect(fresh).not.toContain(expired);
+    const cta = await fetch(`${baseUrl}/api/conversion-events?utm_source=${source}`, {
+      method: "POST",
+      headers: {
+        Cookie: fresh!,
+        "Content-Type": "application/json",
+        "User-Agent": "Mozilla/5.0 (conversion browser test)",
+        "Sec-Fetch-Site": "same-origin",
+      },
+      body: JSON.stringify({ event: "cta_clicked", page: "landing", cta: "hero_free_trial" }),
+    });
+    expect(cta.status).toBe(202);
+    expect(cta.headers.get("set-cookie")).toBeNull();
+    await vi.waitFor(async () => {
+      const rows = await pool.query(
+        `SELECT visitor_key, ip_hash FROM conversion_events WHERE utm_source = $1`, [source],
+      );
+      expect(rows.rows).toHaveLength(1);
+      expect(rows.rows[0]).toMatchObject({ visitor_key: expect.any(String), ip_hash: null });
+    });
+  });
 
   it("rejects a request without an authenticated admin session", async () => {
     const response = await fetch(`${baseUrl}/api/admin/conversion-funnel`);
@@ -352,7 +578,7 @@ describe("GET /api/admin/conversion-funnel", () => {
     seededTelemetryHashes.push(...hashes);
     await pool.query(
       `INSERT INTO conversion_events
-         (event_type, stage, outcome, http_status, http_class, traffic_segment, ip_hash)
+         (event_type, stage, outcome, http_status, http_class, traffic_segment, visitor_key)
        VALUES
          ('landing:trial_register', 'cta', 'seen', NULL, '0xx', 'human_browser', $1),
          ('registration_request', 'registration', 'success', 202, '2xx', 'api_client', $2),
@@ -394,7 +620,7 @@ describe("GET /api/admin/conversion-funnel", () => {
     seededTelemetryHashes.push(hash);
     await pool.query(
       `INSERT INTO conversion_events
-         (event_type, stage, outcome, http_status, http_class, traffic_segment, ip_hash, utm_source)
+         (event_type, stage, outcome, http_status, http_class, traffic_segment, visitor_key, utm_source)
        VALUES
          ('landing:scenario_payment', 'cta', 'clicked', NULL, '0xx', 'human_browser', $1, $2),
          ('registration_request', 'registration', 'success', 202, '2xx', 'human_browser', $1, NULL),
@@ -437,7 +663,7 @@ describe("GET /api/admin/conversion-funnel", () => {
     for (const [index, source] of sources.entries()) {
       await pool.query(
         `INSERT INTO conversion_events
-           (event_type, stage, outcome, http_class, traffic_segment, ip_hash, utm_source)
+           (event_type, stage, outcome, http_class, traffic_segment, visitor_key, utm_source)
          VALUES ('landing:scenario_payment', 'cta', 'clicked', '0xx', 'human_browser', $1, $2)`,
         [hashes[index], source],
       );
@@ -468,7 +694,7 @@ describe("GET /api/admin/conversion-funnel", () => {
     expect(get("direct / unknown")?.original_sources).not.toContain("   ");
 
     const stored = await pool.query(
-      `SELECT utm_source FROM conversion_events WHERE ip_hash = $1`,
+      `SELECT utm_source FROM conversion_events WHERE visitor_key = $1`,
       [hashes[2]],
     );
     expect(stored.rows[0].utm_source).toBe("  PRODUCTHUNT  ");
@@ -497,13 +723,6 @@ describe("GET /api/admin/conversion-funnel", () => {
       headers: { "x-forwarded-for": ip },
       socket: { remoteAddress: ip },
     } as any;
-    const expectedHash = crypto
-      .createHmac("sha256", process.env.SESSION_SECRET!)
-      .update("pba-conversion-visitor-v1\0")
-      .update(ip, "utf8")
-      .digest("hex");
-    seededTelemetryHashes.push(expectedHash);
-
     const results = await Promise.all(
       Array.from({ length: 12 }, () =>
         recordProofVerificationMilestone(req, proofId, 2)
@@ -566,13 +785,6 @@ describe("GET /api/admin/conversion-funnel", () => {
         headers: { "x-forwarded-for": ip },
         socket: { remoteAddress: ip },
       } as any;
-      const expectedHash = crypto
-        .createHmac("sha256", process.env.SESSION_SECRET!)
-        .update("pba-conversion-visitor-v1\0")
-        .update(ip, "utf8")
-        .digest("hex");
-      seededTelemetryHashes.push(expectedHash);
-
       expect(await recordProofVerificationMilestone(req, proofId, ordinal)).toBe(true);
       await pool.query(
         `UPDATE conversion_events
@@ -702,8 +914,8 @@ describe("GET /api/admin/conversion-funnel", () => {
         },
         activation_review: {
           counting_model: {
-            stage_totals: "directional_distinct_visitors",
-            conversions: "same_visitor_adjacent_stages_in_order",
+            stage_totals: "directional_distinct_identified_browsers",
+            conversions: "same_browser_cookie_adjacent_stages_in_order",
             sequence_window_days: 30,
             transition_attribution: "upstream_traffic_segment",
           },

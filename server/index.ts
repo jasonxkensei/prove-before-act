@@ -20,7 +20,7 @@ import { warmCachesFromSnapshots, startTrustRefreshScheduler } from "./trust";
 import { startCoherenceDivergenceScheduler } from "./coherence-divergence";
 import { requestIdMiddleware, logger } from "./logger";
 import { x402PriceConfigWarning, x402NetworkConfigWarning } from "./routes/helpers";
-import { conversionOutcomeMiddleware } from "./conversion-telemetry";
+import { conversionOutcomeMiddleware, conversionVisitorMiddleware } from "./conversion-telemetry";
 import { initializeStripe } from "./stripe";
 import { getCanonicalPublicUrl, isLegacyPublicHost } from "./publicOrigin";
 import {
@@ -132,7 +132,7 @@ app.use("/mcp", (req: Request, res: Response, next: NextFunction) => {
 
 // Capture the two conversion-critical API request outcomes before parsing,
 // global rate limiting, and timeouts can send an early response.
-app.use(conversionOutcomeMiddleware);
+app.use(conversionVisitorMiddleware, conversionOutcomeMiddleware);
 
 // Skip JSON parsing for webhooks to preserve raw body for signature verification
 app.use((req, res, next) => {

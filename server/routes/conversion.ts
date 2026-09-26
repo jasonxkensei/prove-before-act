@@ -15,6 +15,13 @@ const ctaEventSchema = z.object({
 }).strict();
 
 export function registerConversionRoutes(app: Express) {
+  // Establish the browser identity once before concurrent exposure beacons.
+  // No identifier is returned to JavaScript; API-only requests never mint one.
+  app.get("/api/conversion-visitor", publicReadRateLimiter, (_req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    return res.status(204).end();
+  });
+
   app.post("/api/conversion-events", publicReadRateLimiter, (req, res) => {
     const parsed = ctaEventSchema.safeParse(req.body);
     if (!parsed.success) {

@@ -2,10 +2,10 @@ import crypto from "crypto";
 import type { NextFunction, Request, Response } from "express";
 import { db } from "./db";
 import { conversionEventDedupKeys, conversionEvents } from "@shared/schema";
-import { getClientIp } from "./routes/helpers";
 import { logger } from "./logger";
 import { persistConversionTelemetryWriteFailure, recordConversionTelemetryWriteFailure } from "./metrics";
 import { checkAndAlertConversionTelemetry } from "./conversionTelemetryAlerts";
+import { safeConversionSource } from "./conversion-source";
 
 export const CTA_EVENT_NAMES = ["cta_seen", "cta_clicked"] as const;
 export const CTA_PAGES = ["landing", "landing_zh", "leaderboard"] as const;
@@ -57,35 +57,79 @@ export function classifyTrafficSegment(req: Request): TrafficSegment {
   return "human_browser";
 }
 
-function getReferrerHost(req: Request): string | null {
-  const rawReferrer = req.get("referer") || req.get("referrer");
-  if (!rawReferrer) return null;
-  try {
-    const referrerHost = new URL(rawReferrer).hostname.toLowerCase();
-    const selfHost = (req.get("host") || "").toLowerCase().split(":")[0];
-    return referrerHost && referrerHost !== selfHost ? referrerHost.slice(0, 128) : null;
-  } catch {
-    return null;
-  }
-}
-
 export function httpClass(status: number | null): "0xx" | "2xx" | "3xx" | "4xx" | "5xx" {
   if (!status) return "0xx";
   return `${Math.floor(status / 100)}xx` as "2xx" | "3xx" | "4xx" | "5xx";
 }
 
-function visitorKey(req: Request): string {
+const VISITOR_COOKIE = "pba_conversion_v2";
+const VISITOR_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000;
+const visitorKeys = new WeakMap<Request, string>();
+
+function telemetrySecret(): string {
   const secret = process.env.SESSION_SECRET;
   if (!secret) {
-    // Startup already fails without this secret in getSession(); never degrade
-    // to a raw IP hash, an empty key, or a process-local random key.
     throw new Error("SESSION_SECRET is required for conversion telemetry");
   }
-  return crypto
-    .createHmac("sha256", secret)
-    .update("pba-conversion-visitor-v1\0")
-    .update(getClientIp(req), "utf8")
-    .digest("hex");
+  return secret;
+}
+
+function signedVisitorToken(issuedAt: number, random: string): string {
+  const payload = `v2.${issuedAt.toString(36)}.${random}`;
+  const signature = crypto.createHmac("sha256", telemetrySecret())
+    .update("pba-conversion-cookie\0").update(payload).digest("hex");
+  return `${payload}.${signature}`;
+}
+
+function validVisitorToken(token: string | undefined): string | null {
+  const parts = token?.match(/^v2\.([0-9a-z]+)\.([0-9a-f]{32})\.([0-9a-f]{64})$/);
+  if (!parts) return null;
+  const issuedAt = parseInt(parts[1], 36);
+  if (!Number.isSafeInteger(issuedAt) || issuedAt > Date.now() + 60_000
+    || Date.now() - issuedAt > VISITOR_LIFETIME_MS) return null;
+  const expected = signedVisitorToken(issuedAt, parts[2]);
+  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(token!)) ? parts[2] : null;
+}
+
+// Only conversion-related same-origin browser requests mint this cookie.
+// API clients and older IP-only rows remain visible but cannot join journeys.
+export function conversionVisitorMiddleware(req: Request, res: Response, next: NextFunction) {
+  const tracked = (req.method === "POST" && (
+    req.path === "/api/conversion-events"
+    || req.path === "/api/agent/register"
+    || req.path === "/api/proof"
+    || req.path === "/api/credits/stripe/checkout"
+    || req.path === "/api/checkout"
+    || req.path === "/api/credits/purchase"
+    || req.path === "/api/credits/confirm"
+  )) || (req.method === "GET" && (
+    req.path === "/api/conversion-visitor"
+    || /^\/api\/proof\/[^/]+$/.test(req.path)
+  ));
+  if (tracked && req.get("sec-fetch-site") === "same-origin") {
+    const cookie = req.get("cookie")?.split(";")
+      .map((part) => part.trim())
+      .find((part) => part.startsWith(`${VISITOR_COOKIE}=`))
+      ?.slice(VISITOR_COOKIE.length + 1);
+    let random = validVisitorToken(cookie);
+    if (!random && req.method === "GET"
+      && req.path === "/api/conversion-visitor"
+      && classifyTrafficSegment(req) === "human_browser") {
+      random = crypto.randomBytes(16).toString("hex");
+      res.cookie(VISITOR_COOKIE, signedVisitorToken(Date.now(), random), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        path: "/",
+        maxAge: VISITOR_LIFETIME_MS,
+      });
+    }
+    if (random) {
+      visitorKeys.set(req, crypto.createHmac("sha256", telemetrySecret())
+        .update("pba-conversion-visitor-v2\0").update(random).digest("hex"));
+    }
+  }
+  next();
 }
 
 export function recordConversionEvent(
@@ -97,11 +141,8 @@ export function recordConversionEvent(
     httpStatus?: number | null;
   },
 ): void {
-  const ipHash = visitorKey(req);
   const status = event.httpStatus ?? null;
-  const utmSource = typeof req.query.utm_source === "string"
-    ? req.query.utm_source.slice(0, 128)
-    : null;
+  const utmSource = safeConversionSource(req.query.utm_source);
 
   // Telemetry is non-blocking and never interferes with a conversion request.
   db.insert(conversionEvents).values({
@@ -111,8 +152,7 @@ export function recordConversionEvent(
     httpStatus: status,
     httpClass: httpClass(status),
     trafficSegment: classifyTrafficSegment(req),
-    ipHash,
-    referrerHost: getReferrerHost(req),
+    visitorKey: visitorKeys.get(req) ?? null,
     utmSource,
   }).catch(reportConversionTelemetryWriteFailure);
 }
@@ -175,11 +215,8 @@ export async function recordProofVerificationMilestone(
         httpStatus: status,
         httpClass: httpClass(status),
         trafficSegment: classifyTrafficSegment(req),
-        ipHash: visitorKey(req),
-        referrerHost: getReferrerHost(req),
-        utmSource: typeof req.query.utm_source === "string"
-          ? req.query.utm_source.slice(0, 128)
-          : null,
+        visitorKey: visitorKeys.get(req) ?? null,
+        utmSource: safeConversionSource(req.query.utm_source),
         dedupKey,
       });
       return true;

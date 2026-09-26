@@ -514,7 +514,10 @@ export const conversionEvents = pgTable("conversion_events", {
   httpStatus: integer("http_status"),
   httpClass: varchar("http_class", { length: 3 }).notNull(),
   trafficSegment: varchar("traffic_segment", { length: 32 }).notNull(),
-  ipHash: varchar("ip_hash", { length: 64 }).notNull(),
+  // Legacy IP-based keys expire with their rows; never use them to join journeys.
+  ipHash: varchar("ip_hash", { length: 64 }),
+  // HMAC of a signed, short-lived random browser token. Null means unlinked.
+  visitorKey: varchar("visitor_key", { length: 64 }),
   referrerHost: varchar("referrer_host", { length: 128 }),
   utmSource: varchar("utm_source", { length: 128 }),
   dedupKey: varchar("dedup_key", { length: 160 }),
@@ -524,6 +527,7 @@ export const conversionEvents = pgTable("conversion_events", {
   index("idx_conversion_events_day_segment").on(table.createdAt, table.trafficSegment),
   index("idx_conversion_events_day_http").on(table.createdAt, table.httpClass),
   index("idx_conversion_events_ip_time").on(table.ipHash, table.createdAt),
+  index("idx_conversion_events_visitor_time").on(table.visitorKey, table.createdAt),
   index("idx_conversion_events_dedup_lookup").on(table.dedupKey),
   check("conversion_events_stage_check", sql`stage IN ('cta', 'registration', 'proof', 'purchase')`),
   check("conversion_events_outcome_check", sql`outcome IN ('seen', 'clicked', 'started', 'success', 'failure')`),

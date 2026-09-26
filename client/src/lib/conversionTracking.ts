@@ -12,6 +12,26 @@ type CtaName =
   | "trial_register"
   | "leaderboard_register";
 type CtaEvent = "cta_seen" | "cta_clicked";
+let visitorReady: Promise<void> | null = null;
+
+export function ensureConversionVisitor(): Promise<void> {
+  if (!visitorReady) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 1500);
+    visitorReady = fetch("/api/conversion-visitor", {
+      credentials: "same-origin",
+      cache: "no-store",
+      keepalive: true,
+      signal: controller.signal,
+    }).then((response) => {
+      if (!response.ok) throw new Error("Conversion visitor setup unavailable");
+    }).catch(() => {
+      // Failed setup must not block product use or prevent event-only telemetry.
+      visitorReady = null;
+    }).finally(() => clearTimeout(timeout));
+  }
+  return visitorReady;
+}
 
 function wasTrackedThisSession(key: string): boolean {
   try {
@@ -35,25 +55,25 @@ export function trackAgentCta(event: CtaEvent, page: CtaPage, cta: CtaName) {
   const endpoint = utmSource
     ? `/api/conversion-events?${new URLSearchParams({ utm_source: utmSource })}`
     : "/api/conversion-events";
-  try {
-    if (navigator.sendBeacon) {
-      const accepted = navigator.sendBeacon(
-        endpoint,
-        new Blob([body], { type: "application/json" }),
-      );
-      // A false return means the browser rejected the beacon from its queue.
-      // Fall through to fetch so an exposure/click does not silently vanish.
-      if (accepted) return;
+  void ensureConversionVisitor().then(() => {
+    try {
+      if (navigator.sendBeacon) {
+        const accepted = navigator.sendBeacon(
+          endpoint,
+          new Blob([body], { type: "application/json" }),
+        );
+        if (accepted) return;
+      }
+      void fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+        keepalive: true,
+      });
+    } catch {
+      // Analytics is best effort only.
     }
-    void fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body,
-      keepalive: true,
-    });
-  } catch {
-    // Analytics is best effort only.
-  }
+  });
 }
 
 export function useAgentCtaExposure<T extends HTMLElement>(page: CtaPage, cta: CtaName) {

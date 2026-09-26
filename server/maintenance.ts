@@ -473,7 +473,8 @@ export async function migrateConversionEventsTable() {
         http_status INTEGER,
         http_class VARCHAR(3) NOT NULL,
         traffic_segment VARCHAR(32) NOT NULL,
-        ip_hash VARCHAR(64) NOT NULL,
+        ip_hash VARCHAR(64),
+        visitor_key VARCHAR(64),
         referrer_host VARCHAR(128),
         utm_source VARCHAR(128),
         dedup_key VARCHAR(160),
@@ -513,10 +514,13 @@ export async function migrateConversionEventsTable() {
         CHECK (stage IN ('cta', 'registration', 'proof', 'purchase'))
     `);
     await pool.query(`ALTER TABLE conversion_events ADD COLUMN IF NOT EXISTS dedup_key VARCHAR(160)`);
+    await pool.query(`ALTER TABLE conversion_events ADD COLUMN IF NOT EXISTS visitor_key VARCHAR(64)`);
+    await pool.query(`ALTER TABLE conversion_events ALTER COLUMN ip_hash DROP NOT NULL`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_conversion_events_day_funnel ON conversion_events (created_at, stage, outcome)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_conversion_events_day_segment ON conversion_events (created_at, traffic_segment)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_conversion_events_day_http ON conversion_events (created_at, http_class)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_conversion_events_ip_time ON conversion_events (ip_hash, created_at)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_conversion_events_visitor_time ON conversion_events (visitor_key, created_at)`);
     await pool.query(`DROP INDEX IF EXISTS idx_conversion_events_dedup_key`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_conversion_events_dedup_lookup ON conversion_events (dedup_key)`);
     await pool.query(`

@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select";
 import { formatDistanceToNow } from "date-fns";
 import { SHORTLIST_KEY, SHORTLIST_MAX, readShortlist, writeShortlist, clearShortlist, toggleWallet, shouldShowCompareBar, isCompareEnabled } from "@/lib/compare-shortlist";
-import { trackAgentCta, useAgentCtaExposure } from "@/lib/conversionTracking";
+import { ensureConversionVisitor, trackAgentCta, useAgentCtaExposure } from "@/lib/conversionTracking";
 import { trackEvent } from "@/lib/analytics";
 
 interface LeaderboardEntry {
@@ -161,6 +161,7 @@ export default function Leaderboard() {
 
   const registerMutation = useMutation({
     mutationFn: async () => {
+      await ensureConversionVisitor();
       const res = await fetch("/api/agent/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
