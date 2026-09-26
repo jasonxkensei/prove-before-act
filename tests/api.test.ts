@@ -41,11 +41,54 @@ describe("Prove Before Act API", () => {
       expect(text).toContain("Prove Before Act");
     });
 
-    it("GET /.well-known/xproof.md (legacy alias) returns the Prove Before Act specification", async () => {
-      const res = await fetch(`${BASE_URL}/.well-known/xproof.md`, { redirect: "follow" });
-      expect(res.status).toBe(200);
-      expect(res.headers.get("content-type")).toContain("text/markdown");
-      expect(await res.text()).toContain("Prove Before Act Specification");
+    it.each([
+      {
+        alias: "/.well-known/xproof.json",
+        target: "/.well-known/provebeforeact.json",
+        contentType: "application/json",
+      },
+      {
+        alias: "/.well-known/xproof.md",
+        target: "/.well-known/provebeforeact.md",
+        contentType: "text/markdown",
+      },
+    ])("GET $alias permanently redirects to $target and serves its canonical content", async ({
+      alias, target, contentType,
+    }) => {
+      const redirect = await fetch(`${BASE_URL}${alias}`, { redirect: "manual" });
+      expect(redirect.status, `${alias} must remain a permanent redirect`).toBe(301);
+      expect(redirect.headers.get("location"), `${alias} must redirect to ${target}`).toBe(target);
+
+      const [followed, canonical] = await Promise.all([
+        fetch(`${BASE_URL}${alias}`, { redirect: "follow" }),
+        fetch(`${BASE_URL}${target}`),
+      ]);
+      expect(followed.status, `${alias} must resolve successfully`).toBe(200);
+      expect(new URL(followed.url).pathname, `${alias} must resolve to ${target}`).toBe(target);
+      expect(canonical.status, `${target} must remain available`).toBe(200);
+      expect(followed.headers.get("content-type"), `${alias} content type`).toContain(contentType);
+      expect(canonical.headers.get("content-type"), `${target} content type`).toContain(contentType);
+
+      if (contentType === "application/json") {
+        const [body, canonicalBody] = await Promise.all([followed.json(), canonical.json()]);
+        for (const manifest of [body, canonicalBody]) {
+          expect(manifest.service, `${alias} discovery service`).toBe("Prove Before Act");
+          expect(manifest.specification_url, `${alias} specification link`).toBe(
+            "https://provebeforeact.com/standard",
+          );
+          expect(manifest.docs.spec, `${alias} Markdown specification link`).toBe(
+            "https://provebeforeact.com/.well-known/provebeforeact.md",
+          );
+        }
+      } else {
+        const [body, canonicalBody] = await Promise.all([followed.text(), canonical.text()]);
+        expect(body, `${alias} must serve the canonical specification`).toContain(
+          "# Prove Before Act Specification",
+        );
+        expect(canonicalBody, `${target} must serve the specification`).toContain(
+          "# Prove Before Act Specification",
+        );
+      }
     });
 
     it("GET /robots.txt should return robots content", async () => {
