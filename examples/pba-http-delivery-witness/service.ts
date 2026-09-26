@@ -1,5 +1,5 @@
 import { createHash, createPrivateKey, sign, type KeyObject } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { lstat, readFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import {
   buildPbaHttpDeliveryWitnessCanonical,
@@ -307,6 +307,10 @@ export function createRecipientWitnessServer(input: RecipientWitnessConfig): Ser
 
 export async function loadPrivateKeyFromFile(path: string): Promise<KeyObject> {
   if (!path || path.includes("\0")) throw new Error("private_key_file_required");
+  const file = await lstat(path);
+  if (!file.isFile() || (file.mode & 0o077) !== 0) {
+    throw new Error("witness private key must be a private regular file (mode 0600 or stricter)");
+  }
   const pem = await readFile(path, "utf8");
   const key = createPrivateKey(pem);
   if (key.asymmetricKeyType !== "ed25519") throw new Error("witness_private_key_must_be_ed25519");

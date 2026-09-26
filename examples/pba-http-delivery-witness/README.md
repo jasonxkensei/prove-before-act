@@ -12,10 +12,25 @@ outcome.
 
 1. Provision an Ed25519 private key in the recipient's own key-management
    process. Store its PEM outside the application checkout with restrictive
-   filesystem/secret-manager access. This service never generates, persists,
+    filesystem/secret-manager access (`0600` or stricter regular file). This service never generates, persists,
    prints, or returns private keys. Register the corresponding raw Ed25519
    public key and configured witness ID with the verifier operator out of band.
-2. Implement a partner-owned ESM module at an absolute path. It must export
+    After setting the witness configuration below, run
+    `npx tsx examples/pba-http-delivery-witness/show-public-key.ts` **on the
+    recipient's machine**. Share only its JSON output after the verifier
+    operator has independently confirmed the recipient's control of the HTTPS
+    origin. Do not send the private PEM to xProof or paste it into a request.
+2. For a digest-only pilot, use the included `pilot-acceptor.ts` and set
+   `PBA_WITNESS_STORE_DIR` to an absolute, recipient-owned private directory
+   (mode `0700`). It durably records the nonce, body digest, and WHY reference,
+   never the raw body; this acceptance **does not** prove any later business
+   action. Reservations are atomic across processes and retained across
+   restarts. A reservation without an `accepted.json` file after a crash
+   requires manual investigation before retrying; never blindly clear a
+   possibly accepted nonce.
+
+   For an actual recipient application, replace the pilot module with a
+   partner-owned ESM module at an absolute path. It must export
    `async function acceptDelivery({ body, bodyDigest, nonce, whyTxHash,
    recipientOrigin, path })`. Resolve only after the recipient's actual durable
    acceptance has succeeded; throw or return `false` to reject. The `body` is
@@ -37,12 +52,14 @@ outcome.
    PBA_WITNESS_ORIGIN='https://recipient.example' \
    PBA_WITNESS_NETWORK='mainnet' \
    PBA_WITNESS_PRIVATE_KEY_FILE='/secure/path/recipient-ed25519.pem' \
-   PBA_WITNESS_ACCEPT_MODULE='/secure/path/recipient-acceptor.mjs' \
+    PBA_WITNESS_ACCEPT_MODULE='./examples/pba-http-delivery-witness/pilot-acceptor.ts' \
+    PBA_WITNESS_STORE_DIR='/secure/path/pilot-deliveries' \
    PBA_WITNESS_TLS_TERMINATED=true \
    npx tsx examples/pba-http-delivery-witness/server.ts
    ```
 
-   `PBA_WITNESS_NETWORK` must be `mainnet`, `testnet`, or `devnet`; the URL is
+    For an isolated pilot, use `devnet` rather than `mainnet`.
+    `PBA_WITNESS_NETWORK` must be `mainnet`, `testnet`, or `devnet`; the URL is
    selected internally and is never supplied by a request. Optional listener
    settings are `PBA_WITNESS_BIND_HOST` (default `127.0.0.1`),
    `PBA_WITNESS_PORT` (default `8787`), and `PBA_WITNESS_PATH` (default

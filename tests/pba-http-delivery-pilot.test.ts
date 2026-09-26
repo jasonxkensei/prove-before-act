@@ -7,6 +7,7 @@ import {
 } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
+import { signPbaPayload, verifyPbaSignedRecord } from "../server/pba-attestation";
 import {
   buildPbaAnchorPayload,
   buildPbaIdentityCanonical,
@@ -324,6 +325,45 @@ describe("pba-http-delivery-v1 isolated end-to-end pilot", () => {
     const serializedEvidence = JSON.stringify(publicEvidence);
     expect(serializedEvidence).not.toContain(rawPostBody.toString("utf8"));
     expect(serializedEvidence).not.toContain("opaque raw bytes");
+
+    // The same examination evidence is included in the public attestation.
+    // Sign with a throwaway test issuer, never the configured production key.
+    const issuerKey = createEd25519Key();
+    const oldPem = process.env.PBA_VERIFIED_SIGNING_KEY_PEM;
+    const oldKeyId = process.env.PBA_VERIFIED_KEY_ID;
+    let signed: ReturnType<typeof signPbaPayload>;
+    try {
+      process.env.PBA_VERIFIED_SIGNING_KEY_PEM = issuerKey.privateKey.export({
+        format: "pem", type: "pkcs8",
+      }).toString();
+      process.env.PBA_VERIFIED_KEY_ID = "isolated-pilot-only";
+      signed = signPbaPayload({
+        id: "00000000-0000-4000-8000-000000000010",
+        profile: examination.profile,
+        request_digest: examination.request_digest,
+        subject: examination.subject,
+        origin: examination.origin,
+        verdicts: examination.verdicts,
+        verified: examination.verified,
+        evidence: examination.evidence,
+        issued_at: "2025-01-01T00:00:05.000Z",
+        receipt: { mode: "development_preview", note: "Isolated pilot: no payment." },
+      });
+    } finally {
+      if (oldPem === undefined) delete process.env.PBA_VERIFIED_SIGNING_KEY_PEM;
+      else process.env.PBA_VERIFIED_SIGNING_KEY_PEM = oldPem;
+      if (oldKeyId === undefined) delete process.env.PBA_VERIFIED_KEY_ID;
+      else process.env.PBA_VERIFIED_KEY_ID = oldKeyId;
+    }
+    expect(verifyPbaSignedRecord(signed.canonical, signed.signature, signed.publicKey)).toBe(true);
+    const published = JSON.parse(signed.canonical.slice("PBA-VERIFIED-ATTESTATION|v1\n".length));
+    expect(published.profile).toBe("pba-http-delivery-v1");
+    expect(published.evidence.receipt.witness_public_key).toBe(witnessKey.id);
+    expect(published.evidence.disclosures.what.proof.metadata).toEqual({
+      pba_http_delivery_receipt_digest: publicEvidence.receipt.digest,
+    });
+    expect(signed.canonical).not.toContain(rawPostBody.toString("utf8"));
+    expect(signed.canonical).not.toContain("opaque raw bytes");
   });
 
   it("does not produce a receipt or green-capable envelope when the recipient rejects acceptance", async () => {
