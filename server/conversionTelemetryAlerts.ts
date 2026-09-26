@@ -2,7 +2,8 @@ import { logger } from "./logger";
 import {
   getConversionTelemetryPurgeStats,
   getSharedConversionTelemetryWriteFailureStats,
-  CONVERSION_TELEMETRY_FAILURE_HEALTH_WINDOW_MS,
+  claimConversionTelemetryFailureAlert,
+  settleConversionTelemetryFailureAlert,
 } from "./metrics";
 import { alertWebhookHeaders } from "./webhookHeaders";
 
@@ -88,6 +89,7 @@ const conversionTelemetryAlertConfig = {
 };
 
 let conversionTelemetryLastAlertSentAt = 0;
+let conversionTelemetryNextLocalAttemptAt = 0;
 let conversionTelemetryAlertInFlight: Promise<void> | null = null;
 let conversionTelemetryPurgeAlertActive = false;
 let conversionTelemetryPurgeAlertInFlight: Promise<void> | null = null;
@@ -96,14 +98,25 @@ async function checkAndAlertConversionTelemetryImpl(): Promise<void> {
   if (!conversionTelemetryAlertConfig.webhookUrl) return;
 
   const now = Date.now();
-  if (now - conversionTelemetryLastAlertSentAt < conversionTelemetryAlertConfig.cooldownMinutes * 60_000) {
-    return;
-  }
+  if (now < conversionTelemetryNextLocalAttemptAt) return;
 
   const stats = await getSharedConversionTelemetryWriteFailureStats(
     conversionTelemetryAlertConfig.windowMinutes * 60_000,
   );
   if (stats.recent_failures < conversionTelemetryAlertConfig.failureThreshold) return;
+
+  let claim: string | null = null;
+  let coordinated = true;
+  try {
+    claim = await claimConversionTelemetryFailureAlert();
+  } catch (error) {
+    coordinated = false;
+    logger.error("Conversion telemetry alert coordination unavailable; using local fallback", {
+      component: "conversion-telemetry-alerts",
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+  if (coordinated && !claim) return;
 
   const severity: "warning" | "critical" =
     stats.recent_failures >= conversionTelemetryAlertConfig.failureThreshold * 3
@@ -118,15 +131,35 @@ async function checkAndAlertConversionTelemetryImpl(): Promise<void> {
     threshold: conversionTelemetryAlertConfig.failureThreshold,
   };
 
-  await sendAlertWebhook(conversionTelemetryAlertConfig.webhookUrl, payload);
-  conversionTelemetryLastAlertSentAt = now;
-  logger.warn("Conversion telemetry write-failure alert sent", {
-    component: "conversion-telemetry-alerts",
-    severity,
-    failedWrites: stats.recent_failures,
-    threshold: conversionTelemetryAlertConfig.failureThreshold,
-    windowMinutes: conversionTelemetryAlertConfig.windowMinutes,
-  });
+  const delivered = await sendAlertWebhook(conversionTelemetryAlertConfig.webhookUrl, payload);
+  const waitMs = delivered
+    ? Math.max(1_000, conversionTelemetryAlertConfig.cooldownMinutes * 60_000)
+    : Math.min(60_000, Math.max(1_000, conversionTelemetryAlertConfig.cooldownMinutes * 60_000));
+  const finishedAt = Date.now();
+  conversionTelemetryNextLocalAttemptAt = finishedAt + waitMs;
+  if (delivered) conversionTelemetryLastAlertSentAt = finishedAt;
+
+  if (claim) {
+    try {
+      await settleConversionTelemetryFailureAlert(claim, delivered, waitMs);
+    } catch (error) {
+      logger.error("Conversion telemetry alert coordination could not record delivery outcome", {
+        component: "conversion-telemetry-alerts",
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+  logger[delivered ? "warn" : "error"](
+    delivered ? "Conversion telemetry write-failure alert sent" : "Conversion telemetry write-failure alert delivery will be retried",
+    {
+      component: "conversion-telemetry-alerts",
+      severity,
+      failedWrites: stats.recent_failures,
+      threshold: conversionTelemetryAlertConfig.failureThreshold,
+      windowMinutes: conversionTelemetryAlertConfig.windowMinutes,
+      coordinated,
+    },
+  );
 }
 
 export function checkAndAlertConversionTelemetry(): Promise<void> {

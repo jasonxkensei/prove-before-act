@@ -494,6 +494,15 @@ export async function migrateConversionEventsTable() {
         ON conversion_telemetry_write_failures(occurred_at)
     `);
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS conversion_telemetry_alert_state (
+        alert_key TEXT PRIMARY KEY,
+        lease_token TEXT,
+        lease_until TIMESTAMP WITH TIME ZONE,
+        next_attempt_at TIMESTAMP WITH TIME ZONE,
+        last_sent_at TIMESTAMP WITH TIME ZONE
+      )
+    `);
+    await pool.query(`
       DELETE FROM conversion_telemetry_write_failures
       WHERE occurred_at < NOW() - INTERVAL '1 hour'
     `);

@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { pool } from "./db";
 
 const startTime = Date.now();
@@ -216,6 +217,46 @@ export async function getSharedConversionTelemetryWriteFailureStats(
     };
   } catch {
     return { ...local, storage_unavailable: true };
+  }
+}
+
+const CONVERSION_FAILURE_ALERT_KEY = "conversion_telemetry_write_failures";
+// The webhook times out after 10 seconds; a 30-second lease lets an instance
+// recover a crashed sender without racing a healthy in-flight delivery.
+const CONVERSION_FAILURE_ALERT_LEASE_MS = 30_000;
+
+/** Atomic cross-instance claim. Null means another instance holds the lease or cooldown. */
+export async function claimConversionTelemetryFailureAlert(): Promise<string | null> {
+  const token = crypto.randomUUID();
+  const result = await pool.query<{ lease_token: string }>(`
+    INSERT INTO conversion_telemetry_alert_state (alert_key, lease_token, lease_until)
+    VALUES ($1, $2, NOW() + ($3::double precision * INTERVAL '1 millisecond'))
+    ON CONFLICT (alert_key) DO UPDATE
+      SET lease_token = EXCLUDED.lease_token, lease_until = EXCLUDED.lease_until
+    WHERE (conversion_telemetry_alert_state.lease_until IS NULL
+           OR conversion_telemetry_alert_state.lease_until <= NOW())
+      AND (conversion_telemetry_alert_state.next_attempt_at IS NULL
+           OR conversion_telemetry_alert_state.next_attempt_at <= NOW())
+    RETURNING lease_token
+  `, [CONVERSION_FAILURE_ALERT_KEY, token, CONVERSION_FAILURE_ALERT_LEASE_MS]);
+  return result.rows[0]?.lease_token === token ? token : null;
+}
+
+/** Only the lease owner can finish; success gets cooldown, failure gets retry backoff. */
+export async function settleConversionTelemetryFailureAlert(
+  token: string,
+  delivered: boolean,
+  waitMs: number,
+): Promise<void> {
+  const result = await pool.query(`
+    UPDATE conversion_telemetry_alert_state
+    SET lease_token = NULL, lease_until = NULL,
+        last_sent_at = CASE WHEN $3::boolean THEN NOW() ELSE last_sent_at END,
+        next_attempt_at = NOW() + ($4::double precision * INTERVAL '1 millisecond')
+    WHERE alert_key = $1 AND lease_token = $2
+  `, [CONVERSION_FAILURE_ALERT_KEY, token, delivered, waitMs]);
+  if (result.rowCount !== 1) {
+    throw new Error("Conversion telemetry alert lease was lost before completion");
   }
 }
 

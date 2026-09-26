@@ -539,6 +539,16 @@ export const conversionTelemetryWriteFailures = pgTable("conversion_telemetry_wr
   index("idx_conversion_telemetry_write_failures_at").on(table.occurredAt),
 ]);
 
+// One durable coordination record for conversion write-failure alerts.
+// A short lease guards delivery; nextAttemptAt holds either cooldown or retry backoff.
+export const conversionTelemetryAlertState = pgTable("conversion_telemetry_alert_state", {
+  alertKey: text("alert_key").primaryKey(),
+  leaseToken: text("lease_token"),
+  leaseUntil: timestamp("lease_until", { withTimezone: true }),
+  nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }),
+  lastSentAt: timestamp("last_sent_at", { withTimezone: true }),
+});
+
 export type ConversionEvent = typeof conversionEvents.$inferSelect;
 
 // Proof-scoped idempotency markers. These contain no visitor, request,

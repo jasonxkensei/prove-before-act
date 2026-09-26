@@ -2,6 +2,41 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const ORIGINAL_ENV = { ...process.env };
 
+function sharedAlertStore(recentFailures = 3) {
+  const state = {
+    leaseToken: null as string | null,
+    leaseUntil: 0,
+    nextAttemptAt: 0,
+    lastSentAt: 0,
+  };
+  const query = vi.fn(async (statement: string, values?: unknown[]) => {
+    if (statement.includes("FROM conversion_telemetry_write_failures")) {
+      return {
+        rows: [{ recent_failures: String(recentFailures), last_failure_at: new Date() }],
+        rowCount: 1,
+      };
+    }
+    if (statement.includes("INSERT INTO conversion_telemetry_alert_state")) {
+      if (state.leaseUntil > Date.now() || state.nextAttemptAt > Date.now()) {
+        return { rows: [], rowCount: 0 };
+      }
+      state.leaseToken = values![1] as string;
+      state.leaseUntil = Date.now() + Number(values![2]);
+      return { rows: [{ lease_token: state.leaseToken }], rowCount: 1 };
+    }
+    if (statement.includes("UPDATE conversion_telemetry_alert_state")) {
+      if (values![1] !== state.leaseToken) return { rows: [], rowCount: 0 };
+      state.leaseToken = null;
+      state.leaseUntil = 0;
+      state.nextAttemptAt = Date.now() + Number(values![3]);
+      if (values![2]) state.lastSentAt = Date.now();
+      return { rows: [], rowCount: 1 };
+    }
+    throw new Error(`Unexpected alert query: ${statement}`);
+  });
+  return { state, query };
+}
+
 describe("conversion telemetry write health", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -191,6 +226,7 @@ describe("conversion telemetry sustained-failure alerts", () => {
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.useRealTimers();
     vi.unstubAllGlobals();
   });
@@ -201,10 +237,8 @@ describe("conversion telemetry sustained-failure alerts", () => {
 
     const metrics = await import("../server/metrics");
     const { pool } = await import("../server/db");
-    vi.spyOn(pool, "query").mockResolvedValue({
-      rows: [{ recent_failures: "0", last_failure_at: null }],
-      rowCount: 1,
-    } as any);
+    const store = sharedAlertStore(0);
+    vi.spyOn(pool, "query").mockImplementation(store.query as any);
     const { checkAndAlertConversionTelemetry, getConversionTelemetryAlertConfig } =
       await import("../server/conversionTelemetryAlerts");
 
@@ -239,6 +273,119 @@ describe("conversion telemetry sustained-failure alerts", () => {
     metrics.recordConversionTelemetryWriteFailure();
     await checkAndAlertConversionTelemetry();
     expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("shares the delivery lease and cooldown across concurrent instances and restarts", async () => {
+    const store = sharedAlertStore();
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const { pool: firstPool } = await import("../server/db");
+    vi.spyOn(firstPool, "query").mockImplementation(store.query as any);
+    const first = await import("../server/conversionTelemetryAlerts");
+    vi.resetModules();
+    const { pool: secondPool } = await import("../server/db");
+    vi.spyOn(secondPool, "query").mockImplementation(store.query as any);
+    const second = await import("../server/conversionTelemetryAlerts");
+
+    await Promise.all([
+      first.checkAndAlertConversionTelemetry(),
+      second.checkAndAlertConversionTelemetry(),
+    ]);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(store.state.lastSentAt).toBe(Date.now());
+    expect(store.state.leaseToken).toBeNull();
+
+    vi.resetModules();
+    const { pool: restartedPool } = await import("../server/db");
+    vi.spyOn(restartedPool, "query").mockImplementation(store.query as any);
+    const restarted = await import("../server/conversionTelemetryAlerts");
+    await restarted.checkAndAlertConversionTelemetry();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+    vi.advanceTimersByTime(30 * 60_000 + 1);
+    await restarted.checkAndAlertConversionTelemetry();
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("recovers a claim left by a crashed instance after its bounded lease expires", async () => {
+    const store = sharedAlertStore();
+    const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 200 });
+    vi.stubGlobal("fetch", fetchSpy);
+    const { pool } = await import("../server/db");
+    vi.spyOn(pool, "query").mockImplementation(store.query as any);
+    const { claimConversionTelemetryFailureAlert } = await import("../server/metrics");
+    const abandonedClaim = await claimConversionTelemetryFailureAlert();
+    expect(abandonedClaim).toBeTruthy();
+
+    vi.resetModules();
+    const { pool: restartedPool } = await import("../server/db");
+    vi.spyOn(restartedPool, "query").mockImplementation(store.query as any);
+    const { checkAndAlertConversionTelemetry } = await import("../server/conversionTelemetryAlerts");
+    await checkAndAlertConversionTelemetry();
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(30_001);
+    await checkAndAlertConversionTelemetry();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(store.state.leaseToken).toBeNull();
+  });
+
+  it("retries a failed webhook after a shared backoff instead of cooling down a missed alert", async () => {
+    const store = sharedAlertStore();
+    const fetchSpy = vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 503 })
+      .mockResolvedValue({ ok: true, status: 200 });
+    vi.stubGlobal("fetch", fetchSpy);
+    const { pool } = await import("../server/db");
+    vi.spyOn(pool, "query").mockImplementation(store.query as any);
+    const { checkAndAlertConversionTelemetry } = await import("../server/conversionTelemetryAlerts");
+    await checkAndAlertConversionTelemetry();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(store.state.lastSentAt).toBe(0);
+
+    vi.resetModules();
+    const { pool: restartedPool } = await import("../server/db");
+    vi.spyOn(restartedPool, "query").mockImplementation(store.query as any);
+    const restarted = await import("../server/conversionTelemetryAlerts");
+    await restarted.checkAndAlertConversionTelemetry();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(60_001);
+    await restarted.checkAndAlertConversionTelemetry();
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(store.state.lastSentAt).toBe(Date.now());
+  });
+
+  it("logs a coordination outage and uses bounded local delivery instead of suppressing the alert", async () => {
+    const fetchSpy = vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 503 })
+      .mockResolvedValue({ ok: true, status: 200 });
+    vi.stubGlobal("fetch", fetchSpy);
+    const { pool } = await import("../server/db");
+    vi.spyOn(pool, "query").mockImplementation(async (statement: string) => {
+      if (statement.includes("FROM conversion_telemetry_write_failures")) {
+        return { rows: [{ recent_failures: "3", last_failure_at: new Date() }], rowCount: 1 } as any;
+      }
+      throw new Error("coordination store unavailable");
+    });
+    const { logger } = await import("../server/logger");
+    const errorLog = vi.spyOn(logger, "error").mockImplementation(() => {});
+    const { checkAndAlertConversionTelemetry } = await import("../server/conversionTelemetryAlerts");
+
+    await checkAndAlertConversionTelemetry();
+    await checkAndAlertConversionTelemetry();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(59_999);
+    await checkAndAlertConversionTelemetry();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(1);
+    await checkAndAlertConversionTelemetry();
+    await checkAndAlertConversionTelemetry();
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(errorLog).toHaveBeenCalledWith(
+      "Conversion telemetry alert coordination unavailable; using local fallback",
+      expect.objectContaining({ component: "conversion-telemetry-alerts" }),
+    );
   });
 });
 
