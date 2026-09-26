@@ -1495,7 +1495,7 @@ async def handle(ctx: Context, sender: str, msg: MyMessage):
 
   return (
     <div className="min-h-screen bg-background">
-      <PublicSiteHeader primaryActionHref="/#free-trial" />
+      <PublicSiteHeader />
 
       <main className="container py-10 max-w-4xl">
         {/* Page header */}

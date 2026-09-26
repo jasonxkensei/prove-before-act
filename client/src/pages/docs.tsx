@@ -855,7 +855,7 @@ export default function DocsPage() {
     <>
       <style>{DOC_STYLES}</style>
     <div className="pba-docs-root min-h-screen bg-background">
-      <PublicSiteHeader primaryActionHref="/#free-trial" />
+      <PublicSiteHeader />
 
       <div className="container py-10 max-w-4xl mx-auto">
         <div className="mb-8 flex flex-wrap items-center justify-center gap-2">

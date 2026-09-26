@@ -382,7 +382,6 @@ export default function Landing() {
     <div className="page-shell min-w-0 max-w-full overflow-x-hidden">
       <PublicSiteHeader
         howItWorksHref="#how-it-works"
-        primaryActionHref="#free-trial"
         onConnect={() => handleConnect()}
       />
       {/* Hero — thesis and evidence case file */}

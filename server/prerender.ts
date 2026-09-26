@@ -14,6 +14,7 @@ import { PBA_HTTP_DELIVERY_PROFILE } from "./pba-http-delivery";
 import {
   PUBLIC_FOOTER_COLUMNS,
   PUBLIC_MORE_NAV,
+  PUBLIC_PRIMARY_CTA,
   PUBLIC_PRIMARY_NAV,
   PUBLIC_SITE_NAME,
 } from "@shared/public-site";
@@ -166,7 +167,7 @@ function renderPublicHeader(baseUrl: string, { paper = false }: { paper?: boolea
         </summary>
         <div class="public-site-more-menu">${moreLinks}</div>
       </details>
-      <a class="public-site-cta" href="${escapeHtml(publicHref(baseUrl, "/#free-trial"))}">Start free</a>
+      <a class="public-site-cta" href="${escapeHtml(publicHref(baseUrl, PUBLIC_PRIMARY_CTA.href))}">${escapeHtml(PUBLIC_PRIMARY_CTA.label)}</a>
     </nav>
     <div class="public-site-actions">
       <a class="public-site-language" href="${escapeHtml(publicHref(baseUrl, "/zh"))}">中文</a>

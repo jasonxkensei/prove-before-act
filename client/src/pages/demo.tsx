@@ -121,9 +121,7 @@ export default function DemoPage() {
 
   return (
     <div className="page-shell min-h-[100dvh]">
-      <PublicSiteHeader
-        primaryActionHref="/#free-trial"
-      />
+      <PublicSiteHeader />
 
       <main id="main-content">
         <section className="border-b border-border bg-background px-5 py-12 md:px-12 md:py-20 lg:px-[9vw]">

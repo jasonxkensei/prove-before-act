@@ -13,13 +13,13 @@ import {
 import {
   PUBLIC_FOOTER_COLUMNS,
   PUBLIC_MORE_NAV,
+  PUBLIC_PRIMARY_CTA,
   PUBLIC_PRIMARY_NAV,
   PUBLIC_SITE_NAME,
 } from "@shared/public-site";
 
 type PublicSiteHeaderProps = {
   howItWorksHref?: string;
-  primaryActionHref?: string;
   onConnect?: () => void;
   paper?: boolean;
 };
@@ -29,7 +29,6 @@ const primaryLinkClass =
 
 export function PublicSiteHeader({
   howItWorksHref = "/#how-it-works",
-  primaryActionHref = "/#free-trial",
   onConnect,
   paper = false,
 }: PublicSiteHeaderProps) {
@@ -75,13 +74,8 @@ export function PublicSiteHeader({
   const handlePrimaryActionClick = (surface: "desktop" | "mobile") => {
     trackEvent("public_primary_cta_clicked", {
       page: window.location.pathname,
-      destination: primaryActionHref,
+      destination: PUBLIC_PRIMARY_CTA.href,
       surface,
-    });
-    const hash = primaryActionHref.startsWith("#") ? primaryActionHref.slice(1) : null;
-    if (!hash) return;
-    requestAnimationFrame(() => {
-      document.getElementById(hash)?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   };
 
@@ -141,23 +135,23 @@ export function PublicSiteHeader({
             </DropdownMenuContent>
           </DropdownMenu>
           <a
-            href={primaryActionHref}
+            href={PUBLIC_PRIMARY_CTA.href}
             onClick={() => handlePrimaryActionClick("desktop")}
             className="rounded-md border border-primary/20 bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/20"
             data-testid="link-nav-start-free"
           >
-            Start free
+            {PUBLIC_PRIMARY_CTA.label}
           </a>
         </nav>
 
         <div className="flex items-center gap-2 sm:gap-3">
           <a
-            href={primaryActionHref}
+            href={PUBLIC_PRIMARY_CTA.href}
             onClick={() => handlePrimaryActionClick("mobile")}
             className="min-h-11 rounded-md border border-primary/25 bg-primary/10 px-3 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/20 md:hidden"
             data-testid="link-nav-start-free-mobile"
           >
-            Start free
+            {PUBLIC_PRIMARY_CTA.label}
           </a>
           <a
             href="/zh"

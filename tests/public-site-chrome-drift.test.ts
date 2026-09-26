@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import {
   PUBLIC_FOOTER_COLUMNS,
   PUBLIC_MORE_NAV,
+  PUBLIC_PRIMARY_CTA,
   PUBLIC_PRIMARY_NAV,
 } from "@shared/public-site";
 
@@ -32,9 +33,15 @@ describe("shared public-site chrome", () => {
     for (const source of [component, prerender]) {
       expect(source).toContain("@shared/public-site");
       expect(source).toContain("PUBLIC_PRIMARY_NAV");
+      expect(source).toContain("PUBLIC_PRIMARY_CTA");
       expect(source).toContain("PUBLIC_MORE_NAV");
       expect(source).toContain("PUBLIC_FOOTER_COLUMNS");
     }
+    expect(component).not.toContain("primaryActionHref");
+    expect(component.match(/href=\{PUBLIC_PRIMARY_CTA\.href\}/g)).toHaveLength(2);
+    expect(component.match(/\{PUBLIC_PRIMARY_CTA\.label\}/g)).toHaveLength(2);
+    expect(prerender).toContain("publicHref(baseUrl, PUBLIC_PRIMARY_CTA.href)");
+    expect(prerender).toContain("escapeHtml(PUBLIC_PRIMARY_CTA.label)");
     expect(prerender).toContain("renderPublicHeader");
     expect(prerender).toContain("renderPublicFooter");
     expect(prerender).toContain('/favicon-new.png" sizes="131x129"');
@@ -56,6 +63,11 @@ describe("shared public-site chrome", () => {
 
       expect(html).toContain('class="public-site-header');
       expect(html).toContain('class="public-site-footer');
+      const cta = html.match(/<a class="public-site-cta" href="([^"]+)">([^<]+)<\/a>/);
+      expect(cta).not.toBeNull();
+      expect(cta?.[2]).toBe(PUBLIC_PRIMARY_CTA.label);
+      const destination = new URL(cta![1]);
+      expect(`${destination.pathname}${destination.hash}`).toBe(PUBLIC_PRIMARY_CTA.href);
       expect(html).toContain('<link rel="icon" href="/favicon-new.png" sizes="131x129" type="image/png">');
       for (const { label } of PUBLIC_PRIMARY_NAV) expect(html).toContain(`>${label}</a>`);
       for (const { label } of PUBLIC_MORE_NAV) expect(html).toContain(`>${label}</a>`);

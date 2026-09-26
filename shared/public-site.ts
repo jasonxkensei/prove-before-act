@@ -1,5 +1,7 @@
 export const PUBLIC_SITE_NAME = "Prove Before Act";
 
+export const PUBLIC_PRIMARY_CTA = { href: "/#free-trial", label: "Start free" } as const;
+
 export const PUBLIC_PRIMARY_NAV = [
   { href: "/#how-it-works", label: "How it works" },
   { href: "/standard", label: "Standard" },
