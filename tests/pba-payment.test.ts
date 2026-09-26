@@ -2,17 +2,17 @@ import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 import express from "express";
 import supertest from "supertest";
 
-const { mockVerify, mockSettle } = vi.hoisted(() => ({
+const { mockVerify, mockSettle, mockCreateCdpFacilitatorClient } = vi.hoisted(() => ({
   mockVerify: vi.fn(),
   mockSettle: vi.fn(),
+  mockCreateCdpFacilitatorClient: vi.fn(() => ({
+    verify: (...args: unknown[]) => mockVerify(...args),
+    settle: (...args: unknown[]) => mockSettle(...args),
+  })),
 }));
 
-vi.mock("@x402/express", () => ({
-  x402ResourceServer: class {
-    register() {
-      return this;
-    }
-
+vi.mock("@x402/core/server", () => ({
+  HTTPFacilitatorClient: class {
     async verify(...args: unknown[]) {
       return mockVerify(...args);
     }
@@ -22,8 +22,10 @@ vi.mock("@x402/express", () => ({
     }
   },
 }));
-vi.mock("@x402/evm/exact/server", () => ({ ExactEvmScheme: class {} }));
-vi.mock("@x402/core/server", () => ({ HTTPFacilitatorClient: class {} }));
+vi.mock("@coinbase/cdp-sdk/x402", () => ({
+  CDP_FACILITATOR_URL: "https://api.cdp.coinbase.com/platform/v2/x402",
+  createCdpFacilitatorClient: mockCreateCdpFacilitatorClient,
+}));
 
 import {
   makePbaPaymentQuote,
@@ -48,11 +50,14 @@ beforeEach(() => {
   vi.stubEnv("X402_PAY_TO", PAY_TO);
   vi.stubEnv("X402_NETWORK", "eip155:8453");
   vi.stubEnv("X402_FACILITATOR_URL", "https://facilitator.example");
+  vi.stubEnv("CDP_API_KEY_ID", "");
+  vi.stubEnv("CDP_API_KEY_SECRET", "");
+  mockCreateCdpFacilitatorClient.mockClear();
   mockVerify.mockReset().mockResolvedValue({ isValid: true });
   mockSettle.mockReset().mockResolvedValue({
     success: true,
     transaction: TRANSACTION_HASH,
-    network: "eip155:8453",
+    network: "base",
   });
 });
 
@@ -118,12 +123,13 @@ describe("makePbaPaymentQuote", () => {
     expect(quote.accepts).toEqual([expect.objectContaining({
       scheme: "exact",
       price: "$1.25",
-      network: "eip155:8453",
+      network: "base",
       maxAmountRequired: "1250000",
       asset: BASE_USDC,
       resource: `${BASE_URL}/api/pba/verify?digest=${DIGEST}`,
       payTo: PAY_TO,
       maxTimeoutSeconds: 60,
+      extra: { name: "USD Coin", version: "2" },
     })]);
   });
 
@@ -134,6 +140,20 @@ describe("makePbaPaymentQuote", () => {
       price: "$0.01",
       maxAmountRequired: "10000",
       asset: BASE_USDC,
+      extra: { name: "USD Coin", version: "2" },
+    });
+  });
+
+  it("uses the x402 V1 Base Sepolia slug and that network's USDC signing domain", () => {
+    vi.stubEnv("X402_NETWORK", "eip155:84532");
+
+    const quote = makeQuote();
+
+    expect(quote.accepts[0]).toMatchObject({
+      network: "base-sepolia",
+      maxAmountRequired: "10000",
+      asset: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+      extra: { name: "USDC", version: "2" },
     });
   });
 
@@ -164,7 +184,7 @@ describe("settlePbaPayment", () => {
     expect(mockVerify).toHaveBeenCalledTimes(1);
     expect(mockSettle).toHaveBeenCalledTimes(1);
     expect(mockVerify.mock.calls[0][1]).toMatchObject({
-      network: "eip155:8453",
+      network: "base",
       payTo: PAY_TO,
       resource: quote.resource,
       maxAmountRequired: "20000",
@@ -176,34 +196,57 @@ describe("settlePbaPayment", () => {
       settlement: {
         success: true,
         transaction: TRANSACTION_HASH,
-        network: "eip155:8453",
+        network: "base",
       },
     });
+  });
+
+  it("uses authenticated CDP facilitator credentials for the configured CDP endpoint", async () => {
+    vi.stubEnv("X402_FACILITATOR_URL", "https://api.cdp.coinbase.com/platform/v2/x402");
+    vi.stubEnv("CDP_API_KEY_ID", "test-key-id");
+    vi.stubEnv("CDP_API_KEY_SECRET", "test-key-secret");
+
+    await settlePbaPayment(PAYMENT_HEADER, makeQuote());
+
+    expect(mockCreateCdpFacilitatorClient).toHaveBeenCalledWith({
+      apiKeyId: "test-key-id",
+      apiKeySecret: "test-key-secret",
+      baseUrl: "https://api.cdp.coinbase.com/platform/v2/x402",
+    });
+  });
+
+  it("fails closed if the configured CDP facilitator has no credentials", async () => {
+    vi.stubEnv("X402_FACILITATOR_URL", "https://api.cdp.coinbase.com/platform/v2/x402");
+
+    await expect(settlePbaPayment(PAYMENT_HEADER, makeQuote()))
+      .rejects.toMatchObject({ code: "PAYMENTS_UNCONFIGURED" });
+    expect(mockCreateCdpFacilitatorClient).not.toHaveBeenCalled();
+    expect(mockVerify).not.toHaveBeenCalled();
   });
 
   it.each([
     ["explicit success false with a transaction", {
       success: false,
       transaction: TRANSACTION_HASH,
-      network: "eip155:8453",
+      network: "base",
     }],
     ["missing success flag", {
       transaction: TRANSACTION_HASH,
-      network: "eip155:8453",
+      network: "base",
     }],
     ["wrong network", {
       success: true,
       transaction: TRANSACTION_HASH,
-      network: "eip155:84532",
+      network: "base-sepolia",
     }],
     ["missing transaction", {
       success: true,
-      network: "eip155:8453",
+      network: "base",
     }],
     ["malformed transaction", {
       success: true,
       transaction: "0xsettled",
-      network: "eip155:8453",
+      network: "base",
     }],
   ])("does not accept settlement with %s", async (_label, settlement) => {
     mockSettle.mockResolvedValue(settlement);
@@ -234,6 +277,16 @@ describe("settlePbaPayment", () => {
   it("rejects a quote whose resource digest was changed", async () => {
     const quote = makeQuote();
     quote.resource = `${BASE_URL}/api/pba/verify?digest=${"b".repeat(64)}`;
+
+    await expect(settlePbaPayment(PAYMENT_HEADER, quote))
+      .rejects.toMatchObject({ code: "INVALID_PAYMENT_QUOTE" });
+    expect(mockVerify).not.toHaveBeenCalled();
+    expect(mockSettle).not.toHaveBeenCalled();
+  });
+
+  it("rejects changed EIP-712 USDC signing metadata before contacting the facilitator", async () => {
+    const quote = makeQuote();
+    quote.accepts[0].extra.name = "Not USDC";
 
     await expect(settlePbaPayment(PAYMENT_HEADER, quote))
       .rejects.toMatchObject({ code: "INVALID_PAYMENT_QUOTE" });

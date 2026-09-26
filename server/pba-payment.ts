@@ -1,13 +1,26 @@
+import { createHash } from "node:crypto";
+import { CDP_FACILITATOR_URL, createCdpFacilitatorClient } from "@coinbase/cdp-sdk/x402";
 import { HTTPFacilitatorClient } from "@x402/core/server";
 import { convertToTokenAmount, parseMoney } from "@x402/core/utils";
 import { getDefaultAsset } from "@x402/evm";
-import { ExactEvmScheme } from "@x402/evm/exact/server";
-import { x402ResourceServer } from "@x402/express";
 import { getPbaVerificationPriceCents } from "./pricing";
 
 const MAX_PAYMENT_HEADER_LENGTH = 64 * 1024;
 const MAX_DECODED_PAYMENT_BYTES = 48 * 1024;
-const DEFAULT_NETWORK = "eip155:8453";
+const DEFAULT_NETWORK = "base";
+
+function normalizeX402V1Network(network: string): "base" | "base-sepolia" | null {
+  switch (network) {
+    case "base":
+    case "eip155:8453":
+      return "base";
+    case "base-sepolia":
+    case "eip155:84532":
+      return "base-sepolia";
+    default:
+      return null;
+  }
+}
 
 export type PbaPaymentErrorCode =
   | "PAYMENTS_UNCONFIGURED"
@@ -69,16 +82,18 @@ type PbaPaymentServer = {
   settle(payload: unknown, requirements: Record<string, unknown>): Promise<unknown>;
 };
 
-let resourceServer: PbaPaymentServer | null = null;
-let resourceServerConfig = {
+let paymentFacilitator: PbaPaymentServer | null = null;
+let paymentFacilitatorConfig = {
   payTo: "",
   network: "",
   facilitatorUrl: "",
+  facilitatorCredentialsHash: "",
 };
 
 function configuredPaymentSettings() {
   const payTo = process.env.X402_PAY_TO || "";
-  const network = process.env.X402_NETWORK || DEFAULT_NETWORK;
+  const configuredNetwork = process.env.X402_NETWORK || DEFAULT_NETWORK;
+  const network = normalizeX402V1Network(configuredNetwork) || configuredNetwork;
   const facilitatorUrl = process.env.X402_FACILITATOR_URL || "https://www.x402.org/facilitator";
   if (!payTo || payTo.trim() !== payTo || payTo.length > 200) {
     throw new PbaPaymentError(
@@ -89,25 +104,62 @@ function configuredPaymentSettings() {
   return { payTo, network, facilitatorUrl };
 }
 
-function getPbaResourceServer(): PbaPaymentServer {
+function getPbaFacilitatorClient(): PbaPaymentServer {
   const settings = configuredPaymentSettings();
+  if (!normalizeX402V1Network(settings.network)) {
+    throw new PbaPaymentError("PAYMENTS_UNCONFIGURED", "The configured x402 V1 network is invalid.");
+  }
+  const cdpUrl = new URL(CDP_FACILITATOR_URL);
+  const facilitatorUrl = new URL(settings.facilitatorUrl);
+  const targetsCdpHost = facilitatorUrl.hostname.toLowerCase() === cdpUrl.hostname.toLowerCase();
+  const usesCdpFacilitator =
+    facilitatorUrl.protocol === "https:" &&
+    facilitatorUrl.origin === cdpUrl.origin &&
+    facilitatorUrl.pathname.replace(/\/$/, "") === cdpUrl.pathname &&
+    !facilitatorUrl.username &&
+    !facilitatorUrl.password &&
+    !facilitatorUrl.search &&
+    !facilitatorUrl.hash;
+  if (targetsCdpHost && !usesCdpFacilitator) {
+    throw new PbaPaymentError(
+      "PAYMENTS_UNCONFIGURED",
+      "The configured CDP x402 facilitator URL is invalid.",
+    );
+  }
+  const cdpApiKeyId = usesCdpFacilitator ? process.env.CDP_API_KEY_ID || "" : "";
+  const cdpApiKeySecret = usesCdpFacilitator ? process.env.CDP_API_KEY_SECRET || "" : "";
+  if (usesCdpFacilitator && (!cdpApiKeyId || !cdpApiKeySecret)) {
+    throw new PbaPaymentError(
+      "PAYMENTS_UNCONFIGURED",
+      "The configured CDP x402 facilitator credentials are unavailable.",
+    );
+  }
+  const facilitatorCredentialsHash = usesCdpFacilitator
+    ? createHash("sha256").update(`${cdpApiKeyId}\0${cdpApiKeySecret}`).digest("hex")
+    : "";
   if (
-    !resourceServer ||
-    resourceServerConfig.payTo !== settings.payTo ||
-    resourceServerConfig.network !== settings.network ||
-    resourceServerConfig.facilitatorUrl !== settings.facilitatorUrl
+    !paymentFacilitator ||
+    paymentFacilitatorConfig.payTo !== settings.payTo ||
+    paymentFacilitatorConfig.network !== settings.network ||
+    paymentFacilitatorConfig.facilitatorUrl !== settings.facilitatorUrl ||
+    paymentFacilitatorConfig.facilitatorCredentialsHash !== facilitatorCredentialsHash
   ) {
-    const facilitatorClient = new HTTPFacilitatorClient({ url: settings.facilitatorUrl });
-    const nextServer = new x402ResourceServer(facilitatorClient)
-      .register(settings.network as `${string}:${string}`, new ExactEvmScheme());
-    resourceServer = nextServer as unknown as PbaPaymentServer;
-    resourceServerConfig = {
+    const facilitatorClient = usesCdpFacilitator
+      ? createCdpFacilitatorClient({
+          apiKeyId: cdpApiKeyId,
+          apiKeySecret: cdpApiKeySecret,
+          baseUrl: settings.facilitatorUrl,
+        })
+      : new HTTPFacilitatorClient({ url: settings.facilitatorUrl });
+    paymentFacilitator = facilitatorClient as unknown as PbaPaymentServer;
+    paymentFacilitatorConfig = {
       payTo: settings.payTo,
       network: settings.network,
       facilitatorUrl: settings.facilitatorUrl,
+      facilitatorCredentialsHash,
     };
   }
-  return resourceServer;
+  return paymentFacilitator;
 }
 
 function requireCanonicalBaseUrl(baseUrl: string): string {
@@ -142,13 +194,17 @@ function formatUsd(cents: number): string {
  * price exactly as ExactEvmScheme does: decimal USD to token atomic units using
  * that asset's SDK-provided decimals.
  */
-function getUsdcAmount(amountCents: number, network: string): { asset: string; amount: string } {
+function getUsdcAmount(
+  amountCents: number,
+  network: string,
+): { asset: string; amount: string; extra: { name: string; version: string } } {
   try {
     const usdc = getDefaultAsset(network as `${string}:${string}`, "USDC");
     const { amount } = parseMoney(formatUsd(amountCents));
     return {
       asset: usdc.asset,
       amount: convertToTokenAmount(amount, usdc.decimals),
+      extra: { name: usdc.name, version: usdc.version },
     };
   } catch {
     throw new PbaPaymentError(
@@ -182,20 +238,21 @@ export function makePbaPaymentQuote(
   }
   validateAmountCents(amountCents);
   const { payTo, network } = configuredPaymentSettings();
-  if (!/^[a-z][a-z0-9-]*:[a-zA-Z0-9-]+$/.test(network) || network.length > 100) {
+  const x402Network = normalizeX402V1Network(network);
+  if (!x402Network) {
     throw new PbaPaymentError("PAYMENTS_UNCONFIGURED", "The x402 network configuration is invalid.");
   }
 
   const resource = `${origin}/api/pba/verify?digest=${digest}`;
   const description = "PBA Verified official evidence examination. Payment is for examination, not approval.";
   const price = formatUsd(amountCents);
-  const { asset, amount } = getUsdcAmount(amountCents, network);
+  const { asset, amount, extra } = getUsdcAmount(amountCents, x402Network);
   return {
     x402Version: 1,
     accepts: [{
       scheme: "exact",
       price,
-      network,
+      network: x402Network,
       maxAmountRequired: amount,
       resource,
       mimeType: "application/json",
@@ -204,7 +261,7 @@ export function makePbaPaymentQuote(
       maxTimeoutSeconds: 60,
       description,
       asset,
-      extra: {},
+      extra,
     }],
     resource,
     pricing_url: `${origin}/api/pricing`,
@@ -237,14 +294,20 @@ function validateQuote(quote: PbaPaymentQuote): {
 
   const requirement = quote.accepts[0];
   const settings = configuredPaymentSettings();
-  const { asset, amount } = getUsdcAmount(quote.amount_cents, settings.network);
+  const configuredNetwork = normalizeX402V1Network(settings.network);
+  if (!configuredNetwork) {
+    throw new PbaPaymentError("PAYMENTS_UNCONFIGURED", "The configured x402 network is invalid.");
+  }
+  const { asset, amount, extra } = getUsdcAmount(quote.amount_cents, configuredNetwork);
   if (
     requirement.scheme !== "exact" ||
     requirement.price !== formatUsd(quote.amount_cents) ||
     requirement.payTo !== settings.payTo ||
-    requirement.network !== settings.network ||
+    requirement.network !== configuredNetwork ||
     requirement.maxAmountRequired !== amount ||
     requirement.asset !== asset ||
+    requirement.extra?.name !== extra.name ||
+    requirement.extra?.version !== extra.version ||
     requirement.resource !== quote.resource ||
     requirement.mimeType !== "application/json" ||
     !requirement.outputSchema ||
@@ -354,7 +417,7 @@ export async function settlePbaPayment(
 ): Promise<{ externalId: string; settlement: unknown }> {
   const { requirement, resource } = validateQuote(quote);
   const paymentPayload = decodePaymentHeader(paymentHeader);
-  const server = getPbaResourceServer();
+  const facilitator = getPbaFacilitatorClient();
   const requirements = {
     scheme: requirement.scheme,
     network: requirement.network,
@@ -371,7 +434,7 @@ export async function settlePbaPayment(
 
   let verification: { isValid?: boolean };
   try {
-    verification = await server.verify(paymentPayload, requirements);
+    verification = await facilitator.verify(paymentPayload, requirements);
   } catch {
     throw new PbaPaymentError(
       "PAYMENT_VERIFICATION_UNAVAILABLE",
@@ -388,7 +451,7 @@ export async function settlePbaPayment(
 
   let settlement: unknown;
   try {
-    settlement = await server.settle(paymentPayload, requirements);
+    settlement = await facilitator.settle(paymentPayload, requirements);
   } catch {
     throw new PbaPaymentError(
       "PAYMENT_SETTLEMENT_UNKNOWN",

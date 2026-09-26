@@ -1,5 +1,5 @@
 import { createPublicClient, decodeEventLog, http, isAddress, parseAbiItem } from "viem";
-import { base } from "viem/chains";
+import { base, baseSepolia } from "viem/chains";
 import { getDefaultAsset } from "@x402/evm";
 
 const authorizationUsed = parseAbiItem("event AuthorizationUsed(address indexed authorizer, bytes32 indexed nonce)");
@@ -10,7 +10,7 @@ const TX = /^0x[a-fA-F0-9]{64}$/;
 export class ReconciliationEvidenceError extends Error {}
 
 export type ReconciliationEvidence = {
-  source: "base_finalized_usdc_authorization";
+  source: "base_finalized_usdc_authorization" | "base_sepolia_finalized_usdc_authorization";
   network: string;
   blockNumber: string;
   transactionHash: string | null;
@@ -56,13 +56,70 @@ export async function verifyPbaReconciliation(input: {
   transactionHash?: string;
   refundTransactionHash?: string;
 }): Promise<ReconciliationEvidence> {
-  if (input.network !== "eip155:8453") throw new ReconciliationEvidenceError("Only Base mainnet USDC EIP-3009 reconciliation is supported");
-  const auth = receiptAuthorization(input.paymentHeader, input.network, input.payTo, input.amountCents);
-  const token = getDefaultAsset(input.network as `${string}:${string}`, "USDC").asset as `0x${string}`;
-  const client = createPublicClient({ chain: base, transport: http(process.env.BASE_RPC_URL || "https://mainnet.base.org") });
+  if (input.network !== "eip155:8453" && input.network !== "base") {
+    throw new ReconciliationEvidenceError("Only Base mainnet USDC EIP-3009 reconciliation is supported");
+  }
+  return verifyOnBase(input, {
+    network: "eip155:8453",
+    chain: base,
+    rpcUrl: process.env.BASE_RPC_URL || "https://mainnet.base.org",
+    source: "base_finalized_usdc_authorization",
+  });
+}
+
+/**
+ * Test-only evidence verifier for an isolated Base Sepolia x402 exercise.
+ * Production reconciliation routes must continue to use verifyPbaReconciliation.
+ */
+export async function verifyPbaTestnetReconciliation(input: {
+  decision: "confirmed" | "failed" | "refunded";
+  paymentHeader: string;
+  network: string;
+  payTo: string;
+  amountCents: number;
+  transactionHash?: string;
+  refundTransactionHash?: string;
+}): Promise<ReconciliationEvidence> {
+  if (input.network !== "eip155:84532" && input.network !== "base-sepolia") {
+    throw new ReconciliationEvidenceError("Only Base Sepolia USDC test reconciliation is supported");
+  }
+  return verifyOnBase(input, {
+    network: "eip155:84532",
+    chain: baseSepolia,
+    rpcUrl: process.env.BASE_SEPOLIA_RPC_URL || "https://sepolia.base.org",
+    source: "base_sepolia_finalized_usdc_authorization",
+  });
+}
+
+async function verifyOnBase(
+  input: {
+    decision: "confirmed" | "failed" | "refunded";
+    paymentHeader: string;
+    network: string;
+    payTo: string;
+    amountCents: number;
+    transactionHash?: string;
+    refundTransactionHash?: string;
+  },
+  chainConfig: {
+    network: "eip155:8453" | "eip155:84532";
+    chain: typeof base | typeof baseSepolia;
+    rpcUrl: string;
+    source: ReconciliationEvidence["source"];
+  },
+): Promise<ReconciliationEvidence> {
+  const v1Network = chainConfig.network === "eip155:8453" ? "base" : "base-sepolia";
+  const auth = receiptAuthorization(input.paymentHeader, v1Network, input.payTo, input.amountCents);
+  const token = getDefaultAsset(chainConfig.network, "USDC").asset as `0x${string}`;
+  const client = createPublicClient({ chain: chainConfig.chain, transport: http(chainConfig.rpcUrl) });
   try {
-    if (await client.getChainId() !== 8453) {
-      throw new ReconciliationEvidenceError("RPC is not connected to Base mainnet");
+    const expectedChainId = chainConfig.network === "eip155:8453" ? 8453 : 84532;
+    if (await client.getChainId() !== expectedChainId) {
+      throw new ReconciliationEvidenceError(
+        chainConfig.network === "eip155:8453"
+          ? "RPC is not connected to Base mainnet"
+          : "RPC is not connected to Base Sepolia",
+      );
     }
     const finalBlock = await client.getBlock({ blockTag: "finalized" });
     const state = await client.readContract({
@@ -70,7 +127,7 @@ export async function verifyPbaReconciliation(input: {
       args: [auth.from, auth.nonce], blockNumber: finalBlock.number,
     });
     const evidence: ReconciliationEvidence = {
-      source: "base_finalized_usdc_authorization", network: input.network,
+      source: chainConfig.source, network: chainConfig.network,
       blockNumber: finalBlock.number.toString(), transactionHash: null, refundTransactionHash: null,
     };
     if (input.decision === "failed") {

@@ -421,7 +421,7 @@ describe("PBA verification public API", () => {
     process.env.X402_PAY_TO = "0x1234567890123456789012345678901234567890";
     const state: any = {
       requestDigest: "a".repeat(64), subject: PUBLIC_KEY, origin: "evidence-pending",
-      amountCents: 1, quoteNetwork: "eip155:8453",
+      amountCents: 1, quoteNetwork: "base",
       quotePayTo: process.env.X402_PAY_TO, status: "quoted",
       paymentHeaderHash: null, attestationId: null, externalPaymentId: null,
     };
@@ -501,7 +501,7 @@ describe("PBA verification public API", () => {
     const txHash = `0x${"b".repeat(64)}`;
     const row = {
       requestDigest: digest, paymentHeaderHash: hash, status: "settlement_unknown",
-      attestationId: null, externalPaymentId: null, quoteNetwork: "eip155:8453",
+      attestationId: null, externalPaymentId: null, quoteNetwork: "base",
       quotePayTo: "0x1234567890123456789012345678901234567890", amountCents: 1,
       leaseUntil: null, settledAt: null,
     };

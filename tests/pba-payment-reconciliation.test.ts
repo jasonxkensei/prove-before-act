@@ -14,22 +14,34 @@ vi.mock("viem", async (importOriginal) => ({
   ...await importOriginal<typeof import("viem")>(),
   createPublicClient: createClient,
 }));
-import { ReconciliationEvidenceError, verifyPbaReconciliation } from "../server/pba-payment-reconciliation";
+import {
+  ReconciliationEvidenceError,
+  verifyPbaReconciliation,
+  verifyPbaTestnetReconciliation,
+} from "../server/pba-payment-reconciliation";
 
 const from = "0xdeadbeef0000000000000000000000000000cafe";
 const to = "0x1234567890123456789012345678901234567890";
 const token = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+const testnetToken = "0x036CbD53842c5426634e7929541eC2318f3dCF7e";
 const nonce = `0x${"a".repeat(64)}`;
 const originalHash = `0x${"b".repeat(64)}`;
 const refundHash = `0x${"c".repeat(64)}`;
 const header = Buffer.from(JSON.stringify({
-  x402Version: 1, scheme: "exact", network: "eip155:8453",
+  x402Version: 1, scheme: "exact", network: "base",
   payload: {
     authorization: { from, to, value: "10000", validAfter: "1", validBefore: "100", nonce },
     signature: `0x${"d".repeat(130)}`,
   },
 })).toString("base64");
-const input = { decision: "confirmed" as const, network: "eip155:8453", payTo: to,
+const testnetHeader = Buffer.from(JSON.stringify({
+  x402Version: 1, scheme: "exact", network: "base-sepolia",
+  payload: {
+    authorization: { from, to, value: "10000", validAfter: "1", validBefore: "100", nonce },
+    signature: `0x${"d".repeat(130)}`,
+  },
+})).toString("base64");
+const input = { decision: "confirmed" as const, network: "base", payTo: to,
   amountCents: 1, paymentHeader: header, transactionHash: originalHash };
 const transferEvent = parseAbiItem("event Transfer(address indexed from, address indexed to, uint256 value)");
 const usedEvent = parseAbiItem("event AuthorizationUsed(address indexed authorizer, bytes32 indexed nonce)");
@@ -69,6 +81,11 @@ describe("independent PBA payment reconciliation", () => {
     await expect(verifyPbaReconciliation(input)).rejects.toThrow(ReconciliationEvidenceError);
   });
 
+  it("accepts the canonical Base chain ID while still requiring the V1 network slug in the authorization", async () => {
+    await expect(verifyPbaReconciliation({ ...input, network: "eip155:8453" }))
+      .resolves.toMatchObject({ network: "eip155:8453", transactionHash: originalHash });
+  });
+
   it("never treats elapsed time or an unavailable RPC as proof of failure", async () => {
     const failed = { ...input, decision: "failed" as const, transactionHash: undefined };
     await expect(verifyPbaReconciliation(failed)).rejects.toThrow("expired and unused");
@@ -99,5 +116,31 @@ describe("independent PBA payment reconciliation", () => {
     client.getChainId.mockResolvedValue(1);
     await expect(verifyPbaReconciliation(input)).rejects.toThrow("not connected to Base");
     expect(client.getTransactionReceipt).not.toHaveBeenCalled();
+  });
+
+  it("reconciles Base Sepolia evidence only through the test-only verifier", async () => {
+    client.getChainId.mockResolvedValue(84532);
+    client.getTransactionReceipt.mockResolvedValue({
+      status: "success",
+      blockNumber: 40n,
+      logs: [
+        { ...usedLog, address: testnetToken },
+        { ...transferLog(from, to), address: testnetToken },
+      ],
+    });
+    await expect(verifyPbaTestnetReconciliation({
+      ...input,
+      network: "base-sepolia",
+      paymentHeader: testnetHeader,
+    })).resolves.toMatchObject({
+      source: "base_sepolia_finalized_usdc_authorization",
+      network: "eip155:84532",
+      transactionHash: originalHash,
+    });
+    await expect(verifyPbaReconciliation({
+      ...input,
+      network: "base-sepolia",
+      paymentHeader: testnetHeader,
+    })).rejects.toThrow("Only Base mainnet");
   });
 });
