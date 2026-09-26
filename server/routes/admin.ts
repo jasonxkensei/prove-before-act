@@ -104,6 +104,54 @@ const ACTIVATION_STAGE_ORDER = [
 ] as const;
 type ActivationStage = typeof ACTIVATION_STAGE_ORDER[number];
 type ActivationStageCounts = Record<ActivationStage, number>;
+type ActivationCohortCounts = {
+  scenario_to_primary: number;
+  primary_to_registration: number;
+  registration_to_first_proof: number;
+  first_to_second_proof: number;
+};
+
+// A pair exists when an upstream event precedes any downstream event for the
+// same privacy-safe visitor inside the reporting window. MIN(upstream) and
+// MAX(downstream) preserve returning journeys even if an earlier downstream
+// event preceded the visitor's first recorded upstream event.
+const ACTIVATION_COHORT_FIRST_TIMES = sql`
+  MIN(created_at) FILTER (
+    WHERE stage = 'cta' AND outcome = 'clicked' AND event_type LIKE '%:scenario_%'
+  ) AS scenario_first_at,
+  MIN(created_at) FILTER (
+    WHERE stage = 'cta' AND outcome = 'clicked' AND event_type NOT LIKE '%:scenario_%'
+  ) AS primary_first_at,
+  MIN(created_at) FILTER (
+    WHERE stage = 'registration' AND outcome = 'success' AND http_class = '2xx'
+  ) AS registration_first_at,
+  MIN(created_at) FILTER (WHERE event_type = 'first_proof_verified') AS first_proof_first_at
+`;
+
+const ACTIVATION_COHORT_LAST_TIMES = sql`
+  MAX(created_at) FILTER (
+    WHERE stage = 'cta' AND outcome = 'clicked' AND event_type NOT LIKE '%:scenario_%'
+  ) AS primary_last_at,
+  MAX(created_at) FILTER (
+    WHERE stage = 'registration' AND outcome = 'success' AND http_class = '2xx'
+  ) AS registration_last_at,
+  MAX(created_at) FILTER (WHERE event_type = 'first_proof_verified') AS first_proof_last_at,
+  MAX(created_at) FILTER (WHERE event_type = 'external_agent_second_proof_verified') AS second_proof_last_at
+`;
+
+const ACTIVATION_COHORT_COUNTS = sql`
+  COUNT(*) FILTER (WHERE visitor_metrics.scenario_first_at < visitor_latest.primary_last_at)::int AS scenario_to_primary,
+  COUNT(*) FILTER (WHERE visitor_metrics.primary_first_at < visitor_latest.registration_last_at)::int AS primary_to_registration,
+  COUNT(*) FILTER (WHERE visitor_metrics.registration_first_at < visitor_latest.first_proof_last_at)::int AS registration_to_first_proof,
+  COUNT(*) FILTER (WHERE visitor_metrics.first_proof_first_at < visitor_latest.second_proof_last_at)::int AS first_to_second_proof
+`;
+
+const ACTIVATION_VISITOR_LATEST = sql`
+  SELECT ip_hash, ${ACTIVATION_COHORT_LAST_TIMES}
+  FROM conversion_events
+  WHERE created_at >= NOW() - INTERVAL '30 days'
+  GROUP BY ip_hash
+`;
 
 const NON_BROWSER_ACTIVATION_SEGMENTS = new Set(["api_client", "crawler_scanner"]);
 
@@ -122,59 +170,66 @@ function roundPercentage(value: number | null): number | null {
 function buildActivationAnalysis(
   stages: ActivationStageCounts,
   trafficSegment: string,
+  cohorts: ActivationCohortCounts,
 ) {
   const stageRows = ACTIVATION_STAGE_ORDER.map((key, index) => {
     const visitors = stages[key];
     const previousKey = index > 0 ? ACTIVATION_STAGE_ORDER[index - 1] : null;
     const previousVisitors = previousKey ? stages[previousKey] : null;
-    const dropOff = previousVisitors === null ? null : Math.max(0, previousVisitors - visitors);
     return {
       stage: key,
       visitors,
       from_previous: previousVisitors,
-      conversion_rate: previousVisitors && previousVisitors > 0
-        ? roundPercentage(visitors / previousVisitors)
-        : null,
-      drop_off: dropOff,
-      drop_off_rate: previousVisitors && previousVisitors > 0 && dropOff !== null
-        ? roundPercentage(dropOff / previousVisitors)
-        : null,
     };
   });
-  const comparableDrops = stageRows
-    .filter((row) => row.drop_off !== null && row.drop_off_rate !== null && row.from_previous !== null && row.from_previous > 0)
+  const pairCounts = [
+    cohorts.scenario_to_primary,
+    cohorts.primary_to_registration,
+    cohorts.registration_to_first_proof,
+    cohorts.first_to_second_proof,
+  ];
+  const cohortTransitions = ACTIVATION_STAGE_ORDER.slice(1).map((toStage, index) => {
+    const fromStage = ACTIVATION_STAGE_ORDER[index];
+    const fromVisitors = stages[fromStage];
+    const convertedVisitors = pairCounts[index];
+    const lostVisitors = fromVisitors - convertedVisitors;
+    return {
+      from_stage: fromStage,
+      to_stage: toStage,
+      from_visitors: fromVisitors,
+      to_visitors: stages[toStage],
+      converted_visitors: convertedVisitors,
+      lost_visitors: lostVisitors,
+      conversion_rate: fromVisitors > 0 ? roundPercentage(convertedVisitors / fromVisitors) : null,
+      drop_off_rate: fromVisitors > 0 ? roundPercentage(lostVisitors / fromVisitors) : null,
+    };
+  });
+  const comparableDrops = cohortTransitions
+    .filter((row) => row.from_visitors > 0)
     .sort((a, b) => {
-      const exactRateDelta = (b.drop_off! / b.from_previous!) - (a.drop_off! / a.from_previous!);
-      return exactRateDelta || (b.drop_off! - a.drop_off!);
+      const exactRateDelta = (b.lost_visitors / b.from_visitors) - (a.lost_visitors / a.from_visitors);
+      return exactRateDelta || (b.lost_visitors - a.lost_visitors);
     });
   // Non-browser traffic can have registrations or proofs without entering the
   // activation page. Keep its counts visible, but do not recommend product
   // changes from that incomparable population.
   const isComparable = isComparableActivationSegment(trafficSegment, stages);
   const largestDropOff = isComparable
-    ? comparableDrops.find((row) => row.from_previous! >= ACTIVATION_RECOMMENDATION_MIN_FROM_VISITORS)
+    ? comparableDrops.find((row) => row.from_visitors >= ACTIVATION_RECOMMENDATION_MIN_FROM_VISITORS)
     : null;
   const lowConfidenceDropOff = isComparable
-    ? comparableDrops.find((row) => row.from_previous! < ACTIVATION_RECOMMENDATION_MIN_FROM_VISITORS)
-    : null;
-  const describeDrop = (row: typeof stageRows[number] | null | undefined) => row
-    ? {
-        from_stage: ACTIVATION_STAGE_ORDER[stageRows.indexOf(row) - 1],
-        to_stage: row.stage,
-        from_visitors: row.from_previous,
-        to_visitors: row.visitors,
-        lost_visitors: row.drop_off,
-        drop_off_rate: row.drop_off_rate,
-      }
+    ? comparableDrops.find((row) => row.from_visitors < ACTIVATION_RECOMMENDATION_MIN_FROM_VISITORS)
     : null;
 
   return {
     traffic_segment: trafficSegment,
+    // These are independent directional totals, not sequenced conversions.
     stages: stageRows,
-    largest_drop_off: describeDrop(largestDropOff),
-    low_confidence_drop_off: describeDrop(lowConfidenceDropOff),
+    cohort_transitions: cohortTransitions,
+    largest_drop_off: largestDropOff ?? null,
+    low_confidence_drop_off: lowConfidenceDropOff ?? null,
     recommendation_sample_size: isComparable
-      ? largestDropOff?.from_previous ?? Math.max(0, ...comparableDrops.map((row) => row.from_previous ?? 0))
+      ? largestDropOff?.from_visitors ?? Math.max(0, ...comparableDrops.map((row) => row.from_visitors))
       : 0,
   };
 }
@@ -488,7 +543,8 @@ export function registerAdminRoutes(app: Express) {
         WHERE created_at >= NOW() - INTERVAL '30 days'
       `);
       const segmentResult = await db.execute(sql`
-        WITH visitor_metrics AS (
+        WITH visitor_latest AS (${ACTIVATION_VISITOR_LATEST}),
+        visitor_metrics AS (
           SELECT
             traffic_segment,
             ip_hash,
@@ -508,7 +564,8 @@ export function registerAdminRoutes(app: Express) {
               AND http_class = '2xx'
             ) AS registered,
             BOOL_OR(event_type = 'first_proof_verified') AS first_proof_verified,
-            BOOL_OR(event_type = 'external_agent_second_proof_verified') AS second_proof_verified
+            BOOL_OR(event_type = 'external_agent_second_proof_verified') AS second_proof_verified,
+            ${ACTIVATION_COHORT_FIRST_TIMES}
           FROM conversion_events
           WHERE created_at >= NOW() - INTERVAL '30 days'
           GROUP BY traffic_segment, ip_hash
@@ -519,8 +576,10 @@ export function registerAdminRoutes(app: Express) {
           COUNT(*) FILTER (WHERE primary_cta_clicked)::int AS primary_cta_clicked,
           COUNT(*) FILTER (WHERE registered)::int AS registered,
           COUNT(*) FILTER (WHERE first_proof_verified)::int AS first_proof,
-          COUNT(*) FILTER (WHERE second_proof_verified)::int AS second_proof
+          COUNT(*) FILTER (WHERE second_proof_verified)::int AS second_proof,
+          ${ACTIVATION_COHORT_COUNTS}
         FROM visitor_metrics
+        JOIN visitor_latest USING (ip_hash)
         GROUP BY traffic_segment
         ORDER BY traffic_segment
       `);
@@ -531,6 +590,7 @@ export function registerAdminRoutes(app: Express) {
           WHERE created_at >= NOW() - INTERVAL '30 days'
             AND traffic_segment IN ('human_browser', 'declared_agent')
         ),
+        visitor_latest AS (${ACTIVATION_VISITOR_LATEST}),
         first_touch_source AS (
           SELECT DISTINCT ON (ip_hash)
             ip_hash,
@@ -572,7 +632,8 @@ export function registerAdminRoutes(app: Express) {
               AND http_class = '2xx'
             ) AS registered,
             BOOL_OR(event_type = 'first_proof_verified') AS first_proof_verified,
-            BOOL_OR(event_type = 'external_agent_second_proof_verified') AS second_proof_verified
+            BOOL_OR(event_type = 'external_agent_second_proof_verified') AS second_proof_verified,
+            ${ACTIVATION_COHORT_FIRST_TIMES}
           FROM window_events
           LEFT JOIN normalized_source USING (ip_hash)
           GROUP BY campaign_source, window_events.ip_hash
@@ -586,8 +647,10 @@ export function registerAdminRoutes(app: Express) {
           COUNT(*) FILTER (WHERE primary_cta_clicked)::int AS primary_cta_clicked,
           COUNT(*) FILTER (WHERE registered)::int AS registered,
           COUNT(*) FILTER (WHERE first_proof_verified)::int AS first_proof,
-          COUNT(*) FILTER (WHERE second_proof_verified)::int AS second_proof
+          COUNT(*) FILTER (WHERE second_proof_verified)::int AS second_proof,
+          ${ACTIVATION_COHORT_COUNTS}
         FROM visitor_metrics
+        JOIN visitor_latest USING (ip_hash)
         GROUP BY campaign_source
         ORDER BY campaign_source
       `);
@@ -617,6 +680,12 @@ export function registerAdminRoutes(app: Express) {
 
       const parseCount = (row: Record<string, string | number> | undefined, key: string) =>
         Number(row?.[key] || 0);
+      const cohortCountsFromRow = (row: Record<string, string | number>): ActivationCohortCounts => ({
+        scenario_to_primary: parseCount(row, "scenario_to_primary"),
+        primary_to_registration: parseCount(row, "primary_to_registration"),
+        registration_to_first_proof: parseCount(row, "registration_to_first_proof"),
+        first_to_second_proof: parseCount(row, "first_to_second_proof"),
+      });
       const totalsRow = totalsResult.rows[0] as Record<string, string | number> | undefined;
       const proofActivationRow = proofActivationResult.rows[0] as Record<string, string | number> | undefined;
       const lastSevenDays = lastSevenDaysResult.rows[0] as Record<string, string | number> | undefined;
@@ -672,6 +741,7 @@ export function registerAdminRoutes(app: Express) {
           first_proof: parseCount(row, "first_proof"),
           second_proof: parseCount(row, "second_proof"),
         },
+        cohorts: cohortCountsFromRow(row),
         traffic_segment: String(row.traffic_segment),
       }));
       const comparableSegments = segmentAnalysis.filter((segment) =>
@@ -681,9 +751,20 @@ export function registerAdminRoutes(app: Express) {
         for (const stage of ACTIVATION_STAGE_ORDER) totals[stage] += segment.stages[stage];
         return totals;
       }, emptyStages());
-      const overallAnalysis = buildActivationAnalysis(overallStages, "all");
+      const overallCohorts = comparableSegments.reduce((totals, segment) => {
+        for (const key of Object.keys(totals) as Array<keyof ActivationCohortCounts>) {
+          totals[key] += segment.cohorts[key];
+        }
+        return totals;
+      }, {
+        scenario_to_primary: 0,
+        primary_to_registration: 0,
+        registration_to_first_proof: 0,
+        first_to_second_proof: 0,
+      } satisfies ActivationCohortCounts);
+      const overallAnalysis = buildActivationAnalysis(overallStages, "all", overallCohorts);
       const segmentReviews = segmentAnalysis.map((segment) =>
-        buildActivationAnalysis(segment.stages, segment.traffic_segment)
+        buildActivationAnalysis(segment.stages, segment.traffic_segment, segment.cohorts)
       );
       const largestSegmentDropOff = segmentReviews
         .filter((segment) => segment.largest_drop_off !== null)
@@ -706,7 +787,7 @@ export function registerAdminRoutes(app: Express) {
           second_proof: parseCount(row, "second_proof"),
         };
         const entryVisitors = parseCount(row, "entry_visitors");
-        const analysis = buildActivationAnalysis(stages, "campaign");
+        const analysis = buildActivationAnalysis(stages, "campaign", cohortCountsFromRow(row));
         const recommendationEligible = entryVisitors >= CAMPAIGN_RECOMMENDATION_MIN_ENTRY_VISITORS
           && analysis.largest_drop_off !== null;
         return {
@@ -716,6 +797,7 @@ export function registerAdminRoutes(app: Express) {
           recommendation_eligible: recommendationEligible,
           recommendation_sample_size: analysis.recommendation_sample_size,
           stages: analysis.stages,
+          cohort_transitions: analysis.cohort_transitions,
           largest_drop_off: recommendationEligible ? analysis.largest_drop_off : null,
           low_confidence_drop_off: analysis.low_confidence_drop_off,
         };
@@ -795,6 +877,12 @@ export function registerAdminRoutes(app: Express) {
         activation_review: {
           window_days: ACTIVATION_FUNNEL_WINDOW_DAYS,
           minimum_transition_visitors: ACTIVATION_RECOMMENDATION_MIN_FROM_VISITORS,
+          counting_model: {
+            stage_totals: "directional_distinct_visitors",
+            conversions: "same_visitor_adjacent_stages_in_order",
+            sequence_window_days: ACTIVATION_FUNNEL_WINDOW_DAYS,
+            transition_attribution: "upstream_traffic_segment",
+          },
           stage_order: ACTIVATION_STAGE_ORDER,
           overall: overallAnalysis,
           by_traffic_segment: segmentReviews,

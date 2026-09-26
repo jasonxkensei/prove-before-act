@@ -159,6 +159,17 @@ describe("GET /api/admin/stats signer balance", () => {
 });
 
 describe("GET /api/admin/conversion-funnel", () => {
+  const withOrderedPairs = (row: Record<string, string>) => ({
+    ...row,
+    // Ranking tests below provide synthetic directional counts. Their mocked
+    // query result assumes the shared visitors occurred in order; timeline
+    // tests at the end exercise the real SQL against event timestamps.
+    scenario_to_primary: String(Math.min(Number(row.scenario_selected || 0), Number(row.primary_cta_clicked || 0))),
+    primary_to_registration: String(Math.min(Number(row.primary_cta_clicked || 0), Number(row.registered || 0))),
+    registration_to_first_proof: String(Math.min(Number(row.registered || 0), Number(row.first_proof || 0))),
+    first_to_second_proof: String(Math.min(Number(row.first_proof || 0), Number(row.second_proof || 0))),
+  });
+
   function stubActivationQueries(
     segments: Array<Record<string, string>>,
     totals: Record<string, string> = {
@@ -190,8 +201,8 @@ describe("GET /api/admin/conversion-funnel", () => {
         }],
       })
       .mockResolvedValueOnce({ rows: [totals] })
-      .mockResolvedValueOnce({ rows: segments })
-      .mockResolvedValueOnce({ rows: campaigns })
+      .mockResolvedValueOnce({ rows: segments.map(withOrderedPairs) })
+      .mockResolvedValueOnce({ rows: campaigns.map(withOrderedPairs) })
       .mockResolvedValueOnce({ rows: [proofActivation] })
       .mockResolvedValueOnce({
         rows: [{ registrations: "1", successful_proofs: "1" }],
@@ -205,6 +216,30 @@ describe("GET /api/admin/conversion-funnel", () => {
     });
     expect(response.status).toBe(200);
     return response.json();
+  }
+
+  async function seedTimeline(
+    source: string,
+    visitor: string,
+    events: Array<{ minutesAgo: number; eventType: string; stage: string; segment?: string }>,
+  ) {
+    const ipHash = crypto.createHash("sha256").update(`${source}:${visitor}`).digest("hex");
+    seededTelemetryHashes.push(ipHash);
+    for (const event of events) {
+      const clicked = event.stage === "cta";
+      await pool.query(
+        `INSERT INTO conversion_events (
+          event_type, stage, outcome, http_status, http_class,
+          traffic_segment, ip_hash, utm_source, created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [
+          event.eventType, event.stage, clicked ? "clicked" : "success",
+          clicked ? null : 200, clicked ? "0xx" : "2xx",
+          event.segment ?? "human_browser", ipHash, source,
+          new Date(Date.now() - event.minutesAgo * 60_000),
+        ],
+      );
+    }
   }
 
   it("rejects a request without an authenticated admin session", async () => {
@@ -609,6 +644,10 @@ describe("GET /api/admin/conversion-funnel", () => {
           registered: "1",
           first_proof: "1",
           second_proof: "0",
+          scenario_to_primary: "1",
+          primary_to_registration: "1",
+          registration_to_first_proof: "1",
+          first_to_second_proof: "0",
         }],
       })
       .mockResolvedValueOnce({ rows: [] })
@@ -662,6 +701,12 @@ describe("GET /api/admin/conversion-funnel", () => {
           },
         },
         activation_review: {
+          counting_model: {
+            stage_totals: "directional_distinct_visitors",
+            conversions: "same_visitor_adjacent_stages_in_order",
+            sequence_window_days: 30,
+            transition_attribution: "upstream_traffic_segment",
+          },
           minimum_transition_visitors: 10,
           recommendation: {
             status: "low_confidence",
@@ -1223,5 +1268,137 @@ describe("GET /api/admin/conversion-funnel", () => {
     } finally {
       executeSpy.mockRestore();
     }
+  });
+
+  it("does not treat out-of-order visits as cohort conversions or recommend the directional rate", async () => {
+    const source = `out-of-order-${crypto.randomBytes(6).toString("hex")}`;
+    for (let visitor = 0; visitor < 10; visitor++) {
+      await seedTimeline(source, String(visitor), [
+        { minutesAgo: 40, eventType: "registration_request", stage: "registration" },
+        { minutesAgo: 30, eventType: "cta_clicked:hero_free_trial", stage: "cta" },
+      ]);
+    }
+    const body = await getAuthorizedFunnel();
+    const campaign = body.activation_review.by_utm_source.find((row: any) => row.campaign_source === source);
+    expect(campaign).toMatchObject({
+      entry_visitors: 10,
+      recommendation_eligible: true,
+      stages: expect.arrayContaining([
+        expect.objectContaining({ stage: "primary_cta_clicked", visitors: 10 }),
+        expect.objectContaining({ stage: "registered", visitors: 10 }),
+      ]),
+      cohort_transitions: expect.arrayContaining([
+        expect.objectContaining({
+          from_stage: "primary_cta_clicked",
+          to_stage: "registered",
+          from_visitors: 10,
+          to_visitors: 10,
+          converted_visitors: 0,
+          lost_visitors: 10,
+          conversion_rate: 0,
+          drop_off_rate: 100,
+        }),
+      ]),
+      largest_drop_off: expect.objectContaining({
+        from_stage: "primary_cta_clicked",
+        converted_visitors: 0,
+        drop_off_rate: 100,
+      }),
+    });
+  });
+
+  it("does not join milestones from opposite sides of the reporting window", async () => {
+    const source = `window-boundary-${crypto.randomBytes(6).toString("hex")}`;
+    await seedTimeline(source, "earlier-cta", [
+      { minutesAgo: 31 * 24 * 60, eventType: "cta_clicked:hero_free_trial", stage: "cta" },
+      { minutesAgo: 10, eventType: "registration_request", stage: "registration" },
+    ]);
+    await seedTimeline(source, "earlier-registration", [
+      { minutesAgo: 31 * 24 * 60, eventType: "registration_request", stage: "registration" },
+      { minutesAgo: 10, eventType: "cta_clicked:hero_free_trial", stage: "cta" },
+    ]);
+    const body = await getAuthorizedFunnel();
+    const campaign = body.activation_review.by_utm_source.find((row: any) => row.campaign_source === source);
+    expect(campaign).toMatchObject({
+      stages: expect.arrayContaining([
+        expect.objectContaining({ stage: "primary_cta_clicked", visitors: 1 }),
+        expect.objectContaining({ stage: "registered", visitors: 1 }),
+      ]),
+      cohort_transitions: expect.arrayContaining([
+        expect.objectContaining({
+          from_stage: "primary_cta_clicked",
+          to_stage: "registered",
+          from_visitors: 1,
+          converted_visitors: 0,
+          drop_off_rate: 100,
+        }),
+      ]),
+    });
+  });
+
+  it("counts returning visitors once when their later visits complete the ordered journey", async () => {
+    const source = `returning-${crypto.randomBytes(6).toString("hex")}`;
+    await seedTimeline(source, "returning-browser", [
+      { minutesAgo: 60, eventType: "registration_request", stage: "registration" },
+      { minutesAgo: 50, eventType: "cta_clicked:scenario_payment", stage: "cta" },
+      { minutesAgo: 40, eventType: "cta_clicked:hero_free_trial", stage: "cta" },
+      { minutesAgo: 30, eventType: "registration_request", stage: "registration" },
+      { minutesAgo: 20, eventType: "first_proof_verified", stage: "proof" },
+      { minutesAgo: 15, eventType: "first_proof_verified", stage: "proof" },
+      { minutesAgo: 10, eventType: "external_agent_second_proof_verified", stage: "proof" },
+    ]);
+    await seedTimeline(source, "api-only", [
+      { minutesAgo: 25, eventType: "registration_request", stage: "registration", segment: "api_client" },
+      { minutesAgo: 5, eventType: "first_proof_verified", stage: "proof", segment: "api_client" },
+    ]);
+    const body = await getAuthorizedFunnel();
+    const campaign = body.activation_review.by_utm_source.find((row: any) => row.campaign_source === source);
+    expect(campaign.cohort_transitions).toMatchObject([
+      { from_stage: "scenario_selected", converted_visitors: 1, from_visitors: 1 },
+      { from_stage: "primary_cta_clicked", converted_visitors: 1, from_visitors: 1 },
+      { from_stage: "registered", converted_visitors: 1, from_visitors: 1 },
+      { from_stage: "first_proof", converted_visitors: 1, from_visitors: 1 },
+    ]);
+    expect(campaign.stages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ stage: "registered", visitors: 1 }),
+      expect.objectContaining({ stage: "first_proof", visitors: 1 }),
+    ]));
+    const api = body.activation_review.by_traffic_segment.find((row: any) => row.traffic_segment === "api_client");
+    expect(api.stages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ stage: "registered", visitors: expect.any(Number) }),
+    ]));
+    expect(api.cohort_transitions.find((row: any) => row.from_stage === "registered").converted_visitors).toBeGreaterThanOrEqual(1);
+    expect(api.largest_drop_off).toBeNull();
+  });
+
+  it("credits browser-to-API continuations to the browser start without recommending API-only traffic", async () => {
+    const source = `cross-client-${crypto.randomBytes(6).toString("hex")}`;
+    await seedTimeline(source, "browser-then-api", [
+      { minutesAgo: 30, eventType: "cta_clicked:hero_free_trial", stage: "cta" },
+      { minutesAgo: 20, eventType: "registration_request", stage: "registration", segment: "api_client" },
+      { minutesAgo: 10, eventType: "first_proof_verified", stage: "proof", segment: "api_client" },
+    ]);
+    await seedTimeline(source, "api-only", [
+      { minutesAgo: 25, eventType: "registration_request", stage: "registration", segment: "api_client" },
+      { minutesAgo: 5, eventType: "first_proof_verified", stage: "proof", segment: "api_client" },
+    ]);
+    const body = await getAuthorizedFunnel();
+    const campaign = body.activation_review.by_utm_source.find((row: any) => row.campaign_source === source);
+    expect(campaign.stages).toEqual(expect.arrayContaining([
+      expect.objectContaining({ stage: "primary_cta_clicked", visitors: 1 }),
+      expect.objectContaining({ stage: "registered", visitors: 0 }),
+    ]));
+    expect(campaign.cohort_transitions).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        from_stage: "primary_cta_clicked",
+        to_stage: "registered",
+        from_visitors: 1,
+        to_visitors: 0,
+        converted_visitors: 1,
+      }),
+    ]));
+    const api = body.activation_review.by_traffic_segment.find((row: any) => row.traffic_segment === "api_client");
+    expect(api.cohort_transitions.find((row: any) => row.from_stage === "registered").converted_visitors).toBeGreaterThanOrEqual(2);
+    expect(api.largest_drop_off).toBeNull();
   });
 });

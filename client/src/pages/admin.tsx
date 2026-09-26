@@ -230,6 +230,12 @@ interface ConversionFunnelData {
   activation_review: {
     window_days: number;
     minimum_transition_visitors: number;
+    counting_model: {
+      stage_totals: "directional_distinct_visitors";
+      conversions: "same_visitor_adjacent_stages_in_order";
+      sequence_window_days: number;
+      transition_attribution: "upstream_traffic_segment";
+    };
     stage_order: Array<"scenario_selected" | "primary_cta_clicked" | "registered" | "first_proof" | "second_proof">;
     overall: ActivationReviewSegment;
     by_traffic_segment: ActivationReviewSegment[];
@@ -256,9 +262,11 @@ interface ConversionFunnelData {
 interface ActivationReviewDrop {
   from_stage: string;
   to_stage: string;
-  from_visitors: number | null;
+  from_visitors: number;
   to_visitors: number;
-  lost_visitors: number | null;
+  converted_visitors: number;
+  lost_visitors: number;
+  conversion_rate: number | null;
   drop_off_rate: number | null;
 }
 
@@ -268,10 +276,8 @@ interface ActivationReviewSegment {
     stage: "scenario_selected" | "primary_cta_clicked" | "registered" | "first_proof" | "second_proof";
     visitors: number;
     from_previous: number | null;
-    conversion_rate: number | null;
-    drop_off: number | null;
-    drop_off_rate: number | null;
   }>;
+  cohort_transitions: ActivationReviewDrop[];
   largest_drop_off: ActivationReviewDrop | null;
   low_confidence_drop_off: ActivationReviewDrop | null;
   recommendation_sample_size: number;
@@ -284,6 +290,7 @@ interface CampaignActivationReview {
   recommendation_eligible: boolean;
   recommendation_sample_size: number;
   stages: ActivationReviewSegment["stages"];
+  cohort_transitions: ActivationReviewSegment["cohort_transitions"];
   largest_drop_off: ActivationReviewSegment["largest_drop_off"];
   low_confidence_drop_off: ActivationReviewSegment["low_confidence_drop_off"];
 }
@@ -833,6 +840,12 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
             </Badge>
           </div>
           <p className="mt-3 text-sm text-muted-foreground">{review.recommendation.message}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Stage totals count visitors at each step independently. Conversion and drop rates count the
+            same privacy-safe visitor at both adjacent steps in order within{" "}
+            {review.counting_model.sequence_window_days} days, even if their client changes. Transitions
+            belong to the earlier step's traffic segment; repeat visits count once per transition.
+          </p>
           <p className="mt-1 text-xs text-muted-foreground" data-testid="activation-transition-sample">
             {largestDropOff ? "Recommended" : "Largest observed"} transition:{" "}
             {review.recommendation.sample_size} starting visitors (minimum{" "}
@@ -847,7 +860,8 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
                 {ACTIVATION_STAGE_LABELS[largestDropOff.to_stage] ?? largestDropOff.to_stage}
               </span>
               <span className="ml-2 text-muted-foreground">
-                ({largestDropOff.lost_visitors ?? 0} lost / {largestDropOff.from_visitors ?? 0} starting, {largestDropOff.drop_off_rate ?? 0}%)
+                ({largestDropOff.converted_visitors} converted in order / {largestDropOff.from_visitors} starting;
+                {" "}{largestDropOff.lost_visitors} not observed in order, {largestDropOff.drop_off_rate ?? 0}% drop)
               </span>
             </div>
           )}
@@ -859,6 +873,7 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
           {review.by_traffic_segment.length > 0 && (
             <div className="mt-4 overflow-x-auto">
               <table className="w-full min-w-[680px] text-xs">
+                <caption className="pb-2 text-left text-muted-foreground">Directional stage visitors; largest drop uses ordered cohorts.</caption>
                 <thead>
                   <tr className="border-b text-left text-muted-foreground">
                     <th className="pb-2 pr-3 font-medium">Traffic segment</th>
@@ -885,7 +900,7 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
                         <td className="py-2 px-2 text-right tabular-nums">{stageValue("second_proof")}</td>
                         <td className="py-2 pl-2">
                           {drop
-                            ? `${ACTIVATION_STAGE_LABELS[drop.from_stage] ?? drop.from_stage} → ${ACTIVATION_STAGE_LABELS[drop.to_stage] ?? drop.to_stage} (${drop.from_visitors ?? 0} starting, ${drop.drop_off_rate ?? 0}%)`
+                            ? `${ACTIVATION_STAGE_LABELS[drop.from_stage] ?? drop.from_stage} → ${ACTIVATION_STAGE_LABELS[drop.to_stage] ?? drop.to_stage} (${drop.converted_visitors}/${drop.from_visitors} converted in order, ${drop.drop_off_rate ?? 0}% drop)`
                             : segment.low_confidence_drop_off
                               ? `Low confidence (${segment.low_confidence_drop_off.from_visitors ?? 0} / ${review.minimum_transition_visitors} starting visitors)`
                               : "—"}
@@ -926,9 +941,9 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
                 →{" "}
                 {ACTIVATION_STAGE_LABELS[review.largest_campaign_drop_off.largest_drop_off.to_stage]
                   ?? review.largest_campaign_drop_off.largest_drop_off.to_stage}{" "}
-                ({review.largest_campaign_drop_off.largest_drop_off.lost_visitors ?? 0} lost /{" "}
-                {review.largest_campaign_drop_off.largest_drop_off.from_visitors ?? 0} starting,{" "}
-                {review.largest_campaign_drop_off.largest_drop_off.drop_off_rate ?? 0}%)
+                ({review.largest_campaign_drop_off.largest_drop_off.converted_visitors} converted in order /{" "}
+                {review.largest_campaign_drop_off.largest_drop_off.from_visitors} starting,{" "}
+                {review.largest_campaign_drop_off.largest_drop_off.drop_off_rate ?? 0}% drop)
               </p>
             ) : (
               <p className="mt-3 text-xs text-muted-foreground">
@@ -938,6 +953,7 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
             {review.by_utm_source.length > 0 && (
               <div className="mt-3 overflow-x-auto">
                 <table className="w-full min-w-[720px] text-xs">
+                  <caption className="pb-2 text-left text-muted-foreground">Directional campaign visitors; largest drop uses ordered cohorts.</caption>
                   <thead>
                     <tr className="border-b text-left text-muted-foreground">
                       <th className="pb-2 pr-3 font-medium">UTM source</th>
@@ -981,7 +997,7 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
                                   ?? campaign.largest_drop_off.from_stage} → ${
                                   ACTIVATION_STAGE_LABELS[campaign.largest_drop_off.to_stage]
                                   ?? campaign.largest_drop_off.to_stage
-                                } (${campaign.largest_drop_off.from_visitors ?? 0} starting, ${campaign.largest_drop_off.drop_off_rate ?? 0}%)`
+                                } (${campaign.largest_drop_off.converted_visitors}/${campaign.largest_drop_off.from_visitors} converted in order, ${campaign.largest_drop_off.drop_off_rate ?? 0}% drop)`
                                 : "—"}
                             {campaign.low_confidence_drop_off && campaign.recommendation_eligible && (
                               <p className="text-muted-foreground">
