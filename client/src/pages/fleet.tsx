@@ -92,36 +92,35 @@ type FleetMode = "prefix" | "slug";
 const PREFIX_REGEX = /^[a-z0-9]{6,62}$/;
 const SLUG_REGEX = /^[a-z0-9][a-z0-9-]{1,58}[a-z0-9]$/;
 
+function lookupFromUrl(): { mode: FleetMode; value: string } | null {
+  const params = new URLSearchParams(window.location.search);
+  const fleet = params.get("fleet");
+  if (fleet) return { mode: "slug", value: fleet };
+  const org = params.get("org");
+  return org ? { mode: "prefix", value: org } : null;
+}
+
 export default function FleetPage() {
   const { isAuthenticated } = useWalletAuth();
   const [, navigate] = useLocation();
-  const initialParams = typeof window !== "undefined"
-    ? new URLSearchParams(window.location.search)
-    : new URLSearchParams();
-  const initialFleet = initialParams.get("fleet") ?? "";
-  const initialOrg = initialParams.get("org") ?? "";
-  const initialMode: FleetMode = initialFleet ? "slug" : "prefix";
-  const [mode, setMode] = useState<FleetMode>(initialMode);
-  const [orgInput, setOrgInput] = useState(initialFleet || initialOrg);
-  const [query, setQuery] = useState<{ mode: FleetMode; value: string } | null>(
-    initialFleet
-      ? { mode: "slug", value: initialFleet }
-      : initialOrg
-        ? { mode: "prefix", value: initialOrg }
-        : null,
-  );
+  const [query, setQuery] = useState(lookupFromUrl);
+  const [mode, setMode] = useState<FleetMode>(() => lookupFromUrl()?.mode ?? "prefix");
+  const [orgInput, setOrgInput] = useState(() => lookupFromUrl()?.value ?? "");
 
   useEffect(() => {
     document.title = "Fleet Coherence | Prove Before Act";
   }, []);
 
-  // Keep the URL shareable
   useEffect(() => {
-    const qs = query
-      ? `?${query.mode === "slug" ? "fleet" : "org"}=${encodeURIComponent(query.value)}`
-      : "";
-    window.history.replaceState(null, "", `${window.location.pathname}${qs}`);
-  }, [query]);
+    const restoreLookup = () => {
+      const lookup = lookupFromUrl();
+      setMode(lookup?.mode ?? "prefix");
+      setOrgInput(lookup?.value ?? "");
+      setQuery(lookup);
+    };
+    window.addEventListener("popstate", restoreLookup);
+    return () => window.removeEventListener("popstate", restoreLookup);
+  }, []);
 
   const validQuery = query !== null &&
     (query.mode === "slug" ? SLUG_REGEX.test(query.value) : PREFIX_REGEX.test(query.value));
@@ -143,6 +142,12 @@ export default function FleetPage() {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!inputValid) return;
+    const param = mode === "slug" ? "fleet" : "org";
+    const url = `${window.location.pathname}?${param}=${encodeURIComponent(trimmedInput)}${window.location.hash}`;
+    if (`${window.location.pathname}${window.location.search}${window.location.hash}` !== url) {
+      window.history.pushState(null, "", url);
+    }
     setQuery({ mode, value: trimmedInput });
   };
 
