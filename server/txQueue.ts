@@ -23,18 +23,25 @@ type TxEnqueuer = (
   requestId?: string,
 ) => Promise<void>;
 
-let testTxEnqueuer: TxEnqueuer | null = null;
+const testTxEnqueuers = new Map<string, TxEnqueuer>();
 
 /**
- * Test-only injection point for replacing persistent background queue writes.
- * Keeping the override at the queue boundary lets integration tests exercise
- * the complete proof-write path without leaving jobs for a live worker.
+ * Test-only injection point for a specific proof's background queue write.
+ * A unique file hash scopes the replacement across overlapping HTTP requests,
+ * which cannot inherit the test's async context. The returned cleanup only
+ * removes this registration, not another test's replacement.
  */
-export function setTestTxEnqueuer(enqueuer: TxEnqueuer | null): void {
+export function registerTestTxEnqueuer(fileHash: string, enqueuer: TxEnqueuer): () => void {
   if (process.env.NODE_ENV !== "test") {
     throw new Error("The test transaction enqueuer is only available when NODE_ENV=test");
   }
-  testTxEnqueuer = enqueuer;
+  if (testTxEnqueuers.has(fileHash)) {
+    throw new Error(`A test transaction enqueuer is already registered for file hash ${fileHash}`);
+  }
+  testTxEnqueuers.set(fileHash, enqueuer);
+  return () => {
+    if (testTxEnqueuers.get(fileHash) === enqueuer) testTxEnqueuers.delete(fileHash);
+  };
 }
 
 const VALIDATION_STEPS = [
@@ -66,6 +73,9 @@ export async function enqueueTx(
   payload: Record<string, any>,
   requestId?: string
 ): Promise<void> {
+  const testTxEnqueuer = process.env.NODE_ENV === "test"
+    ? testTxEnqueuers.get(payload.fileHash)
+    : undefined;
   if (testTxEnqueuer) {
     return testTxEnqueuer(jobType, jobId, payload, requestId);
   }

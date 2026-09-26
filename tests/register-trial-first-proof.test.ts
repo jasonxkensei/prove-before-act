@@ -16,7 +16,7 @@ import {
   createDeterministicTestBlockchainAdapter,
   setTestBlockchainAdapter,
 } from "../server/blockchain";
-import { setTestTxEnqueuer } from "../server/txQueue";
+import { registerTestTxEnqueuer } from "../server/txQueue";
 import { migrateConversionEventsTable } from "../server/maintenance";
 
 const BASE_URL = "http://localhost:5000";
@@ -289,9 +289,6 @@ describe("two-proof activation through authenticated proof creation", () => {
       payload: Record<string, any>;
     }> = [];
     setTestBlockchainAdapter(createDeterministicTestBlockchainAdapter());
-    setTestTxEnqueuer(async (jobType, jobId, payload) => {
-      interceptedFinalityJobs.push({ jobType, jobId, payload });
-    });
     await migrateConversionEventsTable();
     const app = express();
     app.set("trust proxy", 1);
@@ -303,6 +300,10 @@ describe("two-proof activation through authenticated proof creation", () => {
     if (!address || typeof address === "string") throw new Error("Test server did not bind a TCP port");
     const baseUrl = `http://127.0.0.1:${address.port}`;
     const agentName = uniqueName("two-proof-activation");
+    const firstHash = crypto.createHash("sha256").update(`${agentName}:proof:1`).digest("hex");
+    const releaseQueue = registerTestTxEnqueuer(firstHash, async (jobType, jobId, payload) => {
+      interceptedFinalityJobs.push({ jobType, jobId, payload });
+    });
     const clientIp = `198.20.${crypto.randomInt(1, 255)}.${crypto.randomInt(1, 255)}`;
     const rateLimitWindowStart = Math.floor(Date.now() / REGISTER_RATE_LIMIT_WINDOW_MS) * REGISTER_RATE_LIMIT_WINDOW_MS;
     const registerBucket = rateLimitBucket(clientIp, rateLimitWindowStart);
@@ -316,7 +317,6 @@ describe("two-proof activation through authenticated proof creation", () => {
       expect(issuedKey).toMatch(/^pm_/);
       expect(registration.trial_remaining).toBe(10);
 
-      const firstHash = crypto.createHash("sha256").update(`${agentName}:proof:1`).digest("hex");
       const firstCreateResponse = await fetch(`${baseUrl}/api/proof`, {
         method: "POST",
         headers: {
@@ -471,7 +471,7 @@ describe("two-proof activation through authenticated proof creation", () => {
         expect(JSON.stringify(verification)).not.toContain(issuedKey);
       }
     } finally {
-      setTestTxEnqueuer(null);
+      releaseQueue();
       setTestBlockchainAdapter(null);
       await new Promise<void>((resolve, reject) =>
         server.close((error) => error ? reject(error) : resolve()),
@@ -496,6 +496,84 @@ describe("two-proof activation through authenticated proof creation", () => {
       );
       await pool.query(`DELETE FROM users WHERE agent_name = $1`, [agentName]);
       await pool.query(`DELETE FROM rate_limit_counters WHERE bucket = $1`, [registerBucket]);
+    }
+  }, 30_000);
+
+  it("keeps concurrent proof writes in their own queue replacements", async () => {
+    await migrateConversionEventsTable();
+    setTestBlockchainAdapter(createDeterministicTestBlockchainAdapter());
+    const app = express();
+    app.set("trust proxy", 1);
+    app.use(express.json());
+    const server = await registerRoutes(app);
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const address = server.address();
+    if (!address || typeof address === "string") throw new Error("Test server did not bind a TCP port");
+    const baseUrl = `http://127.0.0.1:${address.port}`;
+    const cases = Array.from({ length: 2 }, (_, index) => {
+      const agentName = uniqueName(`parallel-proof-${index}`);
+      const clientIp = `198.21.${crypto.randomInt(1, 255)}.${crypto.randomInt(1, 255)}`;
+      return {
+        agentName,
+        clientIp,
+        fileHash: crypto.createHash("sha256").update(`${agentName}:proof`).digest("hex"),
+        jobs: [] as Array<{ jobId: string; fileHash: string }>,
+      };
+    });
+    const releaseQueues = cases.map(testCase =>
+      registerTestTxEnqueuer(testCase.fileHash, async (_, jobId, payload) => {
+        testCase.jobs.push({ jobId, fileHash: payload.fileHash });
+      }),
+    );
+
+    try {
+      const registrations = await Promise.all(cases.map(async testCase => {
+        const response = await fetch(`${baseUrl}/api/agent/register`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Forwarded-For": testCase.clientIp },
+          body: JSON.stringify({ agent_name: testCase.agentName }),
+        });
+        expect(response.status).toBe(201);
+        return response.json();
+      }));
+      const created = await Promise.all(cases.map(async (testCase, index) => {
+        const response = await fetch(`${baseUrl}/api/proof`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${registrations[index].api_key}`,
+            "X-Forwarded-For": testCase.clientIp,
+          },
+          body: JSON.stringify({ file_hash: testCase.fileHash, filename: `parallel-${index}.json` }),
+        });
+        expect(response.status).toBe(201);
+        const proof = await response.json();
+        return proof;
+      }));
+
+      for (const [index, testCase] of cases.entries()) {
+        expect(testCase.jobs).toEqual([{
+          jobId: `xproof_cert_${created[index].proof_id}`,
+          fileHash: testCase.fileHash,
+        }]);
+      }
+      const leakedJobs = await pool.query(
+        `SELECT job_id FROM tx_queue WHERE job_id = ANY($1)`,
+        [created.map(proof => `xproof_cert_${proof.proof_id}`)],
+      );
+      expect(leakedJobs.rows).toEqual([]);
+    } finally {
+      releaseQueues.forEach(release => release());
+      setTestBlockchainAdapter(null);
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => error ? reject(error) : resolve()),
+      );
+      for (const testCase of cases) {
+        await pool.query(`DELETE FROM users WHERE agent_name = $1`, [testCase.agentName]);
+        await pool.query(`DELETE FROM rate_limit_counters WHERE bucket = $1`, [
+          rateLimitBucket(testCase.clientIp, Math.floor(Date.now() / REGISTER_RATE_LIMIT_WINDOW_MS) * REGISTER_RATE_LIMIT_WINDOW_MS),
+        ]);
+      }
     }
   }, 30_000);
 });
