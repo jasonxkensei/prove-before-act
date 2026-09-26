@@ -629,7 +629,7 @@ export async function computeTrustScore(userId: string): Promise<TrustScore> {
 //
 const TRUST_CACHE_MAX_ENTRIES = 5000;
 const TRUST_CACHE_TTL_MS = 60_000;
-const trustCache = new Map<string, { value: TrustScore | null; cachedAt: number }>();
+const trustCache = new Map<string, { value: TrustScore | null; cachedAt: number; revision: string | null }>();
 const trustReadThroughInFlight = new Map<string, Promise<TrustScore | null>>();
 
 // Computation uses the regular pool in addition to the transaction connection.
@@ -662,9 +662,9 @@ async function withWalletTrustLock<T>(walletAddress: string, work: () => Promise
   }
 }
 
-async function loadTrustSnapshot(walletAddress: string): Promise<TrustScore | null> {
-  const snap = await pool.query<{ full_trust_data: unknown }>(
-    `SELECT full_trust_data
+async function loadTrustSnapshot(walletAddress: string): Promise<{ value: TrustScore; revision: string } | null> {
+  const snap = await pool.query<{ full_trust_data: unknown; revision: string }>(
+    `SELECT full_trust_data, xmin::text AS revision
      FROM trust_score_snapshots
      WHERE wallet_address = $1
        AND finality_version = ${FINALITY_SNAPSHOT_VERSION}
@@ -672,15 +672,16 @@ async function loadTrustSnapshot(walletAddress: string): Promise<TrustScore | nu
      ORDER BY snapshot_date DESC LIMIT 1`,
     [walletAddress],
   );
-  return (snap.rows[0]?.full_trust_data as TrustScore | undefined) ?? null;
+  const row = snap.rows[0];
+  return row ? { value: row.full_trust_data as TrustScore, revision: row.revision } : null;
 }
 
-function setTrustCache(key: string, value: TrustScore | null) {
+function setTrustCache(key: string, value: TrustScore | null, revision: string | null = null) {
   if (trustCache.size >= TRUST_CACHE_MAX_ENTRIES) {
     const oldestKey = trustCache.keys().next().value;
     if (oldestKey !== undefined) trustCache.delete(oldestKey);
   }
-  trustCache.set(key, { value, cachedAt: Date.now() });
+  trustCache.set(key, { value, cachedAt: Date.now(), revision });
 }
 
 async function computeAndSnapshotTrustScoreByWallet(walletAddress: string, requireSnapshot = false): Promise<TrustScore | null> {
@@ -757,15 +758,32 @@ export async function refreshTrustAfterCertification(
 // exactly one single-wallet computation and persist it for subsequent reads.
 export async function computeTrustScoreByWallet(walletAddress: string): Promise<TrustScore | null> {
   const cached = trustCache.get(walletAddress);
-  if (cached && Date.now() - cached.cachedAt < TRUST_CACHE_TTL_MS) return cached.value;
+  if (cached && cached.revision && Date.now() - cached.cachedAt < TRUST_CACHE_TTL_MS) {
+    // A cheap indexed version read coordinates all app instances. A confirmation
+    // commits its snapshot before the caller returns; a different process must
+    // not serve its old 60-second cache entry on the next public request.
+    // On an outage, do not treat an unverified cached score as current.
+    try {
+      const current = await pool.query<{ revision: string }>(
+        `SELECT xmin::text AS revision FROM trust_score_snapshots
+         WHERE wallet_address = $1 AND finality_version = ${FINALITY_SNAPSHOT_VERSION}
+           AND full_trust_data IS NOT NULL
+         ORDER BY snapshot_date DESC LIMIT 1`,
+        [walletAddress],
+      );
+      if (current.rows[0]?.revision === cached.revision) return cached.value;
+    } catch {
+      // Fall through to the existing snapshot/read-through failure path.
+    }
+  }
   if (cached) trustCache.delete(walletAddress);
 
   // Single bounded indexed read from the precomputed snapshot table.
   try {
     const value = await loadTrustSnapshot(walletAddress);
     if (value) {
-      setTrustCache(walletAddress, value);
-      return value;
+      setTrustCache(walletAddress, value.value, value.revision);
+      return value.value;
     }
   } catch { /* snapshot read failure is non-fatal; return null below */ }
 
@@ -777,8 +795,8 @@ export async function computeTrustScoreByWallet(walletAddress: string): Promise<
     // lock. In that case do not repeat the expensive trust queries.
     const snapshot = await loadTrustSnapshot(walletAddress);
     if (snapshot) {
-      setTrustCache(walletAddress, snapshot);
-      return snapshot;
+      setTrustCache(walletAddress, snapshot.value, snapshot.revision);
+      return snapshot.value;
     }
     return computeAndSnapshotTrustScoreByWallet(walletAddress);
   }).catch((error) => {
