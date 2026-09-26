@@ -35,6 +35,7 @@ import {
   purgeOnboardingCertifications,
   sweepExpiredAcpReservations,
   migrateConversionEventsTable,
+  migrateMx8004BalanceAlertState,
   migrateProofFinalityReconciliationSchema,
   migratePbaHttpWitnessRevocations,
   checkMx8004WalletBalance,
@@ -244,6 +245,7 @@ app.use((req, res, next) => {
   // present. This idempotent migration is non-destructive and is mirrored in
   // shared/schema.ts for publish-time schema reconciliation.
   await migrateConversionEventsTable();
+  await migrateMx8004BalanceAlertState();
   // Additive only: legacy confirmed rows remain untouched and unverified until
   // a separately planned reconciliation. Never stamp them during deployment.
   await db.execute(sql`ALTER TABLE certifications ADD COLUMN IF NOT EXISTS finality_checked_at timestamp`);

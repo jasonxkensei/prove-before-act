@@ -553,6 +553,16 @@ export const conversionTelemetryAlertState = pgTable("conversion_telemetry_alert
   lastSentAt: timestamp("last_sent_at", { withTimezone: true }),
 });
 
+// One durable low-balance episode per signer, with a short delivery lease.
+export const mx8004BalanceAlertState = pgTable("mx8004_balance_alert_state", {
+  signerAddress: text("signer_address").primaryKey(),
+  observedAt: timestamp("observed_at", { withTimezone: true }).notNull(),
+  low: boolean("low").notNull(),
+  notified: boolean("notified").notNull().default(false),
+  leaseToken: text("lease_token"),
+  leaseUntil: timestamp("lease_until", { withTimezone: true }),
+});
+
 export type ConversionEvent = typeof conversionEvents.$inferSelect;
 
 // Proof-scoped idempotency markers. These contain no visitor, request,

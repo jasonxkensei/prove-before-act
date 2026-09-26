@@ -1,5 +1,5 @@
 import { logger } from "./logger";
-import { db } from "./db";
+import { db, pool } from "./db";
 import { txQueue } from "@shared/schema";
 import { eq, and, gte, sql } from "drizzle-orm";
 import { checkAndAlert as checkAndAlertRateLimitImpl } from "./rateLimitAlerts";
@@ -89,45 +89,66 @@ export async function alertPbaPaymentReconciliation(request: {
   });
 }
 
-// A successful delivery belongs to one low-balance episode. A healthy reading
-// re-arms it; an API error does not (it may contain a stale cached reading).
-let alertedLowBalanceAddress: string | null = null;
-let lowBalanceDelivery: Promise<void> | null = null;
+// The webhook has a 10-second timeout; an expired lease recovers after a crash.
+// All transitions are atomic per signer, including across server instances.
+const LOW_BALANCE_LEASE_MS = 30_000;
 
 export async function checkAndAlertMx8004LowBalance(balance: Mx8004SignerBalance): Promise<void> {
-  if (balance.error || balance.balanceEgld === null || !balance.address) return;
+  if (balance.error || balance.balanceEgld === null || !balance.address || !balance.checkedAt) return;
+  const observedAt = new Date(balance.checkedAt);
+  if (Number.isNaN(observedAt.getTime())) return;
   if (!balance.lowBalance) {
-    alertedLowBalanceAddress = null;
+    // Older readings cannot re-arm an episode after a newer low reading.
+    await pool.query(`
+      INSERT INTO mx8004_balance_alert_state (signer_address, observed_at, low, notified)
+      VALUES ($1, $2, FALSE, FALSE)
+      ON CONFLICT (signer_address) DO UPDATE
+        SET observed_at = EXCLUDED.observed_at, low = FALSE, notified = FALSE,
+            lease_token = NULL, lease_until = NULL
+      WHERE mx8004_balance_alert_state.observed_at <= EXCLUDED.observed_at
+    `, [balance.address, observedAt]);
     return;
   }
 
   const webhookUrl = process.env.MX8004_BALANCE_ALERT_WEBHOOK_URL || process.env.TX_ALERT_WEBHOOK_URL;
-  if (!webhookUrl || alertedLowBalanceAddress === balance.address) return;
-  if (lowBalanceDelivery) return lowBalanceDelivery;
+  if (!webhookUrl) return;
+  const token = crypto.randomUUID();
+  const claimed = await pool.query<{ lease_token: string }>(`
+    INSERT INTO mx8004_balance_alert_state
+      (signer_address, observed_at, low, notified, lease_token, lease_until)
+    VALUES ($1, $2, TRUE, FALSE, $3, NOW() + ($4::double precision * INTERVAL '1 millisecond'))
+    ON CONFLICT (signer_address) DO UPDATE
+      SET observed_at = EXCLUDED.observed_at, low = TRUE,
+          lease_token = EXCLUDED.lease_token, lease_until = EXCLUDED.lease_until
+    WHERE mx8004_balance_alert_state.notified = FALSE
+      AND (mx8004_balance_alert_state.lease_until IS NULL
+           OR mx8004_balance_alert_state.lease_until <= NOW())
+      AND (mx8004_balance_alert_state.observed_at < EXCLUDED.observed_at
+           OR (mx8004_balance_alert_state.low = TRUE
+               AND mx8004_balance_alert_state.observed_at = EXCLUDED.observed_at))
+    RETURNING lease_token
+  `, [balance.address, observedAt, token, LOW_BALANCE_LEASE_MS]);
+  if (claimed.rows[0]?.lease_token !== token) return;
 
-  lowBalanceDelivery = (async () => {
-    try {
-      const delivered = await sendAlertWebhook(webhookUrl, "mx8004_signer_low_balance", {
-        alert: "mx8004_signer_low_balance",
-        severity: "warning",
-        timestamp: new Date().toISOString(),
-        signer_address: balance.address,
-        balance_egld: balance.balanceEgld,
-        threshold_egld: balance.thresholdEgld,
-        top_up_action: `Transfer EGLD to signer wallet ${balance.address} before MX-8004 validation jobs stall.`,
-      });
-      if (delivered) alertedLowBalanceAddress = balance.address;
-    } catch (error) {
-      logger.error("MX-8004 balance alert delivery failed", {
-        component: "alerts",
-        error: error instanceof Error ? error.name : "unknown",
-      });
-    }
-  })();
+  let delivered = false;
   try {
-    await lowBalanceDelivery;
+    delivered = await sendAlertWebhook(webhookUrl, "mx8004_signer_low_balance", {
+      alert: "mx8004_signer_low_balance",
+      severity: "warning",
+      timestamp: new Date().toISOString(),
+      signer_address: balance.address,
+      balance_egld: balance.balanceEgld,
+      threshold_egld: balance.thresholdEgld,
+      top_up_action: `Transfer EGLD to signer wallet ${balance.address} before MX-8004 validation jobs stall.`,
+    });
   } finally {
-    lowBalanceDelivery = null;
+    // A healthy reading may have invalidated this lease during delivery.
+    // In that case the old sender must not mark the new episode notified.
+    await pool.query(`
+      UPDATE mx8004_balance_alert_state
+      SET lease_token = NULL, lease_until = NULL, notified = $3
+      WHERE signer_address = $1 AND lease_token = $2 AND low = TRUE
+    `, [balance.address, token, delivered]);
   }
 }
 

@@ -73,6 +73,20 @@ export async function checkMx8004WalletBalance() {
   return balance;
 }
 
+/** Install shared signer-alert state before the balance scheduler starts. */
+export async function migrateMx8004BalanceAlertState(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS mx8004_balance_alert_state (
+      signer_address TEXT PRIMARY KEY,
+      observed_at TIMESTAMPTZ NOT NULL,
+      low BOOLEAN NOT NULL,
+      notified BOOLEAN NOT NULL DEFAULT FALSE,
+      lease_token TEXT,
+      lease_until TIMESTAMPTZ
+    )
+  `);
+}
+
 export async function purgeExpiredConversionEvents(): Promise<number> {
   // Proof-verification deduplication markers intentionally live in
   // conversion_event_dedup_keys beyond this reporting retention window.
