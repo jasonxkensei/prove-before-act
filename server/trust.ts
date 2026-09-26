@@ -632,6 +632,49 @@ const TRUST_CACHE_TTL_MS = 60_000;
 const trustCache = new Map<string, { value: TrustScore | null; cachedAt: number }>();
 const trustReadThroughInFlight = new Map<string, Promise<TrustScore | null>>();
 
+// Computation uses the regular pool in addition to the transaction connection.
+// Keep spare connections for those queries even when many wallets go cold at once.
+const TRUST_LOCK_LOCAL_CONCURRENCY = 4;
+let activeTrustLocks = 0;
+const trustLockWaiters: Array<() => void> = [];
+
+// Transaction-scoped and namespaced: distinct wallets can proceed independently.
+// Try-lock avoids occupying pool connections while another instance is computing.
+async function withWalletTrustLock<T>(walletAddress: string, work: () => Promise<T>): Promise<T> {
+  if (activeTrustLocks >= TRUST_LOCK_LOCAL_CONCURRENCY) {
+    await new Promise<void>((resolve) => trustLockWaiters.push(resolve));
+  }
+  activeTrustLocks++;
+  try {
+    for (let attempt = 0; attempt < 200; attempt++) {
+      const outcome = await db.transaction(async (tx) => {
+        const result = await tx.execute(sql`SELECT pg_try_advisory_xact_lock(hashtext('trust-snapshot'), hashtext(${walletAddress})) AS acquired`);
+        if (!result.rows[0]?.acquired) return { acquired: false as const };
+        return { acquired: true as const, value: await work() };
+      });
+      if (outcome.acquired) return outcome.value;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    throw new Error("Timed out waiting for wallet trust snapshot lock");
+  } finally {
+    activeTrustLocks--;
+    trustLockWaiters.shift()?.();
+  }
+}
+
+async function loadTrustSnapshot(walletAddress: string): Promise<TrustScore | null> {
+  const snap = await pool.query<{ full_trust_data: unknown }>(
+    `SELECT full_trust_data
+     FROM trust_score_snapshots
+     WHERE wallet_address = $1
+       AND finality_version = ${FINALITY_SNAPSHOT_VERSION}
+       AND full_trust_data IS NOT NULL
+     ORDER BY snapshot_date DESC LIMIT 1`,
+    [walletAddress],
+  );
+  return (snap.rows[0]?.full_trust_data as TrustScore | undefined) ?? null;
+}
+
 function setTrustCache(key: string, value: TrustScore | null) {
   if (trustCache.size >= TRUST_CACHE_MAX_ENTRIES) {
     const oldestKey = trustCache.keys().next().value;
@@ -706,7 +749,7 @@ export async function refreshTrustAfterCertification(
   const inFlight = trustReadThroughInFlight.get(walletAddress);
   if (inFlight) await inFlight;
   trustCache.delete(walletAddress);
-  await computeAndSnapshotTrustScoreByWallet(walletAddress, true);
+  await withWalletTrustLock(walletAddress, () => computeAndSnapshotTrustScoreByWallet(walletAddress, true));
 }
 
 // Public read — bounded: in-memory cache first, then one indexed snapshot row.
@@ -719,17 +762,8 @@ export async function computeTrustScoreByWallet(walletAddress: string): Promise<
 
   // Single bounded indexed read from the precomputed snapshot table.
   try {
-    const snap = await pool.query<{ full_trust_data: unknown }>(
-      `SELECT full_trust_data
-       FROM trust_score_snapshots
-       WHERE wallet_address = $1
-         AND finality_version = ${FINALITY_SNAPSHOT_VERSION}
-         AND full_trust_data IS NOT NULL
-       ORDER BY snapshot_date DESC LIMIT 1`,
-      [walletAddress],
-    );
-    if (snap.rows.length > 0 && snap.rows[0].full_trust_data) {
-      const value = snap.rows[0].full_trust_data as TrustScore;
+    const value = await loadTrustSnapshot(walletAddress);
+    if (value) {
       setTrustCache(walletAddress, value);
       return value;
     }
@@ -738,7 +772,16 @@ export async function computeTrustScoreByWallet(walletAddress: string): Promise<
   const inFlight = trustReadThroughInFlight.get(walletAddress);
   if (inFlight) return inFlight;
 
-  const computation = computeAndSnapshotTrustScoreByWallet(walletAddress).catch((error) => {
+  const computation = withWalletTrustLock(walletAddress, async () => {
+    // Another instance may have filled the snapshot while we waited for its
+    // lock. In that case do not repeat the expensive trust queries.
+    const snapshot = await loadTrustSnapshot(walletAddress);
+    if (snapshot) {
+      setTrustCache(walletAddress, snapshot);
+      return snapshot;
+    }
+    return computeAndSnapshotTrustScoreByWallet(walletAddress);
+  }).catch((error) => {
     logger.warn("Trust read-through computation failed", {
       component: "trust-read-through",
       wallet: walletAddress,
@@ -1025,28 +1068,30 @@ export async function runTrustRefreshCycle(): Promise<void> {
       const batch = rows.slice(i, i + TRUST_REFRESH_CONCURRENCY);
       await Promise.all(batch.map(async ({ id, wallet_address }) => {
         try {
-          const trust = await computeTrustScore(id);
-          setTrustCache(wallet_address, trust);
-          await pool.query(
-            `INSERT INTO trust_score_snapshots
-               (wallet_address, score, level, cert_total, active_attestations, rank, snapshot_date, full_trust_data, finality_version)
-             VALUES ($1, $2, $3, $4, $5, 0, CURRENT_DATE, $6::jsonb, ${FINALITY_SNAPSHOT_VERSION})
-             ON CONFLICT (wallet_address, snapshot_date) DO UPDATE
-               SET full_trust_data      = EXCLUDED.full_trust_data,
-                   score                = EXCLUDED.score,
-                   level                = EXCLUDED.level,
-                   cert_total           = EXCLUDED.cert_total,
-                   active_attestations  = EXCLUDED.active_attestations,
-                   finality_version     = ${FINALITY_SNAPSHOT_VERSION}`,
-            [
-              wallet_address,
-              trust.score,
-              trust.level,
-              trust.certTotal,
-              trust.activeAttestations ?? 0,
-              JSON.stringify(trust),
-            ],
-          );
+          await withWalletTrustLock(wallet_address, async () => {
+            const trust = await computeTrustScore(id);
+            await pool.query(
+              `INSERT INTO trust_score_snapshots
+                 (wallet_address, score, level, cert_total, active_attestations, rank, snapshot_date, full_trust_data, finality_version)
+               VALUES ($1, $2, $3, $4, $5, 0, CURRENT_DATE, $6::jsonb, ${FINALITY_SNAPSHOT_VERSION})
+               ON CONFLICT (wallet_address, snapshot_date) DO UPDATE
+                 SET full_trust_data      = EXCLUDED.full_trust_data,
+                     score                = EXCLUDED.score,
+                     level                = EXCLUDED.level,
+                     cert_total           = EXCLUDED.cert_total,
+                     active_attestations  = EXCLUDED.active_attestations,
+                     finality_version     = ${FINALITY_SNAPSHOT_VERSION}`,
+              [
+                wallet_address,
+                trust.score,
+                trust.level,
+                trust.certTotal,
+                trust.activeAttestations ?? 0,
+                JSON.stringify(trust),
+              ],
+            );
+            setTrustCache(wallet_address, trust);
+          });
           succeeded++;
         } catch (err: any) {
           failed++;

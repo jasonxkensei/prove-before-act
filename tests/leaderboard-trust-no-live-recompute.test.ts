@@ -19,7 +19,8 @@
 
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import crypto from "crypto";
-import { pool } from "../server/db";
+import { db, pool } from "../server/db";
+import { sql } from "drizzle-orm";
 import { FINALITY_SNAPSHOT_VERSION } from "@shared/schema";
 import {
   getLeaderboard,
@@ -254,6 +255,51 @@ describe("computeTrustScoreByWallet() never live-recomputes on a cold cache", ()
 });
 
 describe("computeTrustScoreByWallet() snapshots a newly visible public wallet", () => {
+  it("reuses another instance's first snapshot after waiting for its wallet lock", async () => {
+    await pool.query(`DELETE FROM trust_score_snapshots WHERE wallet_address = $1`, [READ_THROUGH_WALLET]);
+    _resetTrustCacheForTesting(READ_THROUGH_WALLET);
+
+    let sawInitialRead!: () => void;
+    const initialRead = new Promise<void>((resolve) => { sawInitialRead = resolve; });
+    const originalQuery = pool.query.bind(pool);
+    const querySpy = vi.spyOn(pool, "query").mockImplementation((async (text: string, values?: unknown[]) => {
+      const result = await originalQuery(text, values);
+      if (text.includes("SELECT full_trust_data") && values?.[0] === READ_THROUGH_WALLET) {
+        sawInitialRead();
+      }
+      return result;
+    }) as typeof pool.query);
+
+    let waitingRead: Promise<Awaited<ReturnType<typeof computeTrustScoreByWallet>>> | undefined;
+    try {
+      // A different DB session represents another app instance computing this
+      // wallet. The reader must recheck after the lock is released, not compute.
+      await db.transaction(async (tx) => {
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('trust-snapshot'), hashtext(${READ_THROUGH_WALLET}))`);
+        waitingRead = computeTrustScoreByWallet(READ_THROUGH_WALLET);
+        await initialRead;
+        await pool.query(
+          `INSERT INTO trust_score_snapshots
+             (wallet_address, score, level, cert_total, active_attestations, rank, snapshot_date, full_trust_data, finality_version)
+           SELECT $1, score, level, cert_total, active_attestations, 0, CURRENT_DATE, full_trust_data, finality_version
+           FROM trust_score_snapshots WHERE wallet_address = $2`,
+          [READ_THROUGH_WALLET, TRUST_WALLET],
+        );
+      });
+      const score = await waitingRead!;
+      expect(score?.score).toBe(IMPOSSIBLE_SCORE);
+      expect(score?.certTotal).toBe(IMPOSSIBLE_CERT_TOTAL);
+      expect(querySpy.mock.calls.filter(([text, values]) =>
+        String(text).includes("INSERT INTO trust_score_snapshots") &&
+        values?.[0] === READ_THROUGH_WALLET && values.length === 6,
+      )).toHaveLength(0);
+    } finally {
+      if (waitingRead) await waitingRead;
+      querySpy.mockRestore();
+      _resetTrustCacheForTesting(READ_THROUGH_WALLET);
+    }
+  });
+
   it("returns a bounded computed score when the first snapshot write fails and reports the failure", async () => {
     const { getTrustSnapshotWriteHealth } = await import("../server/alerts");
     await pool.query(`DELETE FROM trust_score_snapshots WHERE wallet_address = $1`, [READ_THROUGH_WALLET]);
