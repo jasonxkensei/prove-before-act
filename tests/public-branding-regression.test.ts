@@ -12,9 +12,10 @@ import express from "express";
 import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
 
-const { isMX8004ConfiguredMock, getContractAddressesMock } = vi.hoisted(() => ({
+const { isMX8004ConfiguredMock, getContractAddressesMock, getMx8004SignerBalanceMock } = vi.hoisted(() => ({
   isMX8004ConfiguredMock: vi.fn(),
   getContractAddressesMock: vi.fn(),
+  getMx8004SignerBalanceMock: vi.fn(),
 }));
 
 vi.mock("../server/mx8004", async (importOriginal) => {
@@ -23,6 +24,7 @@ vi.mock("../server/mx8004", async (importOriginal) => {
     ...actual,
     isMX8004Configured: isMX8004ConfiguredMock,
     getContractAddresses: getContractAddressesMock,
+    getMx8004SignerBalance: getMx8004SignerBalanceMock,
   };
 });
 
@@ -310,6 +312,9 @@ describe("public branding and capability claims", () => {
 
   it("reports supported-but-inactive MX-8004 truthfully when unconfigured", async () => {
     isMX8004ConfiguredMock.mockReturnValue(false);
+    getMx8004SignerBalanceMock.mockResolvedValue({
+      address: "erd1private-signer", balanceRaw: "987654321012345678", nonce: 98765,
+    });
     const app = express();
     registerMx8004Routes(app);
 
@@ -328,10 +333,16 @@ describe("public branding and capability claims", () => {
     expect(response.body).not.toHaveProperty("erc8004_compliant");
     expect(response.body).not.toHaveProperty("contracts");
     expect(response.body).not.toHaveProperty("capabilities");
+    expect(response.body).not.toHaveProperty("signer_balance");
+    expect(response.body).not.toHaveProperty("signer_balance_egld");
+    expect(response.body).not.toHaveProperty("low_balance");
+    expect(JSON.stringify(response.body)).not.toMatch(/erd1private-signer|987654321012345678|98765/);
+    expect(getMx8004SignerBalanceMock).not.toHaveBeenCalled();
   });
 
   it("reports the complete active MX-8004 capability contract when configured", async () => {
     isMX8004ConfiguredMock.mockReturnValue(true);
+    getMx8004SignerBalanceMock.mockClear();
     getContractAddressesMock.mockReturnValue({
       identityRegistry: "erd1identity-registry",
       validationRegistry: "erd1validation-registry",
@@ -382,6 +393,11 @@ describe("public branding and capability claims", () => {
       feedback: "https://capabilities.example.test/api/mx8004/feedback/{agentNonce}/{clientAddress}/{index}",
     });
     expect(response.body).not.toHaveProperty("erc8004_compliant");
+    expect(response.body).not.toHaveProperty("signer_balance");
+    expect(response.body).not.toHaveProperty("signer_balance_egld");
+    expect(response.body).not.toHaveProperty("low_balance");
+    expect(JSON.stringify(response.body)).not.toMatch(/erd1private-signer|987654321012345678|98765/);
+    expect(getMx8004SignerBalanceMock).not.toHaveBeenCalled();
   });
 
   it.each([

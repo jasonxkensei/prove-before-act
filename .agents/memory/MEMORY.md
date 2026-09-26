@@ -39,3 +39,4 @@
 - [Playwright parameterized cases](playwright-parameterized-cases.md) — Playwright's test API has no test.each; declare cases with a for...of loop at module scope.
 - [MX-8004 queue handoff uncertainty](mx8004-queue-handoff-uncertainty.md) — a failed enqueue acknowledgement is not proof that the insert rolled back; always prefer an actual queue row and avoid automatic replay.
 - [Operator webhook delivery ambiguity](operator-webhook-delivery-ambiguity.md) — durable alerts are at-least-once; use a stable delivery ID so receivers can deduplicate after ambiguous acknowledgements.
+- [Signer wallet privacy boundary](signer-wallet-privacy-boundary.md) — public capability status must not mirror admin-only signer address, balance, or nonce.

@@ -34,7 +34,7 @@ const ADMIN_WALLET = `erd1conversionadmintest${crypto.randomBytes(10).toString("
 let server: Server;
 let baseUrl: string;
 let cookie: string;
-let sid: string;
+const seededSessionIds: string[] = [];
 let originalAdminWallets: string | undefined;
 const seededTelemetryHashes: string[] = [];
 const seededUtmSources: string[] = [];
@@ -42,7 +42,7 @@ const seededDedupKeys: string[] = [];
 const seededUserIds: string[] = [];
 
 async function createAdminSession(walletAddress: string): Promise<string> {
-  sid = crypto.randomUUID().replace(/-/g, "");
+  const sid = crypto.randomUUID().replace(/-/g, "");
   const sess = JSON.stringify({
     cookie: { originalMaxAge: null, expires: null, httpOnly: true, path: "/" },
     walletAddress,
@@ -51,6 +51,7 @@ async function createAdminSession(walletAddress: string): Promise<string> {
     `INSERT INTO sessions (sid, sess, expire) VALUES ($1, $2::jsonb, $3)`,
     [sid, sess, new Date(Date.now() + 3_600_000)],
   );
+  seededSessionIds.push(sid);
   const secret = process.env.SESSION_SECRET;
   if (!secret) throw new Error("SESSION_SECRET is required for admin-session test");
   const signature = crypto
@@ -96,13 +97,48 @@ afterAll(async () => {
   if (seededUserIds.length > 0) {
     await pool.query(`DELETE FROM users WHERE id = ANY($1)`, [seededUserIds]);
   }
-  if (sid) await pool.query(`DELETE FROM sessions WHERE sid = $1`, [sid]);
+  if (seededSessionIds.length > 0) {
+    await pool.query(`DELETE FROM sessions WHERE sid = ANY($1)`, [seededSessionIds]);
+  }
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   if (originalAdminWallets === undefined) delete process.env.ADMIN_WALLETS;
   else process.env.ADMIN_WALLETS = originalAdminWallets;
 });
 
 describe("GET /api/admin/stats signer balance", () => {
+  it("does not disclose signer details without a session or with a signed non-admin session", async () => {
+    const signerAddress = "erd1private-signing-wallet";
+    const signerBalance = "987654321012345678";
+    const balanceSpy = vi.spyOn(mx8004, "getMx8004SignerBalance").mockResolvedValue({
+      address: signerAddress,
+      balanceRaw: signerBalance,
+      balanceEgld: 0.987,
+      nonce: 7,
+      lowBalance: false,
+      thresholdEgld: mx8004.MX8004_LOW_BALANCE_EGLD,
+      checkedAt: "2026-09-26T12:00:00.000Z",
+    });
+    try {
+      const nonAdminCookie = await createAdminSession(
+        `erd1nonadminstats${crypto.randomBytes(10).toString("hex")}`,
+      );
+      for (const [headers, expectedStatus] of [
+        [{}, 401],
+        [{ Cookie: nonAdminCookie }, 403],
+      ] as const) {
+        const response = await fetch(`${baseUrl}/api/admin/stats`, { headers });
+        expect(response.status).toBe(expectedStatus);
+        const body = await response.text();
+        expect(body).not.toContain(signerAddress);
+        expect(body).not.toContain(signerBalance);
+        expect(JSON.parse(body)).not.toHaveProperty("mx8004");
+      }
+      expect(balanceSpy).not.toHaveBeenCalled();
+    } finally {
+      balanceSpy.mockRestore();
+    }
+  });
+
   it("reports a healthy signer wallet to an authenticated admin", async () => {
     const threshold = mx8004.MX8004_LOW_BALANCE_EGLD;
     const balanceSpy = vi.spyOn(mx8004, "getMx8004SignerBalance").mockResolvedValue({

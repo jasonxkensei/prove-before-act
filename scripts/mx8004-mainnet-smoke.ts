@@ -5,6 +5,8 @@
  *   MULTIVERSX_CHAIN_ID=1 npm run smoke:mx8004
  *
  * The target app must have a running queue worker and a funded Mainnet signer.
+ * Confirm MX8004_SMOKE_SIGNER_ADDRESS against the admin-only stats view first:
+ * the public MX-8004 status intentionally does not disclose the configured signer.
  * This creates a real trial account, proof, and six on-chain transactions.
  */
 import { createHash, randomUUID } from "node:crypto";
@@ -72,15 +74,28 @@ async function registryVerified(registry: string, jobId: string): Promise<boolea
 
 export async function runMainnetSmoke(config: Config): Promise<void> {
   const status = await json(`${config.base}/api/mx8004/status`);
-  const balance = status.signer_balance;
   if (!status.active || status.network?.chain_id !== "1" ||
       status.network?.api_url !== API_URL ||
       status.network?.gateway_url !== "https://gateway.multiversx.com" ||
       status.contracts?.validationRegistry !== config.registry ||
-      balance?.address !== config.signer || balance?.status !== "ok" ||
-      !Number.isSafeInteger(balance.nonce) || balance.nonce < 0 ||
       !Number.isInteger(status.contracts?.xproofAgentNonce) || status.contracts.xproofAgentNonce < 1) {
-    throw new Error(`Preflight failed: check server Mainnet chain ID/API/gateway, registry, signer nonce and funded balance. status=${status.status}, network=${JSON.stringify(status.network)}, registry=${status.contracts?.validationRegistry}, signer=${balance?.address}, balance=${balance?.balance_egld} EGLD (${balance?.status}), nonce=${balance?.nonce}, agent=${status.contracts?.xproofAgentNonce}. Never reset a nonce while another job is in flight.`);
+    throw new Error(`Preflight failed: check server Mainnet chain ID/API/gateway, registry, and agent. status=${status.status}, network=${JSON.stringify(status.network)}, registry=${status.contracts?.validationRegistry}, agent=${status.contracts?.xproofAgentNonce}. Never reset a nonce while another job is in flight.`);
+  }
+  // The public status route intentionally does not reveal the signer wallet.
+  // Inspect the explicitly supplied wallet directly on-chain instead.
+  const account = await json(`${API_URL}/accounts/${config.signer}?fields=balance,nonce`);
+  const balanceRaw = typeof account.balance === "string" && /^\d+$/.test(account.balance)
+    ? BigInt(account.balance) : null;
+  const configuredThreshold = Number(process.env.MX8004_LOW_BALANCE_EGLD);
+  const minBalanceEgld = Number.isFinite(configuredThreshold) && configuredThreshold > 0
+    ? configuredThreshold : 3.75;
+  const balance = {
+    nonce: account.nonce,
+    balance_egld: balanceRaw === null ? null : Number(balanceRaw) / 1e18,
+  };
+  if (!Number.isSafeInteger(balance.nonce) || balance.nonce < 0 ||
+      balance.balance_egld === null || balance.balance_egld < minBalanceEgld) {
+    throw new Error(`Preflight failed: check supplied Mainnet signer nonce and funded balance. signer=${config.signer}, balance=${balance.balance_egld} EGLD, nonce=${balance.nonce}, minimum=${minBalanceEgld} EGLD. Never reset a nonce while another job is in flight.`);
   }
 
   const id = randomUUID();

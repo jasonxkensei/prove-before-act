@@ -34,8 +34,8 @@ describe("opt-in Mainnet certification smoke", () => {
       if (url.endsWith("/api/mx8004/status")) return response({
         active: true, contracts: { validationRegistry: registry, xproofAgentNonce: 3 },
         network: { chain_id: "1", api_url: "https://api.multiversx.com", gateway_url: "https://gateway.multiversx.com" },
-        signer_balance: { address: signer, status: "ok", nonce: 7, balance_egld: 5 },
       });
+      if (url.includes(`/accounts/${signer}?`)) return response({ balance: "5000000000000000000", nonce: 7 });
       if (url.endsWith("/api/agent/register")) return response({ api_key: "pm_test" }, 201);
       if (url.endsWith("/api/proof")) {
         expect((init?.headers as Record<string, string>).Authorization).toBe("Bearer pm_test");
@@ -69,15 +69,17 @@ describe("opt-in Mainnet certification smoke", () => {
     expect(requests).toContain("/api/mx8004/job/xproof_cert_generated-id");
   });
 
-  it("refuses to register when the signer or registry does not match", async () => {
-    const fetchMock = vi.fn(async () => response({
-      active: true, contracts: { validationRegistry: registry, xproofAgentNonce: 3 },
-      network: { chain_id: "1", api_url: "https://api.multiversx.com", gateway_url: "https://gateway.multiversx.com" },
-      signer_balance: { address: signer, status: "low_balance", nonce: 7, balance_egld: 0 },
-    }));
+  it("refuses to register when the supplied signer balance is too low", async () => {
+    const fetchMock = vi.fn(async (url: string) =>
+      url.endsWith("/api/mx8004/status")
+        ? response({
+            active: true, contracts: { validationRegistry: registry, xproofAgentNonce: 3 },
+            network: { chain_id: "1", api_url: "https://api.multiversx.com", gateway_url: "https://gateway.multiversx.com" },
+          })
+        : response({ balance: "0", nonce: 7 }));
     vi.stubGlobal("fetch", fetchMock);
     await expect(runMainnetSmoke({ base, signer, registry, deadlineMs: 1000 })).rejects.toThrow("Preflight failed");
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it("stops immediately on a persisted queue handoff failure instead of timing out", async () => {
@@ -87,8 +89,8 @@ describe("opt-in Mainnet certification smoke", () => {
       if (url.endsWith("/api/mx8004/status")) return response({
         active: true, contracts: { validationRegistry: registry, xproofAgentNonce: 3 },
         network: { chain_id: "1", api_url: "https://api.multiversx.com", gateway_url: "https://gateway.multiversx.com" },
-        signer_balance: { address: signer, status: "ok", nonce: 7, balance_egld: 5 },
       });
+      if (url.includes(`/accounts/${signer}?`)) return response({ balance: "5000000000000000000", nonce: 7 });
       if (url.endsWith("/api/agent/register")) return response({ api_key: "pm_test" }, 201);
       if (url.endsWith("/api/proof")) {
         const body = JSON.parse(init!.body as string);
@@ -102,7 +104,7 @@ describe("opt-in Mainnet certification smoke", () => {
     await expect(runMainnetSmoke({ base, signer, registry, deadlineMs: 1000 }))
       .rejects.toThrow("Queue handoff failed");
     expect(requests).toEqual([
-      "/api/mx8004/status", "/api/agent/register", "/api/proof", "/api/mx8004/job/xproof_cert_generated-id",
+      "/api/mx8004/status", `/accounts/${signer}`, "/api/agent/register", "/api/proof", "/api/mx8004/job/xproof_cert_generated-id",
     ]);
   });
 });
