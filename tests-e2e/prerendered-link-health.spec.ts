@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { readFileSync } from "node:fs";
 
 /**
  * Link-health tests for the server-prerendered pages:
@@ -101,6 +102,57 @@ function extractJsonLd(html: string): unknown[] {
   const scripts = [...html.matchAll(/<script\s+type="application\/ld\+json">\s*([\s\S]*?)\s*<\/script>/gi)];
   return scripts.map((match) => JSON.parse(match[1]));
 }
+
+// Fixed HTML routes in prerenderMiddleware(). The redirect /agents/zh and
+// dynamic agent/proof/verification routes are not fixed public pages.
+const PUBLIC_CRAWLER_ROUTES = [
+  "/",
+  "/agent-context",
+  "/agent-context/zh",
+  "/coherence",
+  "/fleet",
+  "/agents",
+  "/founder",
+  "/standard",
+  "/learn",
+  "/demo",
+  "/leaderboard",
+  "/certify",
+] as const;
+const LEGAL_NOTICES = ["/legal/mentions", "/legal/privacy", "/legal/terms"] as const;
+const CRAWLER_HEADERS = {
+  "user-agent": "Googlebot/2.1 (+http://www.google.com/bot.html)",
+  accept: "text/html",
+};
+
+test.describe("legal notices on every fixed crawler-facing page", () => {
+  test("covers all fixed HTML routes handled by prerenderMiddleware", () => {
+    const source = readFileSync(new URL("../server/prerender.ts", import.meta.url), "utf8");
+    const middleware = source.slice(source.indexOf("export function prerenderMiddleware()"));
+    const routes = [...middleware.matchAll(/if \(path === "(\/[^"]*)"/g)]
+      .map((match) => match[1])
+      .filter((path) => path !== "/agents/zh"); // canonical redirect, not an HTML page
+    expect(routes.sort()).toEqual([...PUBLIC_CRAWLER_ROUTES].sort());
+  });
+
+  for (const route of PUBLIC_CRAWLER_ROUTES) {
+    test(`${route} includes all legal notices in its footer and each resolves to HTTP 200`, async ({ request }) => {
+      const res = await request.get(route, { headers: CRAWLER_HEADERS });
+      expect(res.status(), `${route} should return crawler HTML`).toBe(200);
+      expect(res.headers()["content-type"], `${route} should serve HTML`).toContain("text/html");
+
+      const html = await res.text();
+      const footer = html.match(/<footer\b[^>]*>[\s\S]*?<\/footer>/i)?.[0];
+      expect(footer, `${route} should include a footer`).toBeDefined();
+      const footerPaths = extractInternalPaths(footer!);
+      for (const path of LEGAL_NOTICES) {
+        expect(footerPaths, `${route} footer should link to ${path}`).toContain(path);
+        const target = await request.get(path);
+        expect(target.status(), `${route} legal link ${path} should return 200`).toBe(200);
+      }
+    });
+  }
+});
 
 // ---------------------------------------------------------------------------
 // 0. /standard

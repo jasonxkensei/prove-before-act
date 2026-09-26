@@ -35,6 +35,7 @@ export const PUBLIC_FOOTER_COLUMNS = [
     links: [
       { href: "/docs", label: "API Docs" },
       { href: "/agent-context", label: "Agent Context" },
+      { href: "/legal/mentions", label: "Legal mentions" },
       { href: "/legal/privacy", label: "Privacy" },
       { href: "/legal/terms", label: "Terms" },
     ],
