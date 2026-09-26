@@ -16,6 +16,7 @@ import { pgCheckRateLimit } from "../pgRateLimit";
 import { CANONICAL_PUBLIC_ORIGIN } from "../publicOrigin";
 import { getProofFinalityApiUrl, lookupProofFinality } from "../proof-finality";
 import { PBA_WEBHOOK_HEADERS } from "../webhookHeaders";
+import { toOpenApi30 } from "../openapiCompatibility";
 
 // Bounds how many unpaid ACP checkouts a single proven payer wallet may create within the
 // window. Deliberately independent of the generic per-API-key rate limiter, since the DoS
@@ -1135,8 +1136,8 @@ export function registerAcpRoutes(app: Express) {
     }
   });
 
-  // OpenAPI specification for ACP, including outbound webhook notifications.
-  app.get("/api/acp/openapi.json", publicReadRateLimiter, async (req, res) => {
+  // One canonical ACP document; older generators receive a derived 3.0 export.
+  app.get(["/api/acp/openapi.json", "/api/acp/openapi-3.0.json"], publicReadRateLimiter, async (req, res) => {
     const baseUrl = CANONICAL_PUBLIC_ORIGIN;
     const priceUsd = await getCertificationPriceUsd();
 
@@ -1988,7 +1989,8 @@ export function registerAcpRoutes(app: Express) {
     };
     convertNullableSchemas(openApiSpec.components);
     convertNullableSchemas(openApiSpec.paths);
-    res.json({ ...openApiSpec, webhooks: openApiSpec["x-webhooks"] });
+    const canonical = { ...openApiSpec, webhooks: openApiSpec["x-webhooks"] };
+    res.json(req.path === "/api/acp/openapi-3.0.json" ? toOpenApi30(canonical) : canonical);
   });
 
   // ============================================

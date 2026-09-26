@@ -4,6 +4,7 @@ import { execFileSync } from "node:child_process";
 import openapiTS, { astToString } from "openapi-typescript";
 import { buildWebhookPayload, verifyWebhookSignature } from "../server/webhook";
 import { PBA_WEBHOOK_HEADERS, proofWebhookHeaders } from "../server/webhookHeaders";
+import { toOpenApi30 } from "../server/openapiCompatibility";
 
 /**
  * OpenAPI ↔ live-response contract tests for the partner integration endpoints.
@@ -66,6 +67,43 @@ beforeAll(async () => {
 });
 
 describe("OpenAPI partner endpoint contract", () => {
+  it("offers a derived 3.0 document with the same API paths and nullable response types", async () => {
+    const compatible = await fetchJson(`${BASE_URL}/api/acp/openapi-3.0.json`);
+    expect(compatible.openapi).toBe("3.0.3");
+    expect(compatible.webhooks).toBeUndefined();
+    expect(compatible["x-webhooks"]).toEqual(spec["x-webhooks"]);
+    expect(compatible.paths).toHaveProperty("/api/acp/products");
+    expect(Object.keys(compatible.paths).sort()).toEqual(Object.keys(spec.paths).sort());
+    expect(Object.keys(compatible.components.schemas).sort()).toEqual(Object.keys(spec.components.schemas).sort());
+    expect(compatible.paths["/webhooks/proof.certified"]).toBeUndefined();
+    expect(compatible.components.schemas.ProofCertifiedWebhookPayload.properties.blockchain.properties.transaction_hash)
+      .toMatchObject({ type: "string", nullable: true });
+    expect(compatible.components.schemas.PbaTrustLayer.properties.pba_trust_level)
+      .toMatchObject({ type: "string", nullable: true, enum: expect.arrayContaining([null]) });
+
+    const checkTypes = (value: unknown): void => {
+      if (Array.isArray(value)) return value.forEach(checkTypes);
+      if (value && typeof value === "object") {
+        const node = value as Record<string, unknown>;
+        expect(Array.isArray(node.type)).toBe(false);
+        Object.values(node).forEach(checkTypes);
+      }
+    };
+    checkTypes(compatible);
+    const generated = astToString(await openapiTS(compatible, { silent: true }));
+    expect(generated).toContain("ProofCertifiedWebhookPayload:");
+    expect(generated).toMatch(/transaction_hash: string \| null/);
+    const trustLayer = generated.split("PbaTrustLayer: {")[1]?.split("};")[0];
+    expect(trustLayer).toMatch(/pba_trust_level\?: "Newcomer" \| "Active" \| "Trusted" \| "Verified" \| null;/);
+    // Exporting an older version must not mutate the canonical 3.1 shape.
+    expect(spec.components.schemas.ProofCertifiedWebhookPayload.properties.blockchain.properties.transaction_hash.type)
+      .toEqual(["string", "null"]);
+    expect(toOpenApi30(spec).components.schemas.ProofCertifiedWebhookPayload)
+      .toEqual(compatible.components.schemas.ProofCertifiedWebhookPayload);
+    expect(() => toOpenApi30({ openapi: "3.1.0", components: { schemas: { invalid: { type: ["string", "number"] } } } }))
+      .toThrow(/Unsupported OpenAPI 3.1 type union/);
+  });
+
   it("exposes the outbound proof.certified contract without presenting it as an inbound path", () => {
     const notification = spec.webhooks?.["proof.certified"];
     expect(spec.openapi).toBe("3.1.0");

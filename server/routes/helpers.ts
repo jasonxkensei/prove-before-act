@@ -156,7 +156,8 @@ export const RATE_LIMIT_MAX_VALUE = RATE_LIMIT_MAX;
 export async function validateApiKey(req: express.Request, res: express.Response, next: express.NextFunction) {
   const authHeader = req.headers.authorization;
 
-  if (req.path === "/products" || req.path === "/openapi.json" || req.path === "/health") {
+  if (req.path === "/products" || req.path === "/openapi.json" ||
+      req.path === "/openapi-3.0.json" || req.path === "/health") {
     return next();
   }
 

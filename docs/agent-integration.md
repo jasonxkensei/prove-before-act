@@ -55,7 +55,18 @@ AI agents can automatically discover Prove Before Act through several standardiz
 | URL | Format | Description |
 |-----|--------|-------------|
 | `/api/acp/openapi.json` | OpenAPI 3.1 | Full API specification for ACP endpoints and outbound webhooks |
-| `/agent-tools/openapi-actions.json` | OpenAPI 3.0 | GPT Actions-compatible specification |
+| `/api/acp/openapi-3.0.json` | OpenAPI 3.0.3 | Full ACP API compatibility export for generators that cannot read 3.1 |
+| `/agent-tools/openapi-actions.json` | OpenAPI 3.0 | GPT Actions-compatible subset (not the full ACP partner API) |
+
+Use `/api/acp/openapi.json` when your tooling accepts OpenAPI 3.1. If your
+client generator only supports OpenAPI 3.0, import
+`/api/acp/openapi-3.0.json` instead. The 3.0 document is generated from the
+same canonical 3.1 specification, with nullable response fields translated to
+3.0 syntax; both describe the same API paths and models. OpenAPI 3.0 cannot
+describe outbound webhooks in the standard top-level `webhooks` section, so
+the compatibility export keeps the `x-webhooks` extension and the
+`ProofCertifiedWebhookPayload` model but does **not** add a callable webhook
+API path. For receiver setup, use the examples below or the 3.1 document.
 
 ---
 
