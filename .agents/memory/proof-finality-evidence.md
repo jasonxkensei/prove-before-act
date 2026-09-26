@@ -14,3 +14,9 @@ For multi-transaction validation jobs, preserve an intent before submitting each
 **Why:** Broadcast acceptance does not prove execution, and a replay after an ambiguous send can consume another nonce or duplicate an on-chain action.
 
 **How to apply:** Distinguish queue progress from chain inclusion in operator and public status. Never infer finality for old jobs whose intermediate hashes were not preserved.
+
+An absent transaction in a bounded account-history query, or a hash returning 404, is not evidence that an uncertain send was rejected. Manual retry requires a finalized failed transaction matching the saved signer nonce and exact intended call; a finalized success advances the step without broadcasting again.
+
+**Why:** Indexing lag, pagination, and an accepted but still-pending transaction can all make a sent transaction appear missing. Replaying in those cases can duplicate a validation call.
+
+**How to apply:** Treat account history as hash discovery only. Verify the full transaction against the persisted job intent before any recovery transition; leave nonce-less legacy jobs blocked rather than guessing.

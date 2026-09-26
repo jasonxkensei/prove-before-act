@@ -13,8 +13,8 @@ import {
   getSharedConversionTelemetryWriteFailureStats,
   CONVERSION_TELEMETRY_FAILURE_HEALTH_WINDOW_MS,
 } from "../metrics";
-import { getTxQueueStats, getMx8004NonceStall } from "../txQueue";
-import { getMx8004SignerBalance, getMx8004SignerBalanceReport, isMX8004Configured } from "../mx8004";
+import { getTxQueueStats, getMx8004NonceStall, reconcileMx8004Job, RecoveryConflict } from "../txQueue";
+import { getMx8004SignerBalance, getMx8004SignerBalanceReport, getMx8004FreshSignerNonce, getMx8004RecentSignerTransactions, isMX8004Configured } from "../mx8004";
 import { requireAdmin, EXCLUDED_IP_HASHES, getClientIp, safeErrMsg } from "./helpers";
 import { reconstructAuditTrail } from "../audit-trail";
 import { publicStatsRateLimiter } from "../reliability";
@@ -1264,6 +1264,57 @@ export function registerAdminRoutes(app: Express) {
       });
     } catch (err: any) {
       res.status(500).json({ error: safeErrMsg(err) });
+    }
+  });
+
+  app.get("/api/admin/tx-queue/recovery", isWalletAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const page = Number(req.query.page ?? 0);
+      if (!Number.isSafeInteger(page) || page < 0 || page > 10000) return res.status(400).json({ error: "Invalid page" });
+      const jobs = await db.select({
+        id: txQueueTable.id, jobId: txQueueTable.jobId, status: txQueueTable.status,
+        payload: txQueueTable.payload, lastError: txQueueTable.lastError, createdAt: txQueueTable.createdAt,
+      }).from(txQueueTable).where(and(
+        eq(txQueueTable.jobType, "mx8004_validation_loop"),
+        sql`${txQueueTable.status} IN ('recovery_required', 'failed')`,
+      )).orderBy(desc(txQueueTable.createdAt), desc(txQueueTable.id)).limit(51).offset(page * 50);
+      const [chainNonce, history] = await Promise.all([getMx8004FreshSignerNonce(), getMx8004RecentSignerTransactions()]);
+      res.json({
+        chain_nonce: chainNonce,
+        page, has_more: jobs.length > 50,
+        history: history.filter(tx => jobs.slice(0, 50).some(job => {
+          const payload = job.payload as Record<string, any>;
+          return tx.nonce !== null && tx.nonce === (payload.activeTx?.nonce ?? payload.broadcastIntent?.nonce);
+        })),
+        jobs: jobs.slice(0, 50).map(({ payload: raw, ...job }) => {
+          const payload = raw as Record<string, any>;
+          return {
+            ...job, step: payload.currentStep,
+            step_name: ["init_job", "submit_proof", "validation_request", "validation_response", "append_response"][payload.currentStep] ?? null,
+            known_hash: payload.activeTx?.hash ?? null,
+            signer_nonce: payload.activeTx?.nonce ?? payload.broadcastIntent?.nonce ?? null,
+            intent_at: payload.broadcastIntent?.startedAt ?? payload.activeTx?.broadcastAt ?? null,
+            recovery_audit: payload.recoveryAudit ?? [],
+          };
+        }),
+      });
+    } catch (err) {
+      logger.error("Unable to inspect recovery jobs", { component: "tx-queue", error: String(err) });
+      res.status(503).json({ error: "Recovery evidence unavailable" });
+    }
+  });
+
+  app.post("/api/admin/tx-queue/recovery/:id", isWalletAuthenticated, requireAdmin, async (req: any, res) => {
+    const { hash, decision } = req.body ?? {};
+    if (!/^[a-fA-F0-9]{64}$/.test(hash ?? "") || !["confirmed", "rejected"].includes(decision)) {
+      return res.status(400).json({ error: "Provide a transaction hash and confirmed or rejected decision" });
+    }
+    try {
+      res.json(await reconcileMx8004Job(req.params.id, hash, decision, req.session.walletAddress));
+    } catch (err) {
+      if (err instanceof RecoveryConflict) return res.status(409).json({ error: err.message });
+      logger.error("Recovery reconciliation failed", { component: "tx-queue", error: String(err) });
+      res.status(503).json({ error: "Could not verify chain evidence; job remains blocked" });
     }
   });
 

@@ -3,6 +3,7 @@ import {
   TransactionComputer,
   Address,
 } from "@multiversx/sdk-core";
+import { createHash } from "crypto";
 import { recordTransaction } from "./metrics";
 import { enqueueTx } from "./txQueue";
 import { logger } from "./logger";
@@ -265,6 +266,82 @@ export async function getMx8004TransactionFinality(
   if (tx.status === "success" && Number.isInteger(tx.round) && tx.round > 0 &&
       Number.isInteger(tx.blockNonce) && tx.blockNonce > 0) return "confirmed";
   return "pending";
+}
+
+/** Fetch fresh chain evidence for operator reconciliation; a missing hash is never proof of rejection. */
+export async function inspectMx8004RecoveryTransaction(hash: string) {
+  if (!/^[a-fA-F0-9]{64}$/.test(hash)) throw new Error("Invalid transaction hash");
+  const response = await fetch(`${API_URL}/transactions/${hash}`, { signal: AbortSignal.timeout(RPC_TIMEOUT_MS) });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`Transaction lookup returned ${response.status}`);
+  const tx = await response.json();
+  if (tx?.txHash?.toLowerCase() !== hash.toLowerCase()) throw new Error("Transaction hash mismatch");
+  return tx;
+}
+
+export async function getMx8004FreshSignerNonce(): Promise<number> {
+  if (!SENDER_ADDRESS) throw new Error("Signer not configured");
+  const response = await fetch(`${API_URL}/accounts/${SENDER_ADDRESS}?fields=nonce`, {
+    signal: AbortSignal.timeout(RPC_TIMEOUT_MS),
+  });
+  if (!response.ok) throw new Error(`Signer lookup returned ${response.status}`);
+  const { nonce } = await response.json();
+  if (!Number.isSafeInteger(nonce) || nonce < 0) throw new Error("Invalid signer nonce from chain");
+  return nonce;
+}
+
+/** Recent signer history is discovery only; it is never evidence that an absent send was rejected. */
+export async function getMx8004RecentSignerTransactions() {
+  if (!SENDER_ADDRESS) throw new Error("Signer not configured");
+  const response = await fetch(`${API_URL}/accounts/${SENDER_ADDRESS}/transactions?from=0&size=100`, {
+    signal: AbortSignal.timeout(RPC_TIMEOUT_MS),
+  });
+  if (!response.ok) throw new Error(`Signer history lookup returned ${response.status}`);
+  const transactions = await response.json();
+  if (!Array.isArray(transactions)) throw new Error("Invalid signer history response");
+  return transactions.filter((tx: any) => tx.sender?.toLowerCase() === SENDER_ADDRESS.toLowerCase()).map((tx: any) => ({
+    hash: typeof tx.txHash === "string" ? tx.txHash : null,
+    nonce: Number.isSafeInteger(tx.nonce) ? String(tx.nonce) : null,
+    status: typeof tx.status === "string" ? tx.status : null,
+  }));
+}
+
+export function verifyMx8004RecoveryEvidence(
+  tx: any,
+  hash: string,
+  nonce: string,
+  step: number,
+  payload: Record<string, any>,
+): "confirmed" | "failed" | "pending" {
+  if (!SENDER_ADDRESS || !VALIDATION_REGISTRY || !REPUTATION_REGISTRY) throw new Error("Registry not configured");
+  if (!/^\d+$/.test(nonce) || !tx || tx.txHash?.toLowerCase() !== hash.toLowerCase() ||
+      tx.sender?.toLowerCase() !== SENDER_ADDRESS.toLowerCase() ||
+      String(tx.nonce) !== nonce || String(tx.chainID) !== CHAIN_ID) {
+    throw new Error("Transaction does not match the signer, nonce, hash and network");
+  }
+  const proof = `hash:${payload.fileHash}|tx:${payload.transactionHash}`;
+  const requestHash = (awaitHash(proof));
+  const responseHash = awaitHash(`verified:${payload.fileHash}`);
+  const specs: Array<[string | undefined, string[]]> = [
+    [VALIDATION_REGISTRY, ["init_job", toHex(payload.jobId), numberToHex(payload.agentNonce)]],
+    [VALIDATION_REGISTRY, ["submit_proof", toHex(payload.jobId), toHex(proof)]],
+    [VALIDATION_REGISTRY, ["validation_request", toHex(payload.jobId), addressToHex(payload.senderAddress), toHex(`https://provebeforeact.com/proof/${payload.certificationId}.json`), toHex(requestHash)]],
+    [VALIDATION_REGISTRY, ["validation_response", toHex(requestHash), numberToHex(100), toHex(`https://provebeforeact.com/proof/${payload.certificationId}`), toHex(responseHash), toHex("Prove Before Act-certification")]],
+    [REPUTATION_REGISTRY, ["append_response", toHex(payload.jobId), toHex(`https://provebeforeact.com/api/certificates/${payload.certificationId}.pdf`)]],
+  ];
+  const [receiver, parts] = specs[step] ?? [];
+  if (!receiver || tx.receiver?.toLowerCase() !== receiver.toLowerCase() ||
+      tx.data !== Buffer.from(parts.join("@")).toString("base64")) {
+    throw new Error("Transaction contract or call data does not match this job step");
+  }
+  if (!Number.isInteger(tx.round) || tx.round <= 0 || !Number.isInteger(tx.blockNonce) || tx.blockNonce <= 0) return "pending";
+  if (tx.status === "success") return "confirmed";
+  if (["fail", "failed", "invalid"].includes(tx.status)) return "failed";
+  return "pending";
+}
+
+function awaitHash(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
 }
 
 async function vmQuery(

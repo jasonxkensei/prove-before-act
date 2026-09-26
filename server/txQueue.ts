@@ -10,6 +10,9 @@ import {
   appendResponse,
   resetNonce,
   getMx8004TransactionFinality,
+  getMx8004FreshSignerNonce,
+  inspectMx8004RecoveryTransaction,
+  verifyMx8004RecoveryEvidence,
 } from "./mx8004";
 import { logger } from "./logger";
 import { checkAndAlertTx } from "./alerts";
@@ -55,6 +58,59 @@ const FINALITY_POLL_MS = 15_000;
 const FINALITY_RECOVERY_MS = 30 * 60_000;
 
 type ActiveTx = { step: number; hash: string; broadcastAt: string; nonce?: string };
+
+export class RecoveryConflict extends Error {}
+
+export async function reconcileMx8004Job(id: string, hash: string, decision: "confirmed" | "rejected", operator: string) {
+  if (!/^[a-fA-F0-9]{64}$/.test(hash)) throw new RecoveryConflict("Provide a 64-character transaction hash");
+  return db.transaction(async (trx) => {
+    const [task] = await trx.select().from(txQueue).where(eq(txQueue.id, id)).for("update");
+    if (!task || task.jobType !== "mx8004_validation_loop" ||
+        !["recovery_required", "failed"].includes(task.status)) throw new RecoveryConflict("Job is not awaiting manual recovery");
+    const payload = task.payload as Record<string, any>;
+    const step = payload.currentStep;
+    const active = payload.activeTx as ActiveTx | undefined;
+    const intent = payload.broadcastIntent as { step: number; nonce?: string; startedAt?: string } | undefined;
+    if (!Number.isInteger(step) || step < 0 || step > 4 ||
+        (active && (active.step !== step || active.hash?.toLowerCase() !== hash.toLowerCase())) ||
+        (intent && intent.step !== step)) throw new RecoveryConflict("Hash or step conflicts with persisted broadcast");
+    const nonce = active?.nonce ?? intent?.nonce;
+    if (!nonce || !/^\d+$/.test(nonce)) throw new RecoveryConflict("No persisted signer nonce; cannot safely reconcile");
+    const chainNonce = await getMx8004FreshSignerNonce();
+    const tx = await inspectMx8004RecoveryTransaction(hash);
+    if (!tx) throw new RecoveryConflict("Transaction not found; absence does not prove rejection");
+    let state: "confirmed" | "failed" | "pending";
+    try {
+      state = verifyMx8004RecoveryEvidence(tx, hash, nonce, step, { ...payload, jobId: task.jobId });
+    } catch (error) {
+      throw new RecoveryConflict(error instanceof Error ? error.message : "Invalid chain evidence");
+    }
+    if (state === "pending") throw new RecoveryConflict("Transaction is not finalized");
+    if (BigInt(nonce) > BigInt(chainNonce)) throw new RecoveryConflict("Signer account nonce has not caught up to transaction");
+    if ((decision === "confirmed" && state !== "confirmed") ||
+        (decision === "rejected" && state !== "failed")) throw new RecoveryConflict("Decision contradicts chain finality");
+    const audit = {
+      at: new Date().toISOString(), operator, decision, step: VALIDATION_STEPS[step],
+      hash: hash.toLowerCase(), signerNonce: nonce, chainNonce,
+    };
+    const updatedPayload = {
+      ...payload, currentStep: decision === "confirmed" ? step + 1 : step,
+      activeTx: null, broadcastIntent: null, finalityTracked: true,
+      recoveryAudit: [...(Array.isArray(payload.recoveryAudit) ? payload.recoveryAudit : []), audit],
+      finalizedTransactions: decision === "confirmed"
+        ? [...(Array.isArray(payload.finalizedTransactions) ? payload.finalizedTransactions : []),
+          { step: VALIDATION_STEPS[step], hash: hash.toLowerCase() }]
+        : payload.finalizedTransactions,
+    };
+    const status = decision === "confirmed" && step === 4 ? "completed" : "pending";
+    await trx.update(txQueue).set({
+      payload: updatedPayload, status, completedAt: status === "completed" ? new Date() : null,
+      nextRetryAt: null, lastError: null,
+    }).where(eq(txQueue.id, id));
+    logger.warn("MX-8004 recovery reconciled", { component: "tx-queue", jobId: task.jobId, ...audit });
+    return { status, step: updatedPayload.currentStep, audit };
+  });
+}
 
 export function assessMx8004Finality(
   active: ActiveTx,

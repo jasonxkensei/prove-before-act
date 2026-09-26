@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { Link } from "wouter";
+import { TxRecoveryCard } from "@/components/admin/tx-recovery";
 
 interface PublicStats {
   certifications: {
@@ -1786,6 +1787,7 @@ export default function AdminDashboard() {
               <div className="mb-6 space-y-6">
                 <ProposedViolationsCard data={proposedViolations} isAdmin={isAdmin} />
                 <FailedProofCallbacksCard />
+                <TxRecoveryCard />
                 <OnboardingFunnelCard data={stats.onboarding_funnel} />
                 <ConversionFunnelCard data={conversionFunnel} />
                 <TrafficSourcesCard data={trafficSources} />
