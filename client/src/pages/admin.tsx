@@ -272,6 +272,7 @@ interface ActivationReviewSegment {
 
 interface CampaignActivationReview {
   campaign_source: string;
+  original_sources: string[];
   entry_visitors: number;
   recommendation_eligible: boolean;
   stages: ActivationReviewSegment["stages"];
@@ -885,6 +886,7 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
                 <p className="text-xs text-muted-foreground">
                   First known UTM source in this {review.window_days}-day window; missing values are{" "}
                   <span className="font-medium">{review.campaign_attribution.missing_source_label}</span>.
+                  Sources are grouped ignoring case and surrounding whitespace; product-hunt is grouped with producthunt.
                 </p>
               </div>
               <Badge variant="outline">
@@ -928,7 +930,17 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
                         campaign.stages.find((entry) => entry.stage === stage)?.visitors ?? 0;
                       return (
                         <tr key={campaign.campaign_source} className="border-b last:border-0">
-                          <td className="py-2 pr-3 font-medium">{campaign.campaign_source}</td>
+                          <td className="py-2 pr-3 font-medium">
+                            {campaign.campaign_source}
+                            {campaign.original_sources?.length > 0 && (
+                              <details className="mt-1 font-normal text-muted-foreground">
+                                <summary className="cursor-pointer">Original UTM values</summary>
+                                <ul className="mt-1 list-inside list-disc">
+                                  {campaign.original_sources.map((source) => <li key={source} className="break-all">{source}</li>)}
+                                </ul>
+                              </details>
+                            )}
+                          </td>
                           <td className="py-2 px-2 text-right tabular-nums">{stageValue("scenario_selected")}</td>
                           <td className="py-2 px-2 text-right tabular-nums">{stageValue("primary_cta_clicked")}</td>
                           <td className="py-2 px-2 text-right tabular-nums">{stageValue("registered")}</td>

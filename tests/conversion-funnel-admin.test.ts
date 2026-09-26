@@ -387,6 +387,58 @@ describe("GET /api/admin/conversion-funnel", () => {
     ]);
   });
 
+  it("groups case, whitespace, and explicit aliases while retaining raw sources and separating other campaigns", async () => {
+    const before = await getAuthorizedFunnel();
+    const run = crypto.randomBytes(8).toString("hex");
+    const distinct = `launch-${run}`;
+    const sources: Array<string | null> = [
+      "ProductHunt", "producthunt", "  PRODUCTHUNT  ", "product-hunt",
+      distinct, `launch_${run}`, null, "   ",
+    ];
+    const hashes = sources.map((_, index) =>
+      crypto.createHash("sha256").update(`campaign-normalization-${run}-${index}`).digest("hex"),
+    );
+    seededTelemetryHashes.push(...hashes);
+    for (const [index, source] of sources.entries()) {
+      await pool.query(
+        `INSERT INTO conversion_events
+           (event_type, stage, outcome, http_class, traffic_segment, ip_hash, utm_source)
+         VALUES ('landing:scenario_payment', 'cta', 'clicked', '0xx', 'human_browser', $1, $2)`,
+        [hashes[index], source],
+      );
+    }
+
+    const body = await getAuthorizedFunnel();
+    const campaigns = body.activation_review.by_utm_source as Array<{
+      campaign_source: string;
+      original_sources: string[];
+      entry_visitors: number;
+    }>;
+    const get = (name: string) => campaigns.find((entry) => entry.campaign_source === name);
+    const previous = before.activation_review.by_utm_source as typeof campaigns;
+    const previousCount = (name: string) =>
+      previous.find((entry) => entry.campaign_source === name)?.entry_visitors ?? 0;
+
+    expect(get("producthunt")?.entry_visitors).toBe(previousCount("producthunt") + 4);
+    expect(get("producthunt")?.original_sources).toEqual(expect.arrayContaining(sources.slice(0, 4)));
+    expect(get("ProductHunt")).toBeUndefined();
+    expect(get("product-hunt")).toBeUndefined();
+    expect(get(distinct)).toMatchObject({ entry_visitors: 1, original_sources: [distinct] });
+    expect(get(`launch_${run}`)).toMatchObject({
+      entry_visitors: 1,
+      original_sources: [`launch_${run}`],
+    });
+    expect(get("direct / unknown")?.entry_visitors).toBe(previousCount("direct / unknown") + 2);
+    expect(get("direct / unknown")?.original_sources).not.toContain(null);
+    expect(get("direct / unknown")?.original_sources).not.toContain("   ");
+
+    const stored = await pool.query(
+      `SELECT utm_source FROM conversion_events WHERE ip_hash = $1`,
+      [hashes[2]],
+    );
+    expect(stored.rows[0].utm_source).toBe("  PRODUCTHUNT  ");
+  });
+
   it("atomically records each proof verification milestone once across concurrent callers", async () => {
     const run = crypto.randomUUID();
     const proofId = crypto.randomUUID();

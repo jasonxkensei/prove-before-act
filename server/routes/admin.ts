@@ -524,15 +524,28 @@ export function registerAdminRoutes(app: Express) {
         first_touch_source AS (
           SELECT DISTINCT ON (ip_hash)
             ip_hash,
-            NULLIF(BTRIM(utm_source), '') AS utm_source
+            utm_source AS original_source
           FROM window_events
           WHERE NULLIF(BTRIM(utm_source), '') IS NOT NULL
           ORDER BY ip_hash, created_at ASC
         ),
+        normalized_source AS (
+          SELECT
+            ip_hash,
+            original_source,
+            -- Only explicit aliases collapse punctuation; all other sources
+            -- differ only by surrounding whitespace and case.
+            CASE LOWER(BTRIM(original_source))
+              WHEN 'product-hunt' THEN 'producthunt'
+              ELSE LOWER(BTRIM(original_source))
+            END AS campaign_source
+          FROM first_touch_source
+        ),
         visitor_metrics AS (
           SELECT
-            COALESCE(first_touch_source.utm_source, ${DIRECT_UNKNOWN_CAMPAIGN}) AS campaign_source,
+            COALESCE(normalized_source.campaign_source, ${DIRECT_UNKNOWN_CAMPAIGN}) AS campaign_source,
             window_events.ip_hash,
+            MAX(normalized_source.original_source) AS original_source,
             BOOL_OR(
               stage = 'cta'
               AND outcome = 'clicked'
@@ -551,11 +564,13 @@ export function registerAdminRoutes(app: Express) {
             BOOL_OR(event_type = 'first_proof_verified') AS first_proof_verified,
             BOOL_OR(event_type = 'external_agent_second_proof_verified') AS second_proof_verified
           FROM window_events
-          LEFT JOIN first_touch_source USING (ip_hash)
+          LEFT JOIN normalized_source USING (ip_hash)
           GROUP BY campaign_source, window_events.ip_hash
         )
         SELECT
           campaign_source,
+          COALESCE(ARRAY_AGG(DISTINCT original_source ORDER BY original_source)
+            FILTER (WHERE original_source IS NOT NULL), ARRAY[]::text[]) AS original_sources,
           COUNT(*) FILTER (WHERE scenario_selected OR primary_cta_clicked)::int AS entry_visitors,
           COUNT(*) FILTER (WHERE scenario_selected)::int AS scenario_selected,
           COUNT(*) FILTER (WHERE primary_cta_clicked)::int AS primary_cta_clicked,
@@ -683,6 +698,7 @@ export function registerAdminRoutes(app: Express) {
         const analysis = buildActivationAnalysis(stages, "campaign");
         return {
           campaign_source: String(row.campaign_source || DIRECT_UNKNOWN_CAMPAIGN),
+          original_sources: Array.isArray(row.original_sources) ? row.original_sources as string[] : [],
           entry_visitors: entryVisitors,
           recommendation_eligible: recommendationEligible,
           stages: analysis.stages,
