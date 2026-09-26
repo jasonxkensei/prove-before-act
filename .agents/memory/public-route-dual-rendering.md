@@ -9,6 +9,8 @@ Some public routes have two independently maintained representations: the intera
 
 **How to apply:** For public-route changes, inspect crawler middleware before editing. Verify once with a normal browser path and once with a crawler/non-browser request, including navigation, copy, metadata, accessibility landmarks, and narrow-width overflow.
 
+For browser layout checks of crawler-only HTML, fetch the crawler response with an HTTP request and fulfill the browser navigation with those exact bytes. Setting crawler headers on a Playwright browser page can still produce the React page, giving a false positive for crawler layout.
+
 Route-wide shared-header checks must enumerate the browser router rather than treating an older smoke-test subset as exhaustive. Data-dependent public pages can return early without the shared header when identifiers are missing or invalid; use isolated successful-response fixtures to exercise their actual public page state.
 
 **Why:** A five-route smoke list missed other public pages, while synthetic missing IDs produced headerless error views on some otherwise shared-header pages. Both gaps can give a misleading answer about accessibility coverage.
