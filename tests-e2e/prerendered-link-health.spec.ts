@@ -13,10 +13,10 @@ import { readFileSync } from "node:fs";
  * emitted as absolute canonical URLs with domain `provebeforeact.com`
  * (e.g. `href="https://provebeforeact.com/standard"`), not as relative paths.
  *
- * All tests use Playwright's `request` fixture (pure HTTP — no browser
- * launch needed).  We fetch the raw HTML, verify HTTP 200, then parse
- * the body text to confirm link presence and that every internal href
- * resolves to HTTP 200 against the local dev server.
+ * Most tests use Playwright's `request` fixture (pure HTTP); the /standard
+ * contact parity check also launches a browser to verify the React route.
+ * We fetch raw crawler HTML, verify HTTP 200, then parse the body text
+ * to confirm link presence and that every internal href resolves to HTTP 200.
  *
  * Canonical domain handled by extractInternalPaths():
  *   - `https://provebeforeact.com/<path>` → treated as internal → /path
@@ -192,6 +192,25 @@ test.describe("/standard — crawler metadata and structured data", () => {
   test("uses the canonical ProveBeforeAct social handle", async () => {
     expect(html).toContain('href="https://x.com/ProveBeforeAct">@ProveBeforeAct</a>');
     expect(html).not.toContain("@JasonxProof");
+  });
+
+  test("live React contact link matches the crawler-facing contact link", async ({ page }) => {
+    const crawlerContact = html.match(/<p>Contact:[\s\S]*?<\/p>/)?.[0];
+    expect(crawlerContact, "crawler /standard contact paragraph").toBeDefined();
+    const crawlerLinks = [...crawlerContact!.matchAll(/<a href="([^"]+)">([^<]+)<\/a>/g)];
+    expect(crawlerLinks.length, "crawler /standard contact links").toBeGreaterThanOrEqual(2);
+    const [crawlerHref, crawlerText] = crawlerLinks[1].slice(1);
+
+    await page.goto("/standard");
+    const contact = page.locator(".pba-std-root #contribute p").filter({ hasText: "Contact:" });
+    const liveLink = contact.locator("a").nth(1);
+    await expect(liveLink).toBeVisible();
+    const liveHref = await liveLink.getAttribute("href");
+    const liveText = await liveLink.innerText();
+
+    expect(liveHref).toBe("https://x.com/ProveBeforeAct");
+    expect(liveText).toBe("@ProveBeforeAct");
+    expect([liveHref, liveText]).toEqual([crawlerHref, crawlerText]);
   });
 
   test("includes Article and Technical Specification breadcrumb JSON-LD", async () => {
