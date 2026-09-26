@@ -2,7 +2,7 @@ import { db, pool } from "./db";
 import { certifications, users, agentViolations, FINALITY_SNAPSHOT_VERSION } from "@shared/schema";
 import { eq, sql, and } from "drizzle-orm";
 import { logger } from "./logger";
-import { getLeaderboardRefreshHealth, recordLeaderboardRefreshFailure, recordLeaderboardRefreshSuccess, recordLeaderboardSnapshot } from "./alerts";
+import { getLeaderboardRefreshHealth, recordLeaderboardRefreshFailure, recordLeaderboardRefreshSuccess, recordLeaderboardSnapshot, recordTrustReadThroughSnapshotFailure, recordTrustReadThroughSnapshotSuccess } from "./alerts";
 
 export type TrustLevel = "Newcomer" | "Active" | "Trusted" | "Verified";
 
@@ -675,8 +675,10 @@ async function computeAndSnapshotTrustScoreByWallet(walletAddress: string, requi
         JSON.stringify(trust),
       ],
     );
+    if (!requireSnapshot) recordTrustReadThroughSnapshotSuccess();
   } catch (error: any) {
     if (requireSnapshot) throw error;
+    recordTrustReadThroughSnapshotFailure(error);
     // The score is still useful for this request and is cached to prevent a
     // database write failure from turning every public read into a recompute.
     logger.warn("Trust read-through snapshot write failed", {

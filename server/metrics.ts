@@ -52,6 +52,47 @@ const CONVERSION_TELEMETRY_FAILURE_EVENTS_MAX_AGE_MS = 60 * 60 * 1000;
 const CONVERSION_TELEMETRY_FAILURE_EVENTS_SAFETY_CAP = 10000;
 const conversionTelemetryWriteFailureEvents: number[] = [];
 
+// Read-through snapshot writes are best-effort for the caller, but repeated
+// failures must remain visible even when the individual request succeeds.
+export const TRUST_SNAPSHOT_FAILURE_WINDOW_MS = 15 * 60_000;
+const trustSnapshotFailureEvents: number[] = [];
+let trustSnapshotFailureTotal = 0;
+let trustSnapshotLastSuccessAt: number | null = null;
+
+export function recordTrustSnapshotWriteFailure(): void {
+  const now = Date.now();
+  trustSnapshotFailureTotal++;
+  trustSnapshotFailureEvents.push(now);
+  const cutoff = now - TRUST_SNAPSHOT_FAILURE_WINDOW_MS;
+  while (trustSnapshotFailureEvents.length && trustSnapshotFailureEvents[0] < cutoff) {
+    trustSnapshotFailureEvents.shift();
+  }
+  if (trustSnapshotFailureEvents.length > 10_000) {
+    trustSnapshotFailureEvents.splice(0, trustSnapshotFailureEvents.length - 5_000);
+  }
+}
+
+export function recordTrustSnapshotWriteSuccess(): void {
+  trustSnapshotLastSuccessAt = Date.now();
+}
+
+export function getTrustSnapshotWriteStats() {
+  const cutoff = Date.now() - TRUST_SNAPSHOT_FAILURE_WINDOW_MS;
+  let recentFailures = 0;
+  for (let i = trustSnapshotFailureEvents.length - 1; i >= 0; i--) {
+    if (trustSnapshotFailureEvents[i] < cutoff) break;
+    recentFailures++;
+  }
+  const lastFailure = trustSnapshotFailureEvents.at(-1);
+  return {
+    recent_failures: recentFailures,
+    total_failures: trustSnapshotFailureTotal,
+    last_failure_at: lastFailure === undefined ? null : new Date(lastFailure).toISOString(),
+    last_success_at: trustSnapshotLastSuccessAt === null ? null : new Date(trustSnapshotLastSuccessAt).toISOString(),
+    window_minutes: TRUST_SNAPSHOT_FAILURE_WINDOW_MS / 60_000,
+  };
+}
+
 // ── Conversion telemetry retention-cleanup tracking ─────────────────────────
 // Daily purge failures are tracked separately from request-path write failures.
 // Only aggregate health is retained; proof deduplication markers are unrelated.

@@ -17,7 +17,7 @@
  * snapshot-only, exactly as documented.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import crypto from "crypto";
 import { pool } from "../server/db";
 import { FINALITY_SNAPSHOT_VERSION } from "@shared/schema";
@@ -254,6 +254,34 @@ describe("computeTrustScoreByWallet() never live-recomputes on a cold cache", ()
 });
 
 describe("computeTrustScoreByWallet() snapshots a newly visible public wallet", () => {
+  it("returns a bounded computed score when the first snapshot write fails and reports the failure", async () => {
+    const { getTrustSnapshotWriteHealth } = await import("../server/alerts");
+    await pool.query(`DELETE FROM trust_score_snapshots WHERE wallet_address = $1`, [READ_THROUGH_WALLET]);
+    _resetTrustCacheForTesting(READ_THROUGH_WALLET);
+    const originalQuery = pool.query.bind(pool);
+    const querySpy = vi.spyOn(pool, "query").mockImplementation(((text: string, values?: unknown[]) => {
+      if (typeof text === "string" && text.includes("INSERT INTO trust_score_snapshots")) {
+        return Promise.reject(Object.assign(new Error("private database detail"), { code: "08006" }));
+      }
+      return originalQuery(text, values);
+    }) as typeof pool.query);
+    try {
+      const score = await computeTrustScoreByWallet(READ_THROUGH_WALLET);
+      expect(score).not.toBeNull();
+      expect(score!.certTotal).toBe(1);
+      expect(await computeTrustScoreByWallet(READ_THROUGH_WALLET)).toEqual(score);
+      expect(querySpy.mock.calls.filter(([text]) => String(text).includes("INSERT INTO trust_score_snapshots"))).toHaveLength(1);
+      expect(getTrustSnapshotWriteHealth()).toMatchObject({
+        recent_failures: 1,
+        last_database_error: "PostgreSQL 08006: database connection failure",
+      });
+      expect(JSON.stringify(getTrustSnapshotWriteHealth())).not.toContain("private database detail");
+    } finally {
+      querySpy.mockRestore();
+      _resetTrustCacheForTesting(READ_THROUGH_WALLET);
+    }
+  });
+
   it("computes once on the first read and persists the score for subsequent reads", async () => {
     await pool.query(`DELETE FROM trust_score_snapshots WHERE wallet_address = $1`, [READ_THROUGH_WALLET]);
     _resetTrustCacheForTesting(READ_THROUGH_WALLET);

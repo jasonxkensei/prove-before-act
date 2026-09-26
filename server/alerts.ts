@@ -5,6 +5,7 @@ import { eq, and, gte, sql } from "drizzle-orm";
 import { checkAndAlert as checkAndAlertRateLimitImpl } from "./rateLimitAlerts";
 import { alertWebhookHeaders } from "./webhookHeaders";
 import type { Mx8004SignerBalance } from "./mx8004";
+import { getTrustSnapshotWriteStats, recordTrustSnapshotWriteFailure, recordTrustSnapshotWriteSuccess } from "./metrics";
 
 // Rate-limit fail-open alerting now lives in its own module (server/
 // rateLimitAlerts.ts) so it carries no DB/drizzle import. Re-exported here
@@ -110,7 +111,7 @@ export async function checkAndAlertMx8004LowBalance(balance: Mx8004SignerBalance
 // Only fixed labels and validated SQLSTATE codes are allowed into public health
 // and webhook payloads. Driver messages/detail can include SQL parameters,
 // connection URLs or user-provided values and must stay in restricted logs.
-function safeLeaderboardDbError(error: unknown): string {
+function safeSnapshotDbError(error: unknown): string {
   const labels: Record<string, string> = {
     "42P01": "snapshot table missing",
     "42703": "column missing",
@@ -128,6 +129,51 @@ function safeLeaderboardDbError(error: unknown): string {
     current = (current as { cause?: unknown }).cause;
   }
   return "Database operation failed (SQLSTATE unavailable)";
+}
+
+const TRUST_SNAPSHOT_FAILURE_THRESHOLD = 3;
+const TRUST_SNAPSHOT_ALERT_COOLDOWN_MS = 30 * 60_000;
+let trustSnapshotLastError: string | null = null;
+let trustSnapshotLastAlertAt = 0;
+let trustSnapshotAlertInFlight = false;
+
+export function getTrustSnapshotWriteHealth() {
+  const stats = getTrustSnapshotWriteStats();
+  return {
+    status: stats.recent_failures >= TRUST_SNAPSHOT_FAILURE_THRESHOLD ? "degraded" : "ok",
+    ...stats,
+    threshold: TRUST_SNAPSHOT_FAILURE_THRESHOLD,
+    last_database_error: stats.recent_failures ? trustSnapshotLastError : null,
+  };
+}
+
+export function recordTrustReadThroughSnapshotSuccess(): void {
+  recordTrustSnapshotWriteSuccess();
+}
+
+// Never await alert delivery on the public read path. A failing webhook must
+// not turn a usable computed score into an error or delay the response.
+export function recordTrustReadThroughSnapshotFailure(error: unknown): void {
+  recordTrustSnapshotWriteFailure();
+  trustSnapshotLastError = safeSnapshotDbError(error);
+  const health = getTrustSnapshotWriteHealth();
+  if (health.status !== "degraded") return;
+  const now = Date.now();
+  if (trustSnapshotAlertInFlight || now - trustSnapshotLastAlertAt < TRUST_SNAPSHOT_ALERT_COOLDOWN_MS) return;
+  trustSnapshotLastAlertAt = now;
+  const payload = {
+    alert: "trust_read_through_snapshot_write_failures",
+    severity: "warning",
+    timestamp: new Date(now).toISOString(),
+    ...health,
+  };
+  logger.warn("Trust read-through snapshot writes repeatedly failed", { component: "alerts", ...payload });
+  const webhookUrl = process.env.TRUST_SNAPSHOT_ALERT_WEBHOOK_URL || process.env.TX_ALERT_WEBHOOK_URL;
+  if (!webhookUrl) return;
+  trustSnapshotAlertInFlight = true;
+  void sendAlertWebhook(webhookUrl, payload.alert, payload).finally(() => {
+    trustSnapshotAlertInFlight = false;
+  });
 }
 
 const LEADERBOARD_REFRESH_FAILURE_THRESHOLD = 3;
@@ -163,7 +209,7 @@ export function getLeaderboardRefreshHealth(now = Date.now()) {
 
 export async function recordLeaderboardRefreshFailure(error: unknown): Promise<void> {
   leaderboardConsecutiveFailures++;
-  leaderboardLastError = safeLeaderboardDbError(error);
+  leaderboardLastError = safeSnapshotDbError(error);
   const health = getLeaderboardRefreshHealth();
   if (health.status !== "degraded") return;
 

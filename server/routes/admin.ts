@@ -7,7 +7,7 @@ import { certifications, users, apiKeys, visits, txQueue as txQueueTable, agentV
 import { eq, desc, sql, and, gte, gt, count, ne } from "drizzle-orm";
 import { isWalletAuthenticated } from "../walletAuth";
 import { computeTrustScoreByWallet, runLeaderboardRefreshCycle, runTrustRefreshCycle } from "../trust";
-import { getAlertConfig, getRateLimitAlertConfig, getViolationQueueAlertConfig } from "../alerts";
+import { getAlertConfig, getRateLimitAlertConfig, getViolationQueueAlertConfig, getTrustSnapshotWriteHealth } from "../alerts";
 import {
   getMetrics,
   getConversionTelemetryWriteFailureStats,
@@ -890,6 +890,7 @@ export function registerAdminRoutes(app: Express) {
           ...metrics.rate_limit_fail_open,
           alert_config: getRateLimitAlertConfig(),
         },
+        trustSnapshotWrite: getTrustSnapshotWriteHealth(),
         generated_at: now.toISOString(),
       });
     } catch (error) {
