@@ -10,6 +10,8 @@ This is a separate profile from [`pba-verified-v1`](pba-verified-profile.md). It
 
 The receiving organization must operate the witness independently of the agent and the PBA issuer. The verifier operator must verify the recipient's control of its HTTPS origin and its witness public key out of band before adding it to the trusted registry. A key supplied in the request, an unregistered witness, a key identical to the subject's key, or the producer's own statement cannot grant a green result.
 
+An [independently operated recipient service and deployment guide](../examples/pba-http-delivery-witness/README.md) are provided as a reference. The example runs outside xProof, checks a finalized WHY marker, hashes the actual received POST bytes, and signs only after the recipient's acceptance callback succeeds. It does **not** register its own key or turn on public issuance; the verifier operator must vet the recipient and register the key out of band.
+
 The runtime registry is `PBA_HTTP_DELIVERY_WITNESSES_JSON`, a JSON object keyed by witness ID. Each entry has exactly `public_key` (an Ed25519 raw public key as `ed25519:` followed by 64 hex characters) and `recipient_origin` (a canonical HTTPS origin, without path, query, or credentials). For example, the *shape*, with illustrative non-functional data:
 
 ```json
