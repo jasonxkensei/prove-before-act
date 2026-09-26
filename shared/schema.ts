@@ -531,6 +531,14 @@ export const conversionEvents = pgTable("conversion_events", {
   check("conversion_events_http_status_check", sql`http_status IS NULL OR http_status BETWEEN 100 AND 599`),
 ]);
 
+// Failure-health rows contain only a timestamp, never the failed request or
+// event. The admin/alert paths aggregate these over bounded rolling windows.
+export const conversionTelemetryWriteFailures = pgTable("conversion_telemetry_write_failures", {
+  occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("idx_conversion_telemetry_write_failures_at").on(table.occurredAt),
+]);
+
 export type ConversionEvent = typeof conversionEvents.$inferSelect;
 
 // Proof-scoped idempotency markers. These contain no visitor, request,

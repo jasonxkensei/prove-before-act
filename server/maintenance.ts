@@ -79,6 +79,12 @@ export async function purgeExpiredConversionEvents(): Promise<number> {
   const result = await pool.query(
     `DELETE FROM conversion_events WHERE created_at < NOW() - INTERVAL '90 days'`
   );
+  // Outage health needs only the most recent hour; the daily sweep caps stale
+  // timestamp-only records at roughly 25 hours without touching request data.
+  await pool.query(`
+    DELETE FROM conversion_telemetry_write_failures
+    WHERE occurred_at < NOW() - INTERVAL '1 hour'
+  `);
   return result.rowCount || 0;
 }
 
@@ -477,6 +483,19 @@ export async function migrateConversionEventsTable() {
         CONSTRAINT conversion_events_http_class_check CHECK (http_class IN ('0xx', '2xx', '3xx', '4xx', '5xx')),
         CONSTRAINT conversion_events_http_status_check CHECK (http_status IS NULL OR http_status BETWEEN 100 AND 599)
       )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS conversion_telemetry_write_failures (
+        occurred_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+      )
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_conversion_telemetry_write_failures_at
+        ON conversion_telemetry_write_failures(occurred_at)
+    `);
+    await pool.query(`
+      DELETE FROM conversion_telemetry_write_failures
+      WHERE occurred_at < NOW() - INTERVAL '1 hour'
     `);
     // Existing deployments may still have the original three-stage constraint.
     await pool.query(`
