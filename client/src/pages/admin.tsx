@@ -179,17 +179,16 @@ interface AdminStats {
   };
 }
 
-interface FailedProofCallback {
+interface ExhaustedProofCallback {
   certificationId: string;
-  fileName: string | null;
   attempts: number;
   lastAttempt: string | null;
   destination: string;
 }
 
-interface FailedProofCallbacksData {
-  callbacks: FailedProofCallback[];
-  total: number;
+interface ExhaustedProofCallbacksData {
+  callbacks: ExhaustedProofCallback[];
+  limit: number;
 }
 
 interface ConversionFunnelData {
@@ -1278,9 +1277,15 @@ function ProposedViolationsCard({ data, isAdmin }: { data: ProposedViolationsDat
 
 function FailedProofCallbacksCard() {
   const queryClient = useQueryClient();
-  const { data, isLoading, isError } = useQuery<FailedProofCallbacksData>({
+  const { data, isLoading, isError } = useQuery<ExhaustedProofCallbacksData>({
+    queryKey: ["/api/admin/proof-callbacks/exhausted"],
+    retry: false,
+    refetchInterval: 30_000,
+  });
+  const retryable = useQuery<{ callbacks: Array<{ certificationId: string }> }>({
     queryKey: ["/api/admin/proof-callbacks/failed"],
     retry: false,
+    refetchInterval: 30_000,
   });
 
   const retryMutation = useMutation({
@@ -1289,31 +1294,33 @@ function FailedProofCallbacksCard() {
       `/api/admin/proof-callbacks/${encodeURIComponent(certificationId)}/retry`,
     ),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/proof-callbacks/exhausted"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/proof-callbacks/failed"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
     },
   });
 
   const callbacks = data?.callbacks ?? [];
+  const retryableIds = new Set(retryable.data?.callbacks.map((callback) => callback.certificationId) ?? []);
 
   return (
     <Card data-testid="card-failed-proof-callbacks">
       <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
         <div>
-          <CardTitle className="text-sm font-medium">Failed Proof Callbacks</CardTitle>
+          <CardTitle className="text-sm font-medium">Recent Exhausted Proof Callbacks</CardTitle>
           <p className="mt-1 text-xs text-muted-foreground">
-            Retry is available only when the proof is confirmed and saved callback credentials are present.
+            Latest {data?.limit ?? 25} failed deliveries · destinations show origin only. Retry requires a confirmed proof and saved callback credentials.
           </p>
         </div>
         <Webhook className="h-4 w-4 text-muted-foreground" />
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <p className="text-sm text-muted-foreground">Loading failed callbacks...</p>
+          <p className="text-sm text-muted-foreground">Loading exhausted callbacks...</p>
         ) : isError ? (
-          <p className="text-sm text-destructive">Failed callbacks could not be loaded.</p>
+          <p className="text-sm text-destructive">Exhausted callbacks could not be loaded.</p>
         ) : callbacks.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No retryable failed callbacks.</p>
+          <p className="text-sm text-muted-foreground">No exhausted callbacks with recorded attempts.</p>
         ) : (
           <div className="space-y-3">
             {callbacks.map((callback) => (
@@ -1323,11 +1330,11 @@ function FailedProofCallbacksCard() {
                 data-testid={`failed-callback-${callback.certificationId}`}
               >
                 <div className="min-w-0 space-y-1">
-                  <p className="truncate text-sm font-medium">
-                    {callback.fileName || callback.certificationId}
+                  <p className="break-all text-sm font-medium">
+                    Proof {callback.certificationId}
                   </p>
                   <p className="break-all text-xs text-muted-foreground">
-                    Proof {callback.certificationId} · {callback.destination}
+                    Destination: {callback.destination}
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {callback.attempts} failed attempts
@@ -1336,7 +1343,7 @@ function FailedProofCallbacksCard() {
                       : ""}
                   </p>
                 </div>
-                <Button
+                {retryableIds.has(callback.certificationId) && <Button
                   size="sm"
                   variant="outline"
                   onClick={() => retryMutation.mutate(callback.certificationId)}
@@ -1349,10 +1356,13 @@ function FailedProofCallbacksCard() {
                     <RefreshCw className="mr-2 h-4 w-4" />
                   )}
                   Queue retry
-                </Button>
+                </Button>}
               </div>
             ))}
           </div>
+        )}
+        {retryable.isError && (
+          <p className="mt-3 text-xs text-muted-foreground">Retry availability could not be loaded. Delivery details are still available above.</p>
         )}
         {retryMutation.isError && (
           <p className="mt-3 text-sm text-destructive">

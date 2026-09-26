@@ -42,15 +42,15 @@ const activeDeliveries = new Set<string>();
 const queuedDuringDelivery = new Set<string>();
 
 /**
- * Return a redacted representation of a webhook URL safe for structured logs.
- * Only the origin (scheme + host + port) is retained; the path, query string,
- * credentials (userinfo), and fragment are all stripped so that bearer tokens
- * embedded in URLs never reach log aggregation systems.
+ * Return only the origin (scheme + host + port) of a webhook URL.
+ * The same redaction is used for logs and admin responses so credentials,
+ * paths, query strings, and fragments never leave the server.
  */
 export function redactWebhookUrl(url: string): string {
   try {
-    const { origin } = new URL(url);
-    return `${origin}/[redacted]`;
+    const parsed = new URL(url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "[invalid-url]";
+    return parsed.origin;
   } catch {
     return "[invalid-url]";
   }

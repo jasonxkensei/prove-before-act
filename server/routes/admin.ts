@@ -4,7 +4,7 @@ import { db, pool } from "../db";
 import { getRateLimitStats } from "../pgRateLimit";
 import { logger } from "../logger";
 import { certifications, users, apiKeys, visits, txQueue as txQueueTable, agentViolations, FINALITY_SNAPSHOT_VERSION } from "@shared/schema";
-import { eq, desc, sql, and, gte, gt, count, ne } from "drizzle-orm";
+import { eq, desc, sql, and, gte, gt, count, ne, isNotNull } from "drizzle-orm";
 import { isWalletAuthenticated } from "../walletAuth";
 import { computeTrustScoreByWallet, runLeaderboardRefreshCycle, runTrustRefreshCycle } from "../trust";
 import { getAlertConfig, getRateLimitAlertConfig, getViolationQueueAlertConfig, getTrustSnapshotWriteHealth } from "../alerts";
@@ -20,6 +20,7 @@ import { reconstructAuditTrail } from "../audit-trail";
 import { publicStatsRateLimiter } from "../reliability";
 import {
   listRetryableFailedWebhookDeliveries,
+  redactWebhookUrl,
   retryFailedWebhookDelivery,
 } from "../webhook";
 
@@ -1555,6 +1556,36 @@ export function registerAdminRoutes(app: Express) {
   // ============================================
   // Admin: Failed proof callback recovery
   // ============================================
+  app.get("/api/admin/proof-callbacks/exhausted", isWalletAuthenticated, requireAdmin, async (req: any, res) => {
+    try {
+      const limit = 25;
+      const rows = await db.select({
+        id: certifications.id,
+        webhookAttempts: certifications.webhookAttempts,
+        webhookLastAttempt: certifications.webhookLastAttempt,
+        webhookUrl: certifications.webhookUrl,
+      }).from(certifications).where(and(
+        eq(certifications.webhookStatus, "failed"),
+        gt(certifications.webhookAttempts, 0),
+        isNotNull(certifications.webhookLastAttempt),
+        isNotNull(certifications.webhookUrl),
+      )).orderBy(desc(certifications.webhookLastAttempt), desc(certifications.id)).limit(limit);
+
+      res.json({
+        callbacks: rows.map((row) => ({
+          certificationId: row.id,
+          attempts: row.webhookAttempts,
+          lastAttempt: row.webhookLastAttempt,
+          destination: redactWebhookUrl(row.webhookUrl!),
+        })),
+        limit,
+      });
+    } catch {
+      logger.withRequest(req).error("Failed to list exhausted proof callbacks");
+      res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to list exhausted proof callbacks." });
+    }
+  });
+
   app.get("/api/admin/proof-callbacks/failed", isWalletAuthenticated, requireAdmin, async (req: any, res) => {
     try {
       const callbacks = await listRetryableFailedWebhookDeliveries();

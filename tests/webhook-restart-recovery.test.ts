@@ -397,6 +397,12 @@ describe("proof-certified webhook restart recovery", () => {
     await withAdminRoutes(async (baseUrl) => {
       const unauthenticated = await fetch(`${baseUrl}/api/admin/proof-callbacks/failed`);
       expect(unauthenticated.status).toBe(401);
+      const unauthenticatedExhausted = await fetch(`${baseUrl}/api/admin/proof-callbacks/exhausted`);
+      expect(unauthenticatedExhausted.status).toBe(401);
+      const nonAdminExhausted = await fetch(`${baseUrl}/api/admin/proof-callbacks/exhausted`, {
+        headers: { "x-test-wallet": "not-an-admin" },
+      });
+      expect(nonAdminExhausted.status).toBe(403);
 
       const nonAdmin = await fetch(
         `${baseUrl}/api/admin/proof-callbacks/certification-admin-auth-test/retry`,
@@ -463,7 +469,7 @@ describe("proof-certified webhook restart recovery", () => {
         total: 1,
         callbacks: [{
           certificationId: "certification-manual-retry-test",
-          destination: "https://callbacks.example.test/[redacted]",
+          destination: "https://callbacks.example.test",
           attempts: 3,
         }],
       });
@@ -471,6 +477,23 @@ describe("proof-certified webhook restart recovery", () => {
       expect(JSON.stringify(listBody)).not.toContain(webhookSecret);
       expect(JSON.stringify(listBody)).not.toContain("callback-pass");
       expect(JSON.stringify(listBody)).not.toContain("access_token");
+
+      const exhaustedResponse = await fetch(`${baseUrl}/api/admin/proof-callbacks/exhausted`, { headers });
+      expect(exhaustedResponse.status).toBe(200);
+      const exhaustedBody = await exhaustedResponse.json();
+      expect(exhaustedBody).toEqual({
+        limit: 25,
+        callbacks: [{
+          certificationId: "certification-manual-retry-test",
+          destination: "https://callbacks.example.test",
+          attempts: 3,
+          lastAttempt: "2026-09-25T12:10:00.000Z",
+        }],
+      });
+      const serialized = JSON.stringify(exhaustedBody);
+      for (const secret of [callbackUrl, webhookSecret, "callback-user", "callback-pass", "/private/proof", "access_token", "#fragment"]) {
+        expect(serialized).not.toContain(secret);
+      }
 
       const retryResponse = await fetch(
         `${baseUrl}/api/admin/proof-callbacks/certification-manual-retry-test/retry`,
@@ -497,6 +520,38 @@ describe("proof-certified webhook restart recovery", () => {
       });
       expect(JSON.stringify(auditInfo.mock.calls)).not.toContain(callbackUrl);
       expect(JSON.stringify(auditInfo.mock.calls)).not.toContain(webhookSecret);
+    });
+  });
+
+  it("includes exhausted attempts even when a callback cannot be manually retried", async () => {
+    vi.stubEnv("ADMIN_WALLETS", "proof-callback-admin");
+    mockState.certification = {
+      id: "certification-exhausted-without-secret",
+      webhookUrl: "https://receiver.example.test:8443/private/hook?token=hidden#section",
+      webhookSigningSecret: null,
+      webhookStatus: "failed",
+      webhookAttempts: 3,
+      webhookLastAttempt: new Date("2026-09-25T11:00:00.000Z"),
+      blockchainStatus: "confirmed",
+      transactionHash,
+      finalityCheckedAt: new Date("2026-09-25T10:00:00.000Z"),
+    };
+
+    await withAdminRoutes(async (baseUrl) => {
+      const headers = { "x-test-wallet": "proof-callback-admin" };
+      const exhausted = await fetch(`${baseUrl}/api/admin/proof-callbacks/exhausted`, { headers });
+      expect(exhausted.status).toBe(200);
+      expect(await exhausted.json()).toEqual({
+        limit: 25,
+        callbacks: [{
+          certificationId: "certification-exhausted-without-secret",
+          attempts: 3,
+          lastAttempt: "2026-09-25T11:00:00.000Z",
+          destination: "https://receiver.example.test:8443",
+        }],
+      });
+      const retryable = await fetch(`${baseUrl}/api/admin/proof-callbacks/failed`, { headers });
+      expect((await retryable.json()).callbacks).toEqual([]);
     });
   });
 
