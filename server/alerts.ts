@@ -5,6 +5,7 @@ import { eq, and, gte, sql } from "drizzle-orm";
 import { checkAndAlert as checkAndAlertRateLimitImpl } from "./rateLimitAlerts";
 import { alertWebhookHeaders } from "./webhookHeaders";
 import type { Mx8004SignerBalance } from "./mx8004";
+import type { Mx8004NonceStall } from "./txQueue";
 import { getTrustSnapshotWriteStats, recordTrustSnapshotWriteFailure, recordTrustSnapshotWriteSuccess } from "./metrics";
 
 // Rate-limit fail-open alerting now lives in its own module (server/
@@ -105,6 +106,36 @@ export async function checkAndAlertMx8004LowBalance(balance: Mx8004SignerBalance
     await lowBalanceDelivery;
   } finally {
     lowBalanceDelivery = null;
+  }
+}
+
+let alertedNonceSequence: string | null = null;
+let nonceStallDelivery: Promise<void> | null = null;
+
+export async function checkAndAlertMx8004NonceStall(stall: Mx8004NonceStall | null): Promise<void> {
+  if (!stall) {
+    alertedNonceSequence = null;
+    return;
+  }
+  const sequence = `${stall.signer_address}:${stall.oldest_pending_nonce}`;
+  if (alertedNonceSequence === sequence) return;
+  if (nonceStallDelivery) return nonceStallDelivery;
+  nonceStallDelivery = (async () => {
+    const payload = {
+      alert: "mx8004_signer_nonce_stalled",
+      severity: "critical",
+      timestamp: new Date().toISOString(),
+      ...stall,
+    };
+    const webhookUrl = process.env.MX8004_NONCE_ALERT_WEBHOOK_URL || process.env.TX_ALERT_WEBHOOK_URL;
+    if (webhookUrl && !await sendAlertWebhook(webhookUrl, payload.alert, payload)) return;
+    logger.error("MX-8004 signer nonce sequence stalled", { component: "alerts", ...payload });
+    alertedNonceSequence = sequence;
+  })();
+  try {
+    await nonceStallDelivery;
+  } finally {
+    nonceStallDelivery = null;
   }
 }
 

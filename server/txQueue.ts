@@ -47,7 +47,7 @@ const VALIDATION_STEPS = [
 const FINALITY_POLL_MS = 15_000;
 const FINALITY_RECOVERY_MS = 30 * 60_000;
 
-type ActiveTx = { step: number; hash: string; broadcastAt: string };
+type ActiveTx = { step: number; hash: string; broadcastAt: string; nonce?: string };
 
 export function assessMx8004Finality(
   active: ActiveTx,
@@ -287,17 +287,24 @@ async function executeTask(
         payload: sql`payload || ${JSON.stringify({ broadcastIntent: { step: startStep, startedAt: new Date().toISOString() } })}::jsonb`,
       }).where(eq(txQueue.id, taskId));
       let txHash: string;
+      let claimedNonce: string | undefined;
+      const onNonce = async (nonce: string) => {
+        claimedNonce = nonce;
+        await db.update(txQueue).set({
+          payload: sql`payload || ${JSON.stringify({ broadcastIntent: { step: startStep, startedAt: new Date().toISOString(), nonce } })}::jsonb`,
+        }).where(eq(txQueue.id, taskId));
+      };
       try {
         txHash = await [
-          () => initJob(jobId, agentNonce),
-          () => submitProof(jobId, proof),
-          () => validationRequest(jobId, senderAddress, requestUri, requestHash),
-          () => validationResponse(requestHash, 100, responseUri, responseHash, "Prove Before Act-certification"),
-          () => appendResponse(jobId, certUrl),
+          () => initJob(jobId, agentNonce, undefined, onNonce),
+          () => submitProof(jobId, proof, onNonce),
+          () => validationRequest(jobId, senderAddress, requestUri, requestHash, onNonce),
+          () => validationResponse(requestHash, 100, responseUri, responseHash, "Prove Before Act-certification", onNonce),
+          () => appendResponse(jobId, certUrl, onNonce),
         ][startStep]();
         await db.update(txQueue).set({
           payload: sql`payload || ${JSON.stringify({
-            activeTx: { step: startStep, hash: txHash, broadcastAt: new Date().toISOString() }, broadcastIntent: null, finalityTracked: true,
+            activeTx: { step: startStep, hash: txHash, broadcastAt: new Date().toISOString(), nonce: claimedNonce }, broadcastIntent: null, finalityTracked: true,
           })}::jsonb`,
           status: "awaiting_finality",
           nextRetryAt: new Date(Date.now() + FINALITY_POLL_MS),
@@ -391,6 +398,80 @@ export async function getTxQueueStats(): Promise<{
     avgProcessingTimeMs: avgRow.avgMs ? Number(avgRow.avgMs) : null,
     lastActivity,
   };
+}
+
+export const MX8004_NONCE_STALL_MS = 5 * 60_000;
+
+type UnresolvedMx8004Task = {
+  jobId: string;
+  status: string;
+  createdAt: Date | null;
+  payload: unknown;
+};
+
+export type Mx8004NonceStall = {
+  signer_address: string;
+  oldest_pending_nonce: string;
+  oldest_pending_at: string;
+  age_minutes: number;
+  job_ids: string[];
+  recovery_guidance: string;
+};
+
+/**
+ * Chain nonce is the last consumed nonce (see nonce.ts). Only report a stall
+ * when a known claimed nonce is still ahead of the chain after five minutes.
+ * Jobs without persisted nonces (legacy records) cannot establish this fact.
+ */
+export function assessMx8004NonceStall(
+  tasks: UnresolvedMx8004Task[],
+  signerAddress: string | null,
+  chainNonce: number | null,
+  now = Date.now(),
+): Mx8004NonceStall | null {
+  if (!signerAddress || !Number.isSafeInteger(chainNonce) || chainNonce === null || chainNonce < 0) return null;
+  const unresolved = tasks.flatMap(task => {
+    const payload = task.payload as { activeTx?: ActiveTx | null; broadcastIntent?: { nonce?: string; startedAt?: string } | null } | null;
+    const active = payload?.activeTx;
+    const intent = payload?.broadcastIntent;
+    const nonceText = active?.nonce ?? intent?.nonce;
+    const at = active?.broadcastAt ?? intent?.startedAt;
+    if (!nonceText || !/^\d+$/.test(nonceText) || !at) return [];
+    const nonce = Number(nonceText);
+    const timestamp = Date.parse(at);
+    if (!Number.isSafeInteger(nonce) || nonce <= chainNonce || !Number.isFinite(timestamp) || timestamp > now) return [];
+    return [{ task, nonce, timestamp }];
+  }).sort((a, b) => a.nonce - b.nonce || a.timestamp - b.timestamp);
+  const oldest = unresolved[0];
+  if (!oldest || now - oldest.timestamp < MX8004_NONCE_STALL_MS) return null;
+  const jobIds = new Set(unresolved.filter(item => item.nonce >= oldest.nonce).map(item => item.task.jobId));
+  for (const task of tasks) {
+    if (task.status === "pending" && task.createdAt && new Date(task.createdAt).getTime() >= oldest.timestamp) {
+      jobIds.add(task.jobId);
+    }
+  }
+  return {
+    signer_address: signerAddress,
+    oldest_pending_nonce: String(oldest.nonce),
+    oldest_pending_at: new Date(oldest.timestamp).toISOString(),
+    age_minutes: Math.floor((now - oldest.timestamp) / 60_000),
+    job_ids: [...jobIds].sort(),
+    recovery_guidance: "Inspect the signer account nonce and transaction hashes in the MultiversX explorer. Reconcile the oldest nonce and on-chain finality before retrying or resyncing the signer; never blindly rebroadcast an ambiguous transaction.",
+  };
+}
+
+export async function getMx8004NonceStall(
+  signerAddress: string | null,
+  chainNonce: number | null,
+): Promise<Mx8004NonceStall | null> {
+  if (!signerAddress || chainNonce === null) return null;
+  const tasks = await db.select({
+    jobId: txQueue.jobId, status: txQueue.status, createdAt: txQueue.createdAt, payload: txQueue.payload,
+  }).from(txQueue).where(and(
+    eq(txQueue.jobType, "mx8004_validation_loop"),
+    sql`${txQueue.status} IN ('pending', 'processing', 'awaiting_finality', 'recovery_required')`,
+  ));
+  return assessMx8004NonceStall(tasks, signerAddress, chainNonce);
 }
 
 export function startTxQueueWorker(): void {

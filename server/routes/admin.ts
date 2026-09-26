@@ -13,7 +13,7 @@ import {
   getConversionTelemetryWriteFailureStats,
   CONVERSION_TELEMETRY_FAILURE_HEALTH_WINDOW_MS,
 } from "../metrics";
-import { getTxQueueStats } from "../txQueue";
+import { getTxQueueStats, getMx8004NonceStall } from "../txQueue";
 import { getMx8004SignerBalance, getMx8004SignerBalanceReport, isMX8004Configured } from "../mx8004";
 import { requireAdmin, EXCLUDED_IP_HASHES, getClientIp, safeErrMsg } from "./helpers";
 import { reconstructAuditTrail } from "../audit-trail";
@@ -1079,6 +1079,8 @@ export function registerAdminRoutes(app: Express) {
   app.get("/api/admin/tx-queue", isWalletAuthenticated, requireAdmin, async (req: any, res) => {
     try {
       const stats = await getTxQueueStats();
+      const balance = await getMx8004SignerBalance();
+      const nonceStall = balance.error ? null : await getMx8004NonceStall(balance.address, balance.nonce);
       const recentFailed = await db
         .select()
         .from(txQueueTable)
@@ -1097,6 +1099,7 @@ export function registerAdminRoutes(app: Express) {
 
       res.json({
         stats,
+        nonce_stall: nonceStall,
         metrics: {
           success_rate: stats.successRate,
           avg_processing_time_ms: stats.avgProcessingTimeMs,

@@ -180,7 +180,10 @@ export function resetNonce() {
   }
 }
 
-async function signAndSubmit(tx: Transaction): Promise<string> {
+async function signAndSubmit(tx: Transaction, onNonce?: (nonce: string) => Promise<void>): Promise<string> {
+  // Persist the claimed nonce before sending: a crash after acceptance must not
+  // leave the queue unable to identify which signer nonce needs reconciliation.
+  if (onNonce) await onNonce(tx.nonce.toString());
   const privateKeyHex = PRIVATE_KEY!.replace(/^0x/i, "");
   const privateKeyBuffer = Buffer.from(privateKeyHex, "hex");
   const computer = new TransactionComputer();
@@ -307,7 +310,8 @@ export async function registerAgent(
 export async function initJob(
   jobId: string,
   agentNonce: number,
-  serviceId?: number
+  serviceId?: number,
+  onNonce?: (nonce: string) => Promise<void>,
 ): Promise<string> {
   if (!isMX8004Configured()) throw new Error("MX-8004 not configured");
 
@@ -324,12 +328,13 @@ export async function initJob(
     BigInt(15_000_000)
   );
 
-  return signAndSubmit(tx);
+  return signAndSubmit(tx, onNonce);
 }
 
 export async function submitProof(
   jobId: string,
-  proof: string
+  proof: string,
+  onNonce?: (nonce: string) => Promise<void>,
 ): Promise<string> {
   if (!isMX8004Configured()) throw new Error("MX-8004 not configured");
 
@@ -341,14 +346,15 @@ export async function submitProof(
     BigInt(10_000_000)
   );
 
-  return signAndSubmit(tx);
+  return signAndSubmit(tx, onNonce);
 }
 
 export async function validationRequest(
   jobId: string,
   validatorAddress: string,
   requestUri: string,
-  requestHash: string
+  requestHash: string,
+  onNonce?: (nonce: string) => Promise<void>,
 ): Promise<string> {
   if (!isMX8004Configured()) throw new Error("MX-8004 not configured");
 
@@ -360,7 +366,7 @@ export async function validationRequest(
     BigInt(15_000_000)
   );
 
-  return signAndSubmit(tx);
+  return signAndSubmit(tx, onNonce);
 }
 
 export async function validationResponse(
@@ -368,7 +374,8 @@ export async function validationResponse(
   response: number,
   responseUri: string,
   responseHash: string,
-  tag: string
+  tag: string,
+  onNonce?: (nonce: string) => Promise<void>,
 ): Promise<string> {
   if (!isMX8004Configured()) throw new Error("MX-8004 not configured");
 
@@ -380,7 +387,7 @@ export async function validationResponse(
     BigInt(15_000_000)
   );
 
-  return signAndSubmit(tx);
+  return signAndSubmit(tx, onNonce);
 }
 
 export async function getReputationScore(agentNonce: number): Promise<{ score: number; totalJobs: number }> {
@@ -690,7 +697,8 @@ export async function readFeedback(
 
 export async function appendResponse(
   jobId: string,
-  responseUri: string
+  responseUri: string,
+  onNonce?: (nonce: string) => Promise<void>,
 ): Promise<string> {
   if (!isMX8004Configured()) throw new Error("MX-8004 not configured");
 
@@ -702,7 +710,7 @@ export async function appendResponse(
     BigInt(10_000_000)
   );
 
-  return signAndSubmit(tx);
+  return signAndSubmit(tx, onNonce);
 }
 
 export function getExplorerUrl(txHash: string): string {

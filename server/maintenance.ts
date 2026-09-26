@@ -7,9 +7,10 @@ import { FINALITY_SNAPSHOT_VERSION, users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { computeTrustScore } from "./trust";
 import { purgeExpiredRateLimitRows } from "./pgRateLimit";
-import { checkAndAlertMx8004LowBalance, checkAndAlertViolationQueue } from "./alerts";
+import { checkAndAlertMx8004LowBalance, checkAndAlertMx8004NonceStall, checkAndAlertViolationQueue } from "./alerts";
 import { logger } from "./logger";
 import { getMx8004SignerBalance, isMX8004Configured } from "./mx8004";
+import { getMx8004NonceStall } from "./txQueue";
 import {
   recordConversionTelemetryPurgeFailure,
   recordConversionTelemetryPurgeSuccess,
@@ -44,6 +45,18 @@ export async function checkMx8004WalletBalance() {
       component: "maintenance",
       error: error instanceof Error ? error.name : "unknown",
     });
+  }
+
+  // An unavailable account reading must not clear a previous alert episode.
+  if (balance.nonce !== null && balance.address) {
+    try {
+      await checkAndAlertMx8004NonceStall(await getMx8004NonceStall(balance.address, balance.nonce));
+    } catch (error) {
+      logger.error("MX-8004 nonce stall check failed", {
+        component: "maintenance",
+        error: error instanceof Error ? error.name : "unknown",
+      });
+    }
   }
 
   if (balance.lowBalance && Date.now() - lastMx8004LowBalanceWarningAt >= 60 * 60 * 1000) {
