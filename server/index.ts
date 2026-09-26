@@ -138,7 +138,9 @@ app.use((req, res, next) => {
   if (req.path.startsWith('/api/webhooks/')) {
     next();
   } else {
-    express.json()(req, res, next);
+    // The bounded PBA evidence profile allows a 256 KiB envelope; keep the
+    // existing smaller global limit for all other endpoints.
+    express.json({ limit: req.path === '/api/pba/verify' ? '256kb' : '100kb' })(req, res, next);
   }
 });
 

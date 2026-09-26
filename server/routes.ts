@@ -30,6 +30,7 @@ import { registerFleetsRoutes } from "./routes/fleets";
 import { registerFleetOverviewRoutes } from "./routes/fleet-overview";
 import { registerConversionRoutes } from "./routes/conversion";
 import { registerStripeCreditsRoutes } from "./routes/stripe-credits";
+import { registerPbaVerificationRoutes } from "./routes/pba-verification";
 
 const recentVisits = new Map<string, number>();
 setInterval(() => {
@@ -125,6 +126,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerTrustRoutes(app);
   registerAttestationsRoutes(app);
   registerStandardRoutes(app);
+  registerPbaVerificationRoutes(app);
   registerCalibrationRoutes(app);
   registerCoherenceRoutes(app);
   registerFleetsRoutes(app);

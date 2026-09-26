@@ -1,5 +1,5 @@
 import { type Express } from "express";
-import { getCertificationPriceEgld, getPricingInfo } from "../pricing";
+import { getCertificationPriceEgld, getPbaVerificationPriceCents, getPricingInfo } from "../pricing";
 
 export function registerPricingRoutes(app: Express) {
   // Get pricing information (public endpoint)
@@ -15,12 +15,14 @@ export function registerPricingRoutes(app: Express) {
 
       const pricing = await getPricingInfo();
       const { priceUsd, priceEgld, egldUsdRate } = await getCertificationPriceEgld();
+      const pbaVerificationPriceCents = getPbaVerificationPriceCents();
 
       res.json({
         protocol: "prove-before-act",
         version: "1.0",
         ...pricing,
         price_usd: priceUsd,
+        pba_verification_price_usd: pbaVerificationPriceCents / 100,
         price_egld: priceEgld,
         egld_usd_rate: egldUsdRate,
         receiver_address: receiverAddress,
@@ -30,6 +32,12 @@ export function registerPricingRoutes(app: Express) {
         ],
       });
     } catch (error) {
+      if (error instanceof Error && error.message.startsWith("PBA_VERIFICATION_PRICE_CENTS")) {
+        return res.status(500).json({
+          error: "Invalid PBA verification pricing configuration",
+          configuration: "PBA_VERIFICATION_PRICE_CENTS",
+        });
+      }
       res.status(500).json({ error: "Failed to retrieve pricing information" });
     }
   });

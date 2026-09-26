@@ -757,6 +757,96 @@ export const fleetMembers = pgTable("fleet_members", {
 
 export type FleetMember = typeof fleetMembers.$inferSelect;
 
+// ============================================
+// PBA Verified — examination receipts and signed records
+// ============================================
+// These records are intentionally separate from xProof certifications.
+// Payment/intake state is mutable; attestation bytes are append-only, and
+// lifecycle changes are represented by separately signed events.
+export const pbaVerificationRequests = pgTable("pba_verification_requests", {
+  requestDigest: varchar("request_digest", { length: 64 }).primaryKey(),
+  subject: varchar("subject", { length: 512 }).notNull(),
+  origin: varchar("origin", { length: 256 }).notNull(),
+  amountCents: integer("amount_cents").notNull(),
+  quoteNetwork: varchar("quote_network", { length: 64 }).notNull(),
+  quotePayTo: varchar("quote_pay_to", { length: 256 }).notNull(),
+  status: varchar("status", { length: 32 }).notNull(),
+  paymentHeaderHash: varchar("payment_header_hash", { length: 64 }).unique(),
+  externalPaymentId: varchar("external_payment_id", { length: 256 }).unique(),
+  settledAt: timestamp("settled_at", { withTimezone: true }),
+  // Deliberately not a cascading FK: the nullable back-reference and the
+  // attestation's FK to request_digest form a logical cycle. Signed records
+  // must never be deleted as a side effect of removing mutable request state.
+  attestationId: varchar("attestation_id", { length: 36 }),
+  leaseUntil: timestamp("lease_until", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("idx_pba_verification_requests_status_lease").on(table.status, table.leaseUntil),
+  index("idx_pba_verification_requests_created").on(table.createdAt),
+  check("chk_pba_verification_request_digest", sql`${table.requestDigest} ~ '^[a-f0-9]{64}$'`),
+  check("chk_pba_verification_request_amount", sql`${table.amountCents} > 0`),
+  check("chk_pba_verification_request_payment_hash", sql`${table.paymentHeaderHash} IS NULL OR ${table.paymentHeaderHash} ~ '^[a-f0-9]{64}$'`),
+  check("chk_pba_verification_request_status", sql`${table.status} <> ''`),
+]);
+
+export const pbaVerificationKeys = pgTable("pba_verification_keys", {
+  keyId: varchar("key_id", { length: 80 }).primaryKey(),
+  publicKey: varchar("public_key", { length: 72 }).notNull().unique(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  check("chk_pba_verification_key_id", sql`${table.keyId} ~ '^[A-Za-z0-9._:-]{1,80}$'`),
+  check("chk_pba_verification_public_key", sql`${table.publicKey} ~ '^ed25519:[a-f0-9]{64}$'`),
+  index("idx_pba_verification_keys_revoked").on(table.revokedAt),
+]);
+
+export const pbaVerificationAttestations = pgTable("pba_verification_attestations", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  requestDigest: varchar("request_digest", { length: 64 }).notNull()
+    .references(() => pbaVerificationRequests.requestDigest, { onDelete: "restrict" })
+    .unique(),
+  // Store the exact domain-separated bytes that were signed. Do not recreate
+  // this string from JSON when verifying previously issued records.
+  canonical: text("canonical").notNull(),
+  signature: varchar("signature", { length: 132 }).notNull(),
+  keyId: varchar("key_id", { length: 80 }).notNull()
+    .references(() => pbaVerificationKeys.keyId, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("idx_pba_verification_attestations_created").on(table.createdAt),
+  index("idx_pba_verification_attestations_key").on(table.keyId, table.createdAt),
+  check("chk_pba_verification_attestation_signature", sql`${table.signature} ~ '^hex:[a-f0-9]{128}$'`),
+]);
+
+export const pbaVerificationEvents = pgTable("pba_verification_events", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  attestationId: varchar("attestation_id", { length: 36 }).notNull()
+    .references(() => pbaVerificationAttestations.id, { onDelete: "restrict" }),
+  eventType: varchar("event_type", { length: 16 }).notNull(),
+  // Replacement links point to another immutable attestation; the referenced
+  // object is never deleted if an event or request record is removed.
+  replacementId: varchar("replacement_id", { length: 36 })
+    .references(() => pbaVerificationAttestations.id, { onDelete: "restrict" }),
+  canonical: text("canonical").notNull(),
+  signature: varchar("signature", { length: 132 }).notNull(),
+  keyId: varchar("key_id", { length: 80 }).notNull()
+    .references(() => pbaVerificationKeys.keyId, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("idx_pba_verification_events_attestation_time").on(table.attestationId, table.createdAt),
+  index("idx_pba_verification_events_replacement").on(table.replacementId),
+  index("idx_pba_verification_events_key").on(table.keyId, table.createdAt),
+  check("chk_pba_verification_event_type", sql`${table.eventType} IN ('revoked', 'superseded')`),
+  check("chk_pba_verification_event_signature", sql`${table.signature} ~ '^hex:[a-f0-9]{128}$'`),
+  check("chk_pba_verification_event_replacement", sql`${table.eventType} <> 'superseded' OR ${table.replacementId} IS NOT NULL`),
+]);
+
+export type PbaVerificationRequest = typeof pbaVerificationRequests.$inferSelect;
+export type PbaVerificationKey = typeof pbaVerificationKeys.$inferSelect;
+export type PbaVerificationAttestation = typeof pbaVerificationAttestations.$inferSelect;
+export type PbaVerificationEvent = typeof pbaVerificationEvents.$inferSelect;
+
 // rate_limit_counters — persistent rate-limit state for PgRateLimitStore.
 // Created via raw SQL in server/pgRateLimit.ts (ensureRateLimitTable).
 // Bucket key format: "{namespace}:{key}:{window_start_unix_ms}"

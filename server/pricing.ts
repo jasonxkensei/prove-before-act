@@ -88,6 +88,29 @@ export async function getCertificationPriceUsd(): Promise<number> {
   return FLAT_PRICE_USD;
 }
 
+/**
+ * Price for an official PBA verification examination, expressed in integer
+ * cents. This is deliberately independent of certification pricing.
+ *
+ * Read the environment at call time so operators can update the rate without
+ * restarting the process. Invalid values fail closed rather than silently
+ * falling back to the certification price.
+ */
+export function getPbaVerificationPriceCents(): number {
+  const configured = process.env.PBA_VERIFICATION_PRICE_CENTS;
+  if (configured === undefined) return 1;
+
+  if (!/^\d+$/.test(configured)) {
+    throw new Error("PBA_VERIFICATION_PRICE_CENTS must be a positive integer number of cents");
+  }
+
+  const cents = Number(configured);
+  if (!Number.isSafeInteger(cents) || cents <= 0) {
+    throw new Error("PBA_VERIFICATION_PRICE_CENTS must be a positive safe integer number of cents");
+  }
+  return cents;
+}
+
 export async function getCertificationPriceEgld(): Promise<{
   priceUsd: number;
   priceEgld: string;

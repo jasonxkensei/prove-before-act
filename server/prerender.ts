@@ -9,6 +9,7 @@ import { publicReadRateLimiter } from "./reliability";
 import { getTxExplorerUrl } from "./blockchain";
 import { publicProofStatus } from "./proof-finality";
 import { CANONICAL_PUBLIC_ORIGIN } from "./publicOrigin";
+import { getPublicVerification } from "./routes/pba-verification";
 import {
   PUBLIC_FOOTER_COLUMNS,
   PUBLIC_MORE_NAV,
@@ -1297,6 +1298,62 @@ ${renderPublicHeader(baseUrl)}
 ${renderPublicFooter(baseUrl)}
 </body>
 </html>`;
+}
+
+function renderPbaVerificationPage(
+  baseUrl: string,
+  id: string,
+  record: Awaited<ReturnType<typeof getPublicVerification>>,
+): string {
+  const url = `${baseUrl}/verify/${encodeURIComponent(id)}`;
+  if (!record) {
+    return `${commonHead("PBA verification not found | Prove Before Act", "No official PBA verification exists for this identifier.", url)}
+<body>${renderPublicHeader(baseUrl)}<main style="max-width:960px;margin:4rem auto;padding:0 1.5rem">
+<h1>Verification not found</h1><p>No official signed examination exists for this identifier.</p>
+</main>${renderPublicFooter(baseUrl)}</body></html>`;
+  }
+
+  const { attestation, current } = record;
+  const status = current.status;
+  const title = `PBA verification: ${status.replace("_", " ")} | Prove Before Act`;
+  const description = `Official signed examination of WHY, observed ACTION and WHAT for ${attestation.subject}. Current state: ${status}.`;
+  const verdicts = attestation.verdicts as Record<string, { status: string; reason: string }>;
+  const segments = (["why", "what", "link"] as const).map((name) => {
+    const verdict = verdicts[name];
+    const effective = status === "revoked" || status === "superseded" ? "inconclusive" : verdict?.status;
+    const color = effective === "verified" ? "#00cf87" : effective === "rejected" ? "#e15d69" : "#89939e";
+    return `<li style="border-left:4px solid ${color};padding:.8rem 1rem;margin:.7rem 0;background:#17212b">
+<strong>${name.toUpperCase()}</strong>: ${escapeHtml(verdict?.status ?? "inconclusive")}
+ — ${escapeHtml(verdict?.reason ?? "Evidence unavailable")}</li>`;
+  }).join("");
+  const events = current.events.map((event) =>
+    `<li>${escapeHtml(event.event)} · ${escapeHtml(event.issued_at ?? "Unknown date")}
+    ${event.replacement_id ? ` · <a href="${escapeHtml(`${baseUrl}/verify/${event.replacement_id}`)}">Replacement record</a>` : ""}</li>`,
+  ).join("");
+
+  return `${commonHead(title, description, url, "article")}
+<body style="background:#0d1117;color:#e5eced;font-family:Inter,sans-serif;margin:0">
+${renderPublicHeader(baseUrl)}
+<main style="max-width:960px;margin:3rem auto;padding:0 1.5rem 4rem;line-height:1.6">
+<p style="color:#00cf87;text-transform:uppercase;letter-spacing:.1em">Official signed examination · ${escapeHtml(attestation.profile)}</p>
+<h1>PBA verification</h1>
+<p><strong>Current status:</strong> ${escapeHtml(status.replace("_", " "))}</p>
+<p>This result concerns a self-certifying agent and a directly observed MultiversX transaction. It does not establish intent, legal identity, or the outcome of an off-chain action.</p>
+<img src="${escapeHtml(`${baseUrl}/api/pba/verification/${id}/indicator.svg`)}" width="80" height="80" alt="Current WHY, WHAT and LINK verification indicator">
+<h2>WHY · WHAT · LINK</h2><ul style="list-style:none;padding:0">${segments}</ul>
+<h2>Record and signing key</h2>
+<dl><dt>Subject</dt><dd><code>${escapeHtml(attestation.subject)}</code></dd>
+<dt>Request digest</dt><dd><code>${escapeHtml(attestation.request_digest)}</code></dd>
+<dt>Origin</dt><dd>${escapeHtml(attestation.origin)}</dd>
+<dt>Issued</dt><dd>${escapeHtml(attestation.issued_at)}</dd>
+<dt>Key ID</dt><dd><code>${escapeHtml(attestation.key_id)}</code></dd>
+<dt>Public key</dt><dd><code style="overflow-wrap:anywhere">${escapeHtml(record.public_key)}</code></dd>
+<dt>Signature</dt><dd><code style="overflow-wrap:anywhere">${escapeHtml(attestation.signature)}</code></dd></dl>
+${events ? `<h2>Signed lifecycle events</h2><ul>${events}</ul>` : ""}
+<details><summary>Independent verification data</summary><p>Check the Ed25519 signature against the exact domain-separated canonical bytes and the published key. Verify each transaction independently before relying on the result.</p>
+<p><a href="${escapeHtml(`${baseUrl}/api/pba/verification/${id}`)}">Machine-readable signed record</a> · <a href="${escapeHtml(`${baseUrl}/api/pba/keys`)}">Public signing-key registry</a></p>
+<pre style="white-space:pre-wrap;overflow-wrap:anywhere">${escapeHtml(record.canonical)}</pre></details>
+</main>${renderPublicFooter(baseUrl)}</body></html>`;
 }
 
 async function renderAgentsPage(baseUrl: string): Promise<string> {
@@ -2609,6 +2666,23 @@ export function prerenderMiddleware() {
             .set("Content-Type", "text/html")
             .set("Cache-Control", "private, no-store")
             .send(html);
+        }
+      }
+
+      const verificationMatch = path.match(/^\/verify\/([0-9a-fA-F-]{36})$/);
+      if (verificationMatch) {
+        const id = verificationMatch[1];
+        try {
+          const record = await getPublicVerification(id);
+          return res.status(record ? 200 : 404)
+            .set("Content-Type", "text/html")
+            .set("Cache-Control", "private, no-store")
+            .send(renderPbaVerificationPage(baseUrl, id, record));
+        } catch {
+          logger.error("PBA prerender verification unavailable", { component: "prerender" });
+          return res.status(503).set("Content-Type", "text/html")
+            .set("Cache-Control", "private, no-store")
+            .send(`${commonHead("PBA verification unavailable | Prove Before Act", "The current signed verification state is temporarily unavailable.", `${baseUrl}/verify/${id}`)}<body>${renderPublicHeader(baseUrl)}<main><h1>Verification unavailable</h1><p>The signed record could not be checked. No verification status can be shown right now.</p></main>${renderPublicFooter(baseUrl)}</body></html>`);
         }
       }
 
