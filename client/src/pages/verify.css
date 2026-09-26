@@ -38,6 +38,8 @@
 .pba-mark__caption strong { color: var(--verify-ink); font-family: "DM Mono", monospace; font-weight: 500; }
 .pba-mark__record-link { color: var(--verify-green); font-size: .7rem; font-weight: 600; text-underline-offset: 3px; }
 .verify-overview { padding: 1.4rem 1.5rem; border: 1px solid var(--verify-line); border-left: 3px solid var(--verify-green); background: hsl(42 24% 91% / .75); }
+.verify-overview--rejected { border-left-color: var(--verify-red); }
+.verify-overview--pending { border-left-color: var(--verify-amber); }
 .verify-overview__top { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
 .verify-record-id { margin: 0; overflow-wrap: anywhere; font: 500 .98rem/1.5 "DM Mono", ui-monospace, monospace; }
 .verify-current-status { display: grid; justify-items: end; gap: .45rem; }

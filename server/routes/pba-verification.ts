@@ -4,6 +4,7 @@ import { and, desc, eq, inArray, isNull, lt, or } from "drizzle-orm";
 import { z } from "zod";
 import {
   pbaPaymentReconciliations,
+  pbaHttpWitnessRevocations,
   pbaVerificationAttestations,
   pbaVerificationEvents,
   pbaVerificationKeys,
@@ -53,6 +54,8 @@ const PROCESSING_LEASE_MS = 90_000;
 const PAYMENT_LEASE_MS = 120_000;
 const MAX_PAYMENT_HEADER_LENGTH = 64 * 1024;
 const MAX_KEY_REVOCATION_ATTESTATIONS = 500;
+const WITNESS_ID_REGEX = /^[A-Za-z0-9._:-]{1,128}$/;
+const WITNESS_KEY_REGEX = /^ed25519:[a-f0-9]{64}$/;
 
 type PublicStatus = "verified" | "not_verified" | "revoked" | "superseded";
 type PbaVerificationRequest = PbaRequest | PbaHttpDeliveryRequest;
@@ -77,6 +80,24 @@ function parseSignedPayload(canonical: string, domain: string): Record<string, u
   } catch {
     throw new PublicRecordError(503, "The stored signed record is malformed.");
   }
+}
+
+function signedWitnessBinding(payload: Record<string, unknown>): {
+  witnessId: string; publicKey: string;
+} | null {
+  if (payload.profile !== PBA_HTTP_DELIVERY_PROFILE) return null;
+  const evidence = payload.evidence as Record<string, unknown> | undefined;
+  const receipt = evidence?.receipt as Record<string, unknown> | undefined;
+  if (typeof receipt?.witness_id === "string" &&
+      WITNESS_ID_REGEX.test(receipt.witness_id) &&
+      typeof receipt.witness_public_key === "string" &&
+      WITNESS_KEY_REGEX.test(receipt.witness_public_key)) {
+    return { witnessId: receipt.witness_id, publicKey: receipt.witness_public_key };
+  }
+  if (payload.verified === true) {
+    throw new PublicRecordError(503, "A positive HTTP delivery record has no valid signed witness binding.");
+  }
+  return null;
 }
 
 function isVerifiedVerdictSet(payload: Record<string, unknown>): boolean {
@@ -210,6 +231,52 @@ export async function getPublicVerification(id: string) {
 
   const payload = parseSignedPayload(stored.canonical, ATTESTATION_DOMAIN);
   validateAttestationPayload(payload, stored.id, stored.requestDigest, stored.keyId);
+  const witness = signedWitnessBinding(payload);
+  if (payload.profile === PBA_HTTP_DELIVERY_PROFILE && payload.verified === true &&
+      (stored.witnessId !== witness?.witnessId ||
+       stored.witnessPublicKey !== witness?.publicKey)) {
+    throw new PublicRecordError(503, "The witness inventory does not match the signed record.");
+  }
+  let witnessRevocation: {
+    witness_id: string; witness_public_key: string; reason: string;
+    revoked_at: string; canonical: string; signature: string;
+    key_id: string; public_key: string;
+  } | null = null;
+  if (witness) {
+    const [revocation] = await db.select().from(pbaHttpWitnessRevocations)
+      .where(and(
+        eq(pbaHttpWitnessRevocations.witnessId, witness.witnessId),
+        eq(pbaHttpWitnessRevocations.witnessPublicKey, witness.publicKey),
+      )).limit(1);
+    if (revocation) {
+      const [revocationSigner] = await db.select().from(pbaVerificationKeys)
+        .where(eq(pbaVerificationKeys.keyId, revocation.keyId)).limit(1);
+      if (!revocationSigner ||
+          !verifyPbaSignedRecord(revocation.canonical, revocation.signature, revocationSigner.publicKey)) {
+        throw new PublicRecordError(503, "The witness key revocation signature is unavailable or invalid.");
+      }
+      const signed = parseSignedPayload(revocation.canonical, LIFECYCLE_DOMAIN);
+      if (signed.id !== revocation.id ||
+          signed.event !== "witness_key_revoked" ||
+          signed.witness_id !== witness.witnessId ||
+          signed.witness_public_key !== witness.publicKey ||
+          signed.key_id !== revocation.keyId ||
+          signed.issued_at !== revocation.revokedAt.toISOString() ||
+          typeof signed.reason !== "string" || !signed.reason) {
+        throw new PublicRecordError(503, "The witness key revocation does not match its signed record.");
+      }
+      witnessRevocation = {
+        witness_id: witness.witnessId,
+        witness_public_key: witness.publicKey,
+        reason: signed.reason,
+        revoked_at: revocation.revokedAt.toISOString(),
+        canonical: revocation.canonical,
+        signature: revocation.signature,
+        key_id: revocation.keyId,
+        public_key: revocationSigner.publicKey,
+      };
+    }
+  }
 
   const storedEvents = await db.select()
     .from(pbaVerificationEvents)
@@ -249,7 +316,7 @@ export async function getPublicVerification(id: string) {
   }
 
   const firstEvent = storedEvents[0];
-  const currentStatus: PublicStatus = key.revokedAt
+  const currentStatus: PublicStatus = key.revokedAt || witnessRevocation
     ? "revoked"
     : firstEvent?.eventType === "revoked"
       ? "revoked"
@@ -271,6 +338,7 @@ export async function getPublicVerification(id: string) {
       status: currentStatus,
       events,
       signing_key_revoked: !!key.revokedAt,
+      witness_key_revocation: witnessRevocation,
     },
     verify_url: `${CANONICAL_PUBLIC_ORIGIN}/verify/${encodeURIComponent(stored.id)}`,
   };
@@ -646,6 +714,24 @@ export function registerPbaVerificationRoutes(app: Express): void {
           verdicts: examination.verdicts,
         });
       }
+      // Reject a revoked witness before accepting a payment, even if the
+      // operator has not yet removed its key from the runtime registry.
+      const examinedWitness = examination.profile === PBA_HTTP_DELIVERY_PROFILE &&
+        examination.verified ? examination.evidence.receipt : null;
+      if (examinedWitness?.witness_public_key) {
+        const [revokedWitness] = await db.select({ id: pbaHttpWitnessRevocations.id })
+          .from(pbaHttpWitnessRevocations)
+          .where(and(
+            eq(pbaHttpWitnessRevocations.witnessId, examinedWitness.witness_id),
+            eq(pbaHttpWitnessRevocations.witnessPublicKey, examinedWitness.witness_public_key),
+          )).limit(1);
+        if (revokedWitness) {
+          return res.status(409).json({
+            error: "WITNESS_KEY_REVOKED",
+            message: "This witness key has been revoked. No new payment was accepted.",
+          });
+        }
+      }
 
       const paymentHeader = typeof req.headers["x-payment"] === "string"
         ? req.headers["x-payment"]
@@ -851,6 +937,10 @@ export function registerPbaVerificationRoutes(app: Express): void {
             canonical: signed.canonical,
             signature: signed.signature,
             keyId: signed.keyId,
+            witnessId: examination.profile === PBA_HTTP_DELIVERY_PROFILE
+              ? examination.evidence.receipt?.witness_id ?? null : null,
+            witnessPublicKey: examination.profile === PBA_HTTP_DELIVERY_PROFILE
+              ? examination.evidence.receipt?.witness_public_key ?? null : null,
           })
           .returning();
         if (!attestation) throw new Error("attestation_insert_failed");
@@ -882,6 +972,117 @@ export function registerPbaVerificationRoutes(app: Express): void {
         error: "VERIFICATION_SERVICE_UNAVAILABLE",
         message: "The official verification service could not complete this request. Check the same request before retrying; do not make a second payment.",
       });
+    }
+  });
+
+  app.get("/api/admin/pba/witnesses/:witnessId/attestations",
+    isWalletAuthenticated, requireAdmin, async (req: Request, res: Response) => {
+    responseNoStore(res);
+    const query = z.object({
+      public_key: z.string().regex(WITNESS_KEY_REGEX),
+      limit: z.coerce.number().int().min(1).max(100).default(50),
+      offset: z.coerce.number().int().min(0).max(100_000).default(0),
+    }).strict().safeParse(req.query);
+    if (!WITNESS_ID_REGEX.test(req.params.witnessId) || !query.success) {
+      return res.status(400).json({ error: "INVALID_WITNESS_INVENTORY", message: "A witness ID and exact public key are required." });
+    }
+    try {
+      const binding = and(
+        eq(pbaVerificationAttestations.witnessId, req.params.witnessId),
+        eq(pbaVerificationAttestations.witnessPublicKey, query.data.public_key),
+      );
+      const rows = await db.select({
+        id: pbaVerificationAttestations.id,
+        requestDigest: pbaVerificationAttestations.requestDigest,
+        createdAt: pbaVerificationAttestations.createdAt,
+      }).from(pbaVerificationAttestations).where(binding)
+        .orderBy(desc(pbaVerificationAttestations.createdAt), desc(pbaVerificationAttestations.id))
+        .limit(query.data.limit + 1).offset(query.data.offset);
+      const [revocation] = await db.select({ id: pbaHttpWitnessRevocations.id })
+        .from(pbaHttpWitnessRevocations).where(and(
+          eq(pbaHttpWitnessRevocations.witnessId, req.params.witnessId),
+          eq(pbaHttpWitnessRevocations.witnessPublicKey, query.data.public_key),
+        )).limit(1);
+      return res.json({
+        witness_id: req.params.witnessId,
+        witness_public_key: query.data.public_key,
+        witness_key_status: revocation ? "revoked" : "active",
+        attestations: rows.slice(0, query.data.limit).map((row) => ({
+          id: row.id,
+          request_digest: row.requestDigest,
+          created_at: row.createdAt.toISOString(),
+          verify_url: `${CANONICAL_PUBLIC_ORIGIN}/verify/${encodeURIComponent(row.id)}`,
+        })),
+        next_offset: rows.length > query.data.limit ? query.data.offset + query.data.limit : null,
+      });
+    } catch (error) {
+      logger.error("PBA witness inventory unavailable", {
+        component: "pba-verification", error: error instanceof Error ? error.message : "unknown",
+      });
+      return res.status(503).json({ error: "WITNESS_INVENTORY_UNAVAILABLE" });
+    }
+  });
+
+  app.post("/api/admin/pba/witnesses/:witnessId/revoke",
+    isWalletAuthenticated, requireAdmin, async (req: Request, res: Response) => {
+    responseNoStore(res);
+    const body = z.object({
+      public_key: z.string().regex(WITNESS_KEY_REGEX),
+      reason: z.string().trim().min(10).max(500),
+      confirmation: z.literal("REVOKE_WITNESS_KEY"),
+    }).strict().safeParse(req.body);
+    if (!WITNESS_ID_REGEX.test(req.params.witnessId) || !body.success) {
+      return res.status(400).json({
+        error: "INVALID_WITNESS_REVOCATION",
+        message: "Provide the exact witness ID and key, a reason, and explicit confirmation.",
+      });
+    }
+    if (!signingConfigured()) {
+      return res.status(503).json({ error: "OFFICIAL_SIGNING_NOT_CONFIGURED" });
+    }
+    try {
+      const revokedAt = new Date();
+      const id = randomUUID();
+      const signed = signPbaLifecycleEvent({
+        id,
+        event: "witness_key_revoked",
+        witness_id: req.params.witnessId,
+        witness_public_key: body.data.public_key,
+        reason: body.data.reason,
+        issued_at: revokedAt.toISOString(),
+      });
+      const result = await db.transaction(async (tx) => {
+        await ensurePublicKey(tx as unknown as typeof db, signed.keyId, signed.publicKey);
+        const [stored] = await tx.insert(pbaHttpWitnessRevocations).values({
+          id,
+          witnessId: req.params.witnessId,
+          witnessPublicKey: body.data.public_key,
+          canonical: signed.canonical,
+          signature: signed.signature,
+          keyId: signed.keyId,
+          revokedAt,
+        }).onConflictDoNothing().returning();
+        return stored;
+      });
+      if (!result) {
+        return res.status(409).json({ error: "WITNESS_KEY_ALREADY_REVOKED" });
+      }
+      return res.status(201).json({
+        witness_id: result.witnessId,
+        witness_public_key: result.witnessPublicKey,
+        status: "revoked",
+        signed_revocation: {
+          canonical: result.canonical,
+          signature: result.signature,
+          key_id: result.keyId,
+          public_key: signed.publicKey,
+        },
+      });
+    } catch (error) {
+      logger.error("PBA witness key revocation failed", {
+        component: "pba-verification", error: error instanceof Error ? error.message : "unknown",
+      });
+      return res.status(503).json({ error: "WITNESS_REVOCATION_UNAVAILABLE" });
     }
   });
 

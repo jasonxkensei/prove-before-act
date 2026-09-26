@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useParams } from "wouter";
 import { ArrowUpRight, Check, Copy, FileKey2, RotateCw, ShieldAlert } from "lucide-react";
 import { PublicSiteFooter, PublicSiteHeader } from "@/components/public-site-chrome";
@@ -23,7 +23,20 @@ type VerificationResponse = {
   attestation: Attestation;
   canonical: unknown;
   public_key: unknown;
-  current: { status?: string; events?: unknown[] };
+  current: {
+    status?: string;
+    events?: unknown[];
+    witness_key_revocation?: {
+      witness_id: string;
+      witness_public_key: string;
+      reason: string;
+      revoked_at: string;
+      canonical: string;
+      signature: string;
+      key_id: string;
+      public_key: string;
+    } | null;
+  };
   verify_url?: string;
 };
 type LoadState =
@@ -84,6 +97,31 @@ function StatusPill({ status, tone: explicitTone }: { status?: string; tone?: "v
   return <span className={`verify-status verify-status--${tone}`}><i aria-hidden="true" />{label}</span>;
 }
 
+/** Retired records preserve their signed verdict text, never its positive visual mark. */
+export function VerificationVerdicts({
+  verdicts,
+  retired,
+}: {
+  verdicts?: Attestation["verdicts"];
+  retired: boolean;
+}) {
+  return (
+    <div className="verify-verdicts">
+      {verdictKeys.map((key) => {
+        const verdict = verdicts?.[key];
+        const tone = retired && verdict?.status === "verified"
+          ? "pending" : toneFor(verdict?.status);
+        return (
+          <article key={key} className={`verify-verdict verify-verdict--${tone}`}>
+            <div className="verify-verdict__top"><h3>{key.toUpperCase()}</h3><StatusPill status={verdict?.status} tone={tone} /></div>
+            <p>{verdict?.reason || "No explanation was included in the public record."}</p>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function VerifyPage() {
   const { id = "" } = useParams<{ id: string }>();
   const [state, setState] = useState<LoadState>({ kind: "loading" });
@@ -123,6 +161,8 @@ export default function VerifyPage() {
   const currentTone = isCurrentVerified ? "verified" : isRetired ? "rejected" : "pending";
   const currentDescription = isCurrentVerified
     ? "The server currently reports this record as verified. Independently verify its signature and payload before relying on it."
+    : ready?.current.witness_key_revocation
+      ? `The recipient witness key was revoked: ${ready.current.witness_key_revocation.reason}. This historic record is no longer valid, even though its original signature remains intact.`
     : isRetired
       ? `This record is ${currentStatus}; it is no longer current. Its original signature remains inspectable, but must not be treated as current.`
       : isActiveNegative
@@ -167,7 +207,7 @@ export default function VerifyPage() {
                 <PbaMark id={recordId} size={124} className="verify-heading__mark" />
               </header>
 
-              <section className="verify-overview" aria-labelledby="overview-title">
+              <section className={`verify-overview verify-overview--${currentTone}`} aria-labelledby="overview-title">
                 <div className="verify-overview__top">
                   <div>
                     <p className="verify-kicker" id="overview-title">RECORD ID</p>
@@ -190,17 +230,7 @@ export default function VerifyPage() {
 
               <section className="verify-section" aria-labelledby="fourw-title">
                 <div className="verify-section__heading"><div><p className="verify-kicker">THE DECLARED CLAIM</p><h2 id="fourw-title">Three verification questions</h2></div><span className="verify-section-index">01 / 04</span></div>
-                <div className="verify-verdicts">
-                  {verdictKeys.map((key) => {
-                    const verdict = attestation.verdicts?.[key];
-                    return (
-                      <article key={key} className={`verify-verdict verify-verdict--${toneFor(verdict?.status)}`}>
-                        <div className="verify-verdict__top"><h3>{key.toUpperCase()}</h3><StatusPill status={verdict?.status} /></div>
-                        <p>{verdict?.reason || "No explanation was included in the public record."}</p>
-                      </article>
-                    );
-                  })}
-                </div>
+                <VerificationVerdicts verdicts={attestation.verdicts} retired={isRetired} />
               </section>
 
               <section className="verify-section" aria-labelledby="identity-title">
@@ -244,6 +274,13 @@ export default function VerifyPage() {
                     <div className="verify-data-panel__heading"><h3>Current lifecycle events</h3></div>
                     {ready.current.events?.length ? <CopyValue value={ready.current.events} label="lifecycle events" multiline /> : <p className="verify-empty-evidence">No lifecycle events are currently published.</p>}
                   </article>
+                  {ready.current.witness_key_revocation && (
+                    <article className="verify-data-panel">
+                      <div className="verify-data-panel__heading"><ShieldAlert size={16} aria-hidden="true" /><h3>Signed witness key revocation</h3></div>
+                      <p className="verify-field-caption">The original proof is preserved, but the current mark is invalid.</p>
+                      <CopyValue value={ready.current.witness_key_revocation} label="signed witness key revocation" multiline />
+                    </article>
+                  )}
                 </div>
                 <div className={`verify-lifecycle verify-lifecycle--${currentTone}`}>
                   <span className="verify-lifecycle__marker" aria-hidden="true" />

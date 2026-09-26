@@ -608,6 +608,43 @@ export async function migrateProofFinalityReconciliationSchema(): Promise<void> 
   }
 }
 
+/** Required before public PBA reads: a missing revocation table must not leave old marks green. */
+export async function migratePbaHttpWitnessRevocations(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS pba_http_witness_revocations (
+      id VARCHAR(36) PRIMARY KEY,
+      witness_id VARCHAR(128) NOT NULL
+        CONSTRAINT chk_pba_http_witness_revocation_id CHECK (witness_id ~ '^[A-Za-z0-9._:-]{1,128}$'),
+      witness_public_key VARCHAR(72) NOT NULL
+        CONSTRAINT chk_pba_http_witness_revocation_key CHECK (witness_public_key ~ '^ed25519:[a-f0-9]{64}$'),
+      canonical TEXT NOT NULL,
+      signature VARCHAR(132) NOT NULL
+        CONSTRAINT chk_pba_http_witness_revocation_signature CHECK (signature ~ '^hex:[a-f0-9]{128}$'),
+      key_id VARCHAR(80) NOT NULL REFERENCES pba_verification_keys(key_id) ON DELETE RESTRICT,
+      revoked_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_pba_http_witness_revocations_identity
+      ON pba_http_witness_revocations(witness_id, witness_public_key)
+  `);
+  await pool.query(`ALTER TABLE pba_verification_attestations ADD COLUMN IF NOT EXISTS witness_id VARCHAR(128)`);
+  await pool.query(`ALTER TABLE pba_verification_attestations ADD COLUMN IF NOT EXISTS witness_public_key VARCHAR(72)`);
+  // Backfill only indexed metadata; never alter historical canonical bytes or signatures.
+  await pool.query(`
+    UPDATE pba_verification_attestations
+    SET witness_id = split_part(canonical, chr(10), 2)::jsonb->'evidence'->'receipt'->>'witness_id',
+        witness_public_key = split_part(canonical, chr(10), 2)::jsonb->'evidence'->'receipt'->>'witness_public_key'
+    WHERE canonical LIKE 'PBA-VERIFIED-ATTESTATION|v1' || chr(10) || '%'
+      AND split_part(canonical, chr(10), 2)::jsonb->>'profile' = 'pba-http-delivery-v1'
+      AND (witness_id IS NULL OR witness_public_key IS NULL)
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_pba_verification_attestations_witness
+      ON pba_verification_attestations(witness_id, witness_public_key, created_at)
+  `);
+}
+
 export async function purgeStaleSnapshotAttestationCounts() {
   try {
     await pool.query(`UPDATE trust_score_snapshots SET active_attestations = 0 WHERE active_attestations > 0`);

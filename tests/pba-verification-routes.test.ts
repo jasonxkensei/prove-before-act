@@ -3,6 +3,7 @@ import request from "supertest";
 import { generateKeyPairSync } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  pbaHttpWitnessRevocations,
   pbaPaymentReconciliations,
   pbaVerificationAttestations,
   pbaVerificationEvents,
@@ -156,7 +157,7 @@ function validHttpDeliveryEnvelope() {
   };
 }
 
-function installVerificationRequestDb() {
+function installVerificationRequestDb(revokedWitness = false) {
   const rows = new Map<string, Record<string, any>>();
   let latestDigest = "";
   dbMock.insert.mockImplementation((table: unknown) => {
@@ -178,6 +179,9 @@ function installVerificationRequestDb() {
       from(value: unknown) { table = value; return query; },
       where() { return query; },
       limit() {
+        if (table === pbaHttpWitnessRevocations && revokedWitness) {
+          return Promise.resolve([{ id: "revoked-witness-key" }]);
+        }
         return Promise.resolve(table === pbaVerificationRequests && rows.has(latestDigest)
           ? [rows.get(latestDigest)]
           : []);
@@ -241,6 +245,7 @@ function makeHttpDeliveryExamination(
       receipt: {
         digest: "sha256:" + "3".repeat(64),
         witness_id: "recipient-witness",
+        witness_public_key: witnessSignatureValid ? PUBLIC_KEY : null,
         recipient_origin: "https://recipient.example",
         observed_at: null,
         response_status: 200,
@@ -656,7 +661,9 @@ describe("PBA verification public API", () => {
         link: { status: "verified", reason: "ok" },
       },
       verified: true,
-      evidence: {},
+      evidence: profile === PBA_HTTP_DELIVERY_PROFILE ? {
+        receipt: { witness_id: "recipient-witness", witness_public_key: PUBLIC_KEY },
+      } : {},
       issued_at: issuedAt.toISOString(),
       profile,
     });
@@ -677,6 +684,8 @@ describe("PBA verification public API", () => {
       canonical: signedAttestation.canonical,
       signature: signedAttestation.signature,
       keyId: OLD_KEY_ID,
+      witnessId: profile === PBA_HTTP_DELIVERY_PROFILE ? "recipient-witness" : null,
+      witnessPublicKey: profile === PBA_HTTP_DELIVERY_PROFILE ? PUBLIC_KEY : null,
     };
     const storedEvent = {
       id: "00000000-0000-4000-8000-000000000003",
@@ -697,6 +706,7 @@ describe("PBA verification public API", () => {
         orderBy() { return Promise.resolve(table === pbaVerificationEvents ? [storedEvent] : []); },
         limit() {
           if (table === pbaVerificationAttestations) return Promise.resolve([storedAttestation]);
+          if (table === pbaHttpWitnessRevocations) return Promise.resolve([]);
           if (table === pbaVerificationKeys) {
             keyLookup += 1;
             return Promise.resolve([keyLookup === 1
@@ -941,6 +951,272 @@ describe("server-derived PBA indicator", () => {
 
     expect(svg).not.toContain('stroke="#00FF9D"');
     expect(svg.match(/stroke="#A8B0B6"/g)).toHaveLength(3);
+  });
+});
+
+describe("HTTP witness key compromise", () => {
+  const witnessId = "recipient-witness";
+  const witnessPublicKey = `ed25519:${"c".repeat(64)}`;
+  const replacementWitnessKey = `ed25519:${"d".repeat(64)}`;
+  const issuedAt = new Date("2025-03-01T00:00:00Z");
+  const revokedAt = new Date("2025-04-01T00:00:00Z");
+
+  function installPublicRecord(compromised: boolean) {
+    const issuer = makeEd25519Key();
+    const restore = installSigningEnvironment(ACTIVE_KEY_ID, issuer.privatePem);
+    const signedAttestation = signPbaPayload({
+      id: UUID,
+      profile: PBA_HTTP_DELIVERY_PROFILE,
+      request_digest: "1".repeat(64),
+      subject: "recipient-agent",
+      origin: "multiversx:mainnet",
+      verdicts: {
+        why: { status: "verified" },
+        what: { status: "verified" },
+        link: { status: "verified" },
+      },
+      verified: true,
+      evidence: {
+        receipt: { witness_id: witnessId, witness_public_key: witnessPublicKey },
+      },
+      issued_at: issuedAt.toISOString(),
+    });
+    const revocationId = "00000000-0000-4000-8000-000000000030";
+    const signedRevocation = signPbaLifecycleEvent({
+      id: revocationId,
+      event: "witness_key_revoked",
+      witness_id: witnessId,
+      witness_public_key: witnessPublicKey,
+      reason: "Witness private key was compromised",
+      issued_at: revokedAt.toISOString(),
+    });
+    restore();
+    const revocation = {
+      id: revocationId,
+      witnessId,
+      witnessPublicKey,
+      canonical: signedRevocation.canonical,
+      signature: signedRevocation.signature,
+      keyId: ACTIVE_KEY_ID,
+      revokedAt,
+    };
+    const attestation = {
+      id: UUID,
+      requestDigest: "1".repeat(64),
+      canonical: signedAttestation.canonical,
+      signature: signedAttestation.signature,
+      keyId: ACTIVE_KEY_ID,
+      witnessId,
+      witnessPublicKey,
+      createdAt: issuedAt,
+    };
+    dbMock.select.mockImplementation(() => {
+      let table: unknown;
+      const query: any = {
+        from(value: unknown) { table = value; return query; },
+        where() { return query; },
+        orderBy: async () => [],
+        limit: async () => {
+          if (table === pbaVerificationAttestations) return [attestation];
+          if (table === pbaVerificationKeys) return [{
+            keyId: ACTIVE_KEY_ID, publicKey: issuer.publicKey, revokedAt: null,
+          }];
+          if (table === pbaHttpWitnessRevocations) return compromised ? [revocation] : [];
+          return [];
+        },
+      };
+      return query;
+    });
+    return { attestation, revocation, issuer };
+  }
+
+  it("keeps an older attestation green after a legitimate witness rotation", async () => {
+    const previous = process.env.PBA_HTTP_DELIVERY_WITNESSES_JSON;
+    process.env.PBA_HTTP_DELIVERY_WITNESSES_JSON = JSON.stringify({
+      "new-recipient-witness": {
+        public_key: replacementWitnessKey,
+        recipient_origin: "https://recipient.example",
+      },
+    });
+    const { attestation } = installPublicRecord(false);
+    try {
+      const response = await request(createApp()).get(`/api/pba/verification/${UUID}`);
+      expect(response.status).toBe(200);
+      expect(response.body.current.status).toBe("verified");
+      expect(response.body.current.witness_key_revocation).toBeNull();
+      expect(response.body.canonical).toBe(attestation.canonical);
+    } finally {
+      if (previous === undefined) delete process.env.PBA_HTTP_DELIVERY_WITNESSES_JSON;
+      else process.env.PBA_HTTP_DELIVERY_WITNESSES_JSON = previous;
+    }
+  });
+
+  it("removes green from public JSON and SVG without rewriting signed evidence", async () => {
+    const { attestation, revocation, issuer } = installPublicRecord(true);
+    const response = await request(createApp()).get(`/api/pba/verification/${UUID}`);
+    expect(response.status).toBe(200);
+    expect(response.body.attestation.verified).toBe(true);
+    expect(response.body.canonical).toBe(attestation.canonical);
+    expect(response.body.current.status).toBe("revoked");
+    expect(response.body.current.witness_key_revocation).toMatchObject({
+      witness_id: witnessId,
+      witness_public_key: witnessPublicKey,
+      reason: "Witness private key was compromised",
+      canonical: revocation.canonical,
+      signature: revocation.signature,
+      public_key: issuer.publicKey,
+    });
+    expect(verifyPbaSignedRecord(
+      revocation.canonical, revocation.signature, issuer.publicKey,
+    )).toBe(true);
+    const svg = await request(createApp()).get(`/api/pba/verification/${UUID}/indicator.svg`);
+    expect(svg.status).toBe(200);
+    expect(svg.body.toString("utf8")).toContain('stroke="#A8B0B6"');
+    expect(svg.body.toString("utf8")).not.toContain('stroke="#00FF9D"');
+  });
+
+  it("fails closed if a stored revocation signature is tampered with", async () => {
+    const { revocation } = installPublicRecord(true);
+    revocation.signature = SIGNATURE;
+    const response = await request(createApp()).get(`/api/pba/verification/${UUID}`);
+    expect(response.status).toBe(503);
+    expect(response.body.error).toBe("VERIFICATION_RECORD_UNAVAILABLE");
+  });
+
+  it("fails closed if a positive record's indexed witness binding drifts from its signature", async () => {
+    const { attestation } = installPublicRecord(false);
+    attestation.witnessPublicKey = replacementWitnessKey;
+    const response = await request(createApp()).get(`/api/pba/verification/${UUID}`);
+    expect(response.status).toBe(503);
+    expect(response.body.error).toBe("VERIFICATION_RECORD_UNAVAILABLE");
+  });
+
+  it("requires explicit confirmation and writes one signed, idempotent key revocation", async () => {
+    const issuer = makeEd25519Key();
+    const restore = installSigningEnvironment(ACTIVE_KEY_ID, issuer.privatePem);
+    const inserted: Array<Record<string, any>> = [];
+    dbMock.transaction.mockImplementation(async (callback: (tx: any) => Promise<unknown>) => {
+      const tx = {
+        insert(table: unknown) {
+          const builder: any = {
+            values(values: Record<string, any>) { builder.record = values; return builder; },
+            onConflictDoNothing() { return builder; },
+            then(resolve: (value: unknown) => void) {
+              if (table === pbaVerificationKeys) resolve([]);
+            },
+            async returning() {
+              if (table !== pbaHttpWitnessRevocations || inserted.length) return [];
+              inserted.push(builder.record);
+              return [builder.record];
+            },
+          };
+          return builder;
+        },
+        select() {
+          const builder: any = {
+            from() { return builder; },
+            where() { return builder; },
+            for() { return builder; },
+            limit: async () => [{
+              keyId: ACTIVE_KEY_ID, publicKey: issuer.publicKey, revokedAt: null,
+            }],
+          };
+          return builder;
+        },
+      };
+      return callback(tx);
+    });
+    try {
+      const path = `/api/admin/pba/witnesses/${witnessId}/revoke`;
+      const input = {
+        public_key: witnessPublicKey,
+        reason: "Witness private key was compromised",
+      };
+      const missingConfirmation = await request(createApp("admin-wallet"))
+        .post(path).send(input);
+      expect(missingConfirmation.status).toBe(400);
+      expect(dbMock.transaction).not.toHaveBeenCalled();
+      const first = await request(createApp("admin-wallet"))
+        .post(path).send({ ...input, confirmation: "REVOKE_WITNESS_KEY" });
+      expect(first.status).toBe(201);
+      expect(first.body.status).toBe("revoked");
+      expect(verifyPbaSignedRecord(
+        first.body.signed_revocation.canonical,
+        first.body.signed_revocation.signature,
+        issuer.publicKey,
+      )).toBe(true);
+      const repeated = await request(createApp("admin-wallet"))
+        .post(path).send({ ...input, confirmation: "REVOKE_WITNESS_KEY" });
+      expect(repeated.status).toBe(409);
+      expect(inserted).toHaveLength(1);
+    } finally {
+      restore();
+    }
+  });
+
+  it("pages the operator inventory by the exact witness ID and public key", async () => {
+    const issued = new Date("2025-03-01T00:00:00Z");
+    dbMock.select.mockImplementation(() => {
+      let table: unknown;
+      const query: any = {
+        from(value: unknown) { table = value; return query; },
+        where() { return query; },
+        orderBy() { return query; },
+        limit() {
+          return table === pbaHttpWitnessRevocations
+            ? Promise.resolve([{ id: "revoked-key" }]) : query;
+        },
+        offset: async () => [{
+          id: UUID, requestDigest: "1".repeat(64), createdAt: issued,
+        }],
+      };
+      return query;
+    });
+    const response = await request(createApp("admin-wallet"))
+      .get(`/api/admin/pba/witnesses/${witnessId}/attestations`)
+      .query({ public_key: witnessPublicKey, limit: 1, offset: 0 });
+    expect(response.status).toBe(200);
+    expect(response.body.witness_key_status).toBe("revoked");
+    expect(response.body.attestations[0]).toMatchObject({
+      id: UUID, request_digest: "1".repeat(64), created_at: issued.toISOString(),
+    });
+    expect(response.body.next_offset).toBeNull();
+    const invalid = await request(createApp("admin-wallet"))
+      .get(`/api/admin/pba/witnesses/${witnessId}/attestations`)
+      .query({ public_key: replacementWitnessKey.toUpperCase() });
+    expect(invalid.status).toBe(400);
+  });
+
+  it("rejects a revoked witness before accepting any x402 payment", async () => {
+    const issuer = makeEd25519Key();
+    const restore = installEnvironment({
+      NODE_ENV: "test",
+      PBA_VERIFIED_DEV_PREVIEW: undefined,
+      PBA_VERIFIED_DEV_PAYMENTS: "true",
+      PBA_VERIFIED_SIGNING_KEY_PEM: issuer.privatePem,
+      PBA_VERIFIED_KEY_ID: ACTIVE_KEY_ID,
+      X402_PAY_TO: "0x1111111111111111111111111111111111111111",
+      X402_NETWORK: "eip155:8453",
+    });
+    const rows = installVerificationRequestDb(true);
+    const parsed = parsePbaHttpDeliveryRequest(validHttpDeliveryEnvelope());
+    routeMocks.examineHttpDelivery.mockResolvedValue(makeHttpDeliveryExamination(
+      parsed, true, { why: "verified", what: "verified", link: "verified" },
+    ));
+    try {
+      const response = await request(createApp()).post("/api/pba/verify")
+        .set("X-PAYMENT", Buffer.from('{"x402Version":1}').toString("base64"))
+        .send(validHttpDeliveryEnvelope());
+      expect(response.status).toBe(409);
+      expect(response.body.error).toBe("WITNESS_KEY_REVOKED");
+      expect(routeMocks.settlePayment).not.toHaveBeenCalled();
+      expect(routeMocks.signedPayloads.some(
+        (entry) => entry.profile === PBA_HTTP_DELIVERY_PROFILE,
+      )).toBe(false);
+      expect([...rows.values()][0].status).toBe("quoted");
+    } finally {
+      restore();
+    }
   });
 });
 

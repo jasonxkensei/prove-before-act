@@ -23,7 +23,19 @@ The runtime registry is `PBA_HTTP_DELIVERY_WITNESSES_JSON`, a JSON object keyed 
 }
 ```
 
-Do not set this registry to a caller-controlled value. Do not issue official positive records until an actual independent recipient has been vetted and registered. Missing or malformed configuration is **inconclusive**, never a fallback to self-attestation. A recipient should rotate its key under a new witness ID. If an existing witness is compromised, revoke affected issued PBA attestations using the signed lifecycle endpoint; changing the registry alone does not rewrite an existing signed record.
+Do not set this registry to a caller-controlled value. Do not issue official positive records until an actual independent recipient has been vetted and registered. Missing or malformed configuration is **inconclusive**, never a fallback to self-attestation. A recipient should rotate its key under a new witness ID. Normal rotation does not invalidate records signed by the old key.
+
+### Compromised witness key
+
+Removing a key from the runtime registry **does not** invalidate existing records. An authenticated admin must first inventory the exact witness ID and public key at `GET /api/admin/pba/witnesses/:witnessId/attestations?public_key=ed25519%3A...` (page with `limit` and `offset`), then call `POST /api/admin/pba/witnesses/:witnessId/revoke` with JSON:
+
+```json
+{"public_key":"ed25519:<64 lowercase hex digits>","reason":"Documented compromise reason","confirmation":"REVOKE_WITNESS_KEY"}
+```
+
+Use the recipient's **old compromised key**, not its replacement. The reason is published in the signed record; do not put secrets or private incident details in it. The admin action signs one durable, domain-separated revocation with the currently active official PBA signing key. It is atomic and idempotent: a repeated revocation returns a conflict. Remove the key from the runtime registry as well, and use a new witness ID and key for future deliveries. New positive examinations with the revoked pair are rejected before payment even if stale runtime configuration still lists it.
+
+Every public `GET /api/pba/verification/:id` now checks this durable revocation against the *original signed receipt binding*. Affected records report `current.status: "revoked"` and `current.witness_key_revocation` with the signed canonical record, signature, key ID and verification key. The `/verify/:id` page and SVG indicator no longer display green. The historical attestation, evidence and signature remain unchanged; an invalid revocation signature or missing inventory binding fails closed instead of showing a green mark. A key change by itself does **not** revoke unrelated or previously issued attestations.
 
 ## Claim and request
 

@@ -35,6 +35,7 @@ import {
   sweepExpiredAcpReservations,
   migrateConversionEventsTable,
   migrateProofFinalityReconciliationSchema,
+  migratePbaHttpWitnessRevocations,
   checkMx8004WalletBalance,
 } from "./maintenance";
 
@@ -250,6 +251,7 @@ app.use((req, res, next) => {
   await db.execute(sql`ALTER TABLE certifications ADD COLUMN IF NOT EXISTS webhook_signing_secret text`);
   await db.execute(sql`ALTER TABLE certifications ADD COLUMN IF NOT EXISTS webhook_base_url text`);
   await migrateProofFinalityReconciliationSchema();
+  await migratePbaHttpWitnessRevocations();
   try {
     await initializeStripe();
   } catch (error) {

@@ -833,11 +833,31 @@ export const pbaVerificationAttestations = pgTable("pba_verification_attestation
   signature: varchar("signature", { length: 132 }).notNull(),
   keyId: varchar("key_id", { length: 80 }).notNull()
     .references(() => pbaVerificationKeys.keyId, { onDelete: "restrict" }),
+  // Indexed copies of the immutable signed receipt binding, for inventory.
+  witnessId: varchar("witness_id", { length: 128 }),
+  witnessPublicKey: varchar("witness_public_key", { length: 72 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   index("idx_pba_verification_attestations_created").on(table.createdAt),
   index("idx_pba_verification_attestations_key").on(table.keyId, table.createdAt),
+  index("idx_pba_verification_attestations_witness").on(table.witnessId, table.witnessPublicKey, table.createdAt),
   check("chk_pba_verification_attestation_signature", sql`${table.signature} ~ '^hex:[a-f0-9]{128}$'`),
+]);
+
+export const pbaHttpWitnessRevocations = pgTable("pba_http_witness_revocations", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  witnessId: varchar("witness_id", { length: 128 }).notNull(),
+  witnessPublicKey: varchar("witness_public_key", { length: 72 }).notNull(),
+  canonical: text("canonical").notNull(),
+  signature: varchar("signature", { length: 132 }).notNull(),
+  keyId: varchar("key_id", { length: 80 }).notNull()
+    .references(() => pbaVerificationKeys.keyId, { onDelete: "restrict" }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("idx_pba_http_witness_revocations_identity").on(table.witnessId, table.witnessPublicKey),
+  check("chk_pba_http_witness_revocation_id", sql`${table.witnessId} ~ '^[A-Za-z0-9._:-]{1,128}$'`),
+  check("chk_pba_http_witness_revocation_key", sql`${table.witnessPublicKey} ~ '^ed25519:[a-f0-9]{64}$'`),
+  check("chk_pba_http_witness_revocation_signature", sql`${table.signature} ~ '^hex:[a-f0-9]{128}$'`),
 ]);
 
 export const pbaVerificationEvents = pgTable("pba_verification_events", {

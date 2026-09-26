@@ -31,3 +31,4 @@
 - [Cross-language webhook generation](cross-language-webhook-generation.md) — Java emits webhook types but synthesizes a client path; Python webhook generation may emit invalid code.
 - [Drizzle push CLI on this workspace](drizzle-push-cli.md) — config-file push cannot combine with CLI table filters; avoid force and inspect schema drift before applying.
 - [Off-chain PBA witness boundary](pba-off-chain-witness-boundary.md) — distinguish recipient-accepted HTTP delivery from downstream effects; independent witness claims need public signed preimages.
+- [Vitest explicit paths and JSX](vitest-explicit-paths-jsx.md) — an explicit test path still obeys the include glob; SSR imports can use a different JSX transform from the browser.
