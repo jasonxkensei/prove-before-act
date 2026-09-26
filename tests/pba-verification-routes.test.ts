@@ -3,6 +3,7 @@ import request from "supertest";
 import { generateKeyPairSync } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  pbaPaymentReconciliations,
   pbaVerificationAttestations,
   pbaVerificationEvents,
   pbaVerificationKeys,
@@ -37,8 +38,13 @@ const routeMocks = vi.hoisted(() => ({
   settlePayment: vi.fn(),
   signedPayloads: [] as Array<Record<string, unknown>>,
 }));
+const reconcileMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../server/db", () => ({ db: dbMock }));
+vi.mock("../server/pba-payment-reconciliation", async (importOriginal) => ({
+  ...await importOriginal<typeof import("../server/pba-payment-reconciliation")>(),
+  verifyPbaReconciliation: reconcileMock,
+}));
 vi.mock("../server/reliability", () => ({
   paymentRateLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
   publicReadRateLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
@@ -74,6 +80,7 @@ import {
   registerPbaVerificationRoutes,
   __pbaVerificationTestUtils,
 } from "../server/routes/pba-verification";
+import { PbaPaymentError } from "../server/pba-payment";
 
 const UUID = "00000000-0000-4000-8000-000000000001";
 const PUBLIC_KEY = `ed25519:${"a".repeat(64)}`;
@@ -255,9 +262,13 @@ function emptyQuery() {
   return query;
 }
 
-function createApp() {
+function createApp(wallet?: string) {
   const app = express();
   app.use(express.json());
+  if (wallet) app.use((req, _res, next) => {
+    (req as any).session = { walletAddress: wallet };
+    next();
+  });
   registerPbaVerificationRoutes(app);
   return app;
 }
@@ -392,6 +403,135 @@ describe("PBA verification public API", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     dbMock.select.mockImplementation(() => emptyQuery());
+  });
+
+  it("does not reserve a malformed payment and accepts a fresh valid receipt", async () => {
+    const signing = makeEd25519Key();
+    const restoreSigning = installSigningEnvironment("route-test-key", signing.privatePem);
+    const oldMode = process.env.PBA_VERIFIED_DEV_PAYMENTS;
+    const oldPreview = process.env.PBA_VERIFIED_DEV_PREVIEW;
+    const oldPayTo = process.env.X402_PAY_TO;
+    process.env.PBA_VERIFIED_DEV_PAYMENTS = "true";
+    delete process.env.PBA_VERIFIED_DEV_PREVIEW;
+    process.env.X402_PAY_TO = "0x1234567890123456789012345678901234567890";
+    const state: any = {
+      requestDigest: "a".repeat(64), subject: PUBLIC_KEY, origin: "evidence-pending",
+      amountCents: 1, quoteNetwork: "eip155:8453",
+      quotePayTo: process.env.X402_PAY_TO, status: "quoted",
+      paymentHeaderHash: null, attestationId: null, externalPaymentId: null,
+    };
+    try {
+      routeMocks.examineLegacy.mockResolvedValue({
+        subject: PUBLIC_KEY, origin: "test", verified: true,
+        verdicts: { why: { status: "verified" }, what: { status: "verified" },
+          link: { status: "verified" } },
+      });
+      dbMock.insert.mockImplementation(() => ({
+        values: () => ({ onConflictDoNothing: async () => [] }),
+      }));
+      dbMock.select.mockImplementation(() => {
+        const query: any = { from: () => query, where: () => query, limit: async () => [state] };
+        return query;
+      });
+      dbMock.update.mockImplementation(() => ({
+        set(values: any) {
+          return { where: () => ({ returning: async () => {
+            Object.assign(state, values);
+            return [state];
+          } }) };
+        },
+      }));
+      routeMocks.settlePayment.mockRejectedValue(new PbaPaymentError(
+        "PAYMENT_VERIFICATION_UNAVAILABLE", "Payment service unavailable", true,
+      ));
+      const malformed = await request(createApp()).post("/api/pba/verify")
+        .set("x-payment", "not-base64!").send(validEnvelope());
+      expect(malformed.status).toBe(400);
+      expect(malformed.body.error).toBe("INVALID_PAYMENT_HEADER");
+      expect(state.status).toBe("quoted");
+      expect(state.paymentHeaderHash).toBeNull();
+      expect(dbMock.update).not.toHaveBeenCalled();
+      expect(routeMocks.settlePayment).not.toHaveBeenCalled();
+      const freshHeader = Buffer.from(JSON.stringify({ x402Version: 1, payload: {} })).toString("base64");
+      const fresh = await request(createApp()).post("/api/pba/verify")
+        .set("x-payment", freshHeader).send(validEnvelope());
+      expect(fresh.status).toBe(503);
+      expect(fresh.body.error).toBe("PAYMENT_VERIFICATION_UNAVAILABLE");
+      expect(routeMocks.settlePayment).toHaveBeenCalledOnce();
+      expect(state.status).toBe("payment_verify_retryable");
+    } finally {
+      restoreSigning();
+      if (oldMode === undefined) delete process.env.PBA_VERIFIED_DEV_PAYMENTS;
+      else process.env.PBA_VERIFIED_DEV_PAYMENTS = oldMode;
+      if (oldPreview === undefined) delete process.env.PBA_VERIFIED_DEV_PREVIEW;
+      else process.env.PBA_VERIFIED_DEV_PREVIEW = oldPreview;
+      if (oldPayTo === undefined) delete process.env.X402_PAY_TO;
+      else process.env.X402_PAY_TO = oldPayTo;
+    }
+  });
+
+  it("requires an authenticated operator and refuses a mismatched receipt without checking the chain", async () => {
+    const digest = "a".repeat(64);
+    const body = { decision: "confirmed", payment_header: "dGVzdA==",
+      transaction_hash: `0x${"b".repeat(64)}`, note: "Chain receipt checked" };
+    expect((await request(createApp()).post(`/api/admin/pba/payments/${digest}/reconcile`).send(body)).status).toBe(401);
+    dbMock.select.mockImplementation(() => {
+      const query: any = { from: () => query, where: () => query, limit: async () => [{
+        requestDigest: digest, status: "settlement_unknown", paymentHeaderHash: "0".repeat(64),
+      }] };
+      return query;
+    });
+    const response = await request(createApp("admin-wallet"))
+      .post(`/api/admin/pba/payments/${digest}/reconcile`).send(body);
+    expect(response.status).toBe(409);
+    expect(response.body.error).toBe("RECONCILIATION_STATE_CONFLICT");
+    expect(reconcileMock).not.toHaveBeenCalled();
+    expect(dbMock.transaction).not.toHaveBeenCalled();
+  });
+
+  it("commits a confirmed payment and operator audit together without settling again", async () => {
+    const digest = "a".repeat(64);
+    const header = "dGVzdA==";
+    const hash = (await import("node:crypto")).createHash("sha256").update(header).digest("hex");
+    const txHash = `0x${"b".repeat(64)}`;
+    const row = {
+      requestDigest: digest, paymentHeaderHash: hash, status: "settlement_unknown",
+      attestationId: null, externalPaymentId: null, quoteNetwork: "eip155:8453",
+      quotePayTo: "0x1234567890123456789012345678901234567890", amountCents: 1,
+      leaseUntil: null, settledAt: null,
+    };
+    const query: any = { from: () => query, where: () => query, for: () => query,
+      limit: async () => [row] };
+    dbMock.select.mockImplementation(() => query);
+    reconcileMock.mockResolvedValue({
+      source: "base_finalized_usdc_authorization", network: "eip155:8453",
+      blockNumber: "50", transactionHash: txHash, refundTransactionHash: null,
+    });
+    const updated: any[] = [];
+    const inserted: any[] = [];
+    dbMock.transaction.mockImplementation(async (callback: (tx: any) => Promise<unknown>) =>
+      callback({
+        select: () => query,
+        update: () => ({ set: (values: any) => ({
+          where: async () => { updated.push(values); },
+        }) }),
+        insert: (table: unknown) => {
+          expect(table).toBe(pbaPaymentReconciliations);
+          return { values: (values: any) => ({ returning: async () => {
+            inserted.push(values);
+            return [{ ...values, id: "audit-id" }];
+          } }) };
+        },
+      }));
+    const response = await request(createApp("admin-wallet"))
+      .post(`/api/admin/pba/payments/${digest}/reconcile`)
+      .send({ decision: "confirmed", payment_header: header, transaction_hash: txHash,
+        note: "Confirmed at finalized block 50" });
+    expect(response.status).toBe(200);
+    expect(updated[0]).toMatchObject({ status: "paid_ready", externalPaymentId: txHash });
+    expect(inserted[0]).toMatchObject({ operatorWallet: "admin-wallet",
+      paymentHeaderHash: hash, decision: "confirmed", blockNumber: "50" });
+    expect(JSON.stringify(inserted)).not.toContain(header);
   });
 
   it("rejects malformed envelopes before any price or payment flow", async () => {

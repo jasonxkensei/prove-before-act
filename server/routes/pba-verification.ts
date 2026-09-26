@@ -3,12 +3,15 @@ import type { Express, Request, Response } from "express";
 import { and, desc, eq, inArray, isNull, lt, or } from "drizzle-orm";
 import { z } from "zod";
 import {
+  pbaPaymentReconciliations,
   pbaVerificationAttestations,
   pbaVerificationEvents,
   pbaVerificationKeys,
   pbaVerificationRequests,
 } from "@shared/schema";
 import { db } from "../db";
+import { isWalletAuthenticated } from "../walletAuth";
+import { ReconciliationEvidenceError, verifyPbaReconciliation } from "../pba-payment-reconciliation";
 import { logger } from "../logger";
 import { CANONICAL_PUBLIC_ORIGIN } from "../publicOrigin";
 import { getPbaVerificationPriceCents } from "../pricing";
@@ -39,6 +42,7 @@ import {
   makePbaPaymentQuote,
   PbaPaymentError,
   settlePbaPayment,
+  validatePbaPaymentHeader,
   type PbaPaymentQuote,
 } from "../pba-payment";
 
@@ -308,6 +312,8 @@ function sendCurrentRequestState(
       retryable: false,
       request_digest: row.requestDigest,
     });
+  } else if (row.status === "payment_refunded") {
+    res.status(409).json({ error: "PAYMENT_REFUNDED", message: "This receipt was refunded and cannot be reused." });
   } else if (row.status === "processing") {
     res.status(202).json({
       status: "processing",
@@ -327,6 +333,110 @@ function sendCurrentRequestState(
 }
 
 export function registerPbaVerificationRoutes(app: Express): void {
+  const reconciliationInput = z.object({
+    decision: z.enum(["confirmed", "failed", "refunded"]),
+    payment_header: z.string().min(1).max(MAX_PAYMENT_HEADER_LENGTH),
+    transaction_hash: z.string().regex(/^0x[a-fA-F0-9]{64}$/).optional(),
+    refund_transaction_hash: z.string().regex(/^0x[a-fA-F0-9]{64}$/).optional(),
+    note: z.string().trim().min(10).max(2000),
+  }).strict();
+
+  app.get("/api/admin/pba/payments/uncertain", isWalletAuthenticated, requireAdmin, async (_req, res) => {
+    responseNoStore(res);
+    try {
+      const rows = await db.select({
+        requestDigest: pbaVerificationRequests.requestDigest,
+        status: pbaVerificationRequests.status,
+        paymentHeaderHash: pbaVerificationRequests.paymentHeaderHash,
+        amountCents: pbaVerificationRequests.amountCents,
+        quoteNetwork: pbaVerificationRequests.quoteNetwork,
+        quotePayTo: pbaVerificationRequests.quotePayTo,
+        externalPaymentId: pbaVerificationRequests.externalPaymentId,
+        updatedAt: pbaVerificationRequests.updatedAt,
+      }).from(pbaVerificationRequests)
+        .where(inArray(pbaVerificationRequests.status, ["settling", "settlement_unknown"]))
+        .orderBy(desc(pbaVerificationRequests.updatedAt)).limit(100);
+      return res.json({ requests: rows });
+    } catch {
+      return res.status(503).json({ error: "RECONCILIATION_STORAGE_UNAVAILABLE" });
+    }
+  });
+
+  app.get("/api/admin/pba/payments/:digest/reconciliations", isWalletAuthenticated, requireAdmin, async (req, res) => {
+    responseNoStore(res);
+    if (!/^[a-f0-9]{64}$/.test(req.params.digest)) return res.status(400).json({ error: "INVALID_DIGEST" });
+    try {
+      const decisions = await db.select().from(pbaPaymentReconciliations)
+        .where(eq(pbaPaymentReconciliations.requestDigest, req.params.digest))
+        .orderBy(desc(pbaPaymentReconciliations.createdAt));
+      return res.json({ decisions });
+    } catch {
+      return res.status(503).json({ error: "RECONCILIATION_STORAGE_UNAVAILABLE" });
+    }
+  });
+
+  app.post("/api/admin/pba/payments/:digest/reconcile", isWalletAuthenticated, requireAdmin, async (req: Request, res: Response) => {
+    responseNoStore(res);
+    if (!/^[a-f0-9]{64}$/.test(req.params.digest)) return res.status(400).json({ error: "INVALID_DIGEST" });
+    const parsed = reconciliationInput.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "INVALID_RECONCILIATION_INPUT" });
+    const input = parsed.data;
+    const headerHash = createHash("sha256").update(input.payment_header).digest("hex");
+    try {
+      const [snapshot] = await db.select().from(pbaVerificationRequests)
+        .where(eq(pbaVerificationRequests.requestDigest, req.params.digest)).limit(1);
+      if (!snapshot) return res.status(404).json({ error: "REQUEST_NOT_FOUND" });
+      if (snapshot.paymentHeaderHash !== headerHash || !["settling", "settlement_unknown", "paid_ready", "paid_retryable"].includes(snapshot.status) ||
+          (snapshot.status === "settling" && (!snapshot.leaseUntil || snapshot.leaseUntil.getTime() > Date.now())) ||
+          (input.decision === "failed" && !["settling", "settlement_unknown"].includes(snapshot.status)) ||
+          (input.decision === "confirmed" && !["settling", "settlement_unknown"].includes(snapshot.status)) ||
+          (input.decision === "refunded" && snapshot.attestationId)) {
+        return res.status(409).json({ error: "RECONCILIATION_STATE_CONFLICT" });
+      }
+      const evidence = await verifyPbaReconciliation({
+        decision: input.decision, paymentHeader: input.payment_header,
+        network: snapshot.quoteNetwork, payTo: snapshot.quotePayTo,
+        amountCents: snapshot.amountCents, transactionHash: input.transaction_hash,
+        refundTransactionHash: input.refund_transaction_hash,
+      });
+      const decision = await db.transaction(async (tx) => {
+        const [locked] = await tx.select().from(pbaVerificationRequests)
+          .where(eq(pbaVerificationRequests.requestDigest, req.params.digest)).for("update").limit(1);
+        if (!locked || locked.status !== snapshot.status || locked.paymentHeaderHash !== headerHash ||
+            locked.attestationId !== snapshot.attestationId || locked.externalPaymentId !== snapshot.externalPaymentId ||
+            (locked.status === "settling" && (!locked.leaseUntil || locked.leaseUntil.getTime() > Date.now())) ||
+            (input.decision === "refunded" && locked.externalPaymentId &&
+              locked.externalPaymentId.toLowerCase() !== evidence.transactionHash)) {
+          return null;
+        }
+        const nextStatus = input.decision === "confirmed" ? "paid_ready" :
+          input.decision === "failed" ? "quoted" : "payment_refunded";
+        await tx.update(pbaVerificationRequests).set({
+          status: nextStatus,
+          paymentHeaderHash: input.decision === "failed" ? null : headerHash,
+          externalPaymentId: input.decision === "failed" ? null : evidence.transactionHash,
+          settledAt: input.decision === "failed" ? null : locked.settledAt ?? new Date(),
+          leaseUntil: null, updatedAt: new Date(),
+        }).where(eq(pbaVerificationRequests.requestDigest, req.params.digest));
+        const [audit] = await tx.insert(pbaPaymentReconciliations).values({
+          id: randomUUID(), requestDigest: req.params.digest, paymentHeaderHash: headerHash,
+          operatorWallet: (req as any).session.walletAddress,
+          decision: input.decision, source: evidence.source, network: evidence.network,
+          blockNumber: evidence.blockNumber, transactionHash: evidence.transactionHash,
+          refundTransactionHash: evidence.refundTransactionHash, note: input.note,
+        }).returning();
+        return audit;
+      });
+      if (!decision) return res.status(409).json({ error: "RECONCILIATION_STATE_CONFLICT" });
+      return res.json({ decision_id: decision.id, status: input.decision === "confirmed" ? "paid_ready" :
+        input.decision === "failed" ? "quoted" : "payment_refunded", evidence });
+    } catch (error) {
+      if (error instanceof ReconciliationEvidenceError) return res.status(409).json({ error: "EVIDENCE_NOT_PROVEN", message: error.message });
+      logger.error("PBA reconciliation failed", { component: "pba-verification", requestDigest: req.params.digest });
+      return res.status(503).json({ error: "RECONCILIATION_UNAVAILABLE" });
+    }
+  });
+
   app.post("/api/pba/verify", paymentRateLimiter, async (req, res) => {
     responseNoStore(res);
     let request: PbaVerificationRequest;
@@ -452,6 +562,10 @@ export function registerPbaVerificationRoutes(app: Express): void {
         sendCurrentRequestState(res, row);
         return;
       }
+      if (row.status === "payment_refunded") {
+        sendCurrentRequestState(res, row);
+        return;
+      }
       if (row.status === "processing") {
         if (row.leaseUntil && row.leaseUntil.getTime() > Date.now()) {
           sendCurrentRequestState(res, row);
@@ -513,8 +627,15 @@ export function registerPbaVerificationRoutes(app: Express): void {
         if (retryStatus !== row.status) {
           [row] = await db.update(pbaVerificationRequests)
             .set({ status: retryStatus, leaseUntil: null, updatedAt: new Date() })
-            .where(eq(pbaVerificationRequests.requestDigest, digest))
+            .where(and(eq(pbaVerificationRequests.requestDigest, digest), eq(pbaVerificationRequests.status, "paid_ready")))
             .returning();
+          if (!row) {
+            const [current] = await db.select().from(pbaVerificationRequests)
+              .where(eq(pbaVerificationRequests.requestDigest, digest)).limit(1);
+            if (current) sendCurrentRequestState(res, current);
+            else res.status(503).json({ error: "REQUEST_STORAGE_UNAVAILABLE" });
+            return;
+          }
         }
         return res.status(503).json({
           error: "EXAMINATION_INCONCLUSIVE",
@@ -549,6 +670,14 @@ export function registerPbaVerificationRoutes(app: Express): void {
         } else if (paymentHeader.length > MAX_PAYMENT_HEADER_LENGTH) {
           return res.status(400).json({ error: "INVALID_PAYMENT_HEADER", message: "The x402 payment header exceeds the supported size." });
         } else {
+          try {
+            validatePbaPaymentHeader(paymentHeader);
+          } catch (error) {
+            if (error instanceof PbaPaymentError && error.code === "INVALID_PAYMENT_HEADER") {
+              return res.status(400).json({ error: error.code, message: error.message });
+            }
+            throw error;
+          }
           const headerHash = createHash("sha256").update(paymentHeader).digest("hex");
           if (row.paymentHeaderHash && row.paymentHeaderHash !== headerHash) {
             return res.status(409).json({ error: "PAYMENT_RECEIPT_MISMATCH", message: "This verification request is already bound to a different payment receipt." });
@@ -597,10 +726,18 @@ export function registerPbaVerificationRoutes(app: Express): void {
                   leaseUntil: null,
                   updatedAt: new Date(),
                 })
-                .where(eq(pbaVerificationRequests.requestDigest, digest))
+                   .where(and(eq(pbaVerificationRequests.requestDigest, digest), eq(pbaVerificationRequests.status, "settling")))
                 .returning();
+              if (!row) {
+                const [current] = await db.select().from(pbaVerificationRequests)
+                  .where(eq(pbaVerificationRequests.requestDigest, digest)).limit(1);
+                if (current) sendCurrentRequestState(res, current);
+                else res.status(503).json({ error: "REQUEST_STORAGE_UNAVAILABLE" });
+                return;
+              }
             } catch (error) {
-              if (error instanceof PbaPaymentError && error.code === "PAYMENT_VERIFICATION_FAILED") {
+              if (error instanceof PbaPaymentError &&
+                  (error.code === "PAYMENT_VERIFICATION_FAILED" || error.code === "INVALID_PAYMENT_HEADER")) {
                 [row] = await db.update(pbaVerificationRequests)
                   .set({
                     status: "quoted",
@@ -608,9 +745,17 @@ export function registerPbaVerificationRoutes(app: Express): void {
                     leaseUntil: null,
                     updatedAt: new Date(),
                   })
-                  .where(eq(pbaVerificationRequests.requestDigest, digest))
+                 .where(and(eq(pbaVerificationRequests.requestDigest, digest), eq(pbaVerificationRequests.status, "settling")))
                   .returning();
-                return res.status(402).json({ error: error.code, message: error.message, quote: paymentQuote });
+                if (!row) {
+                  const [current] = await db.select().from(pbaVerificationRequests)
+                    .where(eq(pbaVerificationRequests.requestDigest, digest)).limit(1);
+                  if (current) sendCurrentRequestState(res, current);
+                  else res.status(503).json({ error: "REQUEST_STORAGE_UNAVAILABLE" });
+                  return;
+                }
+                return res.status(error.code === "INVALID_PAYMENT_HEADER" ? 400 : 402)
+                  .json({ error: error.code, message: error.message, quote: paymentQuote });
               }
               const unknownSettlement = error instanceof PbaPaymentError && error.code === "PAYMENT_SETTLEMENT_UNKNOWN";
               const retryableVerification = error instanceof PbaPaymentError && error.code === "PAYMENT_VERIFICATION_UNAVAILABLE";
@@ -620,8 +765,15 @@ export function registerPbaVerificationRoutes(app: Express): void {
                   leaseUntil: null,
                   updatedAt: new Date(),
                 })
-                .where(eq(pbaVerificationRequests.requestDigest, digest))
+                 .where(and(eq(pbaVerificationRequests.requestDigest, digest), eq(pbaVerificationRequests.status, "settling")))
                 .returning();
+              if (!row) {
+                const [current] = await db.select().from(pbaVerificationRequests)
+                  .where(eq(pbaVerificationRequests.requestDigest, digest)).limit(1);
+                if (current) sendCurrentRequestState(res, current);
+                else res.status(503).json({ error: "REQUEST_STORAGE_UNAVAILABLE" });
+                return;
+              }
               if (retryableVerification) {
                 return res.status(503).json({ error: error.code, message: error.message, retryable: true, same_receipt_required: true });
               }

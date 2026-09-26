@@ -323,6 +323,11 @@ function decodePaymentHeader(paymentHeader: string): unknown {
   return payload;
 }
 
+/** Reject purely malformed headers before reserving a payment receipt. */
+export function validatePbaPaymentHeader(paymentHeader: string): void {
+  decodePaymentHeader(paymentHeader);
+}
+
 function extractExternalId(settlement: unknown, expectedNetwork: string): string | null {
   if (!settlement || typeof settlement !== "object" || Array.isArray(settlement)) return null;
   const record = settlement as Record<string, unknown>;

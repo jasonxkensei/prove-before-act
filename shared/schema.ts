@@ -790,6 +790,27 @@ export const pbaVerificationRequests = pgTable("pba_verification_requests", {
   check("chk_pba_verification_request_status", sql`${table.status} <> ''`),
 ]);
 
+export const pbaPaymentReconciliations = pgTable("pba_payment_reconciliations", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  requestDigest: varchar("request_digest", { length: 64 }).notNull()
+    .references(() => pbaVerificationRequests.requestDigest, { onDelete: "restrict" }),
+  paymentHeaderHash: varchar("payment_header_hash", { length: 64 }).notNull(),
+  operatorWallet: varchar("operator_wallet", { length: 256 }).notNull(),
+  decision: varchar("decision", { length: 16 }).notNull(),
+  source: varchar("source", { length: 64 }).notNull(),
+  network: varchar("network", { length: 64 }).notNull(),
+  blockNumber: varchar("block_number", { length: 32 }).notNull(),
+  transactionHash: varchar("transaction_hash", { length: 66 }),
+  refundTransactionHash: varchar("refund_transaction_hash", { length: 66 }),
+  note: text("note").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("idx_pba_payment_reconciliations_request").on(table.requestDigest, table.createdAt),
+  uniqueIndex("idx_pba_payment_reconciliations_refund_tx").on(table.refundTransactionHash),
+  check("chk_pba_payment_reconciliation_decision", sql`${table.decision} IN ('confirmed', 'failed', 'refunded')`),
+  check("chk_pba_payment_reconciliation_header", sql`${table.paymentHeaderHash} ~ '^[a-f0-9]{64}$'`),
+]);
+
 export const pbaVerificationKeys = pgTable("pba_verification_keys", {
   keyId: varchar("key_id", { length: 80 }).primaryKey(),
   publicKey: varchar("public_key", { length: 72 }).notNull().unique(),
