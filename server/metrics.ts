@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { pool } from "./db";
+import { readConversionFailureTimestamps, saveConversionFailureTimestamp } from "./conversion-health-store";
 
 const startTime = Date.now();
 
@@ -175,13 +176,19 @@ export function getConversionTelemetryWriteFailureStats(
 
 /** Store a timestamp only. Callers do not await this on the conversion path. */
 export async function persistConversionTelemetryWriteFailure(occurredAt: Date): Promise<void> {
-  await pool.query(
-    `INSERT INTO conversion_telemetry_write_failures (occurred_at) VALUES ($1)`,
-    [occurredAt],
-  );
+  try {
+    await saveConversionFailureTimestamp(occurredAt);
+  } catch {
+    // A DB insert is a secondary store only. Never double-write one failure:
+    // the operator read combines both stores without counting IDs twice.
+    await pool.query(
+      `INSERT INTO conversion_telemetry_write_failures (occurred_at) VALUES ($1)`,
+      [occurredAt],
+    );
+  }
 }
 
-/** Shared, exact rolling count; local events are only failures of the health write itself. */
+/** Combine disjoint shared stores; local events mean both health writes failed. */
 export async function getSharedConversionTelemetryWriteFailureStats(
   windowMs = CONVERSION_TELEMETRY_FAILURE_HEALTH_WINDOW_MS,
 ): Promise<{
@@ -191,8 +198,9 @@ export async function getSharedConversionTelemetryWriteFailureStats(
   storage_unavailable: boolean;
 }> {
   const local = getConversionTelemetryWriteFailureStats(windowMs);
-  try {
-    const result = await pool.query<{
+  const [objectRead, databaseRead] = await Promise.allSettled([
+    readConversionFailureTimestamps(windowMs),
+    pool.query<{
       recent_failures: string | number;
       last_failure_at: Date | string | null;
     }>(`
@@ -202,22 +210,24 @@ export async function getSharedConversionTelemetryWriteFailureStats(
       MAX(occurred_at) AS last_failure_at
       FROM conversion_telemetry_write_failures
       WHERE occurred_at >= NOW() - INTERVAL '1 hour'
-    `, [windowMs]);
-    const row = result.rows[0];
-    const sharedCount = Number(row?.recent_failures ?? 0);
-    const sharedLast = row?.last_failure_at
-      ? new Date(row.last_failure_at).getTime() : null;
-    const localLast = local.last_failure_at ? Date.parse(local.last_failure_at) : null;
-    const lastFailure = Math.max(sharedLast ?? 0, localLast ?? 0);
-    return {
-      recent_failures: sharedCount + local.recent_failures,
-      last_failure_at: lastFailure > 0 ? new Date(lastFailure).toISOString() : null,
-      window_minutes: Math.ceil(windowMs / 60_000),
-      storage_unavailable: false,
-    };
-  } catch {
-    return { ...local, storage_unavailable: true };
-  }
+    `, [windowMs]),
+  ]);
+  const row = databaseRead.status === "fulfilled" ? databaseRead.value.rows[0] : null;
+  const dbCount = Number(row?.recent_failures ?? 0);
+  const dbLast = row?.last_failure_at ? new Date(row.last_failure_at).getTime() : 0;
+  const objectCount = objectRead.status === "fulfilled" ? objectRead.value.recentFailures : 0;
+  const objectLast = objectRead.status === "fulfilled" ? objectRead.value.lastFailureAt ?? 0 : 0;
+  const localLast = local.last_failure_at ? Date.parse(local.last_failure_at) : 0;
+  const lastFailure = Math.max(dbLast, objectLast, localLast);
+  return {
+    recent_failures: dbCount + objectCount + local.recent_failures,
+    last_failure_at: lastFailure > 0 ? new Date(lastFailure).toISOString() : null,
+    window_minutes: Math.ceil(windowMs / 60_000),
+    // A successful read of just one store is not proof of a complete count:
+    // the other may hold failures recorded while this store was unavailable.
+    storage_unavailable: objectRead.status !== "fulfilled" ||
+      databaseRead.status !== "fulfilled" || local.recent_failures > 0,
+  };
 }
 
 const CONVERSION_FAILURE_ALERT_KEY = "conversion_telemetry_write_failures";

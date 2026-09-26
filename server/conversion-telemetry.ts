@@ -173,7 +173,8 @@ function reportConversionTelemetryWriteFailure(error: unknown): void {
     errorCode: safeErrorCode(error),
   });
   // The conversion response never waits for this second, privacy-safe write.
-  // If the shared store is also down, keep a bounded in-process warning.
+  // If both the independent sink and DB fallback are down, keep a bounded
+  // in-process warning. Neither health write delays the conversion response.
   void persistConversionTelemetryWriteFailure(failedAt)
     .catch((storageError: unknown) => {
       recordConversionTelemetryWriteFailure(failedAt.getTime());

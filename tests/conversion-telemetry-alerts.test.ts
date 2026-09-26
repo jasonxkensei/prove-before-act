@@ -1,6 +1,37 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const ORIGINAL_ENV = { ...process.env };
+const objectFiles = vi.hoisted(() => new Map<string, string>());
+const storageControl = vi.hoisted(() => ({ failWrite: true, failRead: false }));
+vi.mock("@replit/object-storage", () => ({
+  Client: class {
+    async uploadFromText(name: string, value: string) {
+      if (storageControl.failWrite) return { ok: false, error: { message: "bucket unavailable" } };
+      objectFiles.set(name, value);
+      return { ok: true, value: null };
+    }
+    async list(options: { prefix?: string; startOffset?: string; endOffset?: string; maxResults?: number } = {}) {
+      if (storageControl.failRead) return { ok: false, error: { message: "bucket unavailable" } };
+      const value = [...objectFiles.keys()].sort()
+        .filter(name => (!options.prefix || name.startsWith(options.prefix))
+          && (!options.startOffset || name >= options.startOffset)
+          && (!options.endOffset || name < options.endOffset))
+        .slice(0, options.maxResults ?? Infinity)
+        .map(name => ({ name }));
+      return { ok: true, value };
+    }
+    async delete(name: string) {
+      objectFiles.delete(name);
+      return { ok: true, value: null };
+    }
+  },
+}));
+
+beforeEach(() => {
+  objectFiles.clear();
+  storageControl.failWrite = true;
+  storageControl.failRead = false;
+});
 
 function sharedAlertStore(recentFailures = 3) {
   const state = {
@@ -196,7 +227,7 @@ describe("conversion telemetry write health", () => {
     restartedMetrics.recordConversionTelemetryWriteFailure();
     expect(await restartedMetrics.getSharedConversionTelemetryWriteFailureStats()).toMatchObject({
       recent_failures: 3,
-      storage_unavailable: false,
+      storage_unavailable: true,
     });
   });
 
@@ -208,6 +239,89 @@ describe("conversion telemetry write health", () => {
     expect(await metrics.getSharedConversionTelemetryWriteFailureStats()).toMatchObject({
       recent_failures: 1,
       storage_unavailable: true,
+    });
+  });
+
+  it("recovers exact failure evidence on another instance after a full primary DB outage", async () => {
+    storageControl.failWrite = false;
+    const metrics = await import("../server/metrics");
+    const { db, pool } = await import("../server/db");
+    const { recordConversionEvent } = await import("../server/conversion-telemetry");
+    vi.spyOn(db, "insert").mockReturnValue({
+      values: () => Promise.reject(new Error("primary database unavailable")),
+    } as any);
+    const primary = vi.spyOn(pool, "query").mockRejectedValue(new Error("primary database unavailable"));
+    const req = {
+      query: { utm_source: "campaign-secret" },
+      path: "/api/conversion-events",
+      headers: { "user-agent": "test-agent" },
+      get: (name: string) => name === "user-agent" ? "test-agent" : null,
+      socket: { remoteAddress: "203.0.113.10" },
+    } as any;
+    recordConversionEvent(req, { eventType: "landing:trial_register", stage: "cta", outcome: "seen" });
+    recordConversionEvent(req, { eventType: "landing:trial_register", stage: "cta", outcome: "clicked" });
+    await vi.waitFor(() => expect(objectFiles.size).toBe(2));
+    expect(primary).not.toHaveBeenCalled();
+    expect([...objectFiles.entries()].every(([name, value]) =>
+      /^conversion-telemetry-write-failures\/v1\/2026-09-07T21:00:00\.\d{3}Z-[a-f0-9-]{36}$/.test(name)
+      && /^2026-09-07T21:00:00\.\d{3}Z$/.test(value))).toBe(true);
+    expect([...objectFiles.keys()].join(" ")).not.toMatch(/campaign|visitor|trial|203\.0\.113/);
+    expect(await metrics.getSharedConversionTelemetryWriteFailureStats()).toMatchObject({
+      recent_failures: 2,
+      storage_unavailable: true,
+    });
+
+    vi.resetModules();
+    const restartedMetrics = await import("../server/metrics");
+    const restartedDb = await import("../server/db");
+    vi.spyOn(restartedDb.pool, "query").mockResolvedValue({
+      rows: [{ recent_failures: "0", last_failure_at: null }],
+      rowCount: 1,
+    } as any);
+    expect(await restartedMetrics.getSharedConversionTelemetryWriteFailureStats()).toMatchObject({
+      recent_failures: 2,
+      last_failure_at: expect.stringMatching(/^2026-09-07T21:00:00\.\d{3}Z$/),
+      storage_unavailable: false,
+    });
+  });
+
+  it("keeps health unknown if App Storage cannot be read even when the database is healthy", async () => {
+    const metrics = await import("../server/metrics");
+    const { pool } = await import("../server/db");
+    storageControl.failRead = true;
+    vi.spyOn(pool, "query").mockResolvedValue({
+      rows: [{ recent_failures: "0", last_failure_at: null }],
+      rowCount: 1,
+    } as any);
+    expect(await metrics.getSharedConversionTelemetryWriteFailureStats()).toMatchObject({
+      recent_failures: 0, storage_unavailable: true,
+    });
+  });
+
+  it("reconciles disjoint object and database fallback writes without double-counting", async () => {
+    const metrics = await import("../server/metrics");
+    const { pool } = await import("../server/db");
+    const fallback: Date[] = [];
+    const query = vi.spyOn(pool, "query").mockImplementation(async (statement: string, values?: unknown[]) => {
+      if (statement.includes("INSERT INTO conversion_telemetry_write_failures")) {
+        fallback.push(values![0] as Date);
+        return { rows: [], rowCount: 1 } as any;
+      }
+      return {
+        rows: [{ recent_failures: String(fallback.length), last_failure_at: fallback.at(-1) ?? null }],
+        rowCount: 1,
+      } as any;
+    });
+    storageControl.failWrite = false;
+    await metrics.persistConversionTelemetryWriteFailure(new Date("2026-09-07T21:00:00.000Z"));
+    expect(query).not.toHaveBeenCalled();
+    storageControl.failWrite = true;
+    await metrics.persistConversionTelemetryWriteFailure(new Date("2026-09-07T21:00:01.000Z"));
+    expect(fallback).toHaveLength(1);
+    expect(await metrics.getSharedConversionTelemetryWriteFailureStats()).toMatchObject({
+      recent_failures: 2,
+      last_failure_at: "2026-09-07T21:00:01.000Z",
+      storage_unavailable: false,
     });
   });
 });

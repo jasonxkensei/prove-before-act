@@ -16,6 +16,7 @@ import {
   recordConversionTelemetryPurgeSuccess,
 } from "./metrics";
 import { checkAndAlertConversionTelemetryPurge } from "./conversionTelemetryAlerts";
+import { purgeOldConversionFailureTimestamps } from "./conversion-health-store";
 
 let lastMx8004LowBalanceWarningAt = 0;
 
@@ -140,6 +141,13 @@ export async function purgeExpiredConversionEvents(): Promise<number> {
     DELETE FROM conversion_telemetry_write_failures
     WHERE occurred_at < NOW() - INTERVAL '1 hour'
   `);
+  try {
+    await purgeOldConversionFailureTimestamps();
+  } catch {
+    // A failed App Storage cleanup must not interrupt the primary retention
+    // sweep. The next daily run can retry these timestamp-only objects.
+    logger.warn("Conversion failure health cleanup unavailable", { component: "maintenance" });
+  }
   return result.rowCount || 0;
 }
 

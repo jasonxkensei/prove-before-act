@@ -16,6 +16,17 @@ import { logger } from "../server/logger";
 import { getSession } from "../server/replitAuth";
 import { registerAdminRoutes } from "../server/routes/admin";
 import * as metrics from "../server/metrics";
+
+// This route suite exercises the real PostgreSQL health fallback. The
+// independent App Storage path is covered with a shared in-memory bucket in
+// conversion-telemetry-alerts.test.ts.
+vi.mock("@replit/object-storage", () => ({
+  Client: class {
+    async uploadFromText() { return { ok: false, error: { message: "storage unavailable in this suite" } }; }
+    async list() { return { ok: true, value: [] }; }
+    async delete() { return { ok: true, value: null }; }
+  },
+}));
 import * as mx8004 from "../server/mx8004";
 import {
   conversionOutcomeMiddleware,

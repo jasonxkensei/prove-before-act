@@ -41,3 +41,4 @@
 - [Operator webhook delivery ambiguity](operator-webhook-delivery-ambiguity.md) — durable alerts are at-least-once; use a stable delivery ID so receivers can deduplicate after ambiguous acknowledgements.
 - [Signer wallet privacy boundary](signer-wallet-privacy-boundary.md) — public capability status must not mirror admin-only signer address, balance, or nonce.
 - [Alert observation fencing](alert-observation-fencing.md) — a suppressed duplicate check must still advance its observation timestamp or a delayed stale result can re-arm the episode.
+- [App Storage bucket provisioning](app-storage-bucket-provisioning.md) — SDK default-bucket lookup can return no usable bucket until the project creates one; fail closed on reads.
