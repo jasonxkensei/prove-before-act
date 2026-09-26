@@ -94,10 +94,9 @@ const SLUG_REGEX = /^[a-z0-9][a-z0-9-]{1,58}[a-z0-9]$/;
 
 function lookupFromUrl(): { mode: FleetMode; value: string } | null {
   const params = new URLSearchParams(window.location.search);
-  const fleet = params.get("fleet");
-  if (fleet) return { mode: "slug", value: fleet };
-  const org = params.get("org");
-  return org ? { mode: "prefix", value: org } : null;
+  if (params.has("fleet")) return { mode: "slug", value: params.get("fleet") ?? "" };
+  if (params.has("org")) return { mode: "prefix", value: params.get("org") ?? "" };
+  return null;
 }
 
 export default function FleetPage() {
@@ -122,15 +121,21 @@ export default function FleetPage() {
     return () => window.removeEventListener("popstate", restoreLookup);
   }, []);
 
-  const validQuery = query !== null &&
-    (query.mode === "slug" ? SLUG_REGEX.test(query.value) : PREFIX_REGEX.test(query.value));
+  const normalizedQuery = query && { mode: query.mode, value: query.value.trim().toLowerCase() };
+  const validQuery = normalizedQuery !== null &&
+    (normalizedQuery.mode === "slug" ? SLUG_REGEX.test(normalizedQuery.value) : PREFIX_REGEX.test(normalizedQuery.value));
+  const invalidLinkMessage = query && !validQuery
+    ? query.mode === "slug"
+      ? "This fleet link has an invalid slug. Use 3–60 letters or numbers, with hyphens between them. Edit the name above, then select View fleet."
+      : "This organization link has an invalid wallet prefix. Use 6–62 letters or numbers. Edit the prefix above, then select View fleet."
+    : null;
 
   const { data, isLoading, error } = useQuery<FleetResponse>({
-    queryKey: ["/api/fleet/coherence", query?.mode, query?.value],
+    queryKey: ["/api/fleet/coherence", normalizedQuery?.mode, normalizedQuery?.value],
     enabled: validQuery,
     queryFn: async () => {
-      const param = query!.mode === "slug" ? "fleet" : "org";
-      const res = await fetch(`/api/fleet/coherence?${param}=${encodeURIComponent(query!.value)}`);
+      const param = normalizedQuery!.mode === "slug" ? "fleet" : "org";
+      const res = await fetch(`/api/fleet/coherence?${param}=${encodeURIComponent(normalizedQuery!.value)}`);
       const json = await res.json();
       if (!res.ok) throw new Error(json.message || "Failed to load fleet coherence");
       return json;
@@ -229,6 +234,8 @@ export default function FleetPage() {
             <Input
               id="fleet-lookup"
               data-testid="input-org-prefix"
+              aria-describedby={invalidLinkMessage ? "fleet-link-validation" : undefined}
+              aria-invalid={!!invalidLinkMessage && !inputValid}
               placeholder={mode === "slug"
                 ? "Registered fleet slug (e.g. acme-agents)"
                 : "Organization wallet prefix (e.g. erd1acme…) — min 6 characters"}
@@ -241,6 +248,17 @@ export default function FleetPage() {
             View fleet
           </Button>
         </form>
+
+        {invalidLinkMessage && (
+          <Card role="alert" className="mb-8 border-[hsl(var(--status-warning)/.4)] bg-[hsl(var(--status-warning)/.1)] text-foreground shadow-none">
+            <CardContent className="flex items-start gap-3 py-6">
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" aria-hidden="true" />
+              <p id="fleet-link-validation" className="text-sm text-[hsl(var(--status-warning))]" data-testid="text-fleet-validation">
+                {invalidLinkMessage}
+              </p>
+            </CardContent>
+          </Card>
+        )}
 
         {!query && (
           <Card className="panel text-foreground shadow-none">

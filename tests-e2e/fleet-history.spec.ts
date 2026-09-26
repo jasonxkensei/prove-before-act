@@ -1,7 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
 
 async function mockFleetResponses(page: Page) {
+  const requests: string[] = [];
   await page.route("**/api/fleet/coherence?*", async (route) => {
+    requests.push(route.request().url());
     const params = new URL(route.request().url()).searchParams;
     const slug = params.get("fleet");
     const prefix = params.get("org");
@@ -26,6 +28,7 @@ async function mockFleetResponses(page: Page) {
       }),
     });
   });
+  return requests;
 }
 
 test("Back and Forward restore prefix and registered fleet searches", async ({ page }) => {
@@ -75,3 +78,46 @@ test("direct prefix and fleet links initialize the matching search", async ({ pa
   await expect(page.getByTestId("button-mode-slug")).toHaveClass(/bg-muted/);
   await expect(page.getByTestId("text-fleet-slug")).toHaveText("alpha-fleet");
 });
+
+test("direct links normalize valid mixed-case identifiers without hiding the entered value", async ({ page }) => {
+  const requests = await mockFleetResponses(page);
+  await page.goto("/fleet?org=ABCDEF");
+  await expect(page.getByTestId("input-org-prefix")).toHaveValue("ABCDEF");
+  await expect(page.getByTestId("text-org-prefix")).toHaveText("abcdef…");
+  await expect(page.getByTestId("text-fleet-validation")).toHaveCount(0);
+  expect(new URL(requests[0]).searchParams.get("org")).toBe("abcdef");
+
+  await page.goto("/fleet?fleet=Alpha-Fleet");
+  await expect(page.getByTestId("input-org-prefix")).toHaveValue("Alpha-Fleet");
+  await expect(page.getByTestId("text-fleet-slug")).toHaveText("alpha-fleet");
+  await expect(page.getByTestId("text-fleet-validation")).toHaveCount(0);
+  expect(new URL(requests[1]).searchParams.get("fleet")).toBe("alpha-fleet");
+});
+
+for (const { link, value, mode, message, corrected, param } of [
+  { link: "/fleet?org=ab", value: "ab", mode: "prefix", message: "invalid wallet prefix", corrected: "abcdef", param: "org" },
+  { link: "/fleet?org=", value: "", mode: "prefix", message: "invalid wallet prefix", corrected: "abcdef", param: "org" },
+  { link: "/fleet?fleet=bad_slug", value: "bad_slug", mode: "slug", message: "invalid slug", corrected: "alpha-fleet", param: "fleet" },
+  { link: "/fleet?fleet=", value: "", mode: "slug", message: "invalid slug", corrected: "alpha-fleet", param: "fleet" },
+]) {
+  test(`invalid direct link ${link} explains the problem and can be corrected`, async ({ page }) => {
+    const requests = await mockFleetResponses(page);
+    await page.goto(link);
+    const input = page.getByTestId("input-org-prefix");
+    await expect(input).toHaveValue(value);
+    await expect(page.getByTestId(mode === "slug" ? "button-mode-slug" : "button-mode-prefix"))
+      .toHaveClass(/bg-muted/);
+    await expect(page.getByTestId("text-fleet-validation")).toContainText(message);
+    await expect(page.getByTestId("button-load-fleet")).toBeDisabled();
+    expect(requests, "invalid URL must not fetch fleet data").toHaveLength(0);
+
+    await input.fill(corrected);
+    await expect(page.getByTestId("button-load-fleet")).toBeEnabled();
+    await input.press("Enter");
+    await expect(page).toHaveURL(new RegExp(`/fleet\\?${param}=${corrected}$`));
+    await expect(page.getByTestId("text-fleet-validation")).toHaveCount(0);
+    await expect(page.getByTestId(mode === "slug" ? "text-fleet-slug" : "text-org-prefix"))
+      .toContainText(corrected);
+    expect(requests, "corrected URL must fetch fleet data").toHaveLength(1);
+  });
+}

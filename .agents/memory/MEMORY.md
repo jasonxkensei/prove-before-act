@@ -35,3 +35,4 @@
 - [Conversion health outage boundary](conversion-health-outage-boundary.md) — shared failure counts cannot survive a full database outage without an independent sink; report unknown, not healthy.
 - [Production crawler smoke target](production-crawler-smoke-target.md) — deployment primary can be a retired host; verify and check the canonical published domain directly.
 - [Playwright cross-browser dev proxy](playwright-cross-browser-dev-proxy.md) — Firefox and WebKit can reject the proxied development HTTPS host; use the configured local test server for full browser suites.
+- [Playwright parameterized cases](playwright-parameterized-cases.md) — Playwright's test API has no test.each; declare cases with a for...of loop at module scope.
