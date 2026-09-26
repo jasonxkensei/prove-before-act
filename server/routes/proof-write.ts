@@ -715,6 +715,7 @@ export function registerProofWriteRoutes(app: Express) {
             fileType: data.filename.split(".").pop() || "unknown",
             authorName: effectiveAuthor,
             blockchainStatus: "pending",
+            ...(isMX8004Configured() ? { mx8004EnqueueStatus: "pending" } : {}),
             isPublic: true,
             authMethod,
             ...(data.metadata ? { metadata: data.metadata } : {}),
@@ -773,6 +774,7 @@ export function registerProofWriteRoutes(app: Express) {
             transactionHash: result.transactionHash,
             transactionUrl: result.transactionUrl,
             blockchainStatus: "pending",
+            ...(isMX8004Configured() ? { mx8004EnqueueStatus: "pending" } : {}),
             ...(result.latencyMs != null ? { blockchainLatencyMs: result.latencyMs } : {}),
           })
           .where(eq(certifications.id, pendingCertification.id))
@@ -1878,6 +1880,7 @@ export function registerProofWriteRoutes(app: Express) {
               transactionHash: result.transactionHash,
               transactionUrl: result.transactionUrl,
               blockchainStatus: "pending",
+              ...(isMX8004Configured() ? { mx8004EnqueueStatus: "pending" } : {}),
               ...(result.latencyMs != null ? { blockchainLatencyMs: result.latencyMs } : {}),
             })
             .where(eq(certifications.id, batchPending.id))

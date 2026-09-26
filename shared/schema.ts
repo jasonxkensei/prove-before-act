@@ -103,6 +103,9 @@ export const certifications = pgTable("certifications", {
   transactionHash: text("transaction_hash"), // Uniqueness is enforced by the partial index below.
   transactionUrl: text("transaction_url"),
   blockchainStatus: varchar("blockchain_status").default("pending"), // pending, confirmed, failed
+  // Handoff state is separate from proof finality and from the chain worker's queue status.
+  mx8004EnqueueStatus: varchar("mx8004_enqueue_status"), // pending, failed; queue row takes precedence
+  mx8004EnqueueError: text("mx8004_enqueue_error"),
   // NULL for legacy rows: they are not automatically grandfathered into verified counts.
   finalityCheckedAt: timestamp("finality_checked_at"),
   // A compact, independently verified MultiversX response retained for audit.

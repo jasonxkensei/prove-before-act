@@ -6,6 +6,9 @@ import {
 import { createHash } from "crypto";
 import { recordTransaction } from "./metrics";
 import { enqueueTx } from "./txQueue";
+import { db } from "./db";
+import { certifications } from "@shared/schema";
+import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 import { claimNextNonce, resyncNonceFromChain } from "./nonce";
 
@@ -516,18 +519,33 @@ export async function recordCertificationAsJob(
   if (!isMX8004Configured()) return;
 
   const agentNonce = parseInt(XPROOF_AGENT_NONCE!);
-  if (isNaN(agentNonce) || agentNonce < 1) {
-    logger.error("Invalid XPROOF_AGENT_NONCE value", { component: "mx8004" });
-    return;
+  try {
+    if (isNaN(agentNonce) || agentNonce < 1) {
+      throw new Error("Invalid XPROOF_AGENT_NONCE value");
+    }
+    await enqueueTx("mx8004_validation_loop", `xproof_cert_${certificationId}`, {
+      certificationId,
+      fileHash,
+      transactionHash,
+      agentNonce,
+      senderAddress: SENDER_ADDRESS!,
+    });
+  } catch (error) {
+    // An insert may have committed even if its acknowledgement was lost.
+    // Never retry or synthesize a worker row here; a real queue row wins on reads.
+    try {
+      await db.update(certifications).set({
+        mx8004EnqueueStatus: "failed",
+        mx8004EnqueueError: "Queue handoff failed; operator review required",
+      }).where(eq(certifications.id, certificationId));
+    } catch (persistError) {
+      logger.error("Could not persist MX-8004 queue handoff failure", {
+        component: "mx8004", certificationId,
+        error: persistError instanceof Error ? persistError.message : String(persistError),
+      });
+    }
+    throw error;
   }
-
-  await enqueueTx("mx8004_validation_loop", `xproof_cert_${certificationId}`, {
-    certificationId,
-    fileHash,
-    transactionHash,
-    agentNonce,
-    senderAddress: SENDER_ADDRESS!,
-  });
 }
 
 export async function getJobData(jobId: string): Promise<{

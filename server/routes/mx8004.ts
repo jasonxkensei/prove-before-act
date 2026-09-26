@@ -4,7 +4,7 @@ import { logger } from "../logger";
 import { isMX8004Configured, getReputationScore, getAgentDetails, getContractAddresses, getJobData, getValidationStatus, hasGivenFeedback, getAgentResponse, readFeedback, getAgentsExplorerUrl, getMx8004SignerBalance, getMx8004SignerBalanceReport, getMx8004NetworkConfiguration } from "../mx8004";
 import { publicReadRateLimiter } from "../reliability";
 import { db } from "../db";
-import { txQueue } from "@shared/schema";
+import { certifications, txQueue } from "@shared/schema";
 import { eq, desc } from "drizzle-orm";
 
 export function registerMx8004Routes(app: Express) {
@@ -92,6 +92,29 @@ export function registerMx8004Routes(app: Express) {
         failure_category: (queueItem.payload as any)?.failureCategory ?? null,
         claimed_nonce: (queueItem.payload as any)?.activeTx?.nonce ?? (queueItem.payload as any)?.broadcastIntent?.nonce ?? null,
       } : {};
+      if (!queueItem && req.params.jobId.startsWith("xproof_cert_")) {
+        const certificationId = req.params.jobId.slice("xproof_cert_".length);
+        const [certification] = await db.select({
+          status: certifications.mx8004EnqueueStatus,
+          error: certifications.mx8004EnqueueError,
+        }).from(certifications).where(eq(certifications.id, certificationId)).limit(1);
+        if (certification?.status === "failed") {
+          return res.status(409).json({
+            job_id: req.params.jobId,
+            queue_status: "enqueue_failed",
+            failure_category: "queue_handoff",
+            queue_error: certification.error,
+            message: "The certification was saved, but its MX-8004 job was not handed to the queue. Operator review is required before any retry.",
+          });
+        }
+        if (certification?.status === "pending") {
+          return res.status(202).json({
+            job_id: req.params.jobId,
+            queue_status: "handoff_pending",
+            message: "The certification is awaiting MX-8004 queue handoff",
+          });
+        }
+      }
       const jobData = await getJobData(req.params.jobId);
       if (!jobData) {
         if (queueItem) {

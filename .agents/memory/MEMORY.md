@@ -37,3 +37,4 @@
 - [Production crawler smoke target](production-crawler-smoke-target.md) — deployment primary can be a retired host; verify and check the canonical published domain directly.
 - [Playwright cross-browser dev proxy](playwright-cross-browser-dev-proxy.md) — Firefox and WebKit can reject the proxied development HTTPS host; use the configured local test server for full browser suites.
 - [Playwright parameterized cases](playwright-parameterized-cases.md) — Playwright's test API has no test.each; declare cases with a for...of loop at module scope.
+- [MX-8004 queue handoff uncertainty](mx8004-queue-handoff-uncertainty.md) — a failed enqueue acknowledgement is not proof that the insert rolled back; always prefer an actual queue row and avoid automatic replay.

@@ -79,4 +79,30 @@ describe("opt-in Mainnet certification smoke", () => {
     await expect(runMainnetSmoke({ base, signer, registry, deadlineMs: 1000 })).rejects.toThrow("Preflight failed");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it("stops immediately on a persisted queue handoff failure instead of timing out", async () => {
+    const requests: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+      requests.push(new URL(url).pathname);
+      if (url.endsWith("/api/mx8004/status")) return response({
+        active: true, contracts: { validationRegistry: registry, xproofAgentNonce: 3 },
+        network: { chain_id: "1", api_url: "https://api.multiversx.com", gateway_url: "https://gateway.multiversx.com" },
+        signer_balance: { address: signer, status: "ok", nonce: 7, balance_egld: 5 },
+      });
+      if (url.endsWith("/api/agent/register")) return response({ api_key: "pm_test" }, 201);
+      if (url.endsWith("/api/proof")) {
+        const body = JSON.parse(init!.body as string);
+        return response({ proof_id: "generated-id", file_hash: body.file_hash, blockchain: { transaction_hash: hash } });
+      }
+      if (url.includes("/api/mx8004/job/")) return response({
+        queue_status: "enqueue_failed", failure_category: "queue_handoff",
+      }, 409);
+      throw new Error(`Unexpected request ${url}`);
+    }));
+    await expect(runMainnetSmoke({ base, signer, registry, deadlineMs: 1000 }))
+      .rejects.toThrow("Queue handoff failed");
+    expect(requests).toEqual([
+      "/api/mx8004/status", "/api/agent/register", "/api/proof", "/api/mx8004/job/xproof_cert_generated-id",
+    ]);
+  });
 });

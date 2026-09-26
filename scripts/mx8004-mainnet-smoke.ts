@@ -118,6 +118,9 @@ export async function runMainnetSmoke(config: Config): Promise<void> {
       // Enqueue is asynchronous; a new proof may briefly return 404. The
       // endpoint also uses 409 to report terminal queue failures.
       const job = await json(`${config.base}/api/mx8004/job/${encodeURIComponent(jobId)}`, undefined, [404, 409]);
+      if (job.queue_status === "enqueue_failed") {
+        throw new Error(`Terminal chain/queue failure. Queue handoff failed; operator review required before retrying. proof=${proof.proof_id} job=${jobId} category=${job.failure_category ?? "queue_handoff"}`);
+      }
       const hashes: Array<{ step: string; hash: string }> = [
         ...(Array.isArray(job.finalized_transactions) ? job.finalized_transactions : []),
         ...(job.transaction_hash ? [{ step: STEPS[job.current_step] ?? "active", hash: job.transaction_hash }] : []),
