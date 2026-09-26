@@ -240,6 +240,26 @@ async function buildScCall(
 
 const RPC_TIMEOUT_MS = 15_000;
 
+/** Gateway acceptance is not inclusion. Only a successful transaction with block metadata is final. */
+export async function getMx8004TransactionFinality(
+  txHash: string,
+): Promise<"confirmed" | "pending" | "failed"> {
+  if (!/^[a-fA-F0-9]{64}$/.test(txHash)) throw new Error("Invalid MX-8004 transaction hash");
+  const response = await fetch(`${API_URL}/transactions/${txHash}`, {
+    signal: AbortSignal.timeout(RPC_TIMEOUT_MS),
+  });
+  if (response.status === 404) return "pending";
+  if (!response.ok) throw new Error(`MX-8004 transaction lookup returned ${response.status}`);
+  const tx = await response.json();
+  if (typeof tx?.txHash !== "string" || tx.txHash.toLowerCase() !== txHash.toLowerCase()) {
+    throw new Error("MX-8004 transaction lookup returned a mismatched hash");
+  }
+  if (["fail", "failed", "invalid"].includes(tx.status)) return "failed";
+  if (tx.status === "success" && Number.isInteger(tx.round) && tx.round > 0 &&
+      Number.isInteger(tx.blockNonce) && tx.blockNonce > 0) return "confirmed";
+  return "pending";
+}
+
 async function vmQuery(
   contractAddress: string,
   funcName: string,

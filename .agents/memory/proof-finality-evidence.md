@@ -8,3 +8,9 @@ Treat a stored confirmed label without separate chain-finality evidence as pendi
 **Why:** Broadcast acceptance and legacy status labels did not establish block inclusion. Public trust snapshots can retain counts calculated using the old rule even after proof responses become conservative.
 
 **How to apply:** Any future change to what qualifies as a verified proof must update both direct public reads and persisted snapshot eligibility/versioning. Reconcile historic transactions only with an explicit process that checks each transaction independently.
+
+For multi-transaction validation jobs, preserve an intent before submitting each transaction and keep its hash until independently confirmed. If the sender crashes between submission and hash persistence, require manual reconciliation rather than automatically replaying the step.
+
+**Why:** Broadcast acceptance does not prove execution, and a replay after an ambiguous send can consume another nonce or duplicate an on-chain action.
+
+**How to apply:** Distinguish queue progress from chain inclusion in operator and public status. Never infer finality for old jobs whose intermediate hashes were not preserved.

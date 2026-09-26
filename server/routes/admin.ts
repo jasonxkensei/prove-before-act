@@ -1091,6 +1091,9 @@ export function registerAdminRoutes(app: Express) {
         .where(eq(txQueueTable.status, "processing"))
         .orderBy(txQueueTable.createdAt)
         .limit(5);
+      const recentRecovery = await db.select().from(txQueueTable)
+        .where(eq(txQueueTable.status, "recovery_required"))
+        .orderBy(txQueueTable.createdAt).limit(10);
 
       res.json({
         stats,
@@ -1102,6 +1105,7 @@ export function registerAdminRoutes(app: Express) {
         },
         recent_failed: recentFailed,
         recent_processing: recentProcessing,
+        recent_recovery: recentRecovery,
       });
     } catch (err: any) {
       res.status(500).json({ error: safeErrMsg(err) });

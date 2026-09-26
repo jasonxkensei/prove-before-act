@@ -3,6 +3,9 @@ import { safeErrMsg } from "./helpers";
 import { logger } from "../logger";
 import { isMX8004Configured, getReputationScore, getAgentDetails, getContractAddresses, getJobData, getValidationStatus, hasGivenFeedback, getAgentResponse, readFeedback, getAgentsExplorerUrl, getMx8004SignerBalance, getMx8004SignerBalanceReport } from "../mx8004";
 import { publicReadRateLimiter } from "../reliability";
+import { db } from "../db";
+import { txQueue } from "@shared/schema";
+import { eq, desc } from "drizzle-orm";
 
 export function registerMx8004Routes(app: Express) {
   app.get("/api/mx8004/status", async (req, res) => {
@@ -72,13 +75,29 @@ export function registerMx8004Routes(app: Express) {
     }
 
     try {
+      const [queueItem] = await db.select({
+        status: txQueue.status, payload: txQueue.payload, lastError: txQueue.lastError,
+      }).from(txQueue).where(eq(txQueue.jobId, req.params.jobId)).orderBy(desc(txQueue.createdAt)).limit(1);
+      const queue = queueItem ? {
+        queue_status: queueItem.status,
+        on_chain_finality: queueItem.status === "completed"
+          ? (queueItem.payload as any)?.finalityTracked ? "confirmed" : "unverified"
+          : queueItem.status === "failed" && (queueItem.payload as any)?.activeTx ? "failed" : "pending",
+        transaction_hash: (queueItem.payload as any)?.activeTx?.hash ?? null,
+        recovery_reason: queueItem.status === "recovery_required" ? queueItem.lastError : null,
+      } : {};
       const jobData = await getJobData(req.params.jobId);
       if (!jobData) {
+        if (queueItem) {
+          return res.status(["failed", "recovery_required"].includes(queueItem.status) ? 409 : 202)
+            .json({ job_id: req.params.jobId, ...queue, message: "Job is not yet available on chain" });
+        }
         return res.status(404).json({ error: "JOB_NOT_FOUND", message: "Job not found in Validation Registry" });
       }
       return res.json({
         job_id: req.params.jobId,
         ...jobData,
+        ...queue,
         standard: "MX-8004",
       });
     } catch (err: any) {

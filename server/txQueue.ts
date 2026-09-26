@@ -9,6 +9,7 @@ import {
   validationResponse,
   appendResponse,
   resetNonce,
+  getMx8004TransactionFinality,
 } from "./mx8004";
 import { logger } from "./logger";
 import { checkAndAlertTx } from "./alerts";
@@ -43,6 +44,21 @@ const VALIDATION_STEPS = [
   "validation_response",
   "append_response",
 ] as const;
+const FINALITY_POLL_MS = 15_000;
+const FINALITY_RECOVERY_MS = 30 * 60_000;
+
+type ActiveTx = { step: number; hash: string; broadcastAt: string };
+
+export function assessMx8004Finality(
+  active: ActiveTx,
+  chainState: "confirmed" | "pending" | "failed",
+  now = Date.now(),
+): "confirmed" | "pending" | "failed" | "recovery_required" {
+  if (chainState !== "pending") return chainState;
+  const broadcastAt = Date.parse(active.broadcastAt);
+  if (!Number.isFinite(broadcastAt)) return "recovery_required";
+  return now - broadcastAt >= FINALITY_RECOVERY_MS ? "recovery_required" : "pending";
+}
 
 export async function enqueueTx(
   jobType: string,
@@ -63,14 +79,6 @@ export async function enqueueTx(
     maxAttempts: 3,
   });
   logger.info("Job enqueued", { component: "tx-queue", jobType, jobId, requestId });
-}
-
-async function updatePayload(taskId: string, updates: Record<string, any>): Promise<void> {
-  if (!taskId) return;
-  await db
-    .update(txQueue)
-    .set({ payload: sql`payload || ${JSON.stringify(updates)}::jsonb` })
-    .where(eq(txQueue.id, taskId));
 }
 
 async function recoverStaleTasks(): Promise<void> {
@@ -105,7 +113,7 @@ async function processNextTask(): Promise<void> {
       SET status = 'processing', started_at = ${now}
       WHERE id = (
         SELECT id FROM tx_queue
-        WHERE status = 'pending'
+        WHERE status IN ('pending', 'awaiting_finality')
           AND (next_retry_at IS NULL OR next_retry_at <= ${now})
         ORDER BY created_at ASC
         LIMIT 1
@@ -145,23 +153,37 @@ async function processNextTask(): Promise<void> {
     logger.info("Processing task", { component: "tx-queue", jobType: task.jobType, jobId: task.jobId, attempt: task.attempts + 1, maxAttempts: task.maxAttempts, requestId: taskRequestId });
 
     try {
-      await executeTask(task.id, task.jobType, task.jobId, task.payload as Record<string, any>);
-
-      await db
-        .update(txQueue)
-        .set({ status: "completed", completedAt: new Date() })
-        .where(eq(txQueue.id, task.id));
-
-      logger.info("Task completed", { component: "tx-queue", jobType: task.jobType, jobId: task.jobId });
+      const outcome = await executeTask(task.id, task.jobType, task.jobId, task.payload as Record<string, any>);
+      if (outcome === "completed") {
+        await db.update(txQueue).set({ status: "completed", completedAt: new Date(), nextRetryAt: null, lastError: null })
+          .where(eq(txQueue.id, task.id));
+        logger.info("Task finalized", { component: "tx-queue", jobType: task.jobType, jobId: task.jobId });
+      } else if (outcome === "recovery_required" || outcome === "failed") {
+        await db.update(txQueue).set({
+          status: outcome,
+          completedAt: new Date(),
+          nextRetryAt: null,
+          lastError: outcome === "failed" ? "Transaction failed on chain; manual review required before retry"
+            : "Broadcast unresolved or not finalized; inspect hash and signer nonce before retry",
+        }).where(eq(txQueue.id, task.id));
+        logger.error("Transaction requires review", { component: "tx-queue", jobId: task.jobId, outcome });
+      }
     } catch (err: any) {
       const newAttempts = task.attempts + 1;
       const errorMessage = err.message || String(err);
 
       logger.error("Task failed", { component: "tx-queue", jobType: task.jobType, jobId: task.jobId, error: errorMessage });
 
-      resetNonce();
-
-      if (newAttempts >= task.maxAttempts) {
+      // Once a hash has been broadcast, never replay that step on lookup errors.
+      const hasActiveTx = !!(task.payload as any)?.activeTx;
+      if (hasActiveTx) {
+        await db.update(txQueue).set({
+          status: "awaiting_finality",
+          lastError: errorMessage,
+          nextRetryAt: new Date(Date.now() + FINALITY_POLL_MS),
+        }).where(eq(txQueue.id, task.id));
+      } else if (newAttempts >= task.maxAttempts) {
+        resetNonce();
         await db
           .update(txQueue)
           .set({
@@ -173,6 +195,7 @@ async function processNextTask(): Promise<void> {
 
         logger.error("Max attempts reached, marking as failed", { component: "tx-queue", jobId: task.jobId });
       } else {
+        resetNonce();
         const backoffSeconds = [10, 30, 90][newAttempts - 1] || 90;
         const nextRetry = new Date(Date.now() + backoffSeconds * 1000);
 
@@ -202,15 +225,21 @@ async function executeTask(
   jobType: string,
   jobId: string,
   payload: Record<string, any>
-): Promise<void> {
+): Promise<"completed" | "waiting" | "failed" | "recovery_required"> {
   switch (jobType) {
     case "mx8004_validation_loop": {
       const { certificationId, fileHash, transactionHash, agentNonce, senderAddress } = payload;
       const rawStep = typeof payload.currentStep === "number" ? payload.currentStep : 0;
-      const startStep = Math.max(0, Math.min(4, rawStep));
-      if (rawStep >= 5) {
-        throw new Error(`Job already completed (currentStep=${rawStep})`);
+      const active = payload.activeTx as ActiveTx | undefined;
+      // A process can crash after sending but before saving the hash. Do not replay
+      // an ambiguous send; an operator must reconcile the signer nonce first.
+      if (payload.broadcastIntent && !active) return "recovery_required";
+      if (rawStep > 0 && !active && !payload.finalityTracked) {
+        // Older queue records advanced on broadcast alone; their steps cannot be trusted.
+        return "recovery_required";
       }
+      if (rawStep >= 5 && !active) return "completed";
+      const startStep = Math.max(0, Math.min(4, rawStep));
       const proof = `hash:${fileHash}|tx:${transactionHash}`;
 
       const crypto = await import("crypto");
@@ -226,37 +255,62 @@ async function executeTask(
         logger.info("Registering job", { component: "tx-queue", jobId, agentNonce });
       }
 
-      if (startStep <= 0) {
-        const txHash = await initJob(jobId, agentNonce);
-        logger.info("Step completed", { component: "tx-queue", step: "1/5", action: "init_job", txHash });
-        await updatePayload(taskId, { currentStep: 1 });
+      if (active) {
+        if (active.step !== startStep || !/^[a-fA-F0-9]{64}$/.test(active.hash)) return "recovery_required";
+        let chainState: "confirmed" | "pending" | "failed";
+        try {
+          chainState = await getMx8004TransactionFinality(active.hash);
+        } catch (error) {
+          if (assessMx8004Finality(active, "pending") === "recovery_required") return "recovery_required";
+          throw error;
+        }
+        const state = assessMx8004Finality(active, chainState);
+        if (state === "failed" || state === "recovery_required") return state;
+        if (state === "pending") {
+          await db.update(txQueue).set({
+            status: "awaiting_finality", nextRetryAt: new Date(Date.now() + FINALITY_POLL_MS), lastError: null,
+          }).where(eq(txQueue.id, taskId));
+          return "waiting";
+        }
+        await db.update(txQueue).set({
+          payload: sql`payload || ${JSON.stringify({ currentStep: startStep + 1, activeTx: null, broadcastIntent: null, finalityTracked: true })}::jsonb`,
+          status: startStep === 4 ? "completed" : "pending",
+          completedAt: startStep === 4 ? new Date() : null,
+          nextRetryAt: null,
+          lastError: null,
+        }).where(eq(txQueue.id, taskId));
+        logger.info("Step finalized", { component: "tx-queue", jobId, step: startStep + 1, txHash: active.hash });
+        return "waiting";
       }
 
-      if (startStep <= 1) {
-        const txHash = await submitProof(jobId, proof);
-        logger.info("Step completed", { component: "tx-queue", step: "2/5", action: "submit_proof", txHash });
-        await updatePayload(taskId, { currentStep: 2 });
+      await db.update(txQueue).set({
+        payload: sql`payload || ${JSON.stringify({ broadcastIntent: { step: startStep, startedAt: new Date().toISOString() } })}::jsonb`,
+      }).where(eq(txQueue.id, taskId));
+      let txHash: string;
+      try {
+        txHash = await [
+          () => initJob(jobId, agentNonce),
+          () => submitProof(jobId, proof),
+          () => validationRequest(jobId, senderAddress, requestUri, requestHash),
+          () => validationResponse(requestHash, 100, responseUri, responseHash, "Prove Before Act-certification"),
+          () => appendResponse(jobId, certUrl),
+        ][startStep]();
+        await db.update(txQueue).set({
+          payload: sql`payload || ${JSON.stringify({
+            activeTx: { step: startStep, hash: txHash, broadcastAt: new Date().toISOString() }, broadcastIntent: null, finalityTracked: true,
+          })}::jsonb`,
+          status: "awaiting_finality",
+          nextRetryAt: new Date(Date.now() + FINALITY_POLL_MS),
+          lastError: null,
+        }).where(eq(txQueue.id, taskId));
+      } catch (error) {
+        logger.error("Broadcast outcome uncertain; manual recovery required", {
+          component: "tx-queue", jobId, step: startStep + 1, error: String(error),
+        });
+        return "recovery_required";
       }
-
-      if (startStep <= 2) {
-        const txHash = await validationRequest(jobId, senderAddress, requestUri, requestHash);
-        logger.info("Step completed", { component: "tx-queue", step: "3/5", action: "validation_request", txHash });
-        await updatePayload(taskId, { currentStep: 3 });
-      }
-
-      if (startStep <= 3) {
-        const txHash = await validationResponse(requestHash, 100, responseUri, responseHash, "Prove Before Act-certification");
-        logger.info("Step completed", { component: "tx-queue", step: "4/5", action: "validation_response", txHash });
-        await updatePayload(taskId, { currentStep: 4 });
-      }
-
-      if (startStep <= 4) {
-        const txHash = await appendResponse(jobId, certUrl);
-        logger.info("Step completed", { component: "tx-queue", step: "5/5", action: "append_response", txHash });
-        await updatePayload(taskId, { currentStep: 5 });
-      }
-
-      break;
+      logger.info("Step broadcast; awaiting finality", { component: "tx-queue", jobId, step: startStep + 1, txHash });
+      return "waiting";
     }
     default:
       throw new Error(`Unknown job type: ${jobType}`);
@@ -268,7 +322,7 @@ async function updateQueueMetrics(): Promise<void> {
     const [result] = await db
       .select({ count: count() })
       .from(txQueue)
-      .where(eq(txQueue.status, "pending"));
+      .where(or(eq(txQueue.status, "pending"), eq(txQueue.status, "awaiting_finality")));
     setMx8004QueueSize(result.count);
   } catch {
   }
@@ -276,6 +330,8 @@ async function updateQueueMetrics(): Promise<void> {
 
 export async function getTxQueueStats(): Promise<{
   pending: number;
+  awaitingFinality: number;
+  recoveryRequired: number;
   processing: number;
   completed: number;
   failed: number;
@@ -286,6 +342,8 @@ export async function getTxQueueStats(): Promise<{
   lastActivity: string | null;
 }> {
   const [pendingRow] = await db.select({ count: count() }).from(txQueue).where(eq(txQueue.status, "pending"));
+  const [awaitingRow] = await db.select({ count: count() }).from(txQueue).where(eq(txQueue.status, "awaiting_finality"));
+  const [recoveryRow] = await db.select({ count: count() }).from(txQueue).where(eq(txQueue.status, "recovery_required"));
   const [processingRow] = await db.select({ count: count() }).from(txQueue).where(eq(txQueue.status, "processing"));
   const [completedRow] = await db.select({ count: count() }).from(txQueue).where(eq(txQueue.status, "completed"));
   const [failedRow] = await db.select({ count: count() }).from(txQueue).where(eq(txQueue.status, "failed"));
@@ -322,6 +380,8 @@ export async function getTxQueueStats(): Promise<{
 
   return {
     pending: pendingRow.count,
+    awaitingFinality: awaitingRow.count,
+    recoveryRequired: recoveryRow.count,
     processing: processingRow.count,
     completed: completedRow.count,
     failed: failedRow.count,
