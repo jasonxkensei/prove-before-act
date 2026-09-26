@@ -411,6 +411,24 @@ test.describe("public-site chrome — mobile viewport", () => {
     await expect(nav).not.toBeVisible();
   });
 
+  test("Escape closes the mobile menu and returns focus to its trigger", async ({ page }) => {
+    const trigger = page.getByTestId("button-mobile-menu");
+    const menu = page.getByRole("navigation", { name: "Mobile navigation" });
+
+    await trigger.focus();
+    await page.keyboard.press("Enter");
+    await expect(menu).toBeVisible();
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+
+    await page.keyboard.press("Tab");
+    await expect(page.getByTestId("link-mobile-how-it-works")).toBeFocused();
+    await page.keyboard.press("Escape");
+
+    await expect(menu).not.toBeVisible();
+    await expect(trigger).toHaveAttribute("aria-expanded", "false");
+    await expect(trigger).toBeFocused();
+  });
+
   test("logo link is visible on mobile", async ({ page }) => {
     await expect(page.getByTestId("link-logo-home").first()).toBeVisible();
   });
