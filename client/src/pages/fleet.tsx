@@ -16,6 +16,7 @@ import {
 import { useWalletAuth } from "@/hooks/useWalletAuth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { StatusIndicator } from "@/components/status-indicator";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -254,9 +255,9 @@ export default function FleetPage() {
           <Card role="alert" className="mb-8 border-[hsl(var(--status-warning)/.4)] bg-[hsl(var(--status-warning)/.1)] text-foreground shadow-none">
             <CardContent className="flex items-start gap-3 py-6">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-500" aria-hidden="true" />
-              <p id="fleet-link-validation" className="text-sm text-[hsl(var(--status-warning))]" data-testid="text-fleet-validation">
+              <StatusIndicator status="warning" as="p" id="fleet-link-validation" className="text-sm" data-testid="text-fleet-validation">
                 {invalidLinkMessage}
-              </p>
+              </StatusIndicator>
             </CardContent>
           </Card>
         )}
@@ -290,7 +291,7 @@ export default function FleetPage() {
           <Card className="border-[hsl(var(--status-warning)/.4)] bg-[hsl(var(--status-warning)/.1)] text-foreground shadow-none">
             <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
               <AlertTriangle className="h-8 w-8 text-amber-500" />
-              <p className="text-sm text-[hsl(var(--status-warning))]" data-testid="text-fleet-error">{error.message}</p>
+              <StatusIndicator status="warning" as="p" className="text-sm" data-testid="text-fleet-error">{error.message}</StatusIndicator>
             </CardContent>
           </Card>
         )}

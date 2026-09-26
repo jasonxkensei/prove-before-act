@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { StatusIndicator } from "@/components/status-indicator";
 import { Button } from "@/components/ui/button";
 import { PublicSiteFooter, PublicSiteHeader } from "@/components/public-site-chrome";
 import { formatDistanceToNow } from "date-fns";
@@ -128,16 +129,16 @@ export default function IssuerProfilePage() {
                 )}
               </div>
               <div className="flex flex-col items-end gap-2">
-                <div className="status-verified rounded-md border border-current/30 bg-current/10 px-3 py-1.5">
+                <StatusIndicator status="verified" as="div" className="rounded-md border border-current/30 bg-current/10 px-3 py-1.5">
                   <ShieldCheck className="h-4 w-4" />
                   <span className="text-sm font-semibold" data-testid="text-active-count">
                     {issuer.activeCount} active
                   </span>
-                </div>
+                </StatusIndicator>
                 {issuer.revokedCount > 0 && (
-                  <span className="text-xs text-muted-foreground" data-testid="text-revoked-count">
+                  <StatusIndicator status="failed" className="text-xs" data-testid="text-revoked-count">
                     {issuer.revokedCount} revoked
-                  </span>
+                  </StatusIndicator>
                 )}
               </div>
             </div>

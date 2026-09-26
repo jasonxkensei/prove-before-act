@@ -8,6 +8,7 @@ import { getFleetProofSummaryAttempt, trackEvent } from "@/lib/analytics";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { StatusIndicator } from "@/components/status-indicator";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 type HealthStatus = "green" | "orange" | "red";
@@ -73,11 +74,18 @@ interface ProofSummary {
   privacy_note: string;
 }
 
-const healthStyles: Record<HealthStatus, string> = {
-  green: "border-primary/40 bg-primary/10 text-primary",
-  orange: "border-amber-300/40 bg-amber-300/10 text-amber-200",
-  red: "border-red-300/40 bg-red-300/10 text-red-200",
+const healthStatusTone: Record<HealthStatus, "verified" | "warning" | "failed"> = {
+  green: "verified",
+  orange: "warning",
+  red: "failed",
 };
+
+function proofStatusTone(status: string): "verified" | "pending" | "failed" | null {
+  if (status === "confirmed") return "verified";
+  if (status === "pending") return "pending";
+  if (status === "failed") return "failed";
+  return null;
+}
 
 function getHealth(agent: OperationalAgent): { status: HealthStatus; reasons: string[] } {
   const health = agent.health;
@@ -203,7 +211,7 @@ export default function FleetOverviewPage() {
           <Card className="border-[hsl(var(--status-warning)/.4)] bg-[hsl(var(--status-warning)/.1)] text-foreground shadow-none" data-testid="fleet-overview-error">
             <CardContent className="flex items-center gap-3 py-8">
               <AlertTriangle className="h-6 w-6 shrink-0 text-amber-300" />
-              <p>{error.message}</p>
+              <StatusIndicator status="warning" as="p">{error.message}</StatusIndicator>
             </CardContent>
           </Card>
         ) : (
@@ -267,9 +275,9 @@ export default function FleetOverviewPage() {
                             <div className="min-w-0">
                               <div className="flex flex-wrap items-center gap-2">
                                 <h3 className="font-semibold">{agent.name || "Unnamed agent"}</h3>
-                                <Badge className={`border ${healthStyles[health.status]}`} data-testid={`fleet-overview-health-${agent.agent_id}`}>
+                                <StatusIndicator status={healthStatusTone[health.status]} badgeVariant="outline" className="border-current/30 bg-current/10" data-testid={`fleet-overview-health-${agent.agent_id}`}>
                                   {health.status.charAt(0).toUpperCase() + health.status.slice(1)}
-                                </Badge>
+                                </StatusIndicator>
                               </div>
                               <p className="mt-1 break-all font-mono text-xs text-[#a0ada3]">Agent ID: {agent.agent_id}</p>
                               <p className="mt-1 break-all font-mono text-xs text-[#65716a]">Owner account: {agent.owner_account_id}</p>
@@ -320,13 +328,13 @@ export default function FleetOverviewPage() {
                 {proofSummary.isLoading ? (
                   <div className="flex justify-center py-12"><Loader2 className="h-7 w-7 animate-spin text-primary" aria-label="Loading proof summary" /></div>
                 ) : proofSummary.error instanceof Error ? (
-                  <p className="border border-amber-300/40 bg-amber-300/10 p-4 text-sm text-amber-200">{proofSummary.error.message}</p>
+                  <StatusIndicator status="warning" as="p" className="border border-current/40 bg-current/10 p-4 text-sm">{proofSummary.error.message}</StatusIndicator>
                 ) : proofSummary.data ? (
                   <div className="space-y-5" data-testid="fleet-proof-summary-content">
                     <div className="flex flex-wrap items-center gap-2">
-                      <Badge className={`border ${healthStyles[proofSummary.data.agent.health]}`}>
+                      <StatusIndicator status={healthStatusTone[proofSummary.data.agent.health]} badgeVariant="outline" className="border-current/30 bg-current/10">
                         {proofSummary.data.agent.health.charAt(0).toUpperCase() + proofSummary.data.agent.health.slice(1)}
-                      </Badge>
+                      </StatusIndicator>
                       <span className="text-sm text-[#a0ada3]">
                         {proofSummary.data.agent.reasons.length ? proofSummary.data.agent.reasons.join(" · ") : "No health warnings"}
                       </span>
@@ -352,7 +360,11 @@ export default function FleetOverviewPage() {
                             <li key={proof.proof_id} className="flex flex-col gap-1 py-3 text-sm sm:flex-row sm:items-center sm:justify-between">
                               <span className="break-all font-mono text-xs text-[#c4cec5]">{proof.proof_id}</span>
                               <span className="flex shrink-0 items-center gap-3">
-                                <Badge variant="outline" className="border-[#526158] text-[#c4cec5]">{proof.status}</Badge>
+                                {proofStatusTone(proof.status) ? (
+                                  <StatusIndicator status={proofStatusTone(proof.status)!} badgeVariant="outline" className="border-current/30 bg-current/10">{proof.status}</StatusIndicator>
+                                ) : (
+                                  <Badge variant="outline" className="border-[#526158] text-[#c4cec5]">{proof.status}</Badge>
+                                )}
                                 <span className="text-xs text-[#a0ada3]">{relativeTime(proof.created_at)}</span>
                               </span>
                             </li>

@@ -244,7 +244,10 @@ export function registerFleetOverviewRoutes(app: Express) {
           WHERE u.id = $1 AND u.id = $2
             AND NOT EXISTS (SELECT 1 FROM agents a WHERE a.id = u.id)
         )
-        SELECT c.id, c.blockchain_status, c.created_at, c.updated_at
+        SELECT c.id,
+          CASE WHEN c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NULL
+            THEN 'pending' ELSE c.blockchain_status END AS status,
+          c.created_at, c.updated_at
         FROM certifications c
         INNER JOIN owned_agent a ON a.id = c.agent_id
           AND a.owner_account_id = $1
@@ -287,7 +290,7 @@ export function registerFleetOverviewRoutes(app: Express) {
         },
         recent_proofs: proofs.rows.map((proof: any) => ({
           proof_id: proof.id,
-          status: proof.blockchain_status,
+          status: proof.status,
           created_at: iso(proof.created_at),
           updated_at: iso(proof.updated_at),
         })),
