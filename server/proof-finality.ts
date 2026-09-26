@@ -1,7 +1,8 @@
 import { db } from "./db";
-import { certifications } from "@shared/schema";
+import { certifications, users } from "@shared/schema";
 import { and, eq, isNotNull } from "drizzle-orm";
 import { logger } from "./logger";
+import { refreshTrustAfterCertification } from "./trust";
 
 export type ChainFinality = "confirmed" | "pending" | "failed" | "unavailable";
 export type HistoricalFinalityResult = ChainFinality | "missing";
@@ -175,6 +176,7 @@ export async function pollProofFinality(): Promise<void> {
     const rows = await db.select({
       id: certifications.id, transactionHash: certifications.transactionHash,
       fileHash: certifications.fileHash, authMethod: certifications.authMethod,
+      userId: certifications.userId,
     }).from(certifications).where(and(
       eq(certifications.blockchainStatus, "pending"),
       isNotNull(certifications.transactionHash),
@@ -196,6 +198,17 @@ export async function pollProofFinality(): Promise<void> {
         eq(certifications.blockchainStatus, "pending"),
         eq(certifications.transactionHash, row.transactionHash!),
       )).returning({ id: certifications.id });
+      if (updated && result === "confirmed") {
+        try {
+          const [owner] = await db.select({ walletAddress: users.walletAddress })
+            .from(users).where(eq(users.id, row.userId));
+          if (owner) await refreshTrustAfterCertification(owner.walletAddress, "confirmed");
+        } catch (error) {
+          logger.error("Finalized proof trust refresh failed", {
+            component: "proof-finality", certificationId: row.id, error: String(error),
+          });
+        }
+      }
       if (updated && (result === "confirmed" || result === "failed")) {
         // Only a newly recorded finality transition can release a pending
         // proof.certified delivery or close a delivery for a failed proof.

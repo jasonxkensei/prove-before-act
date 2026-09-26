@@ -11,6 +11,7 @@ import { broadcastSignedTransaction, getTxExplorerUrl } from "../blockchain";
 import { tryDisplaceAcpReservation } from "./helpers";
 import { ensureDefaultAgent } from "../agent-identity";
 import { lookupProofFinality } from "../proof-finality";
+import { refreshTrustAfterCertification } from "../trust";
 
 /**
  * Parses pipe-separated metadata from a certified tx data payload.
@@ -272,6 +273,18 @@ export function registerCertificationsRoutes(app: Express) {
 
       const certificateUrl = `/api/certificates/${certification.id}.pdf`;
       await db.update(agents).set({ lastSeenAt: new Date() }).where(eq(agents.id, defaultAgent.id));
+      if (certification.blockchainStatus === "confirmed" && certification.finalityCheckedAt) {
+        try {
+          await refreshTrustAfterCertification(walletAddress, "confirmed");
+        } catch (error: any) {
+          // The proof has already been recorded; a trust refresh failure must
+          // not cause the caller to retry a successful certification.
+          logger.withRequest(req).error("Confirmed certification trust refresh failed", {
+            wallet: walletAddress,
+            error: error?.message ?? String(error),
+          });
+        }
+      }
 
       res.status(201).json({
         ...certification,

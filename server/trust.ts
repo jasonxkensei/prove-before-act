@@ -640,7 +640,7 @@ function setTrustCache(key: string, value: TrustScore | null) {
   trustCache.set(key, { value, cachedAt: Date.now() });
 }
 
-async function computeAndSnapshotTrustScoreByWallet(walletAddress: string): Promise<TrustScore | null> {
+async function computeAndSnapshotTrustScoreByWallet(walletAddress: string, requireSnapshot = false): Promise<TrustScore | null> {
   const [user] = await db
     .select({ id: users.id, isPublicProfile: users.isPublicProfile })
     .from(users)
@@ -676,6 +676,7 @@ async function computeAndSnapshotTrustScoreByWallet(walletAddress: string): Prom
       ],
     );
   } catch (error: any) {
+    if (requireSnapshot) throw error;
     // The score is still useful for this request and is cached to prevent a
     // database write failure from turning every public read into a recompute.
     logger.warn("Trust read-through snapshot write failed", {
@@ -687,6 +688,23 @@ async function computeAndSnapshotTrustScoreByWallet(walletAddress: string): Prom
 
   setTrustCache(walletAddress, trust);
   return trust;
+}
+
+// A confirmed proof changes a wallet's score before the next scheduled cycle.
+// Refresh the persisted snapshot as well as this process's cache, so a cold
+// partner/profile read does not reload the old score from the database.
+export async function refreshTrustAfterCertification(
+  walletAddress: string,
+  status: "confirmed" | "pending" | "failed",
+): Promise<void> {
+  if (status !== "confirmed") return;
+
+  // A first public read may already be computing the pre-certification score.
+  // Let it finish before replacing its snapshot and cache entry.
+  const inFlight = trustReadThroughInFlight.get(walletAddress);
+  if (inFlight) await inFlight;
+  trustCache.delete(walletAddress);
+  await computeAndSnapshotTrustScoreByWallet(walletAddress, true);
 }
 
 // Public read — bounded: in-memory cache first, then one indexed snapshot row.

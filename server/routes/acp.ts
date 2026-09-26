@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { z } from "zod";
 import { db, pool } from "../db";
 import { logger } from "../logger";
+import { refreshTrustAfterCertification } from "../trust";
 import { certifications, users, apiKeys, acpCheckouts, attestations, acpCheckoutRequestSchema, acpConfirmRequestSchema, type ACPProduct, type ACPCheckoutResponse, type ACPConfirmResponse } from "@shared/schema";
 import { eq, sql, and, gt } from "drizzle-orm";
 import { publicReadRateLimiter } from "../reliability";
@@ -1053,6 +1054,18 @@ export function registerAcpRoutes(app: Express) {
           confirmedAt: new Date(),
         })
         .where(eq(acpCheckouts.id, checkout.id));
+
+      const [owner] = await db.select({ walletAddress: users.walletAddress })
+        .from(users).where(eq(users.id, acpOwnerId));
+      if (owner) {
+        try {
+          await refreshTrustAfterCertification(owner.walletAddress, "confirmed");
+        } catch (error) {
+          logger.withRequest(req).error("ACP confirmed certification trust refresh failed", {
+            certificationId: certification.id, error: String(error),
+          });
+        }
+      }
 
       const response: ACPConfirmResponse = {
         status: "confirmed",
