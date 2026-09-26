@@ -15,6 +15,7 @@ import { db, pool } from "../server/db";
 import { getSession } from "../server/replitAuth";
 import { registerAdminRoutes } from "../server/routes/admin";
 import * as metrics from "../server/metrics";
+import * as mx8004 from "../server/mx8004";
 import { recordProofVerificationMilestone } from "../server/conversion-telemetry";
 import {
   migrateConversionEventsTable,
@@ -82,6 +83,78 @@ afterAll(async () => {
   await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   if (originalAdminWallets === undefined) delete process.env.ADMIN_WALLETS;
   else process.env.ADMIN_WALLETS = originalAdminWallets;
+});
+
+describe("GET /api/admin/stats signer balance", () => {
+  it("reports a healthy signer wallet to an authenticated admin", async () => {
+    const threshold = mx8004.MX8004_LOW_BALANCE_EGLD;
+    const balanceSpy = vi.spyOn(mx8004, "getMx8004SignerBalance").mockResolvedValue({
+      address: "erd1testsigner",
+      balanceRaw: "10000000000000000000",
+      balanceEgld: threshold + 1,
+      nonce: 42,
+      lowBalance: false,
+      thresholdEgld: threshold,
+      checkedAt: "2026-09-26T12:00:00.000Z",
+    });
+    try {
+      const response = await fetch(`${baseUrl}/api/admin/stats`, {
+        headers: { Cookie: cookie },
+      });
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(balanceSpy).toHaveBeenCalledOnce();
+      expect(body.mx8004).toMatchObject({
+        signer_balance: {
+          address: "erd1testsigner",
+          balance_raw: "10000000000000000000",
+          balance_egld: threshold + 1,
+          threshold_egld: threshold,
+          nonce: 42,
+          status: "ok",
+          low_balance: false,
+        },
+        low_balance: false,
+      });
+    } finally {
+      balanceSpy.mockRestore();
+    }
+  });
+
+  it("keeps the low-balance warning visible when the upstream balance check fails", async () => {
+    const threshold = mx8004.MX8004_LOW_BALANCE_EGLD;
+    const balanceSpy = vi.spyOn(mx8004, "getMx8004SignerBalance").mockResolvedValue({
+      address: "erd1testsigner",
+      balanceRaw: "100000000000000000",
+      balanceEgld: 0.1,
+      nonce: 42,
+      lowBalance: true,
+      thresholdEgld: threshold,
+      checkedAt: "2026-09-26T12:00:00.000Z",
+      error: "MultiversX API returned 503",
+    });
+    try {
+      const response = await fetch(`${baseUrl}/api/admin/stats`, {
+        headers: { Cookie: cookie },
+      });
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(balanceSpy).toHaveBeenCalledOnce();
+      expect(body.mx8004).toMatchObject({
+        signer_balance: {
+          balance_raw: "100000000000000000",
+          balance_egld: 0.1,
+          threshold_egld: threshold,
+          status: "unknown",
+          low_balance: true,
+          error: "MultiversX API returned 503",
+        },
+        low_balance: true,
+      });
+    } finally {
+      balanceSpy.mockRestore();
+    }
+  });
 });
 
 describe("GET /api/admin/conversion-funnel", () => {
