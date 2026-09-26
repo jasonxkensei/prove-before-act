@@ -57,6 +57,27 @@ could not be applied because the certification no longer matched the dry-run
 state. Report mode cannot be combined with `--dry-run`, `--apply`, `--resume`,
 `--approved-dry-run`, `--max-records`, or `--delay-ms`.
 
+## Compare a dry run with its apply run
+
+Compare a completed dry run with the completed apply run that references it:
+
+```sh
+npm run proofs:reconcile-legacy-finality -- --compare <dry-run-id> --with <apply-run-id>
+```
+
+Comparison mode reads both run summaries and their audit items by
+certification ID. Its JSON output shows each proof's dry-run and apply result,
+whether the result or recorded hashes changed, whether the proof was applied,
+and whether the apply result was stale. It also reports dry-run proofs missing
+from the apply run and any apply-only IDs. Non-confirmed dry-run proofs omitted
+from apply are marked `not_applied`; a confirmed dry-run proof with no matching
+apply item is marked `missing_from_apply`.
+
+Both runs must be completed, and the apply run must reference the selected
+dry-run ID. Comparison mode does not acquire the reconciliation lease, call the
+chain API, or update records. It cannot be combined with `--report`, `--dry-run`,
+`--apply`, `--resume`, `--approved-dry-run`, `--max-records`, or `--delay-ms`.
+
 The CLI enforces at least one second between chain API lookups (at most 60 per
 minute), serializes operator runs with a database lease, and keeps the cursor
 and counts in the database. A process interruption can be resumed after the

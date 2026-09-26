@@ -90,4 +90,139 @@ describe("proof finality reconciliation report mode", () => {
     await expect(run()).rejects.toThrow("--report cannot be combined with --dry-run or --apply.");
     expect(mockPool.query).not.toHaveBeenCalled();
   });
+
+  it("compares linked completed runs by proof ID using read-only queries", async () => {
+    process.argv = [
+      "node",
+      "reconcile-legacy-proof-finality.ts",
+      "--compare",
+      "dry-run-123",
+      "--with",
+      "apply-456",
+    ];
+    vi.stubEnv("PROOF_FINALITY_OPERATOR", "");
+    const dryRunCounts = { confirmed: 4, failed: 1, missing: 0, unavailable: 0, pending: 0, stale: 0 };
+    const applyCounts = { confirmed: 2, failed: 1, missing: 0, unavailable: 0, pending: 0, stale: 1 };
+    mockPool.query
+      .mockResolvedValueOnce({
+        rows: [{
+          id: "dry-run-123",
+          mode: "dry_run",
+          status: "completed",
+          operator: "reviewer",
+          approved_dry_run_id: null,
+          cursor_id: "cert-5",
+          counts: dryRunCounts,
+        }],
+      })
+      .mockResolvedValueOnce({
+        rows: [{
+          id: "apply-456",
+          mode: "reconcile",
+          status: "completed",
+          operator: "reviewer",
+          approved_dry_run_id: "dry-run-123",
+          cursor_id: "cert-5",
+          counts: applyCounts,
+        }],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          { certification_id: "cert-applied", transaction_hash: "a".repeat(64), file_hash: "1".repeat(64), result: "confirmed", reason: null, applied: false, checked_at: new Date() },
+          { certification_id: "cert-stale", transaction_hash: "b".repeat(64), file_hash: "2".repeat(64), result: "confirmed", reason: null, applied: false, checked_at: new Date() },
+          { certification_id: "cert-changed", transaction_hash: "c".repeat(64), file_hash: "3".repeat(64), result: "confirmed", reason: null, applied: false, checked_at: new Date() },
+          { certification_id: "cert-not-applied", transaction_hash: "d".repeat(64), file_hash: "4".repeat(64), result: "failed", reason: "transaction_failed", applied: false, checked_at: new Date() },
+          { certification_id: "cert-missing", transaction_hash: "e".repeat(64), file_hash: "5".repeat(64), result: "confirmed", reason: null, applied: false, checked_at: new Date() },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          { certification_id: "cert-applied", transaction_hash: "a".repeat(64), file_hash: "1".repeat(64), result: "confirmed", reason: null, applied: true, checked_at: new Date() },
+          { certification_id: "cert-stale", transaction_hash: "b".repeat(64), file_hash: "2".repeat(64), result: "confirmed", reason: null, applied: false, checked_at: new Date() },
+          { certification_id: "cert-changed", transaction_hash: "c".repeat(64), file_hash: "3".repeat(64), result: "failed", reason: "transaction_failed", applied: false, checked_at: new Date() },
+          { certification_id: "cert-apply-only", transaction_hash: "f".repeat(64), file_hash: "6".repeat(64), result: "confirmed", reason: null, applied: true, checked_at: new Date() },
+        ],
+      });
+    const output = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    await run();
+
+    const comparison = JSON.parse(output.mock.calls[0][0] as string);
+    expect(comparison).toMatchObject({
+      event: "proof_finality_reconciliation_comparison",
+      dryRun: { id: "dry-run-123", status: "completed" },
+      applyRun: { id: "apply-456", status: "completed", approvedDryRunId: "dry-run-123" },
+      summary: {
+        dryRunProofs: 5,
+        applyProofs: 4,
+        matchedProofs: 3,
+        changedResults: 1,
+        changedInputs: 0,
+        appliedProofs: 2,
+        staleProofs: 1,
+        notAppliedProofs: 1,
+        missingFromApply: 1,
+        applyOnlyProofs: 1,
+      },
+    });
+    expect(comparison.proofs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ certificationId: "cert-applied", comparison: "applied", applied: true, stale: false }),
+      expect.objectContaining({ certificationId: "cert-stale", comparison: "stale", applied: false, stale: true }),
+      expect.objectContaining({ certificationId: "cert-changed", comparison: "changed", resultChanged: true }),
+      expect.objectContaining({ certificationId: "cert-not-applied", comparison: "not_applied" }),
+      expect.objectContaining({ certificationId: "cert-missing", comparison: "missing_from_apply" }),
+      expect.objectContaining({ certificationId: "cert-apply-only", comparison: "apply_only" }),
+    ]));
+    expect(mockPool.query).toHaveBeenCalledTimes(4);
+    for (const [sql] of mockPool.query.mock.calls) {
+      expect(sql.trimStart().toUpperCase()).toMatch(/^SELECT\b/);
+    }
+  });
+
+  it("rejects an apply run that is not approved against the selected dry run", async () => {
+    process.argv = [
+      "node",
+      "reconcile-legacy-proof-finality.ts",
+      "--compare",
+      "dry-run-123",
+      "--with",
+      "apply-456",
+    ];
+    mockPool.query
+      .mockResolvedValueOnce({
+        rows: [{
+          id: "dry-run-123", mode: "dry_run", status: "completed", operator: "reviewer",
+          approved_dry_run_id: null, cursor_id: null, counts: {},
+        }],
+      })
+      .mockResolvedValueOnce({
+        rows: [{
+          id: "apply-456", mode: "reconcile", status: "completed", operator: "reviewer",
+          approved_dry_run_id: "another-dry-run", cursor_id: null, counts: {},
+        }],
+      });
+
+    await expect(run()).rejects.toThrow("does not reference dry run dry-run-123");
+    expect(mockPool.query).toHaveBeenCalledTimes(2);
+    for (const [sql] of mockPool.query.mock.calls) {
+      expect(sql.trimStart().toUpperCase()).toMatch(/^SELECT\b/);
+    }
+  });
+
+  it("rejects comparison combined with reconciliation writes before querying the database", async () => {
+    process.argv = [
+      "node",
+      "reconcile-legacy-proof-finality.ts",
+      "--compare",
+      "dry-run-123",
+      "--with",
+      "apply-456",
+      "--apply",
+      "--approved-dry-run",
+      "dry-run-123",
+    ];
+
+    await expect(run()).rejects.toThrow("--compare cannot be combined");
+    expect(mockPool.query).not.toHaveBeenCalled();
+  });
 });

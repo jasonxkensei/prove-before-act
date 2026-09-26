@@ -31,6 +31,8 @@ interface Candidate {
 interface Options {
   resumeId: string | null;
   reportId: string | null;
+  compareDryRunId: string | null;
+  compareApplyId: string | null;
   apply: boolean;
   approvedDryRunId: string | null;
   maxRecords: number;
@@ -84,6 +86,26 @@ function parseOptions(args: string[]): Options {
     throw new Error("--report cannot be combined with --dry-run or --apply.");
   }
 
+  const compareDryRunId = values.get("--compare") ?? null;
+  const compareApplyId = values.get("--with") ?? null;
+  if (compareApplyId && !compareDryRunId) {
+    throw new Error("--with is only valid with --compare.");
+  }
+  if (compareDryRunId && !compareApplyId) {
+    throw new Error("--compare requires --with <apply-run-id>.");
+  }
+  if (compareDryRunId && (
+    reportId ||
+    flags.has("--apply") ||
+    flags.has("--dry-run") ||
+    values.has("--resume") ||
+    values.has("--approved-dry-run") ||
+    values.has("--max-records") ||
+    values.has("--delay-ms")
+  )) {
+    throw new Error("--compare cannot be combined with --report, --dry-run, --apply, --resume, --approved-dry-run, --max-records, or --delay-ms.");
+  }
+
   const maxRecords = Number(values.get("--max-records") ?? 100);
   const delayMs = Number(values.get("--delay-ms") ?? MIN_LOOKUP_DELAY_MS);
   if (!Number.isInteger(maxRecords) || maxRecords < 1 || maxRecords > MAX_RECORDS_PER_INVOCATION) {
@@ -107,7 +129,16 @@ function parseOptions(args: string[]): Options {
   if (!apply && approvedDryRunId) {
     throw new Error("A dry run cannot use --approved-dry-run.");
   }
-  return { resumeId, reportId, apply, approvedDryRunId, maxRecords, delayMs };
+  return {
+    resumeId,
+    reportId,
+    compareDryRunId,
+    compareApplyId,
+    apply,
+    approvedDryRunId,
+    maxRecords,
+    delayMs,
+  };
 }
 
 async function acquireGlobalLease(owner: string): Promise<void> {
@@ -199,6 +230,151 @@ async function loadReport(id: string): Promise<{
       applied: item.applied,
       checkedAt: item.checked_at,
     })),
+  };
+}
+
+async function loadComparison(
+  dryRunId: string,
+  applyRunId: string,
+): Promise<{
+  event: "proof_finality_reconciliation_comparison";
+  dryRun: {
+    id: string;
+    status: RunStatus;
+    operator: string;
+    counts: Counts;
+  };
+  applyRun: {
+    id: string;
+    status: RunStatus;
+    operator: string;
+    approvedDryRunId: string | null;
+    counts: Counts;
+  };
+  summary: {
+    dryRunProofs: number;
+    applyProofs: number;
+    matchedProofs: number;
+    changedResults: number;
+    changedInputs: number;
+    appliedProofs: number;
+    staleProofs: number;
+    notAppliedProofs: number;
+    missingFromApply: number;
+    applyOnlyProofs: number;
+  };
+  proofs: Array<{
+    certificationId: string;
+    comparison: "applied" | "stale" | "changed" | "unchanged" | "not_applied" | "missing_from_apply" | "apply_only";
+    dryRun: {
+      result: HistoricalFinalityResult;
+      reason: string | null;
+      transactionHash: string | null;
+      fileHash: string;
+    } | null;
+    apply: {
+      result: HistoricalFinalityResult;
+      reason: string | null;
+      transactionHash: string | null;
+      fileHash: string;
+      applied: boolean;
+    } | null;
+    resultChanged: boolean;
+    inputChanged: boolean;
+    applied: boolean;
+    stale: boolean;
+  }>;
+}> {
+  const [dryRun, applyRun] = await Promise.all([loadRun(dryRunId), loadRun(applyRunId)]);
+  if (dryRun.mode !== "dry_run" || dryRun.status !== "completed") {
+    throw new Error(`Comparison requires a completed dry run; ${dryRunId} is ${dryRun.mode}/${dryRun.status}.`);
+  }
+  if (applyRun.mode !== "reconcile" || applyRun.status !== "completed") {
+    throw new Error(`Comparison requires a completed apply run; ${applyRunId} is ${applyRun.mode}/${applyRun.status}.`);
+  }
+  if (applyRun.approved_dry_run_id !== dryRun.id) {
+    throw new Error(`Apply run ${applyRunId} does not reference dry run ${dryRunId}.`);
+  }
+
+  const loadItems = (runId: string) => pool.query<ReconciliationItem>(
+    `SELECT certification_id, transaction_hash, file_hash, result, reason, applied, checked_at
+     FROM proof_finality_reconciliation_items
+     WHERE run_id = $1
+     ORDER BY certification_id`,
+    [runId],
+  );
+  const [dryItemsResult, applyItemsResult] = await Promise.all([
+    loadItems(dryRun.id),
+    loadItems(applyRun.id),
+  ]);
+  const dryItems = new Map(dryItemsResult.rows.map((item) => [item.certification_id, item]));
+  const applyItems = new Map(applyItemsResult.rows.map((item) => [item.certification_id, item]));
+  const certificationIds = [...new Set([...dryItems.keys(), ...applyItems.keys()])].sort();
+  const proofs = certificationIds.map((certificationId) => {
+    const dry = dryItems.get(certificationId);
+    const applied = applyItems.get(certificationId);
+    const resultChanged = !!dry && !!applied && dry.result !== applied.result;
+    const inputChanged = !!dry && !!applied && (
+      dry.transaction_hash !== applied.transaction_hash || dry.file_hash !== applied.file_hash
+    );
+    const stale = !!applied && applied.result === "confirmed" && !applied.applied;
+    const comparison = !dry ? "apply_only"
+      : !applied ? dry.result === "confirmed" ? "missing_from_apply" : "not_applied"
+      : stale ? "stale"
+      : resultChanged || inputChanged ? "changed"
+      : applied.applied ? "applied"
+      : "unchanged";
+    return {
+      certificationId,
+      comparison,
+      dryRun: dry ? {
+        result: dry.result,
+        reason: dry.reason,
+        transactionHash: dry.transaction_hash,
+        fileHash: dry.file_hash,
+      } : null,
+      apply: applied ? {
+        result: applied.result,
+        reason: applied.reason,
+        transactionHash: applied.transaction_hash,
+        fileHash: applied.file_hash,
+        applied: applied.applied,
+      } : null,
+      resultChanged,
+      inputChanged,
+      applied: applied?.applied ?? false,
+      stale,
+    };
+  });
+
+  return {
+    event: "proof_finality_reconciliation_comparison",
+    dryRun: {
+      id: dryRun.id,
+      status: dryRun.status,
+      operator: dryRun.operator,
+      counts: dryRun.counts,
+    },
+    applyRun: {
+      id: applyRun.id,
+      status: applyRun.status,
+      operator: applyRun.operator,
+      approvedDryRunId: applyRun.approved_dry_run_id,
+      counts: applyRun.counts,
+    },
+    summary: {
+      dryRunProofs: dryItems.size,
+      applyProofs: applyItems.size,
+      matchedProofs: proofs.filter((proof) => proof.dryRun !== null && proof.apply !== null).length,
+      changedResults: proofs.filter((proof) => proof.resultChanged).length,
+      changedInputs: proofs.filter((proof) => proof.inputChanged).length,
+      appliedProofs: proofs.filter((proof) => proof.applied).length,
+      staleProofs: proofs.filter((proof) => proof.stale).length,
+      notAppliedProofs: proofs.filter((proof) => proof.comparison === "not_applied").length,
+      missingFromApply: proofs.filter((proof) => proof.comparison === "missing_from_apply").length,
+      applyOnlyProofs: proofs.filter((proof) => proof.comparison === "apply_only").length,
+    },
+    proofs,
   };
 }
 
@@ -367,6 +543,10 @@ export async function run(): Promise<void> {
   const options = parseOptions(process.argv.slice(2));
   if (options.reportId) {
     console.log(JSON.stringify(await loadReport(options.reportId)));
+    return;
+  }
+  if (options.compareDryRunId && options.compareApplyId) {
+    console.log(JSON.stringify(await loadComparison(options.compareDryRunId, options.compareApplyId)));
     return;
   }
 
