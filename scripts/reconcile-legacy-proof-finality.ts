@@ -31,6 +31,8 @@ interface Candidate {
 interface Options {
   resumeId: string | null;
   reportId: string | null;
+  reportLimit: number;
+  reportAfterId: string | null;
   compareDryRunId: string | null;
   compareApplyId: string | null;
   apply: boolean;
@@ -58,6 +60,8 @@ const DEFAULT_COUNTS: Counts = {
   stale: 0,
 };
 const MAX_RECORDS_PER_INVOCATION = 500;
+const DEFAULT_REPORT_PAGE_SIZE = 100;
+const MAX_REPORT_PAGE_SIZE = 500;
 const MIN_LOOKUP_DELAY_MS = 1_000;
 const LEASE_DURATION_SECONDS = 120;
 
@@ -82,8 +86,19 @@ function parseOptions(args: string[]): Options {
   }
 
   const reportId = values.get("--report") ?? null;
+  const reportLimit = Number(values.get("--limit") ?? DEFAULT_REPORT_PAGE_SIZE);
+  const reportAfterId = values.get("--after") ?? null;
   if (reportId && (flags.has("--apply") || flags.has("--dry-run"))) {
     throw new Error("--report cannot be combined with --dry-run or --apply.");
+  }
+  if (!reportId && (values.has("--limit") || values.has("--after"))) {
+    throw new Error("--limit and --after are only valid with --report.");
+  }
+  if (!Number.isInteger(reportLimit) || reportLimit < 1 || reportLimit > MAX_REPORT_PAGE_SIZE) {
+    throw new Error(`--limit must be an integer from 1 to ${MAX_REPORT_PAGE_SIZE}.`);
+  }
+  if (reportAfterId && reportAfterId.length > 256) {
+    throw new Error("--after must be a cursor of at most 256 characters.");
   }
 
   const compareDryRunId = values.get("--compare") ?? null;
@@ -101,9 +116,11 @@ function parseOptions(args: string[]): Options {
     values.has("--resume") ||
     values.has("--approved-dry-run") ||
     values.has("--max-records") ||
-    values.has("--delay-ms")
+    values.has("--delay-ms") ||
+    values.has("--limit") ||
+    values.has("--after")
   )) {
-    throw new Error("--compare cannot be combined with --report, --dry-run, --apply, --resume, --approved-dry-run, --max-records, or --delay-ms.");
+    throw new Error("--compare cannot be combined with --report, --dry-run, --apply, --resume, --approved-dry-run, --max-records, --delay-ms, --limit, or --after.");
   }
 
   const maxRecords = Number(values.get("--max-records") ?? 100);
@@ -132,6 +149,8 @@ function parseOptions(args: string[]): Options {
   return {
     resumeId,
     reportId,
+    reportLimit,
+    reportAfterId,
     compareDryRunId,
     compareApplyId,
     apply,
@@ -185,11 +204,18 @@ async function loadRun(id: string): Promise<ReconciliationRun> {
   return { ...run, counts: { ...DEFAULT_COUNTS, ...run.counts } };
 }
 
-async function loadReport(id: string): Promise<{
+async function loadReport(id: string, limit: number, after: string | null): Promise<{
   event: "proof_finality_reconciliation_report";
   run: Omit<ReconciliationRun, "approved_dry_run_id" | "cursor_id"> & {
     approvedDryRunId: string | null;
     cursorId: string | null;
+  };
+  pagination: {
+    limit: number;
+    after: string | null;
+    nextCursor: string | null;
+    hasMore: boolean;
+    totalProofs: number;
   };
   proofs: Array<{
     certificationId: string;
@@ -202,13 +228,26 @@ async function loadReport(id: string): Promise<{
   }>;
 }> {
   const run = await loadRun(id);
-  const items = await pool.query<ReconciliationItem>(
-    `SELECT certification_id, transaction_hash, file_hash, result, reason, applied, checked_at
+  const [items, total] = await Promise.all([
+    pool.query<ReconciliationItem>(
+      `SELECT certification_id, transaction_hash, file_hash, result, reason, applied, checked_at
      FROM proof_finality_reconciliation_items
-     WHERE run_id = $1
-     ORDER BY checked_at, certification_id`,
-    [id],
-  );
+      WHERE run_id = $1
+        AND ($2::text IS NULL OR certification_id > $2)
+      ORDER BY certification_id
+      LIMIT $3`,
+      [id, after, limit + 1],
+    ),
+    pool.query<{ total: string }>(
+      `SELECT COUNT(*)::text AS total
+       FROM proof_finality_reconciliation_items
+       WHERE run_id = $1`,
+      [id],
+    ),
+  ]);
+  const hasMore = items.rows.length > limit;
+  const pageItems = hasMore ? items.rows.slice(0, limit) : items.rows;
+  const nextCursor = hasMore ? pageItems[pageItems.length - 1]?.certification_id ?? null : null;
 
   return {
     event: "proof_finality_reconciliation_report",
@@ -221,7 +260,14 @@ async function loadReport(id: string): Promise<{
       cursorId: run.cursor_id,
       counts: run.counts,
     },
-    proofs: items.rows.map((item) => ({
+    pagination: {
+      limit,
+      after,
+      nextCursor,
+      hasMore,
+      totalProofs: Number(total.rows[0]?.total ?? 0),
+    },
+    proofs: pageItems.map((item) => ({
       certificationId: item.certification_id,
       transactionHash: item.transaction_hash,
       fileHash: item.file_hash,
@@ -542,7 +588,11 @@ async function setRunStatus(id: string, status: RunStatus): Promise<void> {
 export async function run(): Promise<void> {
   const options = parseOptions(process.argv.slice(2));
   if (options.reportId) {
-    console.log(JSON.stringify(await loadReport(options.reportId)));
+    console.log(JSON.stringify(await loadReport(
+      options.reportId,
+      options.reportLimit,
+      options.reportAfterId,
+    )));
     return;
   }
   if (options.compareDryRunId && options.compareApplyId) {

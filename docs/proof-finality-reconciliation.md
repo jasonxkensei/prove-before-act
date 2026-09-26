@@ -43,7 +43,7 @@ Review a run by ID without requiring an operator label or entering dry-run or
 apply mode:
 
 ```sh
-npm run proofs:reconcile-legacy-finality -- --report <run-id>
+npm run proofs:reconcile-legacy-finality -- --report <run-id> --limit 100
 ```
 
 Report mode reads the run summary and its proof audit items only. It does not
@@ -54,8 +54,19 @@ reference, cursor, and cumulative counts for `confirmed`, `failed`, `missing`,
 certification ID, transaction and file hashes, result, reason, whether it was
 applied, and the time it was checked. `stale` counts confirmed outcomes that
 could not be applied because the certification no longer matched the dry-run
-state. Report mode cannot be combined with `--dry-run`, `--apply`, `--resume`,
-`--approved-dry-run`, `--max-records`, or `--delay-ms`.
+state. Pages are ordered by certification ID. `--limit` accepts 1–500 items
+(default 100); pass the returned `pagination.nextCursor` as `--after` to
+continue:
+
+```sh
+npm run proofs:reconcile-legacy-finality -- --report <run-id> --limit 100 --after <next-cursor>
+```
+
+Every page includes the run summary and cumulative counts, total proof count,
+page limit, cursor, and whether another page exists. Report mode cannot be
+combined with `--dry-run`, `--apply`, `--resume`, `--approved-dry-run`,
+`--max-records`, or `--delay-ms`. `--limit` and `--after` are available only
+with `--report`.
 
 ## Compare a dry run with its apply run
 
@@ -76,7 +87,8 @@ apply item is marked `missing_from_apply`.
 Both runs must be completed, and the apply run must reference the selected
 dry-run ID. Comparison mode does not acquire the reconciliation lease, call the
 chain API, or update records. It cannot be combined with `--report`, `--dry-run`,
-`--apply`, `--resume`, `--approved-dry-run`, `--max-records`, or `--delay-ms`.
+`--apply`, `--resume`, `--approved-dry-run`, `--max-records`, `--delay-ms`,
+`--limit`, or `--after`.
 
 The CLI enforces at least one second between chain API lookups (at most 60 per
 minute), serializes operator runs with a database lease, and keeps the cursor

@@ -47,6 +47,9 @@ describe("proof finality reconciliation report mode", () => {
           applied: false,
           checked_at: new Date("2026-09-25T12:00:00.000Z"),
         }],
+      })
+      .mockResolvedValueOnce({
+        rows: [{ total: "5" }],
       });
     const output = vi.spyOn(console, "log").mockImplementation(() => {});
 
@@ -63,6 +66,13 @@ describe("proof finality reconciliation report mode", () => {
         cursorId: "cert-4",
         counts: { confirmed: 1, failed: 1, missing: 1, unavailable: 1, pending: 1, stale: 0 },
       },
+      pagination: {
+        limit: 100,
+        after: null,
+        nextCursor: null,
+        hasMore: false,
+        totalProofs: 5,
+      },
       proofs: [{
         certificationId: "cert-1",
         result: "unavailable",
@@ -70,10 +80,90 @@ describe("proof finality reconciliation report mode", () => {
         applied: false,
       }],
     });
-    expect(mockPool.query).toHaveBeenCalledTimes(2);
+    expect(mockPool.query).toHaveBeenCalledTimes(3);
     for (const [sql] of mockPool.query.mock.calls) {
       expect(sql.trimStart().toUpperCase()).toMatch(/^SELECT\b/);
     }
+  });
+
+  it("returns a bounded page in stable ID order with a continuation cursor", async () => {
+    process.argv = [
+      "node",
+      "reconcile-legacy-proof-finality.ts",
+      "--report",
+      "run-123",
+      "--limit",
+      "2",
+      "--after",
+      "cert-2",
+    ];
+    mockPool.query
+      .mockResolvedValueOnce({
+        rows: [{
+          id: "run-123",
+          mode: "dry_run",
+          status: "paused",
+          operator: "reviewer",
+          approved_dry_run_id: null,
+          cursor_id: "cert-5",
+          counts: { confirmed: 3, failed: 1, missing: 0, unavailable: 1, pending: 0, stale: 0 },
+        }],
+      })
+      .mockResolvedValueOnce({
+        rows: [
+          { certification_id: "cert-3", transaction_hash: "c".repeat(64), file_hash: "3".repeat(64), result: "confirmed", reason: null, applied: false, checked_at: new Date() },
+          { certification_id: "cert-4", transaction_hash: "d".repeat(64), file_hash: "4".repeat(64), result: "failed", reason: "transaction_failed", applied: false, checked_at: new Date() },
+          { certification_id: "cert-5", transaction_hash: "e".repeat(64), file_hash: "5".repeat(64), result: "confirmed", reason: null, applied: false, checked_at: new Date() },
+        ],
+      })
+      .mockResolvedValueOnce({
+        rows: [{ total: "5" }],
+      });
+    const output = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    await run();
+
+    const report = JSON.parse(output.mock.calls[0][0] as string);
+    expect(report).toMatchObject({
+      run: {
+        id: "run-123",
+        status: "paused",
+        cursorId: "cert-5",
+        counts: { confirmed: 3, failed: 1, unavailable: 1 },
+      },
+      pagination: {
+        limit: 2,
+        after: "cert-2",
+        nextCursor: "cert-4",
+        hasMore: true,
+        totalProofs: 5,
+      },
+    });
+    expect(report.proofs.map((proof: { certificationId: string }) => proof.certificationId))
+      .toEqual(["cert-3", "cert-4"]);
+    expect(mockPool.query.mock.calls[1][0]).toContain("ORDER BY certification_id");
+    expect(mockPool.query.mock.calls[1][1]).toEqual(["run-123", "cert-2", 3]);
+    for (const [sql] of mockPool.query.mock.calls) {
+      expect(sql.trimStart().toUpperCase()).toMatch(/^SELECT\b/);
+    }
+  });
+
+  it("rejects invalid or out-of-report pagination before querying the database", async () => {
+    process.argv = [
+      "node",
+      "reconcile-legacy-proof-finality.ts",
+      "--report",
+      "run-123",
+      "--limit",
+      "501",
+    ];
+
+    await expect(run()).rejects.toThrow("--limit must be an integer from 1 to 500.");
+    expect(mockPool.query).not.toHaveBeenCalled();
+
+    process.argv = ["node", "reconcile-legacy-proof-finality.ts", "--after", "cert-2"];
+    await expect(run()).rejects.toThrow("--limit and --after are only valid with --report.");
+    expect(mockPool.query).not.toHaveBeenCalled();
   });
 
   it("rejects report mode combined with apply before querying the database", async () => {
