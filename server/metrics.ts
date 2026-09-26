@@ -1,3 +1,7 @@
+import crypto from "crypto";
+import { pool } from "./db";
+import { readConversionFailureTimestamps, saveConversionFailureTimestamp } from "./conversion-health-store";
+
 const startTime = Date.now();
 
 interface TransactionRecord {
@@ -43,6 +47,228 @@ interface RateLimitFailOpenEvent {
 const rateLimitFailOpenEvents: RateLimitFailOpenEvent[] = [];
 const FAIL_OPEN_EVENTS_MAX_AGE_MS = 60 * 60 * 1000; // 1 hour is plenty for any alert window
 const FAIL_OPEN_EVENTS_SAFETY_CAP = 10000;
+
+// ── Conversion telemetry write-failure tracking ─────────────────────────────
+// Keep only timestamps. This lets operators distinguish a recent storage
+// outage from an old blip without retaining any request or event data.
+export const CONVERSION_TELEMETRY_FAILURE_HEALTH_WINDOW_MS = 15 * 60 * 1000;
+const CONVERSION_TELEMETRY_FAILURE_EVENTS_MAX_AGE_MS = 60 * 60 * 1000;
+const CONVERSION_TELEMETRY_FAILURE_EVENTS_SAFETY_CAP = 10000;
+const conversionTelemetryWriteFailureEvents: number[] = [];
+
+function pruneConversionTelemetryWriteFailures(now: number): void {
+  const cutoff = now - CONVERSION_TELEMETRY_FAILURE_EVENTS_MAX_AGE_MS;
+  while (
+    conversionTelemetryWriteFailureEvents.length > 0
+    && conversionTelemetryWriteFailureEvents[0] < cutoff
+  ) {
+    conversionTelemetryWriteFailureEvents.shift();
+  }
+  if (conversionTelemetryWriteFailureEvents.length > CONVERSION_TELEMETRY_FAILURE_EVENTS_SAFETY_CAP) {
+    conversionTelemetryWriteFailureEvents.splice(
+      0,
+      conversionTelemetryWriteFailureEvents.length - CONVERSION_TELEMETRY_FAILURE_EVENTS_SAFETY_CAP / 2,
+    );
+  }
+}
+
+// Read-through snapshot writes are best-effort for the caller, but repeated
+// failures must remain visible even when the individual request succeeds.
+export const TRUST_SNAPSHOT_FAILURE_WINDOW_MS = 15 * 60_000;
+const trustSnapshotFailureEvents: number[] = [];
+let trustSnapshotFailureTotal = 0;
+let trustSnapshotLastSuccessAt: number | null = null;
+
+export function recordTrustSnapshotWriteFailure(): void {
+  const now = Date.now();
+  trustSnapshotFailureTotal++;
+  trustSnapshotFailureEvents.push(now);
+  const cutoff = now - TRUST_SNAPSHOT_FAILURE_WINDOW_MS;
+  while (trustSnapshotFailureEvents.length && trustSnapshotFailureEvents[0] < cutoff) {
+    trustSnapshotFailureEvents.shift();
+  }
+  if (trustSnapshotFailureEvents.length > 10_000) {
+    trustSnapshotFailureEvents.splice(0, trustSnapshotFailureEvents.length - 5_000);
+  }
+}
+
+export function recordTrustSnapshotWriteSuccess(): void {
+  trustSnapshotLastSuccessAt = Date.now();
+}
+
+export function getTrustSnapshotWriteStats() {
+  const cutoff = Date.now() - TRUST_SNAPSHOT_FAILURE_WINDOW_MS;
+  let recentFailures = 0;
+  for (let i = trustSnapshotFailureEvents.length - 1; i >= 0; i--) {
+    if (trustSnapshotFailureEvents[i] < cutoff) break;
+    recentFailures++;
+  }
+  const lastFailure = trustSnapshotFailureEvents.at(-1);
+  return {
+    recent_failures: recentFailures,
+    total_failures: trustSnapshotFailureTotal,
+    last_failure_at: lastFailure === undefined ? null : new Date(lastFailure).toISOString(),
+    last_success_at: trustSnapshotLastSuccessAt === null ? null : new Date(trustSnapshotLastSuccessAt).toISOString(),
+    window_minutes: TRUST_SNAPSHOT_FAILURE_WINDOW_MS / 60_000,
+  };
+}
+
+// ── Conversion telemetry retention-cleanup tracking ─────────────────────────
+// Daily purge failures are tracked separately from request-path write failures.
+// Only aggregate health is retained; proof deduplication markers are unrelated.
+let conversionTelemetryPurgeConsecutiveFailures = 0;
+let conversionTelemetryPurgeLastFailureAt: number | null = null;
+let conversionTelemetryPurgeLastSuccessAt: number | null = null;
+
+export function recordConversionTelemetryPurgeFailure(): void {
+  conversionTelemetryPurgeConsecutiveFailures++;
+  conversionTelemetryPurgeLastFailureAt = Date.now();
+}
+
+export function recordConversionTelemetryPurgeSuccess(): void {
+  conversionTelemetryPurgeConsecutiveFailures = 0;
+  conversionTelemetryPurgeLastSuccessAt = Date.now();
+}
+
+export function getConversionTelemetryPurgeStats(): {
+  consecutive_failures: number;
+  last_failure_at: string | null;
+  last_success_at: string | null;
+} {
+  return {
+    consecutive_failures: conversionTelemetryPurgeConsecutiveFailures,
+    last_failure_at: conversionTelemetryPurgeLastFailureAt
+      ? new Date(conversionTelemetryPurgeLastFailureAt).toISOString()
+      : null,
+    last_success_at: conversionTelemetryPurgeLastSuccessAt
+      ? new Date(conversionTelemetryPurgeLastSuccessAt).toISOString()
+      : null,
+  };
+}
+
+export function recordConversionTelemetryWriteFailure(now = Date.now()): void {
+  conversionTelemetryWriteFailureEvents.push(now);
+  pruneConversionTelemetryWriteFailures(now);
+}
+
+export function getConversionTelemetryWriteFailureStats(
+  windowMs = CONVERSION_TELEMETRY_FAILURE_HEALTH_WINDOW_MS,
+): {
+  recent_failures: number;
+  last_failure_at: string | null;
+  window_minutes: number;
+} {
+  const now = Date.now();
+  pruneConversionTelemetryWriteFailures(now);
+  const cutoff = now - windowMs;
+  let recentFailures = 0;
+  for (let i = conversionTelemetryWriteFailureEvents.length - 1; i >= 0; i--) {
+    if (conversionTelemetryWriteFailureEvents[i] < cutoff) break;
+    recentFailures++;
+  }
+  const lastFailure = conversionTelemetryWriteFailureEvents.at(-1);
+  return {
+    recent_failures: recentFailures,
+    last_failure_at: lastFailure ? new Date(lastFailure).toISOString() : null,
+    window_minutes: Math.ceil(windowMs / 60_000),
+  };
+}
+
+/** Store a timestamp only. Callers do not await this on the conversion path. */
+export async function persistConversionTelemetryWriteFailure(occurredAt: Date): Promise<void> {
+  try {
+    await saveConversionFailureTimestamp(occurredAt);
+  } catch {
+    // A DB insert is a secondary store only. Never double-write one failure:
+    // the operator read combines both stores without counting IDs twice.
+    await pool.query(
+      `INSERT INTO conversion_telemetry_write_failures (occurred_at) VALUES ($1)`,
+      [occurredAt],
+    );
+  }
+}
+
+/** Combine disjoint shared stores; local events mean both health writes failed. */
+export async function getSharedConversionTelemetryWriteFailureStats(
+  windowMs = CONVERSION_TELEMETRY_FAILURE_HEALTH_WINDOW_MS,
+): Promise<{
+  recent_failures: number;
+  last_failure_at: string | null;
+  window_minutes: number;
+  storage_unavailable: boolean;
+}> {
+  const local = getConversionTelemetryWriteFailureStats(windowMs);
+  const [objectRead, databaseRead] = await Promise.allSettled([
+    readConversionFailureTimestamps(windowMs),
+    pool.query<{
+      recent_failures: string | number;
+      last_failure_at: Date | string | null;
+    }>(`
+      SELECT COUNT(*) FILTER (
+        WHERE occurred_at >= NOW() - ($1::double precision * INTERVAL '1 millisecond')
+      )::bigint AS recent_failures,
+      MAX(occurred_at) AS last_failure_at
+      FROM conversion_telemetry_write_failures
+      WHERE occurred_at >= NOW() - INTERVAL '1 hour'
+    `, [windowMs]),
+  ]);
+  const row = databaseRead.status === "fulfilled" ? databaseRead.value.rows[0] : null;
+  const dbCount = Number(row?.recent_failures ?? 0);
+  const dbLast = row?.last_failure_at ? new Date(row.last_failure_at).getTime() : 0;
+  const objectCount = objectRead.status === "fulfilled" ? objectRead.value.recentFailures : 0;
+  const objectLast = objectRead.status === "fulfilled" ? objectRead.value.lastFailureAt ?? 0 : 0;
+  const localLast = local.last_failure_at ? Date.parse(local.last_failure_at) : 0;
+  const lastFailure = Math.max(dbLast, objectLast, localLast);
+  return {
+    recent_failures: dbCount + objectCount + local.recent_failures,
+    last_failure_at: lastFailure > 0 ? new Date(lastFailure).toISOString() : null,
+    window_minutes: Math.ceil(windowMs / 60_000),
+    // A successful read of just one store is not proof of a complete count:
+    // the other may hold failures recorded while this store was unavailable.
+    storage_unavailable: objectRead.status !== "fulfilled" ||
+      databaseRead.status !== "fulfilled" || local.recent_failures > 0,
+  };
+}
+
+const CONVERSION_FAILURE_ALERT_KEY = "conversion_telemetry_write_failures";
+// The webhook times out after 10 seconds; a 30-second lease lets an instance
+// recover a crashed sender without racing a healthy in-flight delivery.
+const CONVERSION_FAILURE_ALERT_LEASE_MS = 30_000;
+
+/** Atomic cross-instance claim. Null means another instance holds the lease or cooldown. */
+export async function claimConversionTelemetryFailureAlert(): Promise<string | null> {
+  const token = crypto.randomUUID();
+  const result = await pool.query<{ lease_token: string }>(`
+    INSERT INTO conversion_telemetry_alert_state (alert_key, lease_token, lease_until)
+    VALUES ($1, $2, NOW() + ($3::double precision * INTERVAL '1 millisecond'))
+    ON CONFLICT (alert_key) DO UPDATE
+      SET lease_token = EXCLUDED.lease_token, lease_until = EXCLUDED.lease_until
+    WHERE (conversion_telemetry_alert_state.lease_until IS NULL
+           OR conversion_telemetry_alert_state.lease_until <= NOW())
+      AND (conversion_telemetry_alert_state.next_attempt_at IS NULL
+           OR conversion_telemetry_alert_state.next_attempt_at <= NOW())
+    RETURNING lease_token
+  `, [CONVERSION_FAILURE_ALERT_KEY, token, CONVERSION_FAILURE_ALERT_LEASE_MS]);
+  return result.rows[0]?.lease_token === token ? token : null;
+}
+
+/** Only the lease owner can finish; success gets cooldown, failure gets retry backoff. */
+export async function settleConversionTelemetryFailureAlert(
+  token: string,
+  delivered: boolean,
+  waitMs: number,
+): Promise<void> {
+  const result = await pool.query(`
+    UPDATE conversion_telemetry_alert_state
+    SET lease_token = NULL, lease_until = NULL,
+        last_sent_at = CASE WHEN $3::boolean THEN NOW() ELSE last_sent_at END,
+        next_attempt_at = NOW() + ($4::double precision * INTERVAL '1 millisecond')
+    WHERE alert_key = $1 AND lease_token = $2
+  `, [CONVERSION_FAILURE_ALERT_KEY, token, delivered, waitMs]);
+  if (result.rowCount !== 1) {
+    throw new Error("Conversion telemetry alert lease was lost before completion");
+  }
+}
 
 export function recordRateLimitFailOpen(op: RateLimitFailOpenOp): void {
   rateLimitFailOpenCounts[op]++;
@@ -185,6 +411,10 @@ export function getMetrics() {
       queue_size: mx8004QueueSize,
     },
     rate_limit_fail_open: getRateLimitFailOpenStats(),
+    conversion_telemetry: {
+      ...getConversionTelemetryWriteFailureStats(),
+      retention_cleanup: getConversionTelemetryPurgeStats(),
+    },
   };
 }
 

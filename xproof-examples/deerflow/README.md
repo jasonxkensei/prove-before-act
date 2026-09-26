@@ -2,18 +2,21 @@
 
 Add on-chain certification to DeerFlow agents via `XProofDeerFlowSkill`.
 
+**Integration terminology:** Prove Before Act is the accountability pattern for autonomous agents; xProof is its reference implementation. Treat WHY as a declared decision basis—intent, relevant context, and authorization or policy basis—not internal chain-of-thought.
+
 ## What gets certified
 
 Any content the agent passes to the skill — plain text or structured JSON — is certified with:
 - **WHO** — your agent name
 - **WHAT** — SHA-256 hash of the content
 - **WHEN** — UTC timestamp
-- **WHY** — your configured reason
+- **WHY** — your configured declared decision basis
 
 ## Install
 
 ```bash
-pip install xproof
+# Canonical distribution; `xproof` imports below are legacy module aliases.
+pip install prove-before-act
 ```
 
 ## Usage
@@ -55,4 +58,4 @@ No API key required — the demo uses a mock Prove Before Act client.
 
 - [provebeforeact.com](https://provebeforeact.com)
 - Docs (LLM-readable): [provebeforeact.com/llms.txt](https://provebeforeact.com/llms.txt)
-- [PyPI: Prove Before Act](https://pypi.org/project/xproof)
+- [PyPI: Prove Before Act](https://pypi.org/project/prove-before-act)

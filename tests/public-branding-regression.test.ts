@@ -12,9 +12,10 @@ import express from "express";
 import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
 
-const { isMX8004ConfiguredMock, getContractAddressesMock } = vi.hoisted(() => ({
+const { isMX8004ConfiguredMock, getContractAddressesMock, getMx8004SignerBalanceMock } = vi.hoisted(() => ({
   isMX8004ConfiguredMock: vi.fn(),
   getContractAddressesMock: vi.fn(),
+  getMx8004SignerBalanceMock: vi.fn(),
 }));
 
 vi.mock("../server/mx8004", async (importOriginal) => {
@@ -23,6 +24,7 @@ vi.mock("../server/mx8004", async (importOriginal) => {
     ...actual,
     isMX8004Configured: isMX8004ConfiguredMock,
     getContractAddresses: getContractAddressesMock,
+    getMx8004SignerBalance: getMx8004SignerBalanceMock,
   };
 });
 
@@ -114,7 +116,183 @@ const HARDCODED_COST_PATTERNS = [
   /每次(?:认证|存证)?(?:固定收费)?\s*\$0\.01/,
 ];
 
+const PUBLIC_ROUTE_BRAND_CONTRACTS = [
+  { route: "/agents", reactSource: "client/src/pages/agents.tsx", surface: "dark", logo: "dark", sharedChrome: true },
+  { route: "/learn", reactSource: "client/src/pages/learn.tsx", surface: "paper", logo: "light", sharedChrome: true },
+  { route: "/standard", reactSource: "client/src/pages/standard.tsx", surface: "paper", logo: "light", sharedChrome: true },
+  { route: "/fleet", reactSource: "client/src/pages/fleet.tsx", surface: "dark", logo: "dark", sharedChrome: false },
+  { route: "/coherence", reactSource: "client/src/pages/coherence.tsx", surface: "dark", logo: "dark", sharedChrome: true },
+] as const;
+
+const RETIRED_BRAND_SIGNATURES = [
+  /(?:src|href)=["'][^"']*\/(?:xproof-logo|logo-xproof|logo-old)\.(?:svg|png)/i,
+  /font-family\s*:\s*["']?(?:Space Grotesk|JetBrains Mono|Roboto Mono)/i,
+  /#10b981\b/i,
+  /#09090b\b/i,
+];
+
 describe("public branding and capability claims", () => {
+  it("defines the canonical Anchor palette and Inter/DM Mono typography for React", () => {
+    const css = readFileSync(path.resolve(process.cwd(), "client/src/index.css"), "utf8");
+    expect(css).toContain('family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700');
+    expect(css).toContain('--font-sans: "Inter"');
+    expect(css).toContain('--font-mono: "DM Mono"');
+    expect(css).toContain("--background: 215 28% 7%");
+    expect(css).toContain("--primary: 157 100% 50%");
+    expect(css).toContain("--background: 42 28% 94%");
+    for (const signature of RETIRED_BRAND_SIGNATURES) {
+      expect(css).not.toMatch(signature);
+    }
+  });
+
+  it("keeps both shared React chrome variants on the canonical branding contract", () => {
+    const chrome = readFileSync(
+      path.resolve(process.cwd(), "client/src/components/public-site-chrome.tsx"),
+      "utf8",
+    );
+    expect(chrome).toContain('data-brand-surface={paper ? "paper" : "dark"}');
+    expect(chrome).toContain('data-brand-logo={paper ? "light" : "dark"}');
+    expect(chrome).toContain('data-brand-fonts="Inter|DM Mono"');
+    expect(chrome).toContain('data-brand-palette="anchor"');
+    expect(chrome).toContain('src={paper ? "/pba-logo-on-light.svg" : "/pba-logo.svg"}');
+    expect(chrome.match(/src=\{paper \? "\/pba-logo-on-light\.svg" : "\/pba-logo\.svg"\}/g))
+      .toHaveLength(2);
+    for (const signature of RETIRED_BRAND_SIGNATURES) {
+      expect(chrome).not.toMatch(signature);
+    }
+  });
+
+  it.each(PUBLIC_ROUTE_BRAND_CONTRACTS)(
+    "keeps the React branding contract canonical on $route",
+    ({ reactSource, surface, logo, sharedChrome }) => {
+      const source = readFileSync(path.resolve(process.cwd(), reactSource), "utf8");
+      if (sharedChrome) {
+        const chrome = readFileSync(
+          path.resolve(process.cwd(), "client/src/components/public-site-chrome.tsx"),
+          "utf8",
+        );
+        expect(source).toContain("PublicSiteHeader");
+        expect(source).toMatch(
+          surface === "paper"
+            ? /<PublicSiteHeader\s+paper\b/
+            : /<PublicSiteHeader(?:\s|>)/,
+        );
+        if (surface === "dark") expect(source).not.toMatch(/<PublicSiteHeader\s+paper\b/);
+        expect(chrome).toContain(`data-brand-surface={paper ? "paper" : "dark"}`);
+        expect(chrome).toContain(`data-brand-logo={paper ? "light" : "dark"}`);
+        expect(chrome).toContain(
+          `src={paper ? "/pba-logo-on-light.svg" : "/pba-logo.svg"}`,
+        );
+        expect(surface === "paper" ? "light" : "dark").toBe(logo);
+      } else {
+        expect(source).toContain(`data-brand-surface="${surface}"`);
+        expect(source).toContain(`data-brand-logo="${logo}"`);
+        expect(source).toContain('data-brand-fonts="Inter|DM Mono"');
+        expect(source).toContain('data-brand-palette="anchor"');
+        expect(source).toContain(`src="/pba-logo${logo === "light" ? "-on-light" : ""}.svg"`);
+      }
+      for (const signature of RETIRED_BRAND_SIGNATURES) {
+        expect(source).not.toMatch(signature);
+      }
+    },
+  );
+
+  it.each(PUBLIC_ROUTE_BRAND_CONTRACTS)(
+    "keeps crawler branding aligned with React on $route",
+    async ({ route, surface, logo }) => {
+      const response = await fetch(`${BASE}${route}`, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+          Accept: "text/html",
+        },
+      });
+      expect(response.status).toBe(200);
+      const html = await response.text();
+      expect(html).toContain(`data-brand-surface="${surface}"`);
+      expect(html).toContain(`data-brand-logo="${logo}"`);
+      expect(html).toContain('data-brand-fonts="Inter|DM Mono"');
+      expect(html).toContain('data-brand-palette="anchor"');
+      expect(html).toContain(`/pba-logo${logo === "light" ? "-on-light" : ""}.svg`);
+      expect(html).toContain("family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700");
+      expect(html).toContain("--public-bg: hsl(215 28% 7%)");
+      expect(html).toContain("--public-primary: hsl(157 100% 50%)");
+      for (const signature of RETIRED_BRAND_SIGNATURES) {
+        expect(html).not.toMatch(signature);
+      }
+    },
+  );
+
+  it("keeps ClawHub installation messaging canonical and actionable", () => {
+    const clawHubPage = "https://clawhub.ai/jasonxkensei/skills/xproof";
+    const obsoleteClawHubPage = "https://clawhub.ai/jasonxkensei/prove-before-act";
+    const skillSources = [
+      "clawhub-publish/xproof/SKILL.md",
+      "clawhub-publish-v140/xproof/SKILL.md",
+    ];
+    for (const sourcePath of skillSources) {
+      const skill = readFileSync(path.resolve(process.cwd(), sourcePath), "utf8");
+
+      expect(skill, sourcePath).toContain(
+        "The @jasonxkensei/xproof ClawHub slug is a legacy compatibility identifier.",
+      );
+      expect(skill, sourcePath).toContain(
+        "# Prove Before Act — Accountability Layer for AI Agents",
+      );
+      expect(skill, sourcePath).toContain("## First successful integration");
+      expect(skill, sourcePath).toContain(
+        "call `certify_file` through MCP or `POST /api/proof`",
+      );
+      expect(skill, sourcePath).toContain(
+        "use `verify_proof` or `GET /api/proof/<proof_id>`",
+      );
+      expect(skill, sourcePath).toContain(
+        "openclaw skills install @jasonxkensei/xproof",
+      );
+      expect(skill, sourcePath).not.toContain("clawhub/prove-before-act");
+      expect(skill, sourcePath).toContain("github.com/jasonxkensei/prove-before-act");
+      expect(skill, sourcePath).not.toContain("github.com/jasonxkensei/xProof");
+      expect(skill, sourcePath).toContain("pip install prove-before-act");
+      expect(skill, sourcePath).not.toContain("pip install xproof");
+      expect(skill, sourcePath).toContain("```bash\npip install prove-before-act\n```");
+      expect(skill, sourcePath).not.toContain("```python\npip install prove-before-act");
+      expect(skill, sourcePath).toContain("from xproof import XProofClient");
+      expect(skill, sourcePath).toContain('import hashlib');
+      expect(skill, sourcePath).toContain('sha256_hex = hashlib.sha256(');
+    }
+    const versionedSkill = readFileSync(
+      path.resolve(process.cwd(), "clawhub-publish-v140/xproof/SKILL.md"),
+      "utf8",
+    );
+    const pythonPackage = readFileSync(
+      path.resolve(process.cwd(), "python-sdk/pyproject.toml"),
+      "utf8",
+    );
+    expect(pythonPackage).toContain('name = "prove-before-act"');
+    expect(pythonPackage).toContain('include = ["xproof*"]');
+    expect(versionedSkill).toContain("xproof.integrations.*");
+    expect(versionedSkill).not.toContain("from prove_before_act import");
+    expect(versionedSkill).not.toContain("prove_before_act.integrations");
+
+    for (const sourcePath of [
+      ...skillSources,
+      "client/src/pages/agent-context.tsx",
+      "client/src/pages/agent-context-zh.tsx",
+      "server/prerender.ts",
+    ]) {
+      const source = readFileSync(path.resolve(process.cwd(), sourcePath), "utf8");
+      expect(source, sourcePath).toContain(
+        "openclaw skills install @jasonxkensei/xproof",
+      );
+      expect(source, sourcePath).not.toMatch(/hermes skills install|clawhub\/prove-before-act/i);
+    }
+
+    for (const sourcePath of ["client/index.html", "server/prerender.ts"]) {
+      const source = readFileSync(path.resolve(process.cwd(), sourcePath), "utf8");
+      expect(source, sourcePath).toContain(clawHubPage);
+      expect(source, sourcePath).not.toContain(obsoleteClawHubPage);
+    }
+  });
+
   it.each(["/agents", "/agent-context", "/llms.txt", "/llms-full.txt"])(
     "GET %s presents Prove Before Act without retired fixed metrics",
     async (path) => {
@@ -134,6 +312,9 @@ describe("public branding and capability claims", () => {
 
   it("reports supported-but-inactive MX-8004 truthfully when unconfigured", async () => {
     isMX8004ConfiguredMock.mockReturnValue(false);
+    getMx8004SignerBalanceMock.mockResolvedValue({
+      address: "erd1private-signer", balanceRaw: "987654321012345678", nonce: 98765,
+    });
     const app = express();
     registerMx8004Routes(app);
 
@@ -152,10 +333,16 @@ describe("public branding and capability claims", () => {
     expect(response.body).not.toHaveProperty("erc8004_compliant");
     expect(response.body).not.toHaveProperty("contracts");
     expect(response.body).not.toHaveProperty("capabilities");
+    expect(response.body).not.toHaveProperty("signer_balance");
+    expect(response.body).not.toHaveProperty("signer_balance_egld");
+    expect(response.body).not.toHaveProperty("low_balance");
+    expect(JSON.stringify(response.body)).not.toMatch(/erd1private-signer|987654321012345678|98765/);
+    expect(getMx8004SignerBalanceMock).not.toHaveBeenCalled();
   });
 
   it("reports the complete active MX-8004 capability contract when configured", async () => {
     isMX8004ConfiguredMock.mockReturnValue(true);
+    getMx8004SignerBalanceMock.mockClear();
     getContractAddressesMock.mockReturnValue({
       identityRegistry: "erd1identity-registry",
       validationRegistry: "erd1validation-registry",
@@ -206,6 +393,11 @@ describe("public branding and capability claims", () => {
       feedback: "https://capabilities.example.test/api/mx8004/feedback/{agentNonce}/{clientAddress}/{index}",
     });
     expect(response.body).not.toHaveProperty("erc8004_compliant");
+    expect(response.body).not.toHaveProperty("signer_balance");
+    expect(response.body).not.toHaveProperty("signer_balance_egld");
+    expect(response.body).not.toHaveProperty("low_balance");
+    expect(JSON.stringify(response.body)).not.toMatch(/erd1private-signer|987654321012345678|98765/);
+    expect(getMx8004SignerBalanceMock).not.toHaveBeenCalled();
   });
 
   it.each([

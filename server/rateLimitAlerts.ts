@@ -1,5 +1,6 @@
 import { logger } from "./logger";
 import { getRateLimitFailOpenEventsInWindow } from "./metrics";
+import { alertWebhookHeaders } from "./webhookHeaders";
 
 // ============================================================
 // Rate-limit fail-open alerting
@@ -40,8 +41,8 @@ async function sendAlertWebhook(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-xProof-Alert": alertType,
-        "User-Agent": "xProof-Alert/1.0",
+        ...alertWebhookHeaders(alertType),
+        "User-Agent": "ProveBeforeAct-Alert/1.0",
       },
       body: JSON.stringify(payload),
       signal: controller.signal,

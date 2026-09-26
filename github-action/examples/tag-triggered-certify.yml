@@ -16,9 +16,9 @@ jobs:
       - name: Certify with Prove Before Act
         if: startsWith(github.ref, 'refs/tags/v')
         id: certify
-        uses: jasonxkensei/xProof-Action@v1
+        uses: jasonxkensei/prove-before-act-action@v1
         with:
-          api_key: ${{ secrets.XPROOF_API_KEY }}
+          api_key: ${{ secrets.PROVEBEFOREACT_API_KEY }}
           files: 'build.zip'
           fail_on_error: 'true'
 

@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PublicSiteFooter, PublicSiteHeader } from "@/components/public-site-chrome";
 import {
   Shield,
   Search,
@@ -33,6 +34,7 @@ interface Endpoint {
   description: string;
   body?: Record<string, string>;
   response?: string;
+  responseLabel?: string;
   curl: string;
 }
 
@@ -45,8 +47,16 @@ interface EndpointGroup {
 }
 
 const BASE = "https://provebeforeact.com";
+const DOC_STYLES = `
+  .pba-docs-root { --doc-ink: #17201b; --doc-muted: #657069; --doc-rule: #d4d8d1; }
+  .pba-docs-root main { max-width: 74rem; }
+  .pba-docs-root p { max-width: 72ch; line-height: 1.65; }
+  .pba-docs-root pre { border: 1px solid hsl(var(--border)); border-radius: .3rem; line-height: 1.65; }
+  .pba-docs-root section { scroll-margin-top: 6rem; }
+  .pba-docs-root a:focus-visible, .pba-docs-root button:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 3px; }
+`;
 
-const ENDPOINT_GROUPS: EndpointGroup[] = [
+export const ENDPOINT_GROUPS: EndpointGroup[] = [
   {
     id: "getting-started",
     title: "Getting Started",
@@ -403,7 +413,7 @@ const ENDPOINT_GROUPS: EndpointGroup[] = [
         path: "/api/acp/products",
         auth: "Bearer pm_xxx",
         description: "List available ACP (Agent Commerce Protocol) products for proof purchase with EGLD.",
-        response: `{ "products": [{ "id": "proof-1", "name": "Single Proof", "price_egld": "0.001" }] }`,
+        response: `{ "products": [{ "id": "pba-certification", "name": "Prove Before Act Certification", "pricing": { ... }, "legacy_product_ids": ["xproof-certification"] }] }`,
         curl: `curl ${BASE}/api/acp/products \\
   -H "Authorization: Bearer pm_xxx"`,
       },
@@ -411,13 +421,18 @@ const ENDPOINT_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/api/acp/checkout",
         auth: "Bearer pm_xxx",
-        description: "Create an ACP checkout session for EGLD payment.",
-        body: { product_id: "string (required)", quantity: "number (optional, default 1)" },
+        description: "Create an ACP checkout session for EGLD payment. Non-admin callers must prove control of the wallet that will pay.",
+        body: {
+          product_id: "pba-certification (required)",
+          inputs: "{ file_hash, filename, author_name? } (required)",
+          payer_wallet: "erd1... wallet that will send EGLD (required)",
+          payer_wallet_signature: "128-char hex Ed25519 signature of pba-acp-checkout:pba-certification:<file_hash>:<payer_wallet> (required)",
+        },
         response: `{ "checkout_id": "uuid", "payment": { "receiver": "erd1...", "amount": "1000000000000000", "data": "..." } }`,
         curl: `curl -X POST ${BASE}/api/acp/checkout \\
   -H "Authorization: Bearer pm_xxx" \\
   -H "Content-Type: application/json" \\
-  -d '{"product_id": "cert-1"}'`,
+  -d '{"product_id":"pba-certification","inputs":{"file_hash":"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855","filename":"document.pdf"},"payer_wallet":"erd1YOUR_WALLET","payer_wallet_signature":"YOUR_128_CHAR_HEX_ED25519_SIGNATURE"}'`,
       },
       {
         method: "POST",
@@ -435,7 +450,7 @@ const ENDPOINT_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "/mcp → investigate_proof",
         auth: "x402 or Bearer pm_xxx",
-        description: "MCP tool: Reconstruct the full 4W audit trail for a contested agent action. Returns WHO (agent identity + SIGIL), WHAT (SHA-256 hash on-chain), WHEN (MultiversX block timestamp), WHY (decision chain anchored before acting). Includes verification summary and session heartbeat. Requires x402 payment at the current quoted USDC rate on Base (see /api/pricing) or API key. Without payment, returns payment requirements.",
+        description: "MCP tool: Reconstruct the full 4W audit trail for a contested agent action. Returns WHO (agent identity + SIGIL), WHAT (SHA-256 hash on-chain), WHEN (MultiversX block timestamp), WHY (declared decision basis anchored before acting, never private internal reasoning). Includes verification summary and session heartbeat. Requires x402 payment at the current quoted USDC rate on Base (see /api/pricing) or API key. Without payment, returns payment requirements.",
         body: { proof_id: "UUID of any proof in the action pair (WHY, WHAT, or heartbeat)", wallet: "Agent wallet address (erd1...)" },
         response: `{ "agent": { "wallet": "erd1...", "name": "...", "sigil_id": "..." }, "verification": { "intent_preceded_execution": true, "why_certified": true, "what_certified": true, "session_anchored": true, "all_confirmed": true }, "timeline": [{ "role": "WHY", "proof_id": "uuid", "action_type": "comment_reasoning", ... }, { "role": "WHAT", ... }], "session": { "role": "heartbeat", "proof_id": "uuid", ... } }`,
         curl: `curl -X POST ${BASE}/mcp \\
@@ -526,39 +541,45 @@ const ENDPOINT_GROUPS: EndpointGroup[] = [
         method: "POST",
         path: "(your webhook URL)",
         auth: "HMAC-SHA256 signature",
-        description: `When you provide a webhook_url in POST /api/proof or /api/batch, Prove Before Act sends a POST request to your URL when the proof is confirmed on-chain. The request includes an X-xProof-Signature header containing an HMAC-SHA256 signature of the body. For per-proof and per-batch webhooks the signing secret is returned as webhook_secret in the API response — store it securely and use it to verify the signature. For account-level webhooks (set at /api/agents/register) the secret you configured at registration is used instead.`,
+        description: `When you provide a webhook_url in POST /api/proof or /api/batch, Prove Before Act sends this POST body to your URL after the proof is confirmed on-chain. For per-proof and per-batch webhooks the signing secret is returned as webhook_secret in the API response — store it securely. For account-level webhooks (set at /api/agents/register) use the secret configured at registration. Verify the signature and timestamp before trusting the event or delivery ID. Delivery is at least once, not exactly once: the sender makes up to three attempts per delivery round with backoff; if all fail, an operator may start a new round. X-ProveBeforeAct-Delivery is the certification ID and stays the same across attempts and manual retries, even though the timestamp and signature change. Deduplicate by that verified delivery ID: persist it atomically with applying the event, and return success for duplicates without applying them again. If processing fails, return an error so delivery can be retried. Legacy X-xProof-* headers carry identical values during migration.`,
+        responseLabel: "Webhook POST body",
         response: `{
-  "event": "proof.confirmed",
+  "event": "proof.certified",
   "proof_id": "uuid",
+  "status": "certified",
   "file_hash": "abc123...",
-  "tx_hash": "0x...",
-  "timestamp": "2025-01-01T00:00:00Z"
-}
-
-// POST /api/proof response (when webhook_url supplied):
-{
-  "proof_id": "...",
-  "webhook_status": "pending",
-  "webhook_secret": "<unique-32-byte-hex-secret>",
-  ...
+  "filename": "report.pdf",
+  "verify_url": "https://provebeforeact.com/proof/uuid",
+  "certificate_url": "https://provebeforeact.com/api/certificates/uuid.pdf",
+  "proof_json_url": "https://provebeforeact.com/proof/uuid.json",
+  "blockchain": {
+    "network": "MultiversX",
+    "transaction_hash": "abc123...",
+    "explorer_url": "https://explorer.multiversx.com/transactions/abc123..."
+  },
+  "timestamp": "2025-01-01T00:00:00.000Z"
 }`,
-        curl: `# Verify webhook signature in your handler:
+        curl: `# Verify webhook signature in your handler. Canonical request headers:
+# X-ProveBeforeAct-Signature: hex HMAC-SHA256 of timestamp + "." + raw body
+# X-ProveBeforeAct-Timestamp: Unix epoch seconds (check freshness)
+# X-ProveBeforeAct-Event: proof.certified
+# X-ProveBeforeAct-Delivery: stable certification ID (deduplication key)
 # The signing secret is returned as webhook_secret in the /api/proof (or /api/batch) response.
-# Signed message = timestamp + "." + raw_request_body
-# signature = HMAC-SHA256(webhook_secret, signed_message)
-# Compare with X-xProof-Signature header; also validate X-xProof-Timestamp (unix seconds)
-# to guard against replay attacks (reject if > 5 minutes old).
+# Sign the exact raw bytes, before JSON parsing. Reject timestamps older than
+# 5 minutes or more than 60 seconds in the future (clock skew).
 
 # Python example:
 import hmac, hashlib, time
 webhook_secret = b"<your webhook_secret from API response>"
-timestamp = request.headers["X-xProof-Timestamp"]
+timestamp = request.headers["X-ProveBeforeAct-Timestamp"]
 raw_body = request.body  # raw bytes before JSON parsing
-if abs(time.time() - int(timestamp)) > 300:
-    raise ValueError("Timestamp too old — possible replay attack")
-signed_message = (timestamp + "." + raw_body.decode()).encode()
+if int(timestamp) < time.time() - 300 or int(timestamp) > time.time() + 60:
+    raise ValueError("Timestamp outside allowed window")
+signed_message = timestamp.encode("ascii") + b"." + raw_body
 expected = hmac.new(webhook_secret, signed_message, hashlib.sha256).hexdigest()
-assert hmac.compare_digest(expected, request.headers["X-xProof-Signature"])`,
+assert hmac.compare_digest(expected, request.headers["X-ProveBeforeAct-Signature"])
+# Only now trust X-ProveBeforeAct-Event and X-ProveBeforeAct-Delivery.
+# Record the delivery ID atomically with applying the event; acknowledge duplicates.`,
       },
     ],
   },
@@ -566,15 +587,36 @@ assert hmac.compare_digest(expected, request.headers["X-xProof-Signature"])`,
     id: "credits",
     title: "Credits & Payments",
     icon: CreditCard,
-    description: "Prepaid credits and USDC on Base payment flow",
+    description: "Prepaid credits via Stripe Checkout or USDC on Base",
     endpoints: [
       {
         method: "GET",
         path: "/api/credits/packages",
         auth: "None",
         description: "List available prepaid proof packages with pricing.",
-        response: `{ "packages": [{ "id": "pack-100", "certs": 100, "price_usdc": "5.00" }, ...], "payment": { "network": "eip155:8453", "asset": "USDC" } }`,
+        response: `{ "packages": [{ "id": "starter", "certs": 100, "price_usdc": "..." }, ...], "payment_methods": [{ "provider": "stripe" }, { "provider": "usdc_base" }] }`,
         curl: `curl ${BASE}/api/credits/packages`,
+      },
+      {
+        method: "POST",
+        path: "/api/credits/stripe/checkout",
+        auth: "Wallet session or Bearer pm_xxx",
+        description: "Create a hosted Stripe Checkout Session for a pack. Stripe is an additional option; USDC/Base remains available.",
+        body: { package_id: "string (required: starter, pro, or business)" },
+        response: `{ "status": "checkout_created", "checkout_url": "https://checkout.stripe.com/...", "session_id": "cs_...", "fulfillment": "Credits are added only after Stripe's signed payment webhook confirms payment." }`,
+        curl: `curl -X POST ${BASE}/api/credits/stripe/checkout \\
+  -H "Authorization: Bearer pm_xxx" \\
+  -H "Content-Type: application/json" \\
+  -d '{"package_id": "starter"}'`,
+      },
+      {
+        method: "GET",
+        path: "/api/credits/stripe/status/:sessionId",
+        auth: "Wallet session or Bearer pm_xxx",
+        description: "Read checkout fulfillment status. A browser redirect never grants credits; only the signed Stripe webhook does.",
+        response: `{ "status": "paid", "packageId": "starter", "credits": 100, "credit_balance": 150 }`,
+        curl: `curl ${BASE}/api/credits/stripe/status/cs_test_... \\
+  -H "Authorization: Bearer pm_xxx"`,
       },
       {
         method: "POST",
@@ -624,7 +666,7 @@ assert hmac.compare_digest(expected, request.headers["X-xProof-Signature"])`,
         body: {
           "proof.version": '"1.0" (required)',
           "proof.agent_id": "string (required) — unique agent identifier",
-          "proof.instruction_hash": '"sha256:<64 hex chars>" (required) — hash of the reasoning/intent',
+          "proof.instruction_hash": '"sha256:<64 hex chars>" (required) — hash of the declared decision basis or intent, never private internal reasoning',
           "proof.action_hash": '"sha256:<64 hex chars>" (required) — hash of the action executed',
           "proof.timestamp": "ISO 8601 UTC (required)",
           "proof.signature": '"hex:<128+ hex chars>" (required) — Ed25519 or ECDSA signature of canonical payload',
@@ -661,7 +703,7 @@ assert hmac.compare_digest(expected, request.headers["X-xProof-Signature"])`,
 
 function MethodBadge({ method }: { method: string }) {
   const colors: Record<string, string> = {
-    GET: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
+    GET: "bg-primary/15 text-primary border-primary/20",
     POST: "bg-blue-500/15 text-blue-400 border-blue-500/20",
     DELETE: "bg-red-500/15 text-red-400 border-red-500/20",
     PATCH: "bg-amber-500/15 text-amber-400 border-amber-500/20",
@@ -734,7 +776,7 @@ function EndpointCard({ endpoint }: { endpoint: Endpoint }) {
 
           {endpoint.response && (
             <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Response</h4>
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">{endpoint.responseLabel || "Response"}</h4>
               <pre className="bg-muted/50 rounded-md p-3 text-xs font-mono overflow-x-auto whitespace-pre-wrap break-all text-muted-foreground">
                 {endpoint.response}
               </pre>
@@ -810,36 +852,19 @@ export default function DocsPage() {
   const totalEndpoints = ENDPOINT_GROUPS.reduce((sum, g) => sum + g.endpoints.length, 0);
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Button asChild variant="ghost" size="icon" data-testid="button-back-home">
-              <a href="/"><ArrowLeft className="h-4 w-4" /></a>
-            </Button>
-            <a href="/" className="flex items-center gap-2" data-testid="link-logo-docs">
-              <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
-            </a>
-            <Badge variant="outline">API Docs</Badge>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <Button asChild variant="ghost" size="sm" data-testid="link-4w-guide">
-              <a href="/docs/4w">4W Guide</a>
-            </Button>
-            <Button asChild variant="ghost" size="sm" data-testid="link-trading-guide">
-              <a href="/docs/trading">Trading Guide</a>
-            </Button>
-            <Button asChild variant="ghost" size="sm" data-testid="link-llms-txt">
-              <a href="/llms.txt" target="_blank" rel="noopener noreferrer">llms.txt</a>
-            </Button>
-            <Button asChild variant="ghost" size="sm" data-testid="link-openapi">
-              <a href="/api/acp/openapi.json" target="_blank" rel="noopener noreferrer">OpenAPI</a>
-            </Button>
-          </div>
-        </div>
-      </header>
+    <>
+      <style>{DOC_STYLES}</style>
+    <div className="pba-docs-root min-h-screen bg-background">
+      <PublicSiteHeader />
 
       <div className="container py-10 max-w-4xl mx-auto">
+        <div className="mb-8 flex flex-wrap items-center justify-center gap-2">
+          <Badge variant="outline">API Docs</Badge>
+          <Button asChild variant="ghost" size="sm" data-testid="link-4w-guide"><a href="/docs/4w">4W Guide</a></Button>
+          <Button asChild variant="ghost" size="sm" data-testid="link-trading-guide"><a href="/docs/trading">Trading Guide</a></Button>
+          <Button asChild variant="ghost" size="sm" data-testid="link-llms-txt"><a href="/llms.txt" target="_blank" rel="noopener noreferrer">llms.txt</a></Button>
+          <Button asChild variant="ghost" size="sm" data-testid="link-openapi"><a href="/api/acp/openapi.json" target="_blank" rel="noopener noreferrer">OpenAPI</a></Button>
+        </div>
         <div className="mb-10 text-center">
           <h1 className="text-3xl md:text-4xl font-bold mb-3" data-testid="text-docs-title">API Reference</h1>
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto mb-6">
@@ -990,14 +1015,8 @@ curl ${BASE}/api/proof/YOUR_PROOF_ID`}</pre>
         </Card>
       </div>
 
-      <footer className="border-t py-8">
-        <div className="container text-center text-sm text-muted-foreground">
-          <p>
-            Need help? Check <a href="/llms.txt" className="text-primary hover:underline" data-testid="link-footer-llms">llms.txt</a> for machine-readable docs
-            or visit the <a href="/" className="text-primary hover:underline" data-testid="link-footer-home">homepage</a>.
-          </p>
-        </div>
-      </footer>
+      <PublicSiteFooter />
     </div>
+    </>
   );
 }

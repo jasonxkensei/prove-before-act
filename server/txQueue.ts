@@ -9,11 +9,43 @@ import {
   validationResponse,
   appendResponse,
   resetNonce,
+  getMx8004TransactionFinality,
+  getMx8004FreshSignerNonce,
+  inspectMx8004RecoveryTransaction,
+  verifyMx8004RecoveryEvidence,
 } from "./mx8004";
 import { logger } from "./logger";
 import { checkAndAlertTx } from "./alerts";
 
 let workerInterval: ReturnType<typeof setInterval> | null = null;
+
+type TxEnqueuer = (
+  jobType: string,
+  jobId: string,
+  payload: Record<string, any>,
+  requestId?: string,
+) => Promise<void>;
+
+const testTxEnqueuers = new Map<string, TxEnqueuer>();
+
+/**
+ * Test-only injection point for a specific proof's background queue write.
+ * A unique file hash scopes the replacement across overlapping HTTP requests,
+ * which cannot inherit the test's async context. The returned cleanup only
+ * removes this registration, not another test's replacement.
+ */
+export function registerTestTxEnqueuer(fileHash: string, enqueuer: TxEnqueuer): () => void {
+  if (process.env.NODE_ENV !== "test") {
+    throw new Error("The test transaction enqueuer is only available when NODE_ENV=test");
+  }
+  if (testTxEnqueuers.has(fileHash)) {
+    throw new Error(`A test transaction enqueuer is already registered for file hash ${fileHash}`);
+  }
+  testTxEnqueuers.set(fileHash, enqueuer);
+  return () => {
+    if (testTxEnqueuers.get(fileHash) === enqueuer) testTxEnqueuers.delete(fileHash);
+  };
+}
 
 const VALIDATION_STEPS = [
   "init_job",
@@ -22,6 +54,75 @@ const VALIDATION_STEPS = [
   "validation_response",
   "append_response",
 ] as const;
+const FINALITY_POLL_MS = 15_000;
+const FINALITY_RECOVERY_MS = 30 * 60_000;
+export const MX8004_LEGACY_BROADCAST_REVIEW_MS = FINALITY_RECOVERY_MS;
+
+type ActiveTx = { step: number; hash: string; broadcastAt: string; nonce?: string };
+
+export class RecoveryConflict extends Error {}
+
+export async function reconcileMx8004Job(id: string, hash: string, decision: "confirmed" | "rejected", operator: string) {
+  if (!/^[a-fA-F0-9]{64}$/.test(hash)) throw new RecoveryConflict("Provide a 64-character transaction hash");
+  return db.transaction(async (trx) => {
+    const [task] = await trx.select().from(txQueue).where(eq(txQueue.id, id)).for("update");
+    if (!task || task.jobType !== "mx8004_validation_loop" ||
+        !["recovery_required", "failed"].includes(task.status)) throw new RecoveryConflict("Job is not awaiting manual recovery");
+    const payload = task.payload as Record<string, any>;
+    const step = payload.currentStep;
+    const active = payload.activeTx as ActiveTx | undefined;
+    const intent = payload.broadcastIntent as { step: number; nonce?: string; startedAt?: string } | undefined;
+    if (!Number.isInteger(step) || step < 0 || step > 4 ||
+        (active && (active.step !== step || active.hash?.toLowerCase() !== hash.toLowerCase())) ||
+        (intent && intent.step !== step)) throw new RecoveryConflict("Hash or step conflicts with persisted broadcast");
+    const nonce = active?.nonce ?? intent?.nonce;
+    if (!nonce || !/^\d+$/.test(nonce)) throw new RecoveryConflict("No persisted signer nonce; cannot safely reconcile");
+    const chainNonce = await getMx8004FreshSignerNonce();
+    const tx = await inspectMx8004RecoveryTransaction(hash);
+    if (!tx) throw new RecoveryConflict("Transaction not found; absence does not prove rejection");
+    let state: "confirmed" | "failed" | "pending";
+    try {
+      state = verifyMx8004RecoveryEvidence(tx, hash, nonce, step, { ...payload, jobId: task.jobId });
+    } catch (error) {
+      throw new RecoveryConflict(error instanceof Error ? error.message : "Invalid chain evidence");
+    }
+    if (state === "pending") throw new RecoveryConflict("Transaction is not finalized");
+    if (BigInt(nonce) > BigInt(chainNonce)) throw new RecoveryConflict("Signer account nonce has not caught up to transaction");
+    if ((decision === "confirmed" && state !== "confirmed") ||
+        (decision === "rejected" && state !== "failed")) throw new RecoveryConflict("Decision contradicts chain finality");
+    const audit = {
+      at: new Date().toISOString(), operator, decision, step: VALIDATION_STEPS[step],
+      hash: hash.toLowerCase(), signerNonce: nonce, chainNonce,
+    };
+    const updatedPayload = {
+      ...payload, currentStep: decision === "confirmed" ? step + 1 : step,
+      activeTx: null, broadcastIntent: null, finalityTracked: true,
+      recoveryAudit: [...(Array.isArray(payload.recoveryAudit) ? payload.recoveryAudit : []), audit],
+      finalizedTransactions: decision === "confirmed"
+        ? [...(Array.isArray(payload.finalizedTransactions) ? payload.finalizedTransactions : []),
+          { step: VALIDATION_STEPS[step], hash: hash.toLowerCase() }]
+        : payload.finalizedTransactions,
+    };
+    const status = decision === "confirmed" && step === 4 ? "completed" : "pending";
+    await trx.update(txQueue).set({
+      payload: updatedPayload, status, completedAt: status === "completed" ? new Date() : null,
+      nextRetryAt: null, lastError: null,
+    }).where(eq(txQueue.id, id));
+    logger.warn("MX-8004 recovery reconciled", { component: "tx-queue", jobId: task.jobId, ...audit });
+    return { status, step: updatedPayload.currentStep, audit };
+  });
+}
+
+export function assessMx8004Finality(
+  active: ActiveTx,
+  chainState: "confirmed" | "pending" | "failed",
+  now = Date.now(),
+): "confirmed" | "pending" | "failed" | "recovery_required" {
+  if (chainState !== "pending") return chainState;
+  const broadcastAt = Date.parse(active.broadcastAt);
+  if (!Number.isFinite(broadcastAt)) return "recovery_required";
+  return now - broadcastAt >= FINALITY_RECOVERY_MS ? "recovery_required" : "pending";
+}
 
 export async function enqueueTx(
   jobType: string,
@@ -29,6 +130,13 @@ export async function enqueueTx(
   payload: Record<string, any>,
   requestId?: string
 ): Promise<void> {
+  const testTxEnqueuer = process.env.NODE_ENV === "test"
+    ? testTxEnqueuers.get(payload.fileHash)
+    : undefined;
+  if (testTxEnqueuer) {
+    return testTxEnqueuer(jobType, jobId, payload, requestId);
+  }
+
   await db.insert(txQueue).values({
     jobType,
     jobId,
@@ -38,14 +146,6 @@ export async function enqueueTx(
     maxAttempts: 3,
   });
   logger.info("Job enqueued", { component: "tx-queue", jobType, jobId, requestId });
-}
-
-async function updatePayload(taskId: string, updates: Record<string, any>): Promise<void> {
-  if (!taskId) return;
-  await db
-    .update(txQueue)
-    .set({ payload: sql`payload || ${JSON.stringify(updates)}::jsonb` })
-    .where(eq(txQueue.id, taskId));
 }
 
 async function recoverStaleTasks(): Promise<void> {
@@ -80,7 +180,7 @@ async function processNextTask(): Promise<void> {
       SET status = 'processing', started_at = ${now}
       WHERE id = (
         SELECT id FROM tx_queue
-        WHERE status = 'pending'
+        WHERE status IN ('pending', 'awaiting_finality')
           AND (next_retry_at IS NULL OR next_retry_at <= ${now})
         ORDER BY created_at ASC
         LIMIT 1
@@ -120,23 +220,37 @@ async function processNextTask(): Promise<void> {
     logger.info("Processing task", { component: "tx-queue", jobType: task.jobType, jobId: task.jobId, attempt: task.attempts + 1, maxAttempts: task.maxAttempts, requestId: taskRequestId });
 
     try {
-      await executeTask(task.id, task.jobType, task.jobId, task.payload as Record<string, any>);
-
-      await db
-        .update(txQueue)
-        .set({ status: "completed", completedAt: new Date() })
-        .where(eq(txQueue.id, task.id));
-
-      logger.info("Task completed", { component: "tx-queue", jobType: task.jobType, jobId: task.jobId });
+      const outcome = await executeTask(task.id, task.jobType, task.jobId, task.payload as Record<string, any>);
+      if (outcome === "completed") {
+        await db.update(txQueue).set({ status: "completed", completedAt: new Date(), nextRetryAt: null, lastError: null })
+          .where(eq(txQueue.id, task.id));
+        logger.info("Task finalized", { component: "tx-queue", jobType: task.jobType, jobId: task.jobId });
+      } else if (outcome === "recovery_required" || outcome === "failed") {
+        await db.update(txQueue).set({
+          status: outcome,
+          completedAt: new Date(),
+          nextRetryAt: null,
+          lastError: outcome === "failed" ? "Transaction failed on chain; manual review required before retry"
+            : "Broadcast unresolved or not finalized; inspect hash and signer nonce before retry",
+        }).where(eq(txQueue.id, task.id));
+        logger.error("Transaction requires review", { component: "tx-queue", jobId: task.jobId, outcome });
+      }
     } catch (err: any) {
       const newAttempts = task.attempts + 1;
       const errorMessage = err.message || String(err);
 
       logger.error("Task failed", { component: "tx-queue", jobType: task.jobType, jobId: task.jobId, error: errorMessage });
 
-      resetNonce();
-
-      if (newAttempts >= task.maxAttempts) {
+      // Once a hash has been broadcast, never replay that step on lookup errors.
+      const hasActiveTx = !!(task.payload as any)?.activeTx;
+      if (hasActiveTx) {
+        await db.update(txQueue).set({
+          status: "awaiting_finality",
+          lastError: errorMessage,
+          nextRetryAt: new Date(Date.now() + FINALITY_POLL_MS),
+        }).where(eq(txQueue.id, task.id));
+      } else if (newAttempts >= task.maxAttempts) {
+        resetNonce();
         await db
           .update(txQueue)
           .set({
@@ -148,6 +262,7 @@ async function processNextTask(): Promise<void> {
 
         logger.error("Max attempts reached, marking as failed", { component: "tx-queue", jobId: task.jobId });
       } else {
+        resetNonce();
         const backoffSeconds = [10, 30, 90][newAttempts - 1] || 90;
         const nextRetry = new Date(Date.now() + backoffSeconds * 1000);
 
@@ -177,15 +292,21 @@ async function executeTask(
   jobType: string,
   jobId: string,
   payload: Record<string, any>
-): Promise<void> {
+): Promise<"completed" | "waiting" | "failed" | "recovery_required"> {
   switch (jobType) {
     case "mx8004_validation_loop": {
       const { certificationId, fileHash, transactionHash, agentNonce, senderAddress } = payload;
       const rawStep = typeof payload.currentStep === "number" ? payload.currentStep : 0;
-      const startStep = Math.max(0, Math.min(4, rawStep));
-      if (rawStep >= 5) {
-        throw new Error(`Job already completed (currentStep=${rawStep})`);
+      const active = payload.activeTx as ActiveTx | undefined;
+      // A process can crash after sending but before saving the hash. Do not replay
+      // an ambiguous send; an operator must reconcile the signer nonce first.
+      if (payload.broadcastIntent && !active) return "recovery_required";
+      if (rawStep > 0 && !active && !payload.finalityTracked) {
+        // Older queue records advanced on broadcast alone; their steps cannot be trusted.
+        return "recovery_required";
       }
+      if (rawStep >= 5 && !active) return "completed";
+      const startStep = Math.max(0, Math.min(4, rawStep));
       const proof = `hash:${fileHash}|tx:${transactionHash}`;
 
       const crypto = await import("crypto");
@@ -201,37 +322,83 @@ async function executeTask(
         logger.info("Registering job", { component: "tx-queue", jobId, agentNonce });
       }
 
-      if (startStep <= 0) {
-        const txHash = await initJob(jobId, agentNonce);
-        logger.info("Step completed", { component: "tx-queue", step: "1/5", action: "init_job", txHash });
-        await updatePayload(taskId, { currentStep: 1 });
+      if (active) {
+        if (active.step !== startStep || !/^[a-fA-F0-9]{64}$/.test(active.hash)) return "recovery_required";
+        let chainState: "confirmed" | "pending" | "failed";
+        try {
+          chainState = await getMx8004TransactionFinality(active.hash);
+        } catch (error) {
+          if (assessMx8004Finality(active, "pending") === "recovery_required") return "recovery_required";
+          throw error;
+        }
+        const state = assessMx8004Finality(active, chainState);
+        if (state === "failed" || state === "recovery_required") return state;
+        if (state === "pending") {
+          await db.update(txQueue).set({
+            status: "awaiting_finality", nextRetryAt: new Date(Date.now() + FINALITY_POLL_MS), lastError: null,
+          }).where(eq(txQueue.id, taskId));
+          return "waiting";
+        }
+        await db.update(txQueue).set({
+          payload: sql`payload || ${JSON.stringify({
+            currentStep: startStep + 1, activeTx: null, broadcastIntent: null, finalityTracked: true,
+            finalizedTransactions: [
+              ...(Array.isArray(payload.finalizedTransactions) ? payload.finalizedTransactions : []),
+              { step: VALIDATION_STEPS[startStep], hash: active.hash },
+            ],
+          })}::jsonb`,
+          status: startStep === 4 ? "completed" : "pending",
+          completedAt: startStep === 4 ? new Date() : null,
+          nextRetryAt: null,
+          lastError: null,
+        }).where(eq(txQueue.id, taskId));
+        logger.info("Step finalized", { component: "tx-queue", jobId, step: startStep + 1, txHash: active.hash });
+        return "waiting";
       }
 
-      if (startStep <= 1) {
-        const txHash = await submitProof(jobId, proof);
-        logger.info("Step completed", { component: "tx-queue", step: "2/5", action: "submit_proof", txHash });
-        await updatePayload(taskId, { currentStep: 2 });
+      await db.update(txQueue).set({
+        payload: sql`payload || ${JSON.stringify({ broadcastIntent: { step: startStep, startedAt: new Date().toISOString() } })}::jsonb`,
+      }).where(eq(txQueue.id, taskId));
+      let txHash: string;
+      let claimedNonce: string | undefined;
+      const onNonce = async (nonce: string) => {
+        claimedNonce = nonce;
+        await db.update(txQueue).set({
+          payload: sql`payload || ${JSON.stringify({ broadcastIntent: { step: startStep, startedAt: new Date().toISOString(), nonce } })}::jsonb`,
+        }).where(eq(txQueue.id, taskId));
+      };
+      try {
+        txHash = await [
+          () => initJob(jobId, agentNonce, undefined, onNonce),
+          () => submitProof(jobId, proof, onNonce),
+          () => validationRequest(jobId, senderAddress, requestUri, requestHash, onNonce),
+          () => validationResponse(requestHash, 100, responseUri, responseHash, "Prove Before Act-certification", onNonce),
+          () => appendResponse(jobId, certUrl, onNonce),
+        ][startStep]();
+        await db.update(txQueue).set({
+          payload: sql`payload || ${JSON.stringify({
+            activeTx: { step: startStep, hash: txHash, broadcastAt: new Date().toISOString(), nonce: claimedNonce }, broadcastIntent: null, finalityTracked: true,
+          })}::jsonb`,
+          status: "awaiting_finality",
+          nextRetryAt: new Date(Date.now() + FINALITY_POLL_MS),
+          lastError: null,
+        }).where(eq(txQueue.id, taskId));
+      } catch (error) {
+        const message = String(error).toLowerCase();
+        const failureCategory = /nonce/.test(message) ? "nonce"
+          : /balance|funds|egld/.test(message) ? "balance"
+          : /gateway|transaction|fetch|timeout|network/.test(message) ? "gateway"
+          : "broadcast_unknown";
+        await db.update(txQueue).set({
+          payload: sql`payload || ${JSON.stringify({ failureCategory })}::jsonb`,
+        }).where(eq(txQueue.id, taskId));
+        logger.error("Broadcast outcome uncertain; manual recovery required", {
+          component: "tx-queue", jobId, step: startStep + 1, error: String(error),
+        });
+        return "recovery_required";
       }
-
-      if (startStep <= 2) {
-        const txHash = await validationRequest(jobId, senderAddress, requestUri, requestHash);
-        logger.info("Step completed", { component: "tx-queue", step: "3/5", action: "validation_request", txHash });
-        await updatePayload(taskId, { currentStep: 3 });
-      }
-
-      if (startStep <= 3) {
-        const txHash = await validationResponse(requestHash, 100, responseUri, responseHash, "Prove Before Act-certification");
-        logger.info("Step completed", { component: "tx-queue", step: "4/5", action: "validation_response", txHash });
-        await updatePayload(taskId, { currentStep: 4 });
-      }
-
-      if (startStep <= 4) {
-        const txHash = await appendResponse(jobId, certUrl);
-        logger.info("Step completed", { component: "tx-queue", step: "5/5", action: "append_response", txHash });
-        await updatePayload(taskId, { currentStep: 5 });
-      }
-
-      break;
+      logger.info("Step broadcast; awaiting finality", { component: "tx-queue", jobId, step: startStep + 1, txHash });
+      return "waiting";
     }
     default:
       throw new Error(`Unknown job type: ${jobType}`);
@@ -243,7 +410,7 @@ async function updateQueueMetrics(): Promise<void> {
     const [result] = await db
       .select({ count: count() })
       .from(txQueue)
-      .where(eq(txQueue.status, "pending"));
+      .where(or(eq(txQueue.status, "pending"), eq(txQueue.status, "awaiting_finality")));
     setMx8004QueueSize(result.count);
   } catch {
   }
@@ -251,6 +418,8 @@ async function updateQueueMetrics(): Promise<void> {
 
 export async function getTxQueueStats(): Promise<{
   pending: number;
+  awaitingFinality: number;
+  recoveryRequired: number;
   processing: number;
   completed: number;
   failed: number;
@@ -261,6 +430,8 @@ export async function getTxQueueStats(): Promise<{
   lastActivity: string | null;
 }> {
   const [pendingRow] = await db.select({ count: count() }).from(txQueue).where(eq(txQueue.status, "pending"));
+  const [awaitingRow] = await db.select({ count: count() }).from(txQueue).where(eq(txQueue.status, "awaiting_finality"));
+  const [recoveryRow] = await db.select({ count: count() }).from(txQueue).where(eq(txQueue.status, "recovery_required"));
   const [processingRow] = await db.select({ count: count() }).from(txQueue).where(eq(txQueue.status, "processing"));
   const [completedRow] = await db.select({ count: count() }).from(txQueue).where(eq(txQueue.status, "completed"));
   const [failedRow] = await db.select({ count: count() }).from(txQueue).where(eq(txQueue.status, "failed"));
@@ -297,6 +468,8 @@ export async function getTxQueueStats(): Promise<{
 
   return {
     pending: pendingRow.count,
+    awaitingFinality: awaitingRow.count,
+    recoveryRequired: recoveryRow.count,
     processing: processingRow.count,
     completed: completedRow.count,
     failed: failedRow.count,
@@ -306,6 +479,120 @@ export async function getTxQueueStats(): Promise<{
     avgProcessingTimeMs: avgRow.avgMs ? Number(avgRow.avgMs) : null,
     lastActivity,
   };
+}
+
+export const MX8004_NONCE_STALL_MS = 5 * 60_000;
+
+type UnresolvedMx8004Task = {
+  jobId: string;
+  status: string;
+  createdAt: Date | null;
+  payload: unknown;
+};
+
+export type Mx8004LegacyBroadcastReview = {
+  status: "manual_reconciliation_required";
+  reason: "broadcast_without_claimed_nonce";
+  known_hash: string;
+  broadcast_at: string;
+  age_minutes: number;
+  guidance: string;
+};
+
+/**
+ * Legacy broadcasts can have chain evidence without a persisted signer nonce.
+ * Do not infer that nonce from a hash, job order, or the current chain account.
+ */
+export function assessMx8004LegacyBroadcast(
+  task: Pick<UnresolvedMx8004Task, "status" | "payload">,
+  now = Date.now(),
+): Mx8004LegacyBroadcastReview | null {
+  if (!["pending", "processing", "awaiting_finality", "recovery_required", "failed"].includes(task.status)) return null;
+  const payload = task.payload as {
+    activeTx?: { hash?: unknown; broadcastAt?: unknown; nonce?: unknown } | null;
+    broadcastIntent?: { nonce?: unknown } | null;
+  } | null;
+  const active = payload?.activeTx;
+  if (active?.nonce != null || payload?.broadcastIntent?.nonce != null ||
+      typeof active?.hash !== "string" || !/^[a-fA-F0-9]{64}$/.test(active.hash) ||
+      typeof active.broadcastAt !== "string") return null;
+  const broadcastAt = Date.parse(active.broadcastAt);
+  if (!Number.isFinite(broadcastAt) || broadcastAt > now ||
+      (!["recovery_required", "failed"].includes(task.status) &&
+       now - broadcastAt < MX8004_LEGACY_BROADCAST_REVIEW_MS)) return null;
+  return {
+    status: "manual_reconciliation_required",
+    reason: "broadcast_without_claimed_nonce",
+    known_hash: active.hash,
+    broadcast_at: new Date(broadcastAt).toISOString(),
+    age_minutes: Math.floor((now - broadcastAt) / 60_000),
+    guidance: "A broadcast hash and time were recorded before claimed nonces were tracked. Manually inspect transaction finality and the signer account. No nonce can be assigned to this job from these records; do not automatically rebroadcast or resync the signer.",
+  };
+}
+
+export type Mx8004NonceStall = {
+  signer_address: string;
+  oldest_pending_nonce: string;
+  oldest_pending_at: string;
+  age_minutes: number;
+  job_ids: string[];
+  recovery_guidance: string;
+};
+
+/**
+ * Chain nonce is the last consumed nonce (see nonce.ts). Only report a stall
+ * when a known claimed nonce is still ahead of the chain after five minutes.
+ * Jobs without persisted nonces (legacy records) cannot establish this fact.
+ */
+export function assessMx8004NonceStall(
+  tasks: UnresolvedMx8004Task[],
+  signerAddress: string | null,
+  chainNonce: number | null,
+  now = Date.now(),
+): Mx8004NonceStall | null {
+  if (!signerAddress || !Number.isSafeInteger(chainNonce) || chainNonce === null || chainNonce < 0) return null;
+  const unresolved = tasks.flatMap(task => {
+    const payload = task.payload as { activeTx?: ActiveTx | null; broadcastIntent?: { nonce?: string; startedAt?: string } | null } | null;
+    const active = payload?.activeTx;
+    const intent = payload?.broadcastIntent;
+    const nonceText = active?.nonce ?? intent?.nonce;
+    const at = active?.broadcastAt ?? intent?.startedAt;
+    if (!nonceText || !/^\d+$/.test(nonceText) || !at) return [];
+    const nonce = Number(nonceText);
+    const timestamp = Date.parse(at);
+    if (!Number.isSafeInteger(nonce) || nonce <= chainNonce || !Number.isFinite(timestamp) || timestamp > now) return [];
+    return [{ task, nonce, timestamp }];
+  }).sort((a, b) => a.nonce - b.nonce || a.timestamp - b.timestamp);
+  const oldest = unresolved[0];
+  if (!oldest || now - oldest.timestamp < MX8004_NONCE_STALL_MS) return null;
+  const jobIds = new Set(unresolved.filter(item => item.nonce >= oldest.nonce).map(item => item.task.jobId));
+  for (const task of tasks) {
+    if (task.status === "pending" && task.createdAt && new Date(task.createdAt).getTime() >= oldest.timestamp) {
+      jobIds.add(task.jobId);
+    }
+  }
+  return {
+    signer_address: signerAddress,
+    oldest_pending_nonce: String(oldest.nonce),
+    oldest_pending_at: new Date(oldest.timestamp).toISOString(),
+    age_minutes: Math.floor((now - oldest.timestamp) / 60_000),
+    job_ids: [...jobIds].sort(),
+    recovery_guidance: "Inspect the signer account nonce and transaction hashes in the MultiversX explorer. Reconcile the oldest nonce and on-chain finality before retrying or resyncing the signer; never blindly rebroadcast an ambiguous transaction.",
+  };
+}
+
+export async function getMx8004NonceStall(
+  signerAddress: string | null,
+  chainNonce: number | null,
+): Promise<Mx8004NonceStall | null> {
+  if (!signerAddress || chainNonce === null) return null;
+  const tasks = await db.select({
+    jobId: txQueue.jobId, status: txQueue.status, createdAt: txQueue.createdAt, payload: txQueue.payload,
+  }).from(txQueue).where(and(
+    eq(txQueue.jobType, "mx8004_validation_loop"),
+    sql`${txQueue.status} IN ('pending', 'processing', 'awaiting_finality', 'recovery_required')`,
+  ));
+  return assessMx8004NonceStall(tasks, signerAddress, chainNonce);
 }
 
 export function startTxQueueWorker(): void {

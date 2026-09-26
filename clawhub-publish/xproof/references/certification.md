@@ -19,7 +19,7 @@ Creates an immutable certification on MultiversX mainnet.
   "file_hash": "a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd",
   "filename": "report.pdf",
   "author_name": "MyAgent",
-  "webhook_url": "https://your-agent.com/hooks/xproof"
+  "webhook_url": "https://your-agent.com/webhooks/prove-before-act"
 }
 ```
 
@@ -68,7 +68,7 @@ Creates an immutable certification on MultiversX mainnet.
     { "file_hash": "def456...", "filename": "data.csv" }
   ],
   "author_name": "MyAgent",
-  "webhook_url": "https://your-agent.com/hooks/xproof"
+  "webhook_url": "https://your-agent.com/webhooks/prove-before-act"
 }
 ```
 

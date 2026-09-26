@@ -1,0 +1,22 @@
+---
+name: MultiversX nonce recovery after transaction rejection
+description: Wallet nonce claims can advance locally even when a gateway rejects a transaction.
+---
+
+The server claims and persists a MultiversX wallet nonce before it broadcasts a transaction. A gateway rejection that does not consume that nonce (for example, insufficient funds) can leave the persisted nonce ahead of the chain nonce.
+
+**Why:** Repeated failed proof attempts then create nonce gaps. Topping up the wallet alone may not restore processing; future transactions can be sent with a too-high nonce, while failed MX-8004 validation jobs stay terminal.
+
+**How to apply:** During a signer-funding or network-migration recovery, compare the persisted wallet nonce with the active chain's account nonce, resync the persisted value after definitively rejected broadcasts, then retry only the affected background jobs after the signer is funded. Keep the MX-8004 agent nonce configuration separate: it identifies the validation agent and does not own API keys.
+
+**Mainnet nonce semantics:** The MultiversX account API exposes the last consumed nonce; a new transaction must use that value plus one. Persisted `wallet_nonces.nonce` stores the next nonce to claim, not the chain's reported account nonce.
+
+**Why:** Treating the account value as the next nonce causes `lowerNonceInTx` rejection at the exact current account value, and an asynchronous resync can otherwise restore the same bad value repeatedly.
+
+**How to apply:** Add one when seeding or resyncing the persisted next-nonce marker. If several broadcasts remain pending, inspect the gateway transaction states and account nonce before attempting replacement; do not create a nonce gap.
+
+**Recovery safety:** Gateway acceptance and completed validation jobs do not establish chain finality. A resync while other signer writers run can reuse a nonce, and a drained transaction pool does not by itself reconcile public proof statuses. Budget for the follow-on MX-8004 transactions as well as the direct proof.
+
+**Why:** An accepted high-nonce broadcast can be dropped before finality while the application has already advanced the nonce, marked the proof confirmed, and completed its validation job. A later proof cannot repair that history just by receiving a new hash.
+
+**How to apply:** Before a production resync, coordinate a write freeze across proof and validation paths, verify the chain account nonce and individual hashes, preserve and reconcile affected records, then resume with one independently finalized transaction before larger batches.

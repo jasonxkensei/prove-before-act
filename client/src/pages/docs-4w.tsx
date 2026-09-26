@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PublicSiteHeader, PublicSiteFooter } from "@/components/public-site-chrome";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,14 @@ import {
 } from "lucide-react";
 
 const BASE = "https://provebeforeact.com";
+const DOC_STYLES = `
+  .pba-docs-root { --doc-rule: hsl(var(--border)); }
+  .pba-docs-root main { max-width: 72rem; }
+  .pba-docs-root p { max-width: 72ch; line-height: 1.65; }
+  .pba-docs-root section { scroll-margin-top: 6rem; }
+  .pba-docs-root pre { border: 1px solid var(--border); border-radius: .3rem; line-height: 1.65; }
+  .pba-docs-root a:focus-visible, .pba-docs-root button:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 3px; }
+`;
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -69,20 +78,17 @@ function SectionHeader({ icon: Icon, number, title }: { icon: typeof Shield; num
 
 const dualCertCode = `async function certifyAndAct(agent: AgentContext) {
   // ── Step 1: Certify WHY (before acting) ──
-  const reasoning = {
-    action_type: 'comment_reasoning',
+  const decisionBasis = {
+    action_type: 'comment_reasoning',         // existing compatibility identifier
     agent: agent.agentId,                    // agent identity (MX-8004)
     prompt_hash: sha256(agent.prompt),       // hash of the prompt, not the prompt itself
     trigger_content_hash: sha256(agent.trigger), // hash of what triggered this action
-    decision_chain: [                        // auditable reasoning steps
-      '1. Identified relevant topic in post',
-      '2. Applied response rules (max 2 paragraphs, adopt framing)',
-      '3. Determined Prove Before Act relevance: not applicable',
-    ],
+    declared_justification: 'Respond under the configured response policy',
+    // Do not include private step-by-step reasoning.
     rules_applied: ['Max 2 paragraphs', 'Adopt commenter framing'],
     timestamp: new Date().toISOString(),
   };
-  const whyHash = sha256(JSON.stringify(reasoning));
+  const whyHash = sha256(JSON.stringify(decisionBasis));
 
   const whyProof = await fetch('${BASE}/api/proof', {
     method: 'POST',
@@ -93,7 +99,7 @@ const dualCertCode = `async function certifyAndAct(agent: AgentContext) {
     body: JSON.stringify({
       file_hash: whyHash,
       filename: 'action_comment_reasoning_' + Date.now() + '.json',
-      metadata: reasoning,
+      metadata: decisionBasis,
     }),
   }).then(r => r.json());
 
@@ -212,7 +218,8 @@ curl -X POST ${BASE}/api/proof \\
        "metadata": {
          "action_type": "comment_reasoning",
          "prompt_hash": "be54ca2a...",
-         "decision_chain": ["1. Evaluated topic", "2. Applied rules"],
+        "declared_justification": "Respond under the configured response policy",
+        "rules_applied": ["Max 2 paragraphs", "Adopt commenter framing"],
          "trigger_content_hash": "f603bdfd..."
        }
      }'
@@ -249,7 +256,7 @@ const report = await fetch(
 // report.verification:
 // {
 //   intent_preceded_execution: true,   // WHY certified before WHAT
-//   why_certified: true,               // decision chain exists
+//   why_certified: true,               // declared decision-basis proof exists
 //   what_certified: true,              // output hash exists
 //   session_anchored: true,            // heartbeat links to session
 //   all_confirmed: true                // all proofs on-chain
@@ -263,28 +270,10 @@ const report = await fetch(
 
 export default function Docs4WPage() {
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Button asChild variant="ghost" size="icon" data-testid="button-back-docs">
-              <a href="/docs"><ArrowLeft className="h-4 w-4" /></a>
-            </Button>
-            <a href="/" className="flex items-center gap-2" data-testid="link-logo">
-              <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
-            </a>
-            <Badge variant="outline">Integration Guide</Badge>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button asChild variant="ghost" size="sm" data-testid="link-api-docs">
-              <a href="/docs">API Reference</a>
-            </Button>
-            <Button asChild variant="ghost" size="sm" data-testid="link-trading-docs">
-              <a href="/docs/trading">Trading Guide</a>
-            </Button>
-          </div>
-        </div>
-      </header>
+    <>
+      <style>{DOC_STYLES}</style>
+    <div className="pba-docs-root min-h-screen bg-background">
+      <PublicSiteHeader />
 
       <div className="container py-10 max-w-3xl mx-auto">
         <div className="mb-10">
@@ -346,7 +335,7 @@ export default function Docs4WPage() {
                     </div>
                     <h3 className="text-sm font-semibold" data-testid="text-why-title">WHY</h3>
                   </div>
-                  <p className="text-xs text-muted-foreground">Full reasoning — analysis, context, and decision/intention. Anchored <strong className="text-foreground">before acting</strong> — cryptographic proof that intent preceded execution.</p>
+                  <p className="text-xs text-muted-foreground">Declared decision basis — the chosen context, justification, and decision/intention, not private internal reasoning. Anchored <strong className="text-foreground">before acting</strong> — cryptographic proof that intent preceded execution.</p>
                 </CardContent>
               </Card>
               <Card className="border-primary/20">
@@ -462,7 +451,7 @@ export default function Docs4WPage() {
             <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="rounded-md border bg-muted/30 p-3">
                 <p className="text-xs font-medium text-foreground mb-1 flex items-center gap-1.5">
-                  <CheckCircle className="h-3 w-3 text-green-500" /> intent_preceded_execution
+                  <CheckCircle className="h-3 w-3 text-primary" /> intent_preceded_execution
                 </p>
                 <p className="text-xs text-muted-foreground">True when WHY was certified before WHAT — cryptographic proof that intent preceded execution.</p>
               </div>
@@ -488,7 +477,7 @@ export default function Docs4WPage() {
               <p className="text-muted-foreground">WHO : <span className="text-foreground">Prove Before Act-agent-verify-hpyhbs (MX-8004)</span></p>
               <p className="text-muted-foreground">WHAT: <span className="text-foreground">SHA-256 hash per action (Prove Before Act)</span></p>
               <p className="text-muted-foreground">WHEN: <span className="text-foreground">MultiversX block timestamp</span></p>
-              <p className="text-muted-foreground">WHY : <span className="text-foreground">Decision chain anchored before every action</span></p>
+              <p className="text-muted-foreground">WHY : <span className="text-foreground">Declared decision basis anchored before every action — never private internal reasoning</span></p>
               <div className="border-t my-2 pt-2 border-border/50" />
               <p className="text-muted-foreground">comment_reasoning <a href="https://provebeforeact.com/proof/660bfd2b-4900-4a83-b60a-02bed8a07448" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">660bfd2b...</a></p>
               <p className="text-muted-foreground">comment <a href="https://provebeforeact.com/proof/8e1527ac-1fcd-41c8-8d3c-7a79e440fb2f" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">8e1527ac...</a></p>
@@ -498,7 +487,7 @@ export default function Docs4WPage() {
               <p className="text-muted-foreground">Leaderboard: <a href="https://provebeforeact.com/leaderboard" className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">provebeforeact.com/leaderboard</a></p>
             </div>
             <p className="text-xs text-muted-foreground mt-3">
-              Every action proof above links a WHY (reasoning) to a WHAT (output). The heartbeat aggregates all proof IDs into a single on-chain session anchor.
+               Every action proof above links a WHY (declared decision basis, never private internal reasoning) to a WHAT (output). The heartbeat aggregates all proof IDs into a single on-chain session anchor.
               Each certification contributes to the agent's Trust Score — consistency beats volume.
             </p>
             <div className="mt-3">
@@ -521,21 +510,9 @@ export default function Docs4WPage() {
           </section>
         </div>
 
-        <footer className="border-t mt-12 pt-8">
-          <div className="text-center text-sm text-muted-foreground">
-            <p className="mb-3">
-              <a href="/docs/trading" className="text-primary hover:underline" data-testid="link-footer-trading">Trading Integration</a>
-              {" · "}
-              <a href="/docs" className="text-primary hover:underline" data-testid="link-footer-docs">API Reference</a>
-              {" · "}
-              <a href="/" className="text-primary hover:underline" data-testid="link-footer-home">provebeforeact.com</a>
-            </p>
-            <p className="text-xs">
-              If you can't prove intent, your audit trail is incomplete.
-            </p>
-          </div>
-        </footer>
       </div>
+      <PublicSiteFooter />
     </div>
+    </>
   );
 }

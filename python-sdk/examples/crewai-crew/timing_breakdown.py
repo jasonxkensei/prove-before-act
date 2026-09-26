@@ -1,10 +1,14 @@
 """CrewAI + xProof: Timing Breakdown example.
 
 Shows how to use certify_with_confidence() with a TimingBreakdown inside
-a CrewAI-style agent workflow. Each task anchors its full chronology:
+a CrewAI-style agent workflow. Prove Before Act is the accountability pattern;
+xProof is its reference implementation. Each task anchors decision-lifecycle timing:
   - instruction_received_at  — when the crew task was assigned
-  - reasoning_started_at     — when the agent started working
+  - reasoning_started_at     — legacy field name for decision-basis preparation
   - action_taken_at          — when the task output was produced
+
+Record only a sanitized declared decision basis, never private step-by-step
+reasoning or internal chain-of-thought.
 
 Run: python timing_breakdown.py
 """
@@ -37,19 +41,20 @@ def simulate_crew_task(
     instruction_received_at = _now()
     print(f"  [{instruction_received_at}] Task assigned to '{agent_role}'")
 
-    time.sleep(0.05)  # simulate reasoning latency
-    reasoning_started_at = _now()
+    time.sleep(0.05)  # simulate decision-basis preparation latency
+    decision_basis_prepared_at = _now()
 
     time.sleep(0.05)  # simulate execution latency
     action_taken_at = _now()
 
     output_hash = _hash({"role": agent_role, "output": output})
 
+    # `xproof` is the legacy module name retained by the canonical prove-before-act distribution.
     from xproof.models import TimingBreakdown
 
     timing: TimingBreakdown = {
         "instruction_received_at": instruction_received_at,
-        "reasoning_started_at": reasoning_started_at,
+        "reasoning_started_at": decision_basis_prepared_at,  # legacy field name
         "action_taken_at": action_taken_at,
         # CrewAI tasks are driven by a human-defined crew — instruction_following
         "jurisdiction_type": "instruction_following",
@@ -129,7 +134,7 @@ def main() -> None:
 
     print()
     print(f"Decision chain '{decision_id}' fully anchored with timing breakdown.")
-    print("Each step's instruction→reasoning→action chronology is on-chain.")
+    print("Each step's instruction→decision-basis→action timing is on-chain.")
 
 
 if __name__ == "__main__":

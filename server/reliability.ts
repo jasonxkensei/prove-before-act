@@ -3,12 +3,13 @@ import rateLimit from "express-rate-limit";
 import { pool } from "./db";
 import { PgRateLimitStore } from "./pgRateLimit";
 import { getMetrics, getLatencyPercentiles } from "./metrics";
-import { isMX8004Configured } from "./mx8004";
+import { isMX8004Configured, MX8004_LOW_BALANCE_EGLD } from "./mx8004";
 import { isMultiversXConfigured } from "./blockchain";
 import { execSync } from "child_process";
 import { logger } from "./logger";
-import { getClientIp } from "./routes/helpers";
+import { buildAgentTrialOnboarding, getClientIp } from "./routes/helpers";
 import { Sentry } from "./instrument";
+import { getLeaderboardRefreshHealth } from "./alerts";
 
 // SECURITY: All IP-based rate limiters MUST key on getClientIp() rather than
 // the express-rate-limit default (which uses `req.ip`). Under
@@ -164,6 +165,26 @@ export const publicReadRateLimiter = rateLimit({
   keyGenerator: ipKeyGenerator,
   store: new PgRateLimitStore("pub_read"),
   message: { error: "TOO_MANY_REQUESTS", message: "Too many requests, please try again later" },
+  skip: skipForTestSuite,
+});
+
+/**
+ * Incident re-evaluation rebuilds an audit trail, verifies every timeline
+ * transaction against MultiversX, and recomputes trust. Key this budget by
+ * the target wallet rather than caller IP so a distributed caller cannot
+ * repeatedly force expensive work for one public agent.
+ */
+export const incidentReevaluationRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: any) => String(req.params?.wallet || "unknown").trim().toLowerCase(),
+  store: new PgRateLimitStore("incident_reevaluate"),
+  message: {
+    error: "TOO_MANY_REQUESTS",
+    message: "Incident re-evaluation limit reached for this agent. Please try again later.",
+  },
   skip: skipForTestSuite,
 });
 
@@ -369,6 +390,7 @@ export async function healthCheck(_req: Request, res: Response) {
   }
 
   const gatewayUrl = process.env.MULTIVERSX_GATEWAY_URL || "https://gateway.multiversx.com";
+  const apiUrl = process.env.MULTIVERSX_API_URL || "https://api.multiversx.com";
   const gwStart = Date.now();
   try {
     const controller = new AbortController();
@@ -393,6 +415,7 @@ export async function healthCheck(_req: Request, res: Response) {
     status: isMX8004Configured() ? "ok" : "not_configured",
     details: { configured: isMX8004Configured() },
   };
+  checks.leaderboard_refresh = getLeaderboardRefreshHealth();
 
   // EGLD signer balance check — low balance is the #1 silent cause of 100% certification failure
   const signerAddress = process.env.MULTIVERSX_SENDER_ADDRESS;
@@ -400,30 +423,23 @@ export async function healthCheck(_req: Request, res: Response) {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 5000);
-      const balResp = await fetch(`https://api.multiversx.com/accounts/${signerAddress}?fields=balance,nonce`, { signal: controller.signal });
+      const balResp = await fetch(`${apiUrl}/accounts/${signerAddress}?fields=balance,nonce`, { signal: controller.signal });
       clearTimeout(timeout);
       if (balResp.ok) {
         const balData = await balResp.json() as { balance?: string; nonce?: number };
         const balanceRaw = BigInt(balData.balance ?? "0");
         const balanceEgld = Number(balanceRaw) / 1e18;
-        const LOW_EGLD_WARN = 0.3;   // warn below 0.3 EGLD (~3 000 txs)
-        const LOW_EGLD_CRIT = 0.1;   // critical below 0.1 EGLD (~1 000 txs)
+        const LOW_EGLD_WARN = MX8004_LOW_BALANCE_EGLD;
+        const LOW_EGLD_CRIT = Math.min(0.1, LOW_EGLD_WARN / 2);
         const balStatus = balanceEgld < LOW_EGLD_CRIT ? "critical_low_balance" : balanceEgld < LOW_EGLD_WARN ? "low_balance" : "ok";
-        checks.signer_balance = {
-          status: balStatus,
-          details: {
-            address: signerAddress,
-            balance_egld: Math.round(balanceEgld * 1e6) / 1e6,
-            balance_raw: balData.balance ?? "0",
-            nonce: balData.nonce ?? 0,
-            warning: balStatus !== "ok" ? `Signer wallet low on EGLD — certifications will fail below ~0.0001 EGLD. Top up: ${signerAddress}` : undefined,
-          },
-        };
+        // /api/health is public. Keep the operational signal, but never expose
+        // signer identifiers, balances, nonce, or wallet-specific advice here.
+        checks.signer_balance = { status: balStatus };
       } else {
-        checks.signer_balance = { status: "unknown", details: { address: signerAddress, error: `API returned ${balResp.status}` } };
+        checks.signer_balance = { status: "unknown" };
       }
-    } catch (e) {
-      checks.signer_balance = { status: "unknown", details: { address: signerAddress, error: e instanceof Error ? e.message : "fetch failed" } };
+    } catch {
+      checks.signer_balance = { status: "unknown" };
     }
   }
 
@@ -457,6 +473,7 @@ export async function healthCheck(_req: Request, res: Response) {
     },
     transactions: metrics.transactions,
     mx8004_queue: metrics.mx8004,
+    agent_onboarding: buildAgentTrialOnboarding(),
   };
 
   healthCache = { body, status: httpStatus, cachedAt: Date.now() };

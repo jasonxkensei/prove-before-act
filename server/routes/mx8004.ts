@@ -1,11 +1,14 @@
 import { type Express } from "express";
 import { safeErrMsg } from "./helpers";
 import { logger } from "../logger";
-import { isMX8004Configured, getReputationScore, getAgentDetails, getContractAddresses, getJobData, getValidationStatus, hasGivenFeedback, getAgentResponse, readFeedback, getAgentsExplorerUrl } from "../mx8004";
+import { isMX8004Configured, getReputationScore, getAgentDetails, getContractAddresses, getJobData, getValidationStatus, hasGivenFeedback, getAgentResponse, readFeedback, getAgentsExplorerUrl, getMx8004NetworkConfiguration } from "../mx8004";
 import { publicReadRateLimiter } from "../reliability";
+import { db } from "../db";
+import { certifications, txQueue } from "@shared/schema";
+import { eq, desc } from "drizzle-orm";
 
 export function registerMx8004Routes(app: Express) {
-  app.get("/api/mx8004/status", (req, res) => {
+  app.get("/api/mx8004/status", async (req, res) => {
     const baseUrl = `https://${req.get("host")}`;
     
     if (!isMX8004Configured()) {
@@ -29,6 +32,7 @@ export function registerMx8004Routes(app: Express) {
       supported: true,
       active: true,
       status: "active",
+      network: getMx8004NetworkConfiguration(),
       role: "validation_oracle",
       description: "Prove Before Act acts as a validation oracle: each certification is registered as a validated job in the MX-8004 Validation Registry, with the configured validation loop (init_job → submit_proof → validation_request → validation_response → append_response).",
       contracts,
@@ -63,13 +67,71 @@ export function registerMx8004Routes(app: Express) {
     }
 
     try {
-      const jobData = await getJobData(req.params.jobId);
+      const [queueItem] = await db.select({
+        status: txQueue.status, payload: txQueue.payload, lastError: txQueue.lastError,
+      }).from(txQueue).where(eq(txQueue.jobId, req.params.jobId)).orderBy(desc(txQueue.createdAt)).limit(1);
+      const queue = queueItem ? {
+        queue_status: queueItem.status,
+        on_chain_finality: queueItem.status === "completed"
+          ? (queueItem.payload as any)?.finalityTracked ? "confirmed" : "unverified"
+          : queueItem.status === "failed" && (queueItem.payload as any)?.activeTx ? "failed" : "pending",
+        transaction_hash: (queueItem.payload as any)?.activeTx?.hash ?? null,
+        finalized_transactions: (queueItem.payload as any)?.finalizedTransactions ?? [],
+        current_step: (queueItem.payload as any)?.currentStep ?? 0,
+        recovery_reason: queueItem.status === "recovery_required" ? queueItem.lastError : null,
+        queue_error: queueItem.lastError ?? null,
+        failure_category: (queueItem.payload as any)?.failureCategory ?? null,
+        claimed_nonce: (queueItem.payload as any)?.activeTx?.nonce ?? (queueItem.payload as any)?.broadcastIntent?.nonce ?? null,
+      } : {};
+      if (!queueItem && req.params.jobId.startsWith("xproof_cert_")) {
+        const certificationId = req.params.jobId.slice("xproof_cert_".length);
+        const [certification] = await db.select({
+          status: certifications.mx8004EnqueueStatus,
+          error: certifications.mx8004EnqueueError,
+        }).from(certifications).where(eq(certifications.id, certificationId)).limit(1);
+        if (certification?.status === "failed") {
+          return res.status(409).json({
+            job_id: req.params.jobId,
+            queue_status: "enqueue_failed",
+            failure_category: "queue_handoff",
+            queue_error: certification.error,
+            message: "The certification was saved, but its MX-8004 job was not handed to the queue. Operator review is required before any retry.",
+          });
+        }
+        if (certification?.status === "pending") {
+          return res.status(202).json({
+            job_id: req.params.jobId,
+            queue_status: "handoff_pending",
+            message: "The certification is awaiting MX-8004 queue handoff",
+          });
+        }
+      }
+      let jobData;
+      try {
+        jobData = await getJobData(req.params.jobId);
+      } catch (err) {
+        logger.error("MX-8004 job registry read failed", {
+          jobId: req.params.jobId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return res.status(503).json({
+          error: "MX8004_REGISTRY_UNAVAILABLE",
+          job_id: req.params.jobId,
+          ...queue,
+          message: "Validation Registry status is temporarily unavailable; the job's on-chain status could not be checked",
+        });
+      }
       if (!jobData) {
+        if (queueItem) {
+          return res.status(["failed", "recovery_required"].includes(queueItem.status) ? 409 : 202)
+            .json({ job_id: req.params.jobId, ...queue, message: "Job is not yet available on chain" });
+        }
         return res.status(404).json({ error: "JOB_NOT_FOUND", message: "Job not found in Validation Registry" });
       }
       return res.json({
         job_id: req.params.jobId,
         ...jobData,
+        ...queue,
         standard: "MX-8004",
       });
     } catch (err: any) {

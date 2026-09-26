@@ -2,7 +2,7 @@ import { type Express } from "express";
 import crypto from "crypto";
 import { db, pool } from "../db";
 import { logger } from "../logger";
-import { certifications, users, apiKeys } from "@shared/schema";
+import { certifications, users, apiKeys, agents } from "@shared/schema";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { paymentRateLimiter, publicReadRateLimiter } from "../reliability";
@@ -11,6 +11,8 @@ import { recordOnBlockchain, isMultiversXConfigured, computeOnchainPayloadBytes,
 import { getCertificationPriceEgld, getCertificationPriceUsd } from "../pricing";
 import { isMX8004Configured, recordCertificationAsJob } from "../mx8004";
 import { isAdminWallet, getApiKeyOwnerWallet, getTrialUser, consumeTrialCredit, getUserCreditBalance, consumeCredit, atomicConsumeCredit, atomicConsumeTrialCredit, refundCredit, refundTrialCredit, TRIAL_QUOTA, buildCanonicalId, tryDisplaceAcpReservation, buildX402Block, buildPrepaidCreditsBlock, buildTrialExhaustedMessage, buildPaymentRequiredMessage } from "./helpers";
+import { resolveAgentForApiKey } from "../agent-identity";
+import { publicProofStatus } from "../proof-finality";
 
 export function registerStandardRoutes(app: Express) {
   const SHA256_REGEX = /^sha256:[a-fA-F0-9]{64}$/;
@@ -273,6 +275,7 @@ export function registerStandardRoutes(app: Express) {
 
       let authMethod: "api_key" | "x402" = "api_key";
       let apiKeyUserId: string | null = null;
+      let apiKeyAgentId: string | null = null;
       let standardIsAdminExempt = false;
       let standardTrialInfo: { isTrial: boolean; remaining: number; userId: string } | null = null;
       let standardCreditInfo: { userId: string; balance: number } | null = null;
@@ -291,6 +294,9 @@ export function registerStandardRoutes(app: Express) {
           return res.status(401).json({ error: "INVALID_API_KEY", message: "Invalid or expired API key" });
         }
         apiKeyUserId = apiKey.userId || null;
+        const logicalAgent = await resolveAgentForApiKey(apiKey);
+        apiKeyAgentId = logicalAgent.id;
+        await db.update(agents).set({ lastSeenAt: new Date() }).where(eq(agents.id, logicalAgent.id));
         authMethod = "api_key";
 
         db.update(apiKeys)
@@ -443,7 +449,7 @@ export function registerStandardRoutes(app: Express) {
                     network: "mainnet",
                     tx_hash: nowCert.transactionHash,
                     explorer_url: nowCert.transactionUrl,
-                    status: nowCert.blockchainStatus,
+                    status: publicProofStatus(nowCert),
                   },
                   proof_url: `${baseUrl}/proof/${nowCert.id}`,
                   standard_version: "1.0",
@@ -465,7 +471,7 @@ export function registerStandardRoutes(app: Express) {
               network: "mainnet",
               tx_hash: existingCert.transactionHash,
               explorer_url: existingCert.transactionUrl,
-              status: existingCert.blockchainStatus,
+              status: publicProofStatus(existingCert),
             },
             proof_url: `${baseUrl}/proof/${existingCert.id}`,
             standard_version: "1.0",
@@ -522,7 +528,7 @@ export function registerStandardRoutes(app: Express) {
                 network: "mainnet",
                 tx_hash: nowCert.transactionHash,
                 explorer_url: nowCert.transactionUrl,
-                status: nowCert.blockchainStatus,
+                status: publicProofStatus(nowCert),
               },
               proof_url: `${baseUrl}/proof/${nowCert.id}`,
               standard_version: "1.0",
@@ -608,6 +614,7 @@ export function registerStandardRoutes(app: Express) {
       try {
         [pendingCert] = await db.insert(certifications).values({
           userId,
+          ...(apiKeyAgentId ? { agentId: apiKeyAgentId } : {}),
           fileName,
           fileHash: canonicalHash,
           fileType: "application/x-agent-proof-standard",
@@ -646,7 +653,7 @@ export function registerStandardRoutes(app: Express) {
               network: "mainnet",
               tx_hash: raceCert.transactionHash,
               explorer_url: raceCert.transactionUrl,
-              status: raceCert.blockchainStatus,
+              status: publicProofStatus(raceCert),
             },
             proof_url: `${baseUrl}/proof/${raceCert.id}`,
             standard_version: "1.0",
@@ -670,7 +677,7 @@ export function registerStandardRoutes(app: Express) {
         return res.status(502).json({ error: "BLOCKCHAIN_ERROR", message: "Blockchain write failed. Your credit has been refunded." });
       }
 
-      const blockchainStatus = result.transactionHash.startsWith("sim_") ? "pending" : "confirmed";
+      const blockchainStatus = "pending";
 
       // Update the pending row with the real transaction details.
       let cert: (typeof certifications)["$inferSelect"];

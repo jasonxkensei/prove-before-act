@@ -2,6 +2,8 @@
 
 Certify every LLM call and query completion in your LlamaIndex pipeline.
 
+**Integration terminology:** Prove Before Act is the accountability pattern for autonomous agents; xProof is its reference implementation. Treat WHY as a declared decision basis—intent, relevant context, and authorization or policy basis—not internal chain-of-thought.
+
 ## What gets certified
 
 - `CBEventType.LLM` end events — LLM responses
@@ -12,7 +14,8 @@ Each certification records WHO (your agent name), WHAT (SHA-256 of the response)
 ## Install
 
 ```bash
-pip install xproof llama-index-core
+# Canonical distribution; `xproof` imports below are legacy module aliases.
+pip install prove-before-act llama-index-core
 ```
 
 ## Usage
@@ -45,4 +48,4 @@ No API key required — registers a free trial account automatically.
 
 - [provebeforeact.com](https://provebeforeact.com)
 - Docs (LLM-readable): [provebeforeact.com/llms.txt](https://provebeforeact.com/llms.txt)
-- [PyPI: Prove Before Act](https://pypi.org/project/xproof)
+- [PyPI: Prove Before Act](https://pypi.org/project/prove-before-act)

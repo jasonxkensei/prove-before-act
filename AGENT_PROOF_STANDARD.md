@@ -6,7 +6,7 @@ An open, chain-agnostic format for AI agent action certification with cryptograp
 
 A minimal specification for recording **what an AI agent decided** (intent) and **what it executed** (action), with a cryptographic proof that intent preceded execution.
 
-Any system can implement this standard independently, on any stack, against any chain. Prove Before Act is the reference implementation — not a gatekeeper. You do not need to use Prove Before Act infrastructure to create a valid proof.
+Any system can implement this standard independently, on any stack, against any chain. xProof is the reference implementation of this standard — not a gatekeeper. You do not need to use xProof infrastructure to create a valid proof.
 
 ## Design decisions
 
@@ -36,7 +36,7 @@ Every agent action answers four questions:
 | **WHO** | `agent_id` | Which agent acted |
 | **WHAT** | `action_hash` | What was executed |
 | **WHEN** | `timestamp` | When the proof was created |
-| **WHY** | `instruction_hash` | What reasoning preceded the action |
+| **WHY** | `instruction_hash` | Sanitized declared decision basis (intent, relevant context, authorization/policy basis) — never private chain-of-thought |
 
 ## Proof Format
 
@@ -57,7 +57,7 @@ Every agent action answers four questions:
 |-------|------|-------------|
 | `version` | string | Must be `"1.0"` |
 | `agent_id` | string | Persistent agent identifier. Free-form, intentionally chain-agnostic. See design note above. |
-| `instruction_hash` | string | `sha256:` + 64 hex chars. SHA-256 of the instruction/reasoning that preceded the action. Hash the raw content, not a JSON wrapper. |
+| `instruction_hash` | string | `sha256:` + 64 hex chars. SHA-256 of the sanitized declared decision basis (intent, relevant context, authorization/policy basis) that preceded the action. This must be a disclosed document — never a hash of private chain-of-thought. Hash the raw content, not a JSON wrapper. |
 | `action_hash` | string | `sha256:` + 64 hex chars. SHA-256 of the action content (the file, API call body, message, etc.). |
 | `timestamp` | string | ISO 8601 UTC. The moment this proof was created, not the moment of execution. |
 | `signature` | string | `hex:` + cryptographic signature of the canonical payload. Mandatory. See signature scheme below. |
@@ -71,7 +71,7 @@ Every agent action answers four questions:
 | `target_author` | string | The entity affected. Required for intent-action pairing. |
 | `session_id` | string | Groups related proofs into an auditable session. |
 | `chain_anchor` | object | Blockchain anchoring details once the proof has been recorded on-chain. |
-| `metadata` | object | Any additional context: decision chains, rules applied, prompt hashes, model version, etc. |
+| `metadata` | object | Optional, intentionally public classification context only: action category, opaque session or decision IDs, timestamps, and non-content fingerprints such as model version hashes. Never include the declared decision basis, its rationale, rules, prompts, or source details. |
 
 ### Chain anchor
 
@@ -120,9 +120,11 @@ function sha256(content) {
   return 'sha256:' + createHash('sha256').update(content).digest('hex');
 }
 
-function createProof(agentId, instruction, action, privateKeyPem) {
+// `decisionBasis` must be a sanitized, disclosable document — intent, relevant context,
+// and authorization/policy basis. Never pass private chain-of-thought here.
+function createProof(agentId, decisionBasis, action, privateKeyPem) {
   const timestamp = new Date().toISOString();
-  const instructionHash = sha256(instruction);
+  const instructionHash = sha256(decisionBasis);
   const actionHash = sha256(action);
   const canonical = `1.0|${agentId}|${instructionHash}|${actionHash}|${timestamp}`;
   const sig = sign(null, Buffer.from(canonical), privateKeyPem);
@@ -147,9 +149,11 @@ from ecdsa import SigningKey, SECP256k1
 def sha256(content: str) -> str:
     return "sha256:" + hashlib.sha256(content.encode()).hexdigest()
 
-def create_proof(agent_id: str, instruction: str, action: str, sk: SigningKey) -> dict:
+# `decision_basis` must be a sanitized, disclosable document — intent, relevant context,
+# and authorization/policy basis. Never pass private chain-of-thought here.
+def create_proof(agent_id: str, decision_basis: str, action: str, sk: SigningKey) -> dict:
     timestamp = time.strftime("%Y-%m-%dT%H:%M:%S.000Z", time.gmtime())
-    instruction_hash = sha256(instruction)
+    instruction_hash = sha256(decision_basis)
     action_hash = sha256(action)
     canonical = f"1.0|{agent_id}|{instruction_hash}|{action_hash}|{timestamp}"
     sig = sk.sign(canonical.encode())
@@ -182,7 +186,7 @@ A proof pair (intent + action) has **temporal integrity** if:
 
 8. The intent proof `timestamp` is strictly earlier than the action proof `timestamp`
 
-Violating rule 8 is the core anomaly that Prove Before Act's violation detection identifies — an agent that executed before reasoning is provably out of compliance.
+Violating rule 8 is the core anomaly that Prove Before Act's violation detection identifies — an agent that executed before its declared decision basis was anchored is provably out of compliance.
 
 ## Intent-Action Pairing
 
@@ -190,16 +194,18 @@ For full 4W compliance, produce **two proofs per action**:
 
 | Proof | Timing | Content |
 |-------|--------|---------|
-| **Intent Proof** (WHY) | Before execution | Hash of the instruction/reasoning |
+| **Intent Proof** (WHY) | Before execution | Hash of the sanitized declared decision basis (intent, relevant context, authorization/policy basis) |
 | **Action Proof** (WHAT) | After execution | Hash of the action content |
 
-Link the pair by setting the same values for `post_id`, `target_author`, and base `action_type` (the intent proof uses `<type>_reasoning`, the action proof uses `<type>`).
+Link the pair by setting the same values for `post_id`, `target_author`, and base `action_type` (the intent proof uses the legacy compatibility suffix `<type>_reasoning`, while the action proof uses `<type>`). The suffix labels a declared decision-basis proof for pairing only; it never asks for or stores private reasoning.
 
-**Why this matters**: Any verifier can look at the timestamps on two blockchain-anchored proofs and confirm, without trusting the agent, that the reasoning existed before the action. This is the core accountability primitive.
+**Why this matters**: Any verifier can look at the timestamps on two blockchain-anchored proofs and confirm, without trusting the agent, that a declared decision basis was anchored before the action. This is the core accountability primitive.
+
+**What WHY is not**: The `instruction_hash` commits to a declared, disclosable document. It must not be a hash of a private internal reasoning chain that cannot be shown to a verifier. If the underlying document cannot be disclosed, it cannot be audited — defeating the purpose of the proof.
 
 ## Anchoring Options
 
-### Option 1 — Prove Before Act (reference implementation)
+### Option 1 — xProof (Prove Before Act reference implementation)
 
 **Step 1**: Validate your proof format for free:
 ```bash
@@ -224,7 +230,7 @@ Get a free API key (10 certifications): `POST https://provebeforeact.com/api/age
 2. Submit that hash as transaction data on your preferred chain
 3. Store the transaction hash in your proof's `chain_anchor` field
 
-You own the anchoring. Prove Before Act is not required.
+You own the anchoring. xProof is not required.
 
 ## Trust Score Integration
 

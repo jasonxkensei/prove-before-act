@@ -40,10 +40,10 @@ function sha256(s: string): string {
 
 async function seedCert(metadata: Record<string, unknown>, tag: string) {
   const r = await pool.query(
-    `INSERT INTO certifications (user_id, file_name, file_hash, blockchain_status, is_public, metadata)
-     VALUES ($1, $2, $3, 'confirmed', true, $4::jsonb)
+    `INSERT INTO certifications (user_id, file_name, file_hash, blockchain_status, is_public, metadata, transaction_hash, finality_checked_at)
+     VALUES ($1, $2, $3, 'confirmed', true, $4::jsonb, $5, NOW())
      RETURNING id`,
-    [userId, `pba-parity-${tag}.json`, sha256(`pba-parity-${RUN}-${tag}`), JSON.stringify(metadata)],
+    [userId, `pba-parity-${tag}.json`, sha256(`pba-parity-${RUN}-${tag}`), JSON.stringify(metadata), sha256(`pba-parity-${RUN}-tx-${tag}`)],
   );
   certIds.push(r.rows[0].id);
 }

@@ -6,6 +6,7 @@ import { users, apiKeys } from "@shared/schema";
 import { eq, and, gte } from "drizzle-orm";
 import { isWalletAuthenticated } from "../walletAuth";
 import { apiKeyCreationRateLimiter } from "../reliability";
+import { ensureDefaultAgent } from "../agent-identity";
 
 export function registerKeysRoutes(app: Express) {
   // ============================================
@@ -30,6 +31,7 @@ export function registerKeysRoutes(app: Express) {
       const rawKey = `pm_${crypto.randomBytes(32).toString("hex")}`;
       const keyHash = crypto.createHash("sha256").update(rawKey).digest("hex");
       const keyPrefix = rawKey.slice(0, 10) + "...";
+      const defaultAgent = await ensureDefaultAgent(user.id!);
 
       const [apiKey] = await db
         .insert(apiKeys)
@@ -37,6 +39,7 @@ export function registerKeysRoutes(app: Express) {
           keyHash,
           keyPrefix,
           userId: user.id!,
+          agentId: defaultAgent.id,
           name,
         })
         .returning();
@@ -75,6 +78,7 @@ export function registerKeysRoutes(app: Express) {
           lastUsedAt: apiKeys.lastUsedAt,
           isActive: apiKeys.isActive,
           createdAt: apiKeys.createdAt,
+          agentId: apiKeys.agentId,
         })
         .from(apiKeys)
         .where(eq(apiKeys.userId, user.id!));

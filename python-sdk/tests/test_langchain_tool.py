@@ -1,18 +1,22 @@
 """Unit tests for XProofCertifyTool using a mocked XProofClient."""
 
 import hashlib
+import json
 from unittest.mock import MagicMock
 
 import pytest
+import responses
 
 pytest.importorskip("langchain_core", reason="langchain-core not installed")
 
+from xproof.client import XProofClient
 from xproof.exceptions import PolicyViolationError
 from xproof.langchain_tool import XProofCertifyTool
 from xproof.models import Certification, PolicyCheckResult, PolicyViolation
 
 DECISION_ID = "test-decision-001"
 TRANSACTION_HASH = "0xdeadbeefcafe1234"
+BASE = "https://provebeforeact.com"
 
 
 def _make_cert(transaction_hash: str = TRANSACTION_HASH) -> Certification:
@@ -364,3 +368,57 @@ async def test_arun_sha256_hash_of_decision_text_is_correct(tool, mock_client):
 
     call_kwargs = mock_client.certify_with_confidence.call_args.kwargs
     assert call_kwargs["file_hash"] == expected_hash
+
+
+# ---------------------------------------------------------------------------
+# Privacy: `why` supplied via the LangChain tool route is fingerprint-only
+# ---------------------------------------------------------------------------
+
+
+@responses.activate
+def test_langchain_tool_route_fingerprints_why():
+    """A `why` passed through the LangChain tool never reaches the wire as plaintext."""
+    responses.add(
+        responses.POST,
+        f"{BASE}/api/proof",
+        json={
+            "id": "proof-lc",
+            "fileName": f"{DECISION_ID}-pre-commitment.json",
+            "fileHash": "a" * 64,
+            "transactionHash": TRANSACTION_HASH,
+            "transactionUrl": "",
+            "createdAt": "",
+        },
+        status=201,
+    )
+    responses.add(
+        responses.GET,
+        f"{BASE}/api/proofs/policy-check",
+        json={
+            "decision_id": DECISION_ID,
+            "policy_compliant": True,
+            "policy_violations": [],
+            "total_anchors": 1,
+            "checked_at": "2026-04-20T10:00:00Z",
+        },
+        status=200,
+    )
+
+    real_client = XProofClient(api_key="pm_test")
+    tool = XProofCertifyTool(api_key="pm_test", author="test-agent", client=real_client)
+
+    raw_why = "delete PII because retention window expired for EU users"
+    result = tool._run(
+        decision_text="Approve GDPR data deletion",
+        confidence_level=0.97,
+        decision_id=DECISION_ID,
+        threshold_stage="pre-commitment",
+        why=raw_why,
+    )
+    assert result == TRANSACTION_HASH
+
+    raw_body = responses.calls[0].request.body
+    body = raw_body.decode("utf-8") if isinstance(raw_body, (bytes, bytearray)) else raw_body
+    meta = json.loads(body)["metadata"]
+    assert meta["why"] == hashlib.sha256(raw_why.encode("utf-8")).hexdigest()
+    assert raw_why not in body

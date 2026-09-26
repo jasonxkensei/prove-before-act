@@ -1,6 +1,7 @@
 - [Playwright WebKit on Replit/NixOS](playwright-webkit-nix-setup.md) — 3 blockers: patch coreBundle dlOpen list to [], clear GST_PLUGIN_SYSTEM_PATH_1_0 in launchOptions, inject selective LD_LIBRARY_PATH
 - [npm publish on Replit](npm-publish-replit.md) — bash blocks `npm`; use `pnpm publish --registry https://registry.npmjs.org/` with NPM_ACCESS_TOKEN env var
 - [GitHub remote divergence](github-remote-divergence.md) — when git push fails (remote ahead), push individual files via GitHub contents API with GITHUB_PERSONAL_ACCESS_TOKEN
+- [GitHub repository rebranding](github-repository-rebranding.md) — GitHub repository renames preserve old URL redirects; update manifests and public links to the new canonical names
 - [SDK distribution channel](sdk-distribution.md) — PyPI: PYPI_API_TOKEN + twine; npm: NPM_ACCESS_TOKEN + pnpm; clawhub: GITHUB_PERSONAL_ACCESS_TOKEN + contents API to jasonxkensei/xproof-openclaw-skill
 - [Drizzle schema vs raw-SQL drift](drizzle-schema-raw-sql-drift.md) — any table/column/index/constraint created via raw SQL MUST also be declared in shared/schema.ts or drizzle-kit push will DROP it in production
 - [Playwright wallet-session + focus testing](playwright-wallet-session-focus-testing.md) — how to seed a real owner session for e2e tests without weakening auth, and why FocusManager needs `visibilitychange` not `focus`
@@ -10,6 +11,35 @@
 - [npm lockfile Replit registry proxy](npm-lockfile-replit-registry.md) — always regenerate package-lock.json with `--registry https://registry.npmjs.org`; Replit proxy URLs break CI
 - [xproof security audit fixes Aug 2026](xproof-security-audit-aug2026.md) — comprehensive map of 71 audit findings vs fixed/confirmed status
 - [MultiversX WASM builds on Replit](multiversx-wasm-toolchain-replit.md) — sc-meta needs rustup in /tmp (Nix rust lacks wasm stdlib); struct views return ONE nested-encoded buffer, decode sequentially
+- [MultiversX nonce recovery](multiversx-nonce-recovery-after-rejection.md) — rejected broadcasts can advance the local wallet nonce; funding recovery needs a nonce resync and job replay
 - [Public pricing claims](public-pricing-claims.md) — public rates must be live-derived or link to /api/pricing, including crawler-rendered and published skill content
 - [GitHub connector Git-data writes](github-connector-git-data-writes.md) — OAuth connector may read repos but reject Git tree/commit writes; use a securely stored Git transport credential for repository synchronization
 - [GitHub Actions PostgreSQL CI](github-actions-postgres-ci.md) — service PostgreSQL needs a TCP driver, and lockfile tarballs must resolve through the public npm registry
+- [Immutable release sources](github-raw-cache-after-api-writes.md) — build release bundles from immutable source revisions, not mutable branch references
+- [PBA positioning and adoption](positioning-and-adoption.md) — lead with pre-execution accountability and independent adoption; use “decision basis” instead of “reasoning”
+- [Drizzle composite FK introspection](drizzle-composite-fk-introspection.md) — stable 0.31 can churn composite FKs; use generated ownership keys when push idempotence matters
+- [Public route dual rendering](public-route-dual-rendering.md) — crawler prerenders bypass React; route-wide chrome checks need full browser coverage and valid data states
+- [Replit Stripe connection field names](replit-stripe-connection-fields.md) — current Stripe connector exposes `secret`, not the older `secret_key` field; managed webhook secrets are held by StripeSync
+- [One-time trial credentials](one-time-trial-credentials.md) — keep raw trial keys out of durable browser storage; allow tab-scoped recovery with explicit copy/download and graceful storage failure
+- [Agent activation credential boundary](agent-activation-credential-boundary.md) — disclose raw keys once but preserve private-context usability; only confirmed proofs with valid transaction hashes advance activation
+- [MultiversX UI global CSS collisions](multiversx-ui-global-css-collisions.md) — SDK UI injects Tailwind utilities after app CSS; avoid generic utility classes for critical responsive visibility
+- [Production bearer redirect](production-bearer-redirect.md) — a published host can redirect cross-origin and drop Authorization; resolve the verified destination before credentialed API calls
+- [Durable tool clock](durable-tool-clock.md) — CodeExecution may reject Date.now despite guidance; omit optional time filters or use an explicit timestamp
+- [Workflow startup race](workflow-startup-race.md) — network-backed checks may run before the app opens its port; confirm readiness before judging connection-refused failures.
+- [Proof finality evidence](proof-finality-evidence.md) — legacy confirmed labels are not chain evidence; status-rule changes must invalidate persisted trust snapshots
+- [PostgreSQL lock observation in tests](postgres-lock-observation.md) — lock-wait tests should not rely on pg_stat_activity query text being enabled
+- [Cross-language webhook generation](cross-language-webhook-generation.md) — Java emits webhook types but synthesizes a client path; Python webhook generation may emit invalid code.
+- [Drizzle push CLI on this workspace](drizzle-push-cli.md) — config-file push cannot combine with CLI table filters; avoid force and inspect schema drift before applying.
+- [Off-chain PBA witness boundary](pba-off-chain-witness-boundary.md) — distinguish recipient-accepted HTTP delivery from downstream effects; independent witness claims need public signed preimages.
+- [Vitest explicit paths and JSX](vitest-explicit-paths-jsx.md) — an explicit test path still obeys the include glob; SSR imports can use a different JSX transform from the browser.
+- [Conversion health outage boundary](conversion-health-outage-boundary.md) — shared failure counts cannot survive a full database outage without an independent sink; report unknown, not healthy.
+- [Conversion identity boundary](conversion-identity-boundary.md) — ordered journeys require browser identity; keep unlinked API and legacy activity visible without inferring identity from a shared IP.
+- [Production crawler smoke target](production-crawler-smoke-target.md) — deployment primary can be a retired host; verify and check the canonical published domain directly.
+- [Playwright cross-browser dev proxy](playwright-cross-browser-dev-proxy.md) — Firefox and WebKit can reject the proxied development HTTPS host; use the configured local test server for full browser suites.
+- [Playwright parameterized cases](playwright-parameterized-cases.md) — Playwright's test API has no test.each; declare cases with a for...of loop at module scope.
+- [MX-8004 queue handoff uncertainty](mx8004-queue-handoff-uncertainty.md) — a failed enqueue acknowledgement is not proof that the insert rolled back; always prefer an actual queue row and avoid automatic replay.
+- [Operator webhook delivery ambiguity](operator-webhook-delivery-ambiguity.md) — durable alerts are at-least-once; use a stable delivery ID so receivers can deduplicate after ambiguous acknowledgements.
+- [Signer wallet privacy boundary](signer-wallet-privacy-boundary.md) — public capability status must not mirror admin-only signer address, balance, or nonce.
+- [Alert observation fencing](alert-observation-fencing.md) — a suppressed duplicate check must still advance its observation timestamp or a delayed stale result can re-arm the episode.
+- [App Storage bucket provisioning](app-storage-bucket-provisioning.md) — SDK default-bucket lookup can return no usable bucket until the project creates one; fail closed on reads.
+- [x402 V1 network identifiers](x402-v1-network-identifiers.md) — V1 EVM uses legacy network slugs plus USDC EIP-712 domain metadata; V2 uses CAIP-2 identifiers.

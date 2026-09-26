@@ -3,16 +3,26 @@ import crypto from "crypto";
 import { db, pool } from "../db";
 import { getRateLimitStats } from "../pgRateLimit";
 import { logger } from "../logger";
-import { certifications, users, apiKeys, visits, txQueue as txQueueTable, agentViolations } from "@shared/schema";
-import { eq, desc, sql, and, gte, gt, count, ne } from "drizzle-orm";
+import { certifications, users, apiKeys, visits, txQueue as txQueueTable, agentViolations, FINALITY_SNAPSHOT_VERSION } from "@shared/schema";
+import { eq, desc, sql, and, gte, gt, count, ne, isNotNull } from "drizzle-orm";
 import { isWalletAuthenticated } from "../walletAuth";
 import { computeTrustScoreByWallet, runLeaderboardRefreshCycle, runTrustRefreshCycle } from "../trust";
-import { getAlertConfig, getRateLimitAlertConfig, getViolationQueueAlertConfig } from "../alerts";
-import { getMetrics } from "../metrics";
-import { getTxQueueStats } from "../txQueue";
+import { getAlertConfig, getRateLimitAlertConfig, getViolationQueueAlertConfig, getTrustSnapshotWriteHealth } from "../alerts";
+import {
+  getMetrics,
+  getSharedConversionTelemetryWriteFailureStats,
+  CONVERSION_TELEMETRY_FAILURE_HEALTH_WINDOW_MS,
+} from "../metrics";
+import { getTxQueueStats, getMx8004NonceStall, assessMx8004LegacyBroadcast, MX8004_LEGACY_BROADCAST_REVIEW_MS, reconcileMx8004Job, RecoveryConflict } from "../txQueue";
+import { getMx8004SignerBalance, getMx8004SignerBalanceReport, getMx8004FreshSignerNonce, getMx8004RecentSignerTransactions, isMX8004Configured } from "../mx8004";
 import { requireAdmin, EXCLUDED_IP_HASHES, getClientIp, safeErrMsg } from "./helpers";
 import { reconstructAuditTrail } from "../audit-trail";
 import { publicStatsRateLimiter } from "../reliability";
+import {
+  listRetryableFailedWebhookDeliveries,
+  redactWebhookUrl,
+  retryFailedWebhookDelivery,
+} from "../webhook";
 
 // Map a referer hostname to a friendly traffic-source label.
 // Pattern match (suffix-based) so subdomains like t.co, lm.facebook.com,
@@ -79,8 +89,151 @@ function labelForReferrerHost(host: string): string {
 // and fold concurrent first-fetches into a single in-flight promise.
 const STATS_CACHE_TTL_MS = 60_000;
 const TRAFFIC_SOURCES_WINDOW_DAYS = 30;
+const ACTIVATION_FUNNEL_WINDOW_DAYS = 30;
+const CAMPAIGN_RECOMMENDATION_MIN_ENTRY_VISITORS = 10;
+const ACTIVATION_RECOMMENDATION_MIN_FROM_VISITORS = 10;
+const DIRECT_UNKNOWN_CAMPAIGN = "direct / unknown";
 let statsCache: { body: object; cachedAt: number } | null = null;
 let statsInflight: Promise<object> | null = null;
+
+const ACTIVATION_STAGE_ORDER = [
+  "scenario_selected",
+  "primary_cta_clicked",
+  "registered",
+  "first_proof",
+  "second_proof",
+] as const;
+type ActivationStage = typeof ACTIVATION_STAGE_ORDER[number];
+type ActivationStageCounts = Record<ActivationStage, number>;
+type ActivationCohortCounts = {
+  scenario_to_primary: number;
+  primary_to_registration: number;
+  registration_to_first_proof: number;
+  first_to_second_proof: number;
+};
+
+// A pair exists when an upstream event precedes any downstream event for the
+// same privacy-safe visitor inside the reporting window. MIN(upstream) and
+// MAX(downstream) preserve returning journeys even if an earlier downstream
+// event preceded the visitor's first recorded upstream event.
+const ACTIVATION_COHORT_FIRST_TIMES = sql`
+  MIN(created_at) FILTER (
+    WHERE stage = 'cta' AND outcome = 'clicked' AND event_type LIKE '%:scenario_%'
+  ) AS scenario_first_at,
+  MIN(created_at) FILTER (
+    WHERE stage = 'cta' AND outcome = 'clicked' AND event_type NOT LIKE '%:scenario_%'
+  ) AS primary_first_at,
+  MIN(created_at) FILTER (
+    WHERE stage = 'registration' AND outcome = 'success' AND http_class = '2xx'
+  ) AS registration_first_at,
+  MIN(created_at) FILTER (WHERE event_type = 'first_proof_verified') AS first_proof_first_at
+`;
+
+const ACTIVATION_COHORT_LAST_TIMES = sql`
+  MAX(created_at) FILTER (
+    WHERE stage = 'cta' AND outcome = 'clicked' AND event_type NOT LIKE '%:scenario_%'
+  ) AS primary_last_at,
+  MAX(created_at) FILTER (
+    WHERE stage = 'registration' AND outcome = 'success' AND http_class = '2xx'
+  ) AS registration_last_at,
+  MAX(created_at) FILTER (WHERE event_type = 'first_proof_verified') AS first_proof_last_at,
+  MAX(created_at) FILTER (WHERE event_type = 'external_agent_second_proof_verified') AS second_proof_last_at
+`;
+
+const ACTIVATION_COHORT_COUNTS = sql`
+  COUNT(*) FILTER (WHERE visitor_metrics.scenario_first_at < visitor_latest.primary_last_at)::int AS scenario_to_primary,
+  COUNT(*) FILTER (WHERE visitor_metrics.primary_first_at < visitor_latest.registration_last_at)::int AS primary_to_registration,
+  COUNT(*) FILTER (WHERE visitor_metrics.registration_first_at < visitor_latest.first_proof_last_at)::int AS registration_to_first_proof,
+  COUNT(*) FILTER (WHERE visitor_metrics.first_proof_first_at < visitor_latest.second_proof_last_at)::int AS first_to_second_proof
+`;
+
+const ACTIVATION_VISITOR_LATEST = sql`
+  SELECT visitor_key, ${ACTIVATION_COHORT_LAST_TIMES}
+  FROM conversion_events
+  WHERE created_at >= NOW() - INTERVAL '30 days' AND visitor_key IS NOT NULL
+  GROUP BY visitor_key
+`;
+
+const NON_BROWSER_ACTIVATION_SEGMENTS = new Set(["api_client", "crawler_scanner"]);
+
+function isComparableActivationSegment(
+  trafficSegment: string,
+  stages: ActivationStageCounts,
+): boolean {
+  return !NON_BROWSER_ACTIVATION_SEGMENTS.has(trafficSegment)
+    && (stages.scenario_selected > 0 || stages.primary_cta_clicked > 0);
+}
+
+function roundPercentage(value: number | null): number | null {
+  return value === null ? null : Math.round(value * 1000) / 10;
+}
+
+function buildActivationAnalysis(
+  stages: ActivationStageCounts,
+  trafficSegment: string,
+  cohorts: ActivationCohortCounts,
+) {
+  const stageRows = ACTIVATION_STAGE_ORDER.map((key, index) => {
+    const visitors = stages[key];
+    const previousKey = index > 0 ? ACTIVATION_STAGE_ORDER[index - 1] : null;
+    const previousVisitors = previousKey ? stages[previousKey] : null;
+    return {
+      stage: key,
+      visitors,
+      from_previous: previousVisitors,
+    };
+  });
+  const pairCounts = [
+    cohorts.scenario_to_primary,
+    cohorts.primary_to_registration,
+    cohorts.registration_to_first_proof,
+    cohorts.first_to_second_proof,
+  ];
+  const cohortTransitions = ACTIVATION_STAGE_ORDER.slice(1).map((toStage, index) => {
+    const fromStage = ACTIVATION_STAGE_ORDER[index];
+    const fromVisitors = stages[fromStage];
+    const convertedVisitors = pairCounts[index];
+    const lostVisitors = fromVisitors - convertedVisitors;
+    return {
+      from_stage: fromStage,
+      to_stage: toStage,
+      from_visitors: fromVisitors,
+      to_visitors: stages[toStage],
+      converted_visitors: convertedVisitors,
+      lost_visitors: lostVisitors,
+      conversion_rate: fromVisitors > 0 ? roundPercentage(convertedVisitors / fromVisitors) : null,
+      drop_off_rate: fromVisitors > 0 ? roundPercentage(lostVisitors / fromVisitors) : null,
+    };
+  });
+  const comparableDrops = cohortTransitions
+    .filter((row) => row.from_visitors > 0)
+    .sort((a, b) => {
+      const exactRateDelta = (b.lost_visitors / b.from_visitors) - (a.lost_visitors / a.from_visitors);
+      return exactRateDelta || (b.lost_visitors - a.lost_visitors);
+    });
+  // Non-browser traffic can have registrations or proofs without entering the
+  // activation page. Keep its counts visible, but do not recommend product
+  // changes from that incomparable population.
+  const isComparable = isComparableActivationSegment(trafficSegment, stages);
+  const largestDropOff = isComparable
+    ? comparableDrops.find((row) => row.from_visitors >= ACTIVATION_RECOMMENDATION_MIN_FROM_VISITORS)
+    : null;
+  const lowConfidenceDropOff = isComparable
+    ? comparableDrops.find((row) => row.from_visitors < ACTIVATION_RECOMMENDATION_MIN_FROM_VISITORS)
+    : null;
+
+  return {
+    traffic_segment: trafficSegment,
+    // These are independent directional totals, not sequenced conversions.
+    stages: stageRows,
+    cohort_transitions: cohortTransitions,
+    largest_drop_off: largestDropOff ?? null,
+    low_confidence_drop_off: lowConfidenceDropOff ?? null,
+    recommendation_sample_size: isComparable
+      ? largestDropOff?.from_visitors ?? Math.max(0, ...comparableDrops.map((row) => row.from_visitors))
+      : 0,
+  };
+}
 
 export function registerAdminRoutes(app: Express) {
   app.get("/api/stats", publicStatsRateLimiter, async (req: any, res) => {
@@ -352,7 +505,8 @@ export function registerAdminRoutes(app: Express) {
           http_class,
           traffic_segment,
           COUNT(*)::int AS events,
-          COUNT(DISTINCT ip_hash)::int AS visitors
+          COUNT(DISTINCT visitor_key)::int AS visitors,
+          COUNT(*) FILTER (WHERE visitor_key IS NULL)::int AS unlinked_events
         FROM conversion_events
         WHERE created_at >= NOW() - INTERVAL '30 days'
         GROUP BY 1, 2, 3, 4, 5
@@ -361,28 +515,169 @@ export function registerAdminRoutes(app: Express) {
       const totalsResult = await db.execute(sql`
         SELECT
           COUNT(*)::int AS events,
-          COUNT(DISTINCT ip_hash)::int AS visitors,
-          COUNT(DISTINCT ip_hash) FILTER (
+          COUNT(DISTINCT visitor_key)::int AS visitors,
+          COUNT(*) FILTER (WHERE visitor_key IS NULL)::int AS unlinked_events,
+          COUNT(*) FILTER (
+            WHERE visitor_key IS NULL AND traffic_segment = 'api_client'
+          )::int AS unlinked_api_events,
+          MIN(created_at) AS first_event_at,
+          MAX(created_at) AS last_event_at,
+          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours')::int AS events_last_24h,
+          COUNT(DISTINCT visitor_key) FILTER (
             WHERE stage = 'cta' AND outcome = 'seen'
           )::int AS cta_views,
-          COUNT(DISTINCT ip_hash) FILTER (
+          COUNT(DISTINCT visitor_key) FILTER (
             WHERE stage = 'cta' AND outcome = 'clicked'
           )::int AS cta_clicks,
-          COUNT(DISTINCT ip_hash) FILTER (
+          COUNT(DISTINCT visitor_key) FILTER (
+            WHERE stage = 'cta'
+              AND outcome = 'clicked'
+              AND event_type NOT LIKE '%:scenario_%'
+          )::int AS primary_cta_clicks,
+          COUNT(DISTINCT visitor_key) FILTER (
+            WHERE stage = 'cta'
+              AND outcome = 'clicked'
+              AND event_type LIKE '%:scenario_%'
+          )::int AS scenario_engagements,
+          COUNT(DISTINCT visitor_key) FILTER (
             WHERE stage = 'registration' AND outcome = 'success' AND http_class = '2xx'
           )::int AS registrations,
-          COUNT(DISTINCT ip_hash) FILTER (
+          COUNT(DISTINCT visitor_key) FILTER (
             WHERE stage = 'proof' AND outcome = 'success' AND http_status = 201
           )::int AS successful_proofs
         FROM conversion_events
         WHERE created_at >= NOW() - INTERVAL '30 days'
       `);
+      const segmentResult = await db.execute(sql`
+        WITH visitor_latest AS (${ACTIVATION_VISITOR_LATEST}),
+        visitor_metrics AS (
+          SELECT
+            CASE WHEN GROUPING(traffic_segment) = 1 THEN 'all' ELSE traffic_segment END AS traffic_segment,
+            visitor_key,
+            BOOL_OR(
+              stage = 'cta'
+              AND outcome = 'clicked'
+              AND event_type LIKE '%:scenario_%'
+            ) AS scenario_selected,
+            BOOL_OR(
+              stage = 'cta'
+              AND outcome = 'clicked'
+              AND event_type NOT LIKE '%:scenario_%'
+            ) AS primary_cta_clicked,
+            BOOL_OR(
+              stage = 'registration'
+              AND outcome = 'success'
+              AND http_class = '2xx'
+            ) AS registered,
+            BOOL_OR(event_type = 'first_proof_verified') AS first_proof_verified,
+            BOOL_OR(event_type = 'external_agent_second_proof_verified') AS second_proof_verified,
+            ${ACTIVATION_COHORT_FIRST_TIMES}
+          FROM conversion_events
+          WHERE created_at >= NOW() - INTERVAL '30 days' AND visitor_key IS NOT NULL
+          GROUP BY GROUPING SETS ((traffic_segment, visitor_key), (visitor_key))
+        )
+        SELECT
+          traffic_segment,
+          COUNT(*) FILTER (WHERE scenario_selected)::int AS scenario_selected,
+          COUNT(*) FILTER (WHERE primary_cta_clicked)::int AS primary_cta_clicked,
+          COUNT(*) FILTER (WHERE registered)::int AS registered,
+          COUNT(*) FILTER (WHERE first_proof_verified)::int AS first_proof,
+          COUNT(*) FILTER (WHERE second_proof_verified)::int AS second_proof,
+          ${ACTIVATION_COHORT_COUNTS}
+        FROM visitor_metrics
+        JOIN visitor_latest USING (visitor_key)
+        GROUP BY traffic_segment
+        ORDER BY traffic_segment
+      `);
+      const campaignResult = await db.execute(sql`
+        WITH window_events AS (
+          SELECT *
+          FROM conversion_events
+          WHERE created_at >= NOW() - INTERVAL '30 days'
+            AND traffic_segment IN ('human_browser', 'declared_agent')
+            AND visitor_key IS NOT NULL
+        ),
+        visitor_latest AS (${ACTIVATION_VISITOR_LATEST}),
+        first_touch_source AS (
+          SELECT DISTINCT ON (visitor_key)
+            visitor_key,
+            utm_source AS original_source
+          FROM window_events
+          WHERE NULLIF(BTRIM(utm_source), '') IS NOT NULL
+          ORDER BY visitor_key, created_at ASC
+        ),
+        normalized_source AS (
+          SELECT
+            visitor_key,
+            original_source,
+            -- Only explicit aliases collapse punctuation; all other sources
+            -- differ only by surrounding whitespace and case.
+            CASE LOWER(BTRIM(original_source))
+              WHEN 'product-hunt' THEN 'producthunt'
+              ELSE LOWER(BTRIM(original_source))
+            END AS campaign_source
+          FROM first_touch_source
+        ),
+        visitor_metrics AS (
+          SELECT
+            COALESCE(normalized_source.campaign_source, ${DIRECT_UNKNOWN_CAMPAIGN}) AS campaign_source,
+            window_events.visitor_key,
+            MAX(normalized_source.original_source) AS original_source,
+            BOOL_OR(
+              stage = 'cta'
+              AND outcome = 'clicked'
+              AND event_type LIKE '%:scenario_%'
+            ) AS scenario_selected,
+            BOOL_OR(
+              stage = 'cta'
+              AND outcome = 'clicked'
+              AND event_type NOT LIKE '%:scenario_%'
+            ) AS primary_cta_clicked,
+            BOOL_OR(
+              stage = 'registration'
+              AND outcome = 'success'
+              AND http_class = '2xx'
+            ) AS registered,
+            BOOL_OR(event_type = 'first_proof_verified') AS first_proof_verified,
+            BOOL_OR(event_type = 'external_agent_second_proof_verified') AS second_proof_verified,
+            ${ACTIVATION_COHORT_FIRST_TIMES}
+          FROM window_events
+          LEFT JOIN normalized_source USING (visitor_key)
+          GROUP BY campaign_source, window_events.visitor_key
+        )
+        SELECT
+          campaign_source,
+          COALESCE(ARRAY_AGG(DISTINCT original_source ORDER BY original_source)
+            FILTER (WHERE original_source IS NOT NULL), ARRAY[]::text[]) AS original_sources,
+          COUNT(*) FILTER (WHERE scenario_selected OR primary_cta_clicked)::int AS entry_visitors,
+          COUNT(*) FILTER (WHERE scenario_selected)::int AS scenario_selected,
+          COUNT(*) FILTER (WHERE primary_cta_clicked)::int AS primary_cta_clicked,
+          COUNT(*) FILTER (WHERE registered)::int AS registered,
+          COUNT(*) FILTER (WHERE first_proof_verified)::int AS first_proof,
+          COUNT(*) FILTER (WHERE second_proof_verified)::int AS second_proof,
+          ${ACTIVATION_COHORT_COUNTS}
+        FROM visitor_metrics
+        JOIN visitor_latest USING (visitor_key)
+        GROUP BY campaign_source
+        ORDER BY campaign_source
+      `);
+      const proofActivationResult = await db.execute(sql`
+        SELECT
+          COUNT(DISTINCT visitor_key) FILTER (
+            WHERE event_type = 'first_proof_verified'
+          )::int AS first_proof_visitors,
+          COUNT(DISTINCT visitor_key) FILTER (
+            WHERE event_type = 'external_agent_second_proof_verified'
+          )::int AS repeat_proof_visitors
+        FROM conversion_events
+        WHERE created_at >= NOW() - INTERVAL '30 days'
+      `);
       const lastSevenDaysResult = await db.execute(sql`
         SELECT
-          COUNT(DISTINCT ip_hash) FILTER (
+          COUNT(*) FILTER (
             WHERE stage = 'registration' AND outcome = 'success' AND http_class = '2xx'
           )::int AS registrations,
-          COUNT(DISTINCT ip_hash) FILTER (
+          COUNT(*) FILTER (
             WHERE stage = 'proof' AND outcome = 'success' AND http_status = 201
           )::int AS successful_proofs
         FROM conversion_events
@@ -392,8 +687,17 @@ export function registerAdminRoutes(app: Express) {
 
       const parseCount = (row: Record<string, string | number> | undefined, key: string) =>
         Number(row?.[key] || 0);
+      const cohortCountsFromRow = (row: Record<string, string | number>): ActivationCohortCounts => ({
+        scenario_to_primary: parseCount(row, "scenario_to_primary"),
+        primary_to_registration: parseCount(row, "primary_to_registration"),
+        registration_to_first_proof: parseCount(row, "registration_to_first_proof"),
+        first_to_second_proof: parseCount(row, "first_to_second_proof"),
+      });
       const totalsRow = totalsResult.rows[0] as Record<string, string | number> | undefined;
+      const proofActivationRow = proofActivationResult.rows[0] as Record<string, string | number> | undefined;
       const lastSevenDays = lastSevenDaysResult.rows[0] as Record<string, string | number> | undefined;
+      const segmentRows = segmentResult.rows as Array<Record<string, string | number>>;
+      const campaignRows = campaignResult.rows as Array<Record<string, string | number>>;
       const registrations7d = parseCount(lastSevenDays, "registrations");
       const successfulProofs7d = parseCount(lastSevenDays, "successful_proofs");
       const alerts = [];
@@ -411,10 +715,140 @@ export function registerAdminRoutes(app: Express) {
           message: "No new proof (HTTP 201) in the last 7 complete days.",
         });
       }
+      const telemetryWriteHealth = await getSharedConversionTelemetryWriteFailureStats(
+        CONVERSION_TELEMETRY_FAILURE_HEALTH_WINDOW_MS,
+      );
+      if (telemetryWriteHealth.storage_unavailable) {
+        alerts.push({
+          severity: "warning",
+          condition: "conversion_telemetry_health_unavailable",
+          message: "Conversion telemetry write health could not be checked across instances. Funnel data may be incomplete.",
+        });
+      }
+      if (telemetryWriteHealth.recent_failures > 0) {
+        alerts.push({
+          severity: "warning",
+          condition: "conversion_telemetry_write_failures",
+          message: `Conversion telemetry failed to write ${telemetryWriteHealth.recent_failures} time(s) in the last ${telemetryWriteHealth.window_minutes} minutes. Funnel data may be incomplete.`,
+        });
+      }
+
+      const emptyStages = (): Record<ActivationStage, number> => ({
+        scenario_selected: 0,
+        primary_cta_clicked: 0,
+        registered: 0,
+        first_proof: 0,
+        second_proof: 0,
+      });
+      const allSegmentRow = segmentRows.find((row) => row.traffic_segment === "all");
+      const segmentAnalysis = segmentRows.filter((row) => row.traffic_segment !== "all").map((row) => ({
+        stages: {
+          scenario_selected: parseCount(row, "scenario_selected"),
+          primary_cta_clicked: parseCount(row, "primary_cta_clicked"),
+          registered: parseCount(row, "registered"),
+          first_proof: parseCount(row, "first_proof"),
+          second_proof: parseCount(row, "second_proof"),
+        },
+        cohorts: cohortCountsFromRow(row),
+        traffic_segment: String(row.traffic_segment),
+      }));
+      const comparableSegments = segmentAnalysis.filter((segment) =>
+        isComparableActivationSegment(segment.traffic_segment, segment.stages)
+      );
+      const overallStages = allSegmentRow ? {
+        scenario_selected: parseCount(allSegmentRow, "scenario_selected"),
+        primary_cta_clicked: parseCount(allSegmentRow, "primary_cta_clicked"),
+        registered: parseCount(allSegmentRow, "registered"),
+        first_proof: parseCount(allSegmentRow, "first_proof"),
+        second_proof: parseCount(allSegmentRow, "second_proof"),
+      } : comparableSegments.reduce((totals, segment) => {
+        for (const stage of ACTIVATION_STAGE_ORDER) totals[stage] += segment.stages[stage];
+        return totals;
+      }, emptyStages());
+      const overallCohorts = allSegmentRow ? cohortCountsFromRow(allSegmentRow)
+        : comparableSegments.reduce((totals, segment) => {
+        for (const key of Object.keys(totals) as Array<keyof ActivationCohortCounts>) {
+          totals[key] += segment.cohorts[key];
+        }
+        return totals;
+      }, {
+        scenario_to_primary: 0,
+        primary_to_registration: 0,
+        registration_to_first_proof: 0,
+        first_to_second_proof: 0,
+      } satisfies ActivationCohortCounts);
+      const overallAnalysis = buildActivationAnalysis(overallStages, "all", overallCohorts);
+      const segmentReviews = segmentAnalysis.map((segment) =>
+        buildActivationAnalysis(segment.stages, segment.traffic_segment, segment.cohorts)
+      );
+      const largestSegmentDropOff = segmentReviews
+        .filter((segment) => segment.largest_drop_off !== null)
+        .sort((a, b) => {
+          const aDrop = a.largest_drop_off!;
+          const bDrop = b.largest_drop_off!;
+          const exactRateDelta = (
+            bDrop.lost_visitors! / bDrop.from_visitors!
+          ) - (
+            aDrop.lost_visitors! / aDrop.from_visitors!
+          );
+          return exactRateDelta || (bDrop.lost_visitors! - aDrop.lost_visitors!);
+        })[0] ?? null;
+      const campaignAnalysis = campaignRows.map((row) => {
+        const stages: ActivationStageCounts = {
+          scenario_selected: parseCount(row, "scenario_selected"),
+          primary_cta_clicked: parseCount(row, "primary_cta_clicked"),
+          registered: parseCount(row, "registered"),
+          first_proof: parseCount(row, "first_proof"),
+          second_proof: parseCount(row, "second_proof"),
+        };
+        const entryVisitors = parseCount(row, "entry_visitors");
+        const analysis = buildActivationAnalysis(stages, "campaign", cohortCountsFromRow(row));
+        const recommendationEligible = entryVisitors >= CAMPAIGN_RECOMMENDATION_MIN_ENTRY_VISITORS
+          && analysis.largest_drop_off !== null;
+        return {
+          campaign_source: String(row.campaign_source || DIRECT_UNKNOWN_CAMPAIGN),
+          original_sources: Array.isArray(row.original_sources) ? row.original_sources as string[] : [],
+          entry_visitors: entryVisitors,
+          recommendation_eligible: recommendationEligible,
+          recommendation_sample_size: analysis.recommendation_sample_size,
+          stages: analysis.stages,
+          cohort_transitions: analysis.cohort_transitions,
+          largest_drop_off: recommendationEligible ? analysis.largest_drop_off : null,
+          low_confidence_drop_off: analysis.low_confidence_drop_off,
+        };
+      });
+      const largestCampaignDropOff = campaignAnalysis
+        .filter((campaign) => campaign.largest_drop_off !== null)
+        .sort((a, b) => {
+          const aDrop = a.largest_drop_off!;
+          const bDrop = b.largest_drop_off!;
+          const exactRateDelta = (
+            bDrop.lost_visitors! / bDrop.from_visitors!
+          ) - (
+            aDrop.lost_visitors! / aDrop.from_visitors!
+          );
+          return exactRateDelta || (bDrop.lost_visitors! - aDrop.lost_visitors!);
+        })[0] ?? null;
+      const totalEvents = parseCount(totalsRow, "events");
+      const funnelReview = {
+        status: totalEvents === 0 ? "awaiting_traffic"
+          : largestSegmentDropOff ? "ready" : "low_confidence",
+        message: totalEvents === 0
+          ? "No published conversion traffic is recorded in this window. Republish with analytics enabled, then review after at least 7 complete days."
+          : largestSegmentDropOff
+            ? "Review the largest qualifying transition drop before changing the product."
+            : `No comparable transition has ${ACTIVATION_RECOMMENDATION_MIN_FROM_VISITORS} starting visitors yet. Wait for more traffic before changing the product.`,
+        minimum_sample_size: ACTIVATION_RECOMMENDATION_MIN_FROM_VISITORS,
+        sample_size: largestSegmentDropOff?.largest_drop_off?.from_visitors
+          ?? Math.max(0, ...segmentReviews.map((segment) => segment.recommendation_sample_size)),
+        hypothesis: largestSegmentDropOff?.largest_drop_off
+          ? `Test only the ${largestSegmentDropOff.traffic_segment} ${largestSegmentDropOff.largest_drop_off.from_stage} → ${largestSegmentDropOff.largest_drop_off.to_stage} transition; keep SEO, pricing, branding, and feature scope unchanged.`
+          : null,
+      };
 
       res.json({
         timezone: "UTC",
-        window_days: 30,
+        window_days: ACTIVATION_FUNNEL_WINDOW_DAYS,
         rows: (rowsResult.rows as Array<Record<string, string | number>>).map((row) => ({
           date: row.day,
           stage: row.stage,
@@ -423,18 +857,63 @@ export function registerAdminRoutes(app: Express) {
           traffic_segment: row.traffic_segment,
           events: parseCount(row, "events"),
           visitors: parseCount(row, "visitors"),
+          unlinked_events: parseCount(row, "unlinked_events"),
         })),
         totals: {
           events: parseCount(totalsRow, "events"),
           visitors: parseCount(totalsRow, "visitors"),
+          unlinked_events: parseCount(totalsRow, "unlinked_events"),
+          unlinked_api_events: parseCount(totalsRow, "unlinked_api_events"),
           cta_views: parseCount(totalsRow, "cta_views"),
           cta_clicks: parseCount(totalsRow, "cta_clicks"),
+          primary_cta_clicks: parseCount(totalsRow, "primary_cta_clicks"),
+          scenario_engagements: parseCount(totalsRow, "scenario_engagements"),
           registrations: parseCount(totalsRow, "registrations"),
           successful_proofs: parseCount(totalsRow, "successful_proofs"),
+          first_proof_visitors: parseCount(proofActivationRow, "first_proof_visitors"),
+          repeat_proof_visitors: parseCount(proofActivationRow, "repeat_proof_visitors"),
         },
         last_7_complete_days: {
           registrations: registrations7d,
           successful_proofs: successfulProofs7d,
+        },
+        collection: {
+          confirmed: totalEvents > 0,
+          events_in_window: totalEvents,
+          events_last_24h: parseCount(totalsRow, "events_last_24h"),
+          first_event_at: totalsRow?.first_event_at ?? null,
+          last_event_at: totalsRow?.last_event_at ?? null,
+          telemetry_write_health: {
+            status: telemetryWriteHealth.storage_unavailable
+              ? "unknown"
+              : telemetryWriteHealth.recent_failures > 0 ? "warning" : "healthy",
+            recent_failures: telemetryWriteHealth.recent_failures,
+            last_failure_at: telemetryWriteHealth.last_failure_at,
+            window_minutes: telemetryWriteHealth.window_minutes,
+          },
+        },
+        activation_review: {
+          window_days: ACTIVATION_FUNNEL_WINDOW_DAYS,
+          minimum_transition_visitors: ACTIVATION_RECOMMENDATION_MIN_FROM_VISITORS,
+          counting_model: {
+            stage_totals: "directional_distinct_identified_browsers",
+            conversions: "same_browser_cookie_adjacent_stages_in_order",
+            sequence_window_days: ACTIVATION_FUNNEL_WINDOW_DAYS,
+            transition_attribution: "upstream_traffic_segment",
+            unlinked_activity: "events_only_excluded_from_visitors_and_transitions",
+          },
+          stage_order: ACTIVATION_STAGE_ORDER,
+          overall: overallAnalysis,
+          by_traffic_segment: segmentReviews,
+          largest_segment_drop_off: largestSegmentDropOff,
+          campaign_attribution: {
+            model: "first_touch_30d",
+            missing_source_label: DIRECT_UNKNOWN_CAMPAIGN,
+            minimum_entry_visitors: CAMPAIGN_RECOMMENDATION_MIN_ENTRY_VISITORS,
+          },
+          by_utm_source: campaignAnalysis,
+          largest_campaign_drop_off: largestCampaignDropOff,
+          recommendation: funnelReview,
         },
         alerts,
         generated_at: new Date().toISOString(),
@@ -451,6 +930,7 @@ export function registerAdminRoutes(app: Express) {
 
   app.get("/api/admin/stats", isWalletAuthenticated, requireAdmin, async (req: any, res) => {
     try {
+      const mx8004SignerBalance = await getMx8004SignerBalance();
       const now = new Date();
       const h24 = new Date(now.getTime() - 24 * 60 * 60 * 1000);
       const d7 = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -552,11 +1032,17 @@ export function registerAdminRoutes(app: Express) {
           last_success_at: metrics.transactions.last_success_at,
           last_failed_at: metrics.transactions.last_failed_at,
         },
+        mx8004: {
+          configured: isMX8004Configured(),
+          signer_balance: getMx8004SignerBalanceReport(mx8004SignerBalance),
+          low_balance: mx8004SignerBalance.lowBalance,
+        },
         txAlerts: getAlertConfig(),
         rateLimitFailOpen: {
           ...metrics.rate_limit_fail_open,
           alert_config: getRateLimitAlertConfig(),
         },
+        trustSnapshotWrite: getTrustSnapshotWriteHealth(),
         generated_at: now.toISOString(),
       });
     } catch (error) {
@@ -745,6 +1231,8 @@ export function registerAdminRoutes(app: Express) {
   app.get("/api/admin/tx-queue", isWalletAuthenticated, requireAdmin, async (req: any, res) => {
     try {
       const stats = await getTxQueueStats();
+      const balance = await getMx8004SignerBalance();
+      const nonceStall = balance.error ? null : await getMx8004NonceStall(balance.address, balance.nonce);
       const recentFailed = await db
         .select()
         .from(txQueueTable)
@@ -757,9 +1245,13 @@ export function registerAdminRoutes(app: Express) {
         .where(eq(txQueueTable.status, "processing"))
         .orderBy(txQueueTable.createdAt)
         .limit(5);
+      const recentRecovery = await db.select().from(txQueueTable)
+        .where(eq(txQueueTable.status, "recovery_required"))
+        .orderBy(txQueueTable.createdAt).limit(10);
 
       res.json({
         stats,
+        nonce_stall: nonceStall,
         metrics: {
           success_rate: stats.successRate,
           avg_processing_time_ms: stats.avgProcessingTimeMs,
@@ -768,9 +1260,70 @@ export function registerAdminRoutes(app: Express) {
         },
         recent_failed: recentFailed,
         recent_processing: recentProcessing,
+        recent_recovery: recentRecovery,
       });
     } catch (err: any) {
       res.status(500).json({ error: safeErrMsg(err) });
+    }
+  });
+
+  app.get("/api/admin/tx-queue/recovery", isWalletAuthenticated, requireAdmin, async (req, res) => {
+    try {
+      const page = Number(req.query.page ?? 0);
+      if (!Number.isSafeInteger(page) || page < 0 || page > 10000) return res.status(400).json({ error: "Invalid page" });
+      const now = Date.now();
+      const legacyCutoff = new Date(now - MX8004_LEGACY_BROADCAST_REVIEW_MS).toISOString();
+      const jobs = await db.select({
+        id: txQueueTable.id, jobId: txQueueTable.jobId, status: txQueueTable.status,
+        payload: txQueueTable.payload, lastError: txQueueTable.lastError, createdAt: txQueueTable.createdAt,
+      }).from(txQueueTable).where(and(
+        eq(txQueueTable.jobType, "mx8004_validation_loop"),
+        sql`(${txQueueTable.status} IN ('recovery_required', 'failed')
+          OR (${txQueueTable.status} IN ('pending', 'processing', 'awaiting_finality')
+            AND ${txQueueTable.payload}->'activeTx'->>'nonce' IS NULL
+            AND ${txQueueTable.payload}->'broadcastIntent'->>'nonce' IS NULL
+            AND ${txQueueTable.payload}->'activeTx'->>'hash' IS NOT NULL
+            AND ${txQueueTable.payload}->'activeTx'->>'broadcastAt' <= ${legacyCutoff}))`,
+      )).orderBy(desc(txQueueTable.createdAt), desc(txQueueTable.id)).limit(51).offset(page * 50);
+      const [chainNonce, history] = await Promise.all([getMx8004FreshSignerNonce(), getMx8004RecentSignerTransactions()]);
+      res.json({
+        chain_nonce: chainNonce,
+        page, has_more: jobs.length > 50,
+        history: history.filter(tx => jobs.slice(0, 50).some(job => {
+          const payload = job.payload as Record<string, any>;
+          return tx.nonce !== null && tx.nonce === (payload.activeTx?.nonce ?? payload.broadcastIntent?.nonce);
+        })),
+        jobs: jobs.slice(0, 50).map(({ payload: raw, ...job }) => {
+          const payload = raw as Record<string, any>;
+          const manualReconciliation = assessMx8004LegacyBroadcast({ status: job.status, payload }, now);
+          return {
+            ...job, step: payload.currentStep,
+            step_name: ["init_job", "submit_proof", "validation_request", "validation_response", "append_response"][payload.currentStep] ?? null,
+            known_hash: payload.activeTx?.hash ?? null,
+            signer_nonce: payload.activeTx?.nonce ?? payload.broadcastIntent?.nonce ?? null,
+            intent_at: payload.broadcastIntent?.startedAt ?? payload.activeTx?.broadcastAt ?? null,
+            manual_reconciliation: manualReconciliation,
+            recovery_audit: payload.recoveryAudit ?? [],
+          };
+        }),
+      });
+    } catch (err) {
+      logger.error("Unable to inspect recovery jobs", { component: "tx-queue", error: String(err) });
+      res.status(503).json({ error: "Recovery evidence unavailable" });
+    }
+  });
+
+  app.post("/api/admin/tx-queue/recovery/:id", isWalletAuthenticated, requireAdmin, async (req: any, res) => {
+    const { hash, decision } = req.body ?? {};
+    if (!/^[a-fA-F0-9]{64}$/.test(hash ?? "") || !["confirmed", "rejected"].includes(decision)) {
+      return res.status(400).json({ error: "Provide a transaction hash and confirmed or rejected decision" });
+    }
+    try {
+      res.json(await reconcileMx8004Job(req.params.id, hash, decision, req.session.walletAddress));
+    } catch (err) {
+      if (err instanceof RecoveryConflict) return res.status(409).json({ error: err.message });
+      logger.error("Recovery reconciliation failed", { component: "tx-queue", error: String(err) });
+      res.status(503).json({ error: "Could not verify chain evidence; job remains blocked" });
     }
   });
 
@@ -852,11 +1405,12 @@ export function registerAdminRoutes(app: Express) {
         if (trust) {
           updatedScore = { score: trust.score, level: trust.level };
           await pool.query(
-            `INSERT INTO trust_score_snapshots (wallet_address, score, level, cert_total, active_attestations, rank, snapshot_date)
-             VALUES ($1, $2, $3, $4, $5, 0, CURRENT_DATE)
+            `INSERT INTO trust_score_snapshots (wallet_address, score, level, cert_total, active_attestations, rank, snapshot_date, finality_version)
+             VALUES ($1, $2, $3, $4, $5, 0, CURRENT_DATE, ${FINALITY_SNAPSHOT_VERSION})
              ON CONFLICT (wallet_address, snapshot_date) DO UPDATE SET
                score = EXCLUDED.score, level = EXCLUDED.level,
-               cert_total = EXCLUDED.cert_total, active_attestations = EXCLUDED.active_attestations`,
+               cert_total = EXCLUDED.cert_total, active_attestations = EXCLUDED.active_attestations,
+               finality_version = ${FINALITY_SNAPSHOT_VERSION}`,
             [target_wallet, trust.score, trust.level, trust.certTotal, trust.activeAttestations ?? 0]
           );
         }
@@ -973,7 +1527,7 @@ export function registerAdminRoutes(app: Express) {
           COALESCE(SUM(ak.request_count), 0)::int AS total_key_requests,
           MAX(ak.last_used_at) AS key_last_used_at,
           COUNT(c.id)::int AS cert_count,
-          COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed')::int AS confirmed_count,
+          COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NOT NULL)::int AS confirmed_count,
           MIN(c.created_at) AS first_cert_at,
           MAX(c.created_at) AS last_cert_at
         FROM users u
@@ -1076,6 +1630,90 @@ export function registerAdminRoutes(app: Express) {
       res.status(500).json({ error: safeErrMsg(err) });
     }
   });
+
+  // ============================================
+  // Admin: Failed proof callback recovery
+  // ============================================
+  app.get("/api/admin/proof-callbacks/exhausted", isWalletAuthenticated, requireAdmin, async (req: any, res) => {
+    try {
+      const limit = 25;
+      const rows = await db.select({
+        id: certifications.id,
+        webhookAttempts: certifications.webhookAttempts,
+        webhookLastAttempt: certifications.webhookLastAttempt,
+        webhookUrl: certifications.webhookUrl,
+      }).from(certifications).where(and(
+        eq(certifications.webhookStatus, "failed"),
+        gt(certifications.webhookAttempts, 0),
+        isNotNull(certifications.webhookLastAttempt),
+        isNotNull(certifications.webhookUrl),
+      )).orderBy(desc(certifications.webhookLastAttempt), desc(certifications.id)).limit(limit);
+
+      res.json({
+        callbacks: rows.map((row) => ({
+          certificationId: row.id,
+          attempts: row.webhookAttempts,
+          lastAttempt: row.webhookLastAttempt,
+          destination: redactWebhookUrl(row.webhookUrl!),
+        })),
+        limit,
+      });
+    } catch {
+      logger.withRequest(req).error("Failed to list exhausted proof callbacks");
+      res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to list exhausted proof callbacks." });
+    }
+  });
+
+  app.get("/api/admin/proof-callbacks/failed", isWalletAuthenticated, requireAdmin, async (req: any, res) => {
+    try {
+      const callbacks = await listRetryableFailedWebhookDeliveries();
+      res.json({ callbacks, total: callbacks.length });
+    } catch {
+      logger.withRequest(req).error("Failed to list retryable proof callbacks");
+      res.status(500).json({ error: "INTERNAL_ERROR", message: "Failed to list retryable proof callbacks." });
+    }
+  });
+
+  app.post(
+    "/api/admin/proof-callbacks/:certificationId/retry",
+    isWalletAuthenticated,
+    requireAdmin,
+    async (req: any, res) => {
+      const certificationId = typeof req.params.certificationId === "string"
+        ? req.params.certificationId
+        : "";
+      try {
+        const result = await retryFailedWebhookDelivery(certificationId);
+        if (!result.retried) {
+          return res.status(409).json({
+            error: "CALLBACK_NOT_RETRYABLE",
+            message: "This proof callback is not eligible for manual retry.",
+          });
+        }
+
+        logger.withRequest(req).info("Admin retried failed proof callback", {
+          action: "proof_webhook_retry",
+          operator_wallet: req.session.walletAddress,
+          certification_id: certificationId,
+          previous_attempts: result.previousAttempts,
+        });
+        return res.status(202).json({
+          success: true,
+          certification_id: certificationId,
+          status: "pending",
+        });
+      } catch {
+        logger.withRequest(req).error("Failed to queue proof callback retry", {
+          action: "proof_webhook_retry",
+          certification_id: certificationId,
+        });
+        return res.status(500).json({
+          error: "INTERNAL_ERROR",
+          message: "Failed to queue proof callback retry.",
+        });
+      }
+    },
+  );
 
   // ============================================
   // Admin: Proposed Violations Review

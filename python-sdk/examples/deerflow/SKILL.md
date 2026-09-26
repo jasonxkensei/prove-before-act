@@ -40,7 +40,7 @@ curl -s -X POST https://provebeforeact.com/api/agent/register \
 Save the `api_key` from the response. Set it as an environment variable:
 
 ```bash
-export XPROOF_API_KEY="pm_..."
+export PROVEBEFOREACT_API_KEY="pm_..."
 ```
 
 ## Certify an Output
@@ -55,7 +55,7 @@ HASH=$(echo -n "$CONTENT" | sha256sum | cut -d' ' -f1)
 # 2. Certify on-chain
 curl -s -X POST https://provebeforeact.com/api/proof \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $XPROOF_API_KEY" \
+  -H "Authorization: Bearer $PROVEBEFOREACT_API_KEY" \
   -d "{
     \"file_hash\": \"$HASH\",
     \"file_name\": \"q3-analysis.json\",
@@ -64,7 +64,7 @@ curl -s -X POST https://provebeforeact.com/api/proof \
       \"who\": \"deerflow-agent\",
       \"what\": \"$HASH\",
       \"when\": \"$(date -u +%Y-%m-%dT%H:%M:%S.000Z)\",
-      \"why\": \"Quarterly earnings certification\",
+      \"why\": \"earnings_certification\",
       \"framework\": \"deerflow\"
     }
   }" | jq .
@@ -84,7 +84,8 @@ Response:
 ### Using the Python SDK
 
 ```bash
-pip install xproof
+# Canonical distribution; `xproof` imports below are legacy module aliases.
+pip install prove-before-act[deerflow]
 ```
 
 ```python
@@ -95,8 +96,10 @@ skill = XProofDeerFlowSkill(api_key="pm_...")
 # Plain text
 result = skill._run("My research findings")
 
-# With metadata
-result = skill._run('{"content": "Q3 analysis", "why": "Quarterly review"}')
+# With metadata — `why` is the legacy fingerprint-only field (SHA-256 hashed
+# before sending, not a human-readable reason). Use a fixed action
+# classification / opaque ID.
+result = skill._run('{"content": "Q3 analysis", "why": "quarterly_review"}')
 ```
 
 ### Using the LangChain callback (DeerFlow uses LangGraph internally)
@@ -115,7 +118,7 @@ Certify up to 50 outputs in a single API call:
 ```bash
 curl -s -X POST https://provebeforeact.com/api/batch \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $XPROOF_API_KEY" \
+  -H "Authorization: Bearer $PROVEBEFOREACT_API_KEY" \
   -d '{
     "files": [
       {"file_hash": "abc123...", "file_name": "report-1.json"},
@@ -143,7 +146,7 @@ Every certification answers four questions:
 | **WHO** | `who` | Which agent produced the output |
 | **WHAT** | `what` | SHA-256 hash of the content (the content itself stays private) |
 | **WHEN** | `when` | Blockchain timestamp — written by the chain, not the agent |
-| **WHY** | `why` | Context: why was this output produced |
+| **WHY** | `why` | Legacy fingerprint-only field — SHA-256 hashed before serialization, not a human-readable reason. Pass a fixed action classification / opaque ID, never free-text rationale |
 
 ## Payment Options
 
@@ -155,6 +158,6 @@ Every certification answers four questions:
 - [Prove Before Act website](https://provebeforeact.com)
 - [API documentation](https://provebeforeact.com/docs)
 - [MCP endpoint](https://provebeforeact.com/mcp)
-- [Python SDK on PyPI](https://pypi.org/project/xproof/)
+- [Python SDK on PyPI](https://pypi.org/project/prove-before-act/)
 - [npm SDK](https://www.npmjs.com/package/prove-before-act)
-- [GitHub](https://github.com/jasonxkensei/xProof)
+- [GitHub](https://github.com/jasonxkensei/prove-before-act)

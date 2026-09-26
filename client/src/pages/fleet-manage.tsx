@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { StatusIndicator } from "@/components/status-indicator";
 import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -137,10 +138,10 @@ function AddMemberForm({ fleet, sessionWallet, onClose }: AddMemberFormProps) {
       {/* Ownership proof section */}
       {trimmedWallet && (
         isOwnWallet ? (
-          <p className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
+          <StatusIndicator status="verified" as="p" className="flex items-center gap-1.5">
             <ShieldCheck className="h-3.5 w-3.5 shrink-0" />
             This is your connected wallet — no additional proof needed.
-          </p>
+          </StatusIndicator>
         ) : (
           <div className="space-y-3">
             {/* Proof type toggle */}
@@ -186,7 +187,7 @@ function AddMemberForm({ fleet, sessionWallet, onClose }: AddMemberFormProps) {
                     <Copy className="h-3.5 w-3.5" />
                   </Button>
                 </div>
-                {copied && <p className="text-xs text-emerald-600 dark:text-emerald-400">Copied!</p>}
+                {copied && <StatusIndicator status="verified" as="p">Copied!</StatusIndicator>}
                 <Input
                   placeholder="0a1b2c3d… (hex-encoded Ed25519 signature)"
                   value={signature}
@@ -608,10 +609,10 @@ export default function FleetManagePage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="operational-header">
         <div className="container flex h-16 items-center justify-between gap-4">
           <Link href="/" data-testid="link-logo-home" className="flex items-center gap-2">
-            <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
+            <img src="/pba-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
           </Link>
           <nav className="flex items-center gap-3">
             <Button asChild variant="ghost" size="sm">
@@ -624,7 +625,7 @@ export default function FleetManagePage() {
         </div>
       </header>
 
-      <div className="container mx-auto max-w-3xl py-12 space-y-8">
+      <div className="page-container max-w-3xl py-12 space-y-8">
         {/* Page heading */}
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>

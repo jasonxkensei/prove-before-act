@@ -6,6 +6,7 @@ import { coherenceChecks, certifications, users, fleets, fleetMembers } from "@s
 import { eq, and, sql, isNull } from "drizzle-orm";
 import { validateApiKey } from "./helpers";
 import { publicReadRateLimiter } from "../reliability";
+import { publicProofStatus } from "../proof-finality";
 
 // ── Coherence scoring ─────────────────────────────────────────────────────────
 // How well did the WHAT (actual result) stay aligned with the WHY (stated
@@ -43,6 +44,24 @@ const linkRequestSchema = z.object({
   why_proof_id: z.string().uuid("why_proof_id must be a UUID"),
   what_proof_id: z.string().uuid("what_proof_id must be a UUID"),
 });
+
+function linkResponse(check: typeof coherenceChecks.$inferSelect, alreadyLinked = false) {
+  const score = check.coherenceScore ?? 0;
+  return {
+    // Canonical agent-facing response contract. Scores in persistence remain
+    // 0–100 for existing fleet/history calculations, while this endpoint
+    // returns a portable 0–1 ratio. Expose the equivalent percentage
+    // explicitly as well so consumers never have to infer the score scale.
+    coherence_id: check.id,
+    coherence_score: score / 100,
+    coherence_score_percent: score,
+    linked: true,
+    success: true,
+    ...(alreadyLinked ? { already_linked: true } : {}),
+    // Preserve the detailed legacy response for callers already using it.
+    coherence_check: serializeCheck(check),
+  };
+}
 
 export function registerCoherenceRoutes(app: Express) {
   // ── POST /api/coherence/link — agent links a WHY anchor to its WHAT proof ──
@@ -130,7 +149,7 @@ export function registerCoherenceRoutes(app: Express) {
       // Already linked?
       if (checkRow.linkedProofId) {
         if (checkRow.linkedProofId === what_proof_id) {
-          return res.json({ success: true, already_linked: true, coherence_check: serializeCheck(checkRow) });
+          return res.json(linkResponse(checkRow, true));
         }
         return res.status(409).json({
           error: "ALREADY_LINKED",
@@ -143,7 +162,7 @@ export function registerCoherenceRoutes(app: Express) {
       const anchorAt = checkRow.createdAt ? new Date(checkRow.createdAt).getTime() : Date.now();
       const whatAt = whatCert.createdAt ? new Date(whatCert.createdAt).getTime() : Date.now();
       const score = computeCoherenceScore({
-        whatConfirmed: whatCert.blockchainStatus === "confirmed",
+        whatConfirmed: publicProofStatus(whatCert) === "confirmed",
         whatReferencesWhy: whatMeta.why_proof_id === why_proof_id,
         deltaMs: whatAt - anchorAt,
       });
@@ -157,7 +176,7 @@ export function registerCoherenceRoutes(app: Express) {
       if (!updated) {
         const [current] = await db.select().from(coherenceChecks).where(eq(coherenceChecks.id, checkRow.id));
         if (current?.linkedProofId === what_proof_id) {
-          return res.json({ success: true, already_linked: true, coherence_check: serializeCheck(current) });
+          return res.json(linkResponse(current, true));
         }
         return res.status(409).json({
           error: "ALREADY_LINKED",
@@ -169,13 +188,12 @@ export function registerCoherenceRoutes(app: Express) {
       logger.info("Coherence WHY→WHAT linked", { coherenceCheckId: updated.id, whyProofId: why_proof_id, whatProofId: what_proof_id, score, userId });
 
       return res.json({
-        success: true,
-        coherence_check: serializeCheck(updated),
+        ...linkResponse(updated),
         score_breakdown: {
           linked: true,
           what_within_1h: whatAt - anchorAt >= 0 && whatAt - anchorAt <= COHERENCE_LINK_WINDOW_MS,
           what_references_why: whatMeta.why_proof_id === why_proof_id,
-          what_confirmed_on_chain: whatCert.blockchainStatus === "confirmed",
+          what_confirmed_on_chain: publicProofStatus(whatCert) === "confirmed",
           execution_preceded_intent: whatAt - anchorAt < 0,
         },
         message: `WHY→WHAT link recorded. Coherence score: ${score}/100.`,

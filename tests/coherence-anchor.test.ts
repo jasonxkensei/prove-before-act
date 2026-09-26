@@ -102,9 +102,17 @@ describe("cross-account WHY→WHAT link flow (integration)", () => {
       const whatId = crypto.randomUUID();
       whatIds.push(whatId);
       await pool.query(
-        `INSERT INTO certifications (id, user_id, file_name, file_hash, blockchain_status, is_public, metadata, created_at)
-         VALUES ($1, $2, 'result.json', $3, 'confirmed', true, $4, NOW() - INTERVAL '5 minutes')`,
-        [whatId, u.id, crypto.randomBytes(32).toString("hex"), JSON.stringify({ why_proof_id: whyId })],
+        `INSERT INTO certifications
+           (id, user_id, file_name, file_hash, blockchain_status, transaction_hash,
+            finality_checked_at, is_public, metadata, created_at)
+         VALUES ($1, $2, 'result.json', $3, 'confirmed', $4, NOW(), true, $5, NOW() - INTERVAL '5 minutes')`,
+        [
+          whatId,
+          u.id,
+          crypto.randomBytes(32).toString("hex"),
+          crypto.randomBytes(32).toString("hex"),
+          JSON.stringify({ why_proof_id: whyId }),
+        ],
       );
     }
   });
@@ -136,6 +144,9 @@ describe("cross-account WHY→WHAT link flow (integration)", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.success).toBe(true);
+    expect(body.linked).toBe(true);
+    expect(body.coherence_id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(body.coherence_score).toBe(1);
     expect(body.coherence_check.linked_proof_id).toBe(whatIds[0]);
     expect(body.coherence_check.coherence_score).toBe(100);
   });
@@ -149,7 +160,36 @@ describe("cross-account WHY→WHAT link flow (integration)", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.success).toBe(true);
+    expect(body.linked).toBe(true);
+    expect(body.coherence_score).toBe(1);
     expect(body.coherence_check.linked_proof_id).toBe(whatIds[1]);
+  });
+
+  it("re-linking the same pair is idempotent and preserves the canonical response contract", async () => {
+    const res = await fetch(`${BASE}/api/coherence/link`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${users[0].rawKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ why_proof_id: whyIds[0], what_proof_id: whatIds[0] }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toMatchObject({
+      linked: true,
+      already_linked: true,
+      coherence_score: 1,
+    });
+    expect(body.coherence_id).toBeTruthy();
+  });
+
+  it("reaches the API route before the SPA catch-all when no key is supplied", async () => {
+    const res = await fetch(`${BASE}/api/coherence/link`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ why_proof_id: whyIds[0], what_proof_id: whatIds[0] }),
+    });
+    expect(res.status).toBe(401);
+    expect(res.headers.get("content-type")).toMatch(/application\/json/);
+    expect((await res.json()).error).toBe("UNAUTHORIZED");
   });
 
   it("account B cannot link account A's WHY proof (ownership enforced)", async () => {

@@ -32,6 +32,7 @@ from __future__ import annotations
 import json
 from unittest.mock import MagicMock
 
+# `xproof` is the legacy module name retained by the canonical prove-before-act distribution.
 from xproof.exceptions import PolicyViolationError
 from xproof.langchain_tool import XProofCertifyTool
 from xproof.models import PolicyCheckResult
@@ -82,6 +83,8 @@ def run_compliant_scenario(base_decision_id: str) -> None:
     decision_text = json.dumps(
         {"action": "delete_pii_records", "scope": "eu-region", "count": 15_000}
     )
+    # decision_text is a sanitized declared decision basis, never private
+    # step-by-step reasoning or internal chain-of-thought.
 
     client = _build_mock_client(decision_id, compliant=True)
     tool = XProofCertifyTool(client=client, author="data-hygiene-agent")
@@ -95,7 +98,7 @@ def run_compliant_scenario(base_decision_id: str) -> None:
                 "threshold_stage": "pre-commitment",
                 "decision_id": decision_id,
                 "reversibility_class": "irreversible",
-                "why": "Scheduled GDPR retention cleanup",
+                "why": "gdpr-retention-cleanup",
             }
         )
         print(f"  Policy compliant — proceeding (tx: {tx_hash})")
@@ -116,6 +119,8 @@ def run_blocked_scenario(base_decision_id: str) -> None:
     decision_text = json.dumps(
         {"action": "delete_pii_records", "scope": "eu-region", "count": 15_000}
     )
+    # decision_text is a sanitized declared decision basis, never private
+    # step-by-step reasoning or internal chain-of-thought.
 
     client = _build_mock_client(decision_id, compliant=False)
     tool = XProofCertifyTool(client=client, author="data-hygiene-agent")
@@ -129,7 +134,7 @@ def run_blocked_scenario(base_decision_id: str) -> None:
                 "threshold_stage": "pre-commitment",
                 "decision_id": decision_id,
                 "reversibility_class": "irreversible",
-                "why": "Scheduled GDPR retention cleanup",
+                "why": "gdpr-retention-cleanup",
             }
         )
         raise AssertionError("Expected PolicyViolationError was not raised")

@@ -15,12 +15,13 @@ Prove Before Act solves this by anchoring a SHA-256 hash of the agent's output o
 | **Who** | The agent or role that produced the output |
 | **What** | SHA-256 hash of the certified content |
 | **When** | ISO 8601 timestamp of certification |
-| **Why** | Context or reason for the certification |
+| **Why** | Legacy fingerprint-only field for a public action classification or opaque ID; never a human-readable reason |
 
 ## Installation
 
 ```bash
-pip install xproof
+# Canonical distribution; `xproof` imports below are legacy module aliases.
+pip install prove-before-act[deerflow]
 ```
 
 ## Usage in DeerFlow
@@ -36,12 +37,14 @@ skill = XProofDeerFlowSkill(api_key="pm_...")
 result = skill._run("My research findings")
 
 # Certify with metadata
-result = skill._run('{"content": "Q3 analysis", "file_name": "q3.json", "why": "Quarterly review"}')
+# `why` is the legacy fingerprint-only 4W field (SHA-256 hashed before sending,
+# not a human-readable reason). Use a fixed action classification / opaque ID.
+result = skill._run('{"content": "Q3 analysis", "file_name": "q3.json", "why": "quarterly_review"}')
 ```
 
 ### 2. Via the skill definition
 
-Copy `Prove Before Act.yaml` into your DeerFlow skills directory. The skill accepts a JSON input with `content` (required), and optional `file_name`, `author`, and `why` fields.
+Copy `Prove Before Act.yaml` into your DeerFlow skills directory. The skill accepts a JSON input with `content` (required), and optional `file_name`, `author`, and `why` fields. `why` is the legacy **fingerprint-only** field — it is SHA-256 hashed before serialization and is not a human-readable reason, so pass a fixed action classification or opaque ID (never free-text rationale).
 
 ### 3. With the existing LangChain integration
 
@@ -82,12 +85,12 @@ Below is a ready-to-paste PR description for submitting this skill to the DeerFl
 
 **Integration surface:**
 - Skill definition: `skills/xproof.yaml`
-- Python implementation: `pip install xproof` (the `XProofDeerFlowSkill` class)
+- Python implementation: `pip install prove-before-act[deerflow]` (the `xproof` module name used by `XProofDeerFlowSkill` is a legacy compatibility alias)
 - Zero DeerFlow core changes required — uses the standard skill interface
 
 **Links:**
 - [Prove Before Act website](https://provebeforeact.com)
-- [Prove Before Act Python SDK](https://github.com/jasonxkensei/xProof)
+- [Prove Before Act Python SDK](https://github.com/jasonxkensei/prove-before-act)
 - [MultiversX blockchain](https://multiversx.com)
 
 ---

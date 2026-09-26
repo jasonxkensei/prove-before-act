@@ -2,7 +2,7 @@ import { type Express } from "express";
 import crypto from "crypto";
 import { db, pool } from "../db";
 import { logger } from "../logger";
-import { certifications, users, apiKeys } from "@shared/schema";
+import { certifications, users, apiKeys, agents, FINALITY_SNAPSHOT_VERSION } from "@shared/schema";
 import { eq, and, sql, desc, ne } from "drizzle-orm";
 import { z } from "zod";
 import { isWalletAuthenticated } from "../walletAuth";
@@ -12,6 +12,8 @@ import { TRIAL_QUOTA, REGISTER_RATE_LIMIT_MAX, REGISTER_RATE_LIMIT_WINDOW_MS, ge
 import { pgCheckRateLimit } from "../pgRateLimit";
 import { CANONICAL_PUBLIC_ORIGIN } from "../publicOrigin";
 import { getCertificationPriceUsd } from "../pricing";
+import { recordConversionEvent } from "../conversion-telemetry";
+import { publicProofStatus } from "../proof-finality";
 
 // ============================================
 // Builds the machine-actionable quick_start guide
@@ -137,14 +139,15 @@ function buildQuickStart(apiKey: string, agentName: string, baseUrl: string) {
       python: {
         product: "Prove Before Act",
         compatibility_note: "The xproof package and XProofClient import are legacy compatibility identifiers; Prove Before Act is the current product name.",
-        install: "pip install xproof",
-        usage: `from xproof import XProofClient\nimport hashlib\nclient = XProofClient("${apiKey}")\ncontent = b"my decision"\nfile_hash = hashlib.sha256(content).hexdigest()\nproof = client.certify_hash(file_hash, "decision.json", "${agentName}",\n    who="${agentName}", why="task instruction")\nprint(proof.id, proof.transaction_url)`,
+        install: "pip install prove-before-act",
+        usage: `from xproof import XProofClient  # legacy module name retained by the canonical package\nimport hashlib\nclient = XProofClient("${apiKey}")\ncontent = b"my decision"\nfile_hash = hashlib.sha256(content).hexdigest()\nproof = client.certify_hash(file_hash, "decision.json", "${agentName}",\n    who="${agentName}", why="task instruction")\nprint(proof.id, proof.transaction_url)`,
       },
       npm: {
         product: "Prove Before Act",
         compatibility_note: "The @xproof/xproof package and XProofClient export are legacy compatibility identifiers; Prove Before Act is the current product name.",
-        install: "npm install @xproof/xproof",
-        usage: `import { XProofClient } from "@xproof/xproof";\nimport { createHash } from "crypto";\nconst client = new XProofClient({ apiKey: "${apiKey}" });\nconst hash = createHash("sha256").update("my decision").digest("hex");\nconst proof = await client.certifyHash(hash, "decision.json", "${agentName}",\n  { why: "task instruction", who: "${agentName}" });\nconsole.log(proof.id, proof.transactionUrl);`,
+        install: "npm install prove-before-act",
+        legacy_install: "npm install @xproof/xproof (legacy compatibility only)",
+        usage: `import { XProofClient } from "prove-before-act";\nimport { createHash } from "crypto";\nconst client = new XProofClient({ apiKey: "${apiKey}" });\nconst hash = createHash("sha256").update("my decision").digest("hex");\nconst proof = await client.certifyHash(hash, "decision.json", "${agentName}",\n  { why: "task instruction", who: "${agentName}" });\nconsole.log(proof.id, proof.transactionUrl);`,
       },
     },
     status_endpoint: `${baseUrl}/api/agent/status`,
@@ -319,7 +322,7 @@ export function registerAgentsRoutes(app: Express) {
           how_it_works: "Bazaar metadata (input/output schemas and pricing) is embedded in x402 payment responses from Prove Before Act. Confirm availability and pricing from the live response before a purchase.",
           discoverable_endpoints: [
             `POST ${baseUrl}/api/proof — single file/decision certification`,
-            `POST ${baseUrl}/api/batch — batch certification (up to 100 files)`,
+            `POST ${baseUrl}/api/batch — batch certification (up to 50 files)`,
           ],
         },
         mcp_direct: {
@@ -356,7 +359,7 @@ export function registerAgentsRoutes(app: Express) {
       status_endpoint: `GET ${baseUrl}/api/agent/status`,
       docs: `${baseUrl}/llms.txt`,
       openapi: `${baseUrl}/api/acp/openapi.json`,
-      examples: "https://github.com/jasonxkensei/xproof-examples",
+      examples: "https://github.com/jasonxkensei/prove-before-act-examples",
     });
   };
   app.get("/api/trial", trialInfoHandler);
@@ -394,6 +397,9 @@ export function registerAgentsRoutes(app: Express) {
           error: "RATE_LIMIT_EXCEEDED",
           message: `Maximum ${REGISTER_RATE_LIMIT_MAX} trial registrations per hour per IP. Try again later.`,
           retry_after: Math.ceil((regRl.resetAt - Date.now()) / 1000),
+          next_action: {
+            instruction: "Wait for retry_after seconds, then retry registration once.",
+          },
         });
       }
 
@@ -427,6 +433,12 @@ export function registerAgentsRoutes(app: Express) {
           message: `An agent named "${data.agent_name}" already exists on a real wallet. Registration blocked to prevent duplicates.`,
           resolution: `If this is your agent: connect your wallet at ${baseUrl} and use your existing API key. If you need a trial key for a different agent: choose a unique name (e.g. "${data.agent_name}-v2" or "${data.agent_name}-${crypto.randomBytes(3).toString("hex")}").`,
           claim_endpoint: `POST ${baseUrl}/api/trial/claim`,
+          next_action: {
+            method: "POST",
+            path: "/api/agent/register",
+            instruction: "Retry with a unique agent_name. Existing raw API keys cannot be retrieved.",
+            body: { agent_name: `${data.agent_name}-v2` },
+          },
         });
       }
 
@@ -461,10 +473,19 @@ export function registerAgentsRoutes(app: Express) {
           ...(data.webhook_url ? { webhookUrl: data.webhook_url, webhookSecret: webhookSecretSeed } : {}),
         }).returning();
 
+        // A new account always receives its deterministic default logical
+        // agent. Its ID is deliberately the account ID, not a generated ID.
+        await tx.insert(agents).values({
+          id: newUser.id,
+          ownerAccountId: newUser.id,
+          name: data.agent_name,
+        });
+
         await tx.insert(apiKeys).values({
           keyHash,
           keyPrefix,
           userId: newUser.id,
+          agentId: newUser.id,
           name: `Trial: ${data.agent_name}`,
           isActive: true,
         });
@@ -478,6 +499,18 @@ export function registerAgentsRoutes(app: Express) {
         ipHash,
         hasWebhook: !!data.webhook_url,
       });
+      recordConversionEvent(req, {
+        eventType: "agent_registered",
+        stage: "registration",
+        outcome: "success",
+        httpStatus: 201,
+      });
+      recordConversionEvent(req, {
+        eventType: "api_key_issued",
+        stage: "registration",
+        outcome: "success",
+        httpStatus: 201,
+      });
 
       const baseUrl = CANONICAL_PUBLIC_ORIGIN;
 
@@ -486,8 +519,24 @@ export function registerAgentsRoutes(app: Express) {
       const trialRemaining = TRIAL_QUOTA;
 
       return res.status(201).json({
+        agent_id: trialUser.id,
         api_key: rawKey,
         agent_name: data.agent_name,
+        credential_handling: {
+          disclosure: "one_time",
+          scope: "private_registration_response",
+          usable_until: "revoked",
+          instruction: "Keep this credential in the current private execution context. The full key cannot be retrieved later, but it remains valid for immediate and subsequent authenticated requests.",
+          warning: "One-time disclosure does not mean one-time use. Do not discard the key before creating and verifying your proofs.",
+        },
+        next_action: {
+          method: "POST",
+          path: "/api/proof",
+          url: `${baseUrl}/api/proof`,
+          authorization: `Bearer ${rawKey}`,
+          content_type: "application/json",
+          instruction: "Hash the decision artifact locally with SHA-256. Submit only the 64-character hash; do not upload the artifact.",
+        },
         authorization_guide: {
           problem: "POST /api/agent/register requires NO Authorization header — it is the only endpoint that works without a key. Every other endpoint (POST /api/proof, GET /api/agent/status, etc.) requires Authorization: Bearer <api_key>.",
           solution: `Add this header to every subsequent request: Authorization: Bearer ${rawKey}`,
@@ -514,7 +563,7 @@ export function registerAgentsRoutes(app: Express) {
               url: data.webhook_url,
               secret: webhookSecretSeed,
               status: "registered",
-              note: "All your proofs will POST to this URL automatically. Verify signature with X-xProof-Signature header.",
+              note: "All your proofs will POST to this URL automatically. Verify the signature with X-ProveBeforeAct-Signature. X-xProof-Signature remains a legacy alias.",
               verify_signature: `HMAC-SHA256(secret="${webhookSecretSeed}", message=timestamp + "." + raw_body)`,
             }
           : {
@@ -692,6 +741,7 @@ export function registerAgentsRoutes(app: Express) {
           fileHash: certifications.fileHash,
           blockchainStatus: certifications.blockchainStatus,
           transactionHash: certifications.transactionHash,
+          finalityCheckedAt: certifications.finalityCheckedAt,
           createdAt: certifications.createdAt,
         })
         .from(certifications)
@@ -741,7 +791,7 @@ export function registerAgentsRoutes(app: Express) {
           request: {
             method: "POST",
             url: `${baseUrl}/api/proof`,
-            headers: { Authorization: `Bearer ${rawKey}`, "Content-Type": "application/json" },
+             headers: { Authorization: "Bearer <current_api_key>", "Content-Type": "application/json" },
             body: {
               file_hash: "<sha256-hex-64-chars>",
               filename: "decision.json",
@@ -755,8 +805,9 @@ export function registerAgentsRoutes(app: Express) {
               },
             },
           },
+          credential_note: "Reuse the API key already held by this private execution context. This endpoint intentionally never redisplays the full secret.",
           curl: `curl -X POST "${baseUrl}/api/proof" \\
-  -H "Authorization: Bearer ${rawKey}" \\
+  -H "Authorization: Bearer $PROVE_BEFORE_ACT_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"file_hash":"<sha256-hex>","filename":"decision.json","author_name":"${agentName}","metadata":{"action_type":"decision","who":"${agentName}","why":"<instruction>"}}'`,
         };
@@ -770,7 +821,7 @@ export function registerAgentsRoutes(app: Express) {
           last_proof: lastProof ? {
             proof_id: lastProof.id,
             verify_url: `${baseUrl}/proof/${lastProof.id}`,
-            blockchain_status: lastProof.blockchainStatus,
+            blockchain_status: publicProofStatus(lastProof),
             transaction_hash: lastProof.transactionHash,
           } : null,
           leaderboard: user.isPublicProfile
@@ -784,8 +835,9 @@ export function registerAgentsRoutes(app: Express) {
           certify: {
             single: `POST ${baseUrl}/api/proof — individual certifications`,
             batch: `POST ${baseUrl}/api/batch — up to 50 files per call, same price. Use for CI/CD or multi-artifact runs.`,
-            batch_curl: `curl -X POST "${baseUrl}/api/batch" \\\n  -H "Authorization: Bearer ${rawKey}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"files":[{"file_hash":"<sha256>","filename":"artifact_1.wasm"},{"file_hash":"<sha256>","filename":"artifact_2.json"}]}'`,
-            single_curl: `curl -X POST "${baseUrl}/api/proof" \\\n  -H "Authorization: Bearer ${rawKey}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"file_hash":"<sha256-hex>","filename":"decision.json","author_name":"${agentNameCtx}","metadata":{"action_type":"decision","who":"${agentNameCtx}","why":"<intent>"}}'`,
+            credential_note: "Reuse the API key already held by this private execution context. This endpoint intentionally never redisplays the full secret.",
+            batch_curl: `curl -X POST "${baseUrl}/api/batch" \\\n  -H "Authorization: Bearer $PROVE_BEFORE_ACT_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{"files":[{"file_hash":"<sha256>","filename":"artifact_1.wasm"},{"file_hash":"<sha256>","filename":"artifact_2.json"}]}'`,
+            single_curl: `curl -X POST "${baseUrl}/api/proof" \\\n  -H "Authorization: Bearer $PROVE_BEFORE_ACT_API_KEY" \\\n  -H "Content-Type: application/json" \\\n  -d '{"file_hash":"<sha256-hex>","filename":"decision.json","author_name":"${agentNameCtx}","metadata":{"action_type":"decision","who":"${agentNameCtx}","why":"<intent>"}}'`,
           },
           tips: [
             "Add metadata.who / what / when / why for complete 4W provenance. Run GET /api/agent/status after a proof to see which fields are missing.",
@@ -856,7 +908,7 @@ export function registerAgentsRoutes(app: Express) {
             id: lastProof.id,
             filename: lastProof.fileName,
             file_hash: lastProof.fileHash,
-            blockchain_status: lastProof.blockchainStatus,
+            blockchain_status: publicProofStatus(lastProof),
             transaction_hash: lastProof.transactionHash,
             anchored_at: lastProof.createdAt?.toISOString(),
             verify_url: `${baseUrl}/proof/${lastProof.id}`,
@@ -914,11 +966,12 @@ export function registerAgentsRoutes(app: Express) {
         },
         mcp_config: {
           description: "If you support MCP (Claude Desktop, Cursor, etc.), add Prove Before Act to your config",
+          credential_note: "Substitute the API key already held by the current private execution context. The full secret is intentionally not returned by this status endpoint.",
           claude_desktop_config: {
             mcpServers: {
               "prove-before-act": {
                 url: `${baseUrl}/mcp`,
-                headers: { Authorization: `Bearer ${rawKey}` },
+                headers: { Authorization: "Bearer <current_api_key>" },
               },
             },
           },
@@ -930,7 +983,7 @@ export function registerAgentsRoutes(app: Express) {
           docs: `${baseUrl}/llms.txt`,
           openapi: `${baseUrl}/api/acp/openapi.json`,
           claim_trial: user.isTrial ? `POST ${baseUrl}/api/trial/claim` : null,
-          examples: "https://github.com/jasonxkensei/xproof-examples",
+          examples: "https://github.com/jasonxkensei/prove-before-act-examples",
         },
       });
     } catch (error) {
@@ -1017,11 +1070,12 @@ export function registerAgentsRoutes(app: Express) {
         if (trust) {
           updatedScore = { score: trust.score, level: trust.level };
           await pool.query(
-            `INSERT INTO trust_score_snapshots (wallet_address, score, level, cert_total, active_attestations, rank, snapshot_date)
-             VALUES ($1, $2, $3, $4, $5, 0, CURRENT_DATE)
+            `INSERT INTO trust_score_snapshots (wallet_address, score, level, cert_total, active_attestations, rank, snapshot_date, finality_version)
+             VALUES ($1, $2, $3, $4, $5, 0, CURRENT_DATE, ${FINALITY_SNAPSHOT_VERSION})
              ON CONFLICT (wallet_address, snapshot_date) DO UPDATE SET
                score = EXCLUDED.score, level = EXCLUDED.level,
-               cert_total = EXCLUDED.cert_total, active_attestations = EXCLUDED.active_attestations`,
+               cert_total = EXCLUDED.cert_total, active_attestations = EXCLUDED.active_attestations,
+               finality_version = ${FINALITY_SNAPSHOT_VERSION}`,
             [realWallet, trust.score, trust.level, trust.certTotal, trust.activeAttestations ?? 0]
           );
         }

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PublicSiteHeader, PublicSiteFooter } from "@/components/public-site-chrome";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,14 @@ import {
 } from "lucide-react";
 
 const BASE = "https://provebeforeact.com";
+const DOC_STYLES = `
+  .pba-docs-root { --doc-rule: hsl(var(--border)); }
+  .pba-docs-root main { max-width: 72rem; }
+  .pba-docs-root p { max-width: 74ch; line-height: 1.65; }
+  .pba-docs-root section { scroll-margin-top: 6rem; }
+  .pba-docs-root pre { border-radius: .3rem; line-height: 1.65; }
+  .pba-docs-root a:focus-visible, .pba-docs-root button:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 3px; }
+`;
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -225,24 +234,10 @@ contract ViolationWatcher {
 
 export default function DocsBaseViolationsPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="border-b sticky top-0 z-50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-14 items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Button asChild variant="ghost" size="icon" data-testid="button-back-docs">
-              <a href="/docs"><ArrowLeft className="h-4 w-4" /></a>
-            </Button>
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-primary" />
-              <h1 className="font-semibold">Base Violation Events</h1>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-xs font-mono" data-testid="badge-network">eip155:8453</Badge>
-            <Badge variant="outline" className="text-xs font-mono" data-testid="badge-chain">Base Mainnet</Badge>
-          </div>
-        </div>
-      </header>
+    <>
+      <style>{DOC_STYLES}</style>
+    <div className="pba-docs-root min-h-screen bg-background text-foreground">
+      <PublicSiteHeader />
 
       <div className="container py-10 max-w-4xl mx-auto">
         <div className="mb-10">
@@ -349,7 +344,7 @@ enum ViolationType {
                       <Badge variant="outline" className="text-xs">server-defined penalty</Badge>
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Intentional violation. Content hash mismatch between anchored proof and published output. Unauthorized action without prior reasoning proof.
+                       Intentional violation. Content hash mismatch between anchored proof and published output. Unauthorized action without a prior declared decision-basis proof.
                     </p>
                   </div>
                 </div>
@@ -584,15 +579,8 @@ for (const event of events) {
         </div>
       </div>
 
-      <footer className="border-t py-8 mt-10">
-        <div className="container text-center text-sm text-muted-foreground">
-          <p>
-            Source: <a href="https://github.com" className="text-primary hover:underline">contracts/ViolationWatcher.sol</a> ·{" "}
-            <a href="/docs" className="text-primary hover:underline">API Reference</a> ·{" "}
-            <a href="/" className="text-primary hover:underline">provebeforeact.com</a>
-          </p>
-        </div>
-      </footer>
+      <PublicSiteFooter />
     </div>
+    </>
   );
 }

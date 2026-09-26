@@ -32,7 +32,7 @@ function fh() {
   return crypto.randomBytes(32).toString("hex");
 }
 
-// Helper: insert a user with N confirmed certs and returns { userId, walletAddress }.
+// Helper: insert a user with N finalized certs and returns { userId, walletAddress }.
 async function insertUser(label: string, numCerts: number) {
   const userId = `circ-${RUN}-${label}`;
   const w = wallet(label);
@@ -43,8 +43,8 @@ async function insertUser(label: string, numCerts: number) {
   for (let i = 0; i < numCerts; i++) {
     await pool.query(
       `INSERT INTO certifications
-         (id, user_id, file_name, file_hash, blockchain_status, is_public, created_at)
-       VALUES ($1, $2, 'f.json', $3, 'confirmed', true, NOW() - INTERVAL '1 day')`,
+         (id, user_id, file_name, file_hash, blockchain_status, finality_checked_at, is_public, created_at)
+       VALUES ($1, $2, 'f.json', $3, 'confirmed', NOW(), true, NOW() - INTERVAL '1 day')`,
       [crypto.randomUUID(), userId, fh()],
     );
   }

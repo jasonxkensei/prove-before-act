@@ -12,6 +12,7 @@ LlamaIndex CallbackManager.
 Production usage::
 
     from llama_index.core.callbacks import CallbackManager
+    # `xproof` is the legacy module name retained by the canonical prove-before-act distribution.
     from xproof.integrations.llamaindex import XProofCallbackHandler
 
     handler = XProofCallbackHandler(api_key="pm_...")

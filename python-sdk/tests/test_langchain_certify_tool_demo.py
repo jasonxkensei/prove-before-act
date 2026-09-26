@@ -76,7 +76,7 @@ def test_blocked_scenario_violation_rule() -> None:
                 "threshold_stage": "pre-commitment",
                 "decision_id": decision_id,
                 "reversibility_class": "irreversible",
-                "why": "Scheduled GDPR retention cleanup",
+                "why": "gdpr-retention-cleanup",
             }
         )
 
@@ -106,7 +106,7 @@ def test_compliant_scenario_transaction_hash() -> None:
             "threshold_stage": "pre-commitment",
             "decision_id": decision_id,
             "reversibility_class": "irreversible",
-            "why": "Scheduled GDPR retention cleanup",
+            "why": "gdpr-retention-cleanup",
         }
     )
 

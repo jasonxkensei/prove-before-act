@@ -19,6 +19,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
 import { queryClient } from "@/lib/queryClient";
 import { XPROOF_NATIVE_AUTH_TOKEN_KEY, handleLogout } from "@/lib/auth-storage";
+import { trackEvent } from "@/lib/analytics";
+import { getSafeRedirectTo } from "@/lib/safe-redirect";
 
 // Re-export so callers that import from this module keep working.
 export { XPROOF_NATIVE_AUTH_TOKEN_KEY, handleLogout };
@@ -106,6 +108,7 @@ export function WalletLoginModal({ open, onOpenChange, redirectTo }: WalletLogin
 
         queryClient.setQueryData(['/api/auth/me'], userData);
         await queryClient.invalidateQueries({ queryKey: ['/api/auth/me'] });
+        trackEvent("wallet_login_succeeded", { provider: "extension" });
 
         toast({
           title: "Wallet connected",
@@ -113,7 +116,7 @@ export function WalletLoginModal({ open, onOpenChange, redirectTo }: WalletLogin
         });
 
         onOpenChange(false);
-        navigate(redirectTo || '/dashboard');
+         navigate(getSafeRedirectTo(redirectTo));
 
         return true;
       } else {
@@ -124,6 +127,7 @@ export function WalletLoginModal({ open, onOpenChange, redirectTo }: WalletLogin
         setLoading(null);
         setWaitingForConnection(false);
         syncAttempted.current = false;
+        trackEvent("wallet_login_failed", { provider: "extension", stage: "sync" });
 
         toast({
           title: "Connection error",
@@ -139,6 +143,7 @@ export function WalletLoginModal({ open, onOpenChange, redirectTo }: WalletLogin
       setLoading(null);
       setWaitingForConnection(false);
       syncAttempted.current = false;
+      trackEvent("wallet_login_failed", { provider: "extension", stage: "request" });
 
       toast({
         title: "Connection error",
@@ -172,6 +177,7 @@ export function WalletLoginModal({ open, onOpenChange, redirectTo }: WalletLogin
     setError(null);
     syncAttempted.current = false;
     pendingTokenRef.current = null;
+    trackEvent("wallet_login_attempted", { provider: buttonKey });
 
     try {
       try { logoutAction(); } catch (_e) { /* cleanup non-fatal */ }

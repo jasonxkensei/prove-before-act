@@ -133,7 +133,7 @@ const BAZAAR_BATCH = declareDiscoveryExtension({
           },
           required: ["file_hash", "filename"],
         },
-        maxItems: 100,
+        maxItems: 50,
       },
       author_name: { type: "string" },
     },
@@ -215,7 +215,7 @@ export async function getPaymentRequirements(route: "proof" | "batch" | "investi
     payTo,
     maxTimeoutSeconds: 60,
     description: route === "batch"
-      ? "Prove Before Act batch certification — certify up to 100 files/decisions in one on-chain transaction"
+      ? "Prove Before Act batch certification — certify up to 50 files/decisions in one on-chain transaction"
       : route === "investigate"
         ? "Prove Before Act 4W incident investigation — reconstruct full agent decision audit trail by decision_id"
         : "Prove Before Act single file/decision certification — anchor SHA-256 hash on MultiversX with optional 4W provenance",

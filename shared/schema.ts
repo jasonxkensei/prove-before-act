@@ -2,8 +2,10 @@ import { sql } from 'drizzle-orm';
 import {
   bigint,
   check,
+  foreignKey,
   date,
   index,
+  unique,
   uniqueIndex,
   jsonb,
   pgTable,
@@ -60,10 +62,38 @@ export const users = pgTable("users", {
 
 export type User = typeof users.$inferSelect;
 
+// Logical agents belong to an account.  The account's default agent is
+// deterministic: its id is the owner_account_id (there is intentionally no
+// is_default column).
+export const agents = pgTable("agents", {
+  id: varchar("id").primaryKey(),
+  name: varchar("name").notNull(),
+  ownerAccountId: varchar("owner_account_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  // Internal, collision-safe account binding used as a stable ordinary FK
+  // target. Length prefixes prevent ambiguous concatenations.
+  ownershipKey: text("ownership_key").generatedAlwaysAs(
+    sql`char_length(id)::text || ':' || id || ':' || char_length(owner_account_id)::text || ':' || owner_account_id`,
+  ),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  lastSeenAt: timestamp("last_seen_at"),
+}, (table) => [
+  unique("agents_ownership_key_unique").on(table.ownershipKey),
+  index("idx_agents_owner_account").on(table.ownerAccountId),
+  index("idx_agents_owner_last_seen").on(table.ownerAccountId, table.lastSeenAt),
+]);
+
+export type Agent = typeof agents.$inferSelect;
+
 // Certifications table
 export const certifications = pgTable("certifications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  // NULL remains deliberately historical/unattributed; it is never inferred
+  // from a proof's metadata, author, wallet, API-key name, or filename.
+  agentId: varchar("agent_id"),
+  agentOwnershipKey: text("agent_ownership_key").generatedAlwaysAs(
+    sql`CASE WHEN agent_id IS NULL THEN NULL ELSE char_length(agent_id)::text || ':' || agent_id || ':' || char_length(user_id)::text || ':' || user_id END`,
+  ),
   fileName: text("file_name").notNull(),
   fileHash: text("file_hash").notNull().unique(),
   fileType: varchar("file_type"),
@@ -73,18 +103,38 @@ export const certifications = pgTable("certifications", {
   transactionHash: text("transaction_hash"), // Uniqueness is enforced by the partial index below.
   transactionUrl: text("transaction_url"),
   blockchainStatus: varchar("blockchain_status").default("pending"), // pending, confirmed, failed
+  // Handoff state is separate from proof finality and from the chain worker's queue status.
+  mx8004EnqueueStatus: varchar("mx8004_enqueue_status"), // pending, failed; queue row takes precedence
+  mx8004EnqueueError: text("mx8004_enqueue_error"),
+  // NULL for legacy rows: they are not automatically grandfathered into verified counts.
+  finalityCheckedAt: timestamp("finality_checked_at"),
+  // A compact, independently verified MultiversX response retained for audit.
+  finalityEvidence: jsonb("finality_evidence"),
   certificateUrl: text("certificate_url"),
   isPublic: boolean("is_public").default(true),
   webhookUrl: text("webhook_url"),
+  // Private recovery data for pending webhook deliveries; never include in API responses.
+  webhookSigningSecret: text("webhook_signing_secret"),
+  webhookBaseUrl: text("webhook_base_url"),
   webhookStatus: varchar("webhook_status"),
   webhookLastAttempt: timestamp("webhook_last_attempt"),
   webhookAttempts: integer("webhook_attempts").default(0),
+  // Cross-instance lease for an outbound proof-certified callback.
+  webhookLeaseToken: varchar("webhook_lease_token", { length: 64 }),
+  webhookLeaseExpiresAt: timestamp("webhook_lease_expires_at"),
   blockchainLatencyMs: integer("blockchain_latency_ms"),
   authMethod: varchar("auth_method"),
   metadata: jsonb("metadata"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => [
+  // Agent assignment is optional for historical proofs. The generated key is
+  // NULL for those rows; otherwise it binds the agent id to this account.
+  foreignKey({
+    name: "certifications_agent_owner_fk",
+    columns: [table.agentOwnershipKey],
+    foreignColumns: [agents.ownershipKey],
+  }),
   // Partial unique index: a given on-chain transaction hash can only be used for one
   // certification. NULL transaction_hash is excluded so pending rows (which have no tx yet)
   // do not conflict with each other.
@@ -96,6 +146,7 @@ export const certifications = pgTable("certifications", {
   index("idx_certs_trust_lookup")
     .on(table.userId, table.createdAt)
     .where(sql`blockchain_status = 'confirmed' AND is_public = true`),
+  index("idx_certifications_agent_created").on(table.agentId, table.createdAt),
   // JSONB expression indexes backing metadata-keyed lookup endpoints.
   // These are partial indexes (WHERE clause) so they stay small.
   index("idx_cert_meta_decision_id")
@@ -130,6 +181,73 @@ export const certifications = pgTable("certifications", {
 ]);
 
 export type Certification = typeof certifications.$inferSelect;
+
+// One durable operator notification per exhausted callback episode. A manual
+// callback retry creates a new episode without discarding any earlier alert.
+export const proofCallbackAlertOutbox = pgTable("proof_callback_alert_outbox", {
+  id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
+  // Keep the alert if a certification is later removed during an outage.
+  certificationId: varchar("certification_id").notNull(),
+  destination: text("destination").notNull(),
+  callbackAttempts: integer("callback_attempts").notNull(),
+  status: varchar("status").notNull().default("pending"),
+  deliveryAttempts: integer("delivery_attempts").notNull().default(0),
+  nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }).notNull().defaultNow(),
+  leaseToken: text("lease_token"),
+  leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+}, (table) => [
+  index("idx_proof_callback_alert_outbox_due").on(table.status, table.nextAttemptAt),
+]);
+
+export const FINALITY_SNAPSHOT_VERSION = 2;
+
+// Append-only operator history for legacy proof-finality reconciliation.
+// These tables are created by migrateProofFinalityReconciliationSchema().
+export const proofFinalityReconciliationRuns = pgTable("proof_finality_reconciliation_runs", {
+  id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
+  mode: varchar("mode").notNull(),
+  status: varchar("status").notNull().default("running"),
+  operator: text("operator").notNull(),
+  approvedDryRunId: text("approved_dry_run_id"),
+  cursorId: varchar("cursor_id"),
+  counts: jsonb("counts").notNull().default(sql`'{"confirmed":0,"failed":0,"missing":0,"unavailable":0,"pending":0,"stale":0}'::jsonb`),
+  startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+}, (table) => [
+  check("proof_finality_reconciliation_runs_mode_check", sql`${table.mode} IN ('dry_run', 'reconcile')`),
+  check("proof_finality_reconciliation_runs_status_check", sql`${table.status} IN ('running', 'paused', 'completed', 'failed')`),
+  index("idx_proof_finality_reconciliation_runs_status").on(table.status, table.startedAt),
+]);
+
+export const proofFinalityReconciliationItems = pgTable("proof_finality_reconciliation_items", {
+  id: text("id").primaryKey().default(sql`gen_random_uuid()::text`),
+  runId: text("run_id").notNull().references(() => proofFinalityReconciliationRuns.id),
+  // Deliberately not a foreign key: an audit item must survive proof deletion.
+  certificationId: varchar("certification_id").notNull(),
+  transactionHash: text("transaction_hash"),
+  fileHash: text("file_hash").notNull(),
+  result: varchar("result").notNull(),
+  reason: text("reason"),
+  applied: boolean("applied").notNull().default(false),
+  evidence: jsonb("evidence"),
+  checkedAt: timestamp("checked_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  check("proof_finality_reconciliation_items_result_check", sql`${table.result} IN ('confirmed', 'failed', 'missing', 'unavailable', 'pending')`),
+  uniqueIndex("idx_proof_finality_reconciliation_items_run_cert").on(table.runId, table.certificationId),
+  index("idx_proof_finality_reconciliation_items_cert").on(table.certificationId, table.checkedAt),
+]);
+
+// One shared lease serializes operator runs across app instances and CLI processes.
+export const proofFinalityReconciliationLock = pgTable("proof_finality_reconciliation_lock", {
+  id: integer("id").primaryKey().default(1),
+  owner: text("owner"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+}, (table) => [
+  check("proof_finality_reconciliation_lock_singleton", sql`id = 1`),
+]);
 
 // ============================================
 // Attestations table — Domain-specific trust signals
@@ -168,6 +286,8 @@ export interface ACPProduct {
   id: string;
   name: string;
   description: string;
+  /** Historical product IDs still accepted by checkout for migration safety. */
+  legacy_product_ids?: string[];
   pricing: {
     type: "fixed" | "variable";
     amount: string;
@@ -307,6 +427,10 @@ export const apiKeys = pgTable("api_keys", {
   keyHash: varchar("key_hash").notNull().unique(),
   keyPrefix: varchar("key_prefix").notNull(), // First 8 chars for display (pm_xxx...)
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  agentId: varchar("agent_id"),
+  agentOwnershipKey: text("agent_ownership_key").generatedAlwaysAs(
+    sql`CASE WHEN agent_id IS NULL THEN NULL ELSE char_length(agent_id)::text || ':' || agent_id || ':' || char_length(user_id)::text || ':' || user_id END`,
+  ),
   name: varchar("name").notNull(),
   lastUsedAt: timestamp("last_used_at"),
   requestCount: integer("request_count").default(0),
@@ -314,7 +438,16 @@ export const apiKeys = pgTable("api_keys", {
   previousKeyHash: varchar("previous_key_hash"),
   previousKeyExpiresAt: timestamp("previous_key_expires_at"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  // NULL agent_id keeps legacy account keys valid; otherwise the generated key
+  // binds the assigned agent to the key's account.
+  foreignKey({
+    name: "api_keys_agent_owner_fk",
+    columns: [table.agentOwnershipKey],
+    foreignColumns: [agents.ownershipKey],
+  }),
+  index("idx_api_keys_agent").on(table.agentId),
+]);
 
 export type ApiKey = typeof apiKeys.$inferSelect;
 
@@ -366,6 +499,32 @@ export const creditPurchases = pgTable("credit_purchases", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Stripe-hosted checkout orders for prepaid certification packs. Stripe remains
+// an additional payment rail; USDC/Base purchases continue to use
+// credit_purchase_intents above. Credits are granted only by a verified webhook.
+export const stripeCreditCheckouts = pgTable("stripe_credit_checkouts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  packageId: varchar("package_id").notNull(),
+  credits: integer("credits").notNull(),
+  amountUsdCents: integer("amount_usd_cents").notNull(),
+  currency: varchar("currency", { length: 3 }).default("usd").notNull(),
+  status: varchar("status", { length: 16 }).default("pending").notNull(),
+  stripeSessionId: varchar("stripe_session_id").unique(),
+  stripePaymentIntentId: varchar("stripe_payment_intent_id").unique(),
+  fulfilledAt: timestamp("fulfilled_at", { withTimezone: true }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("idx_stripe_credit_checkouts_user_created").on(table.userId, table.createdAt),
+  check("stripe_credit_checkouts_status_check", sql`status IN ('pending', 'paid', 'expired')`),
+  check("stripe_credit_checkouts_currency_check", sql`currency = 'usd'`),
+  check("stripe_credit_checkouts_amount_check", sql`amount_usd_cents > 0`),
+  check("stripe_credit_checkouts_credits_check", sql`credits > 0`),
+]);
+
+export type StripeCreditCheckout = typeof stripeCreditCheckouts.$inferSelect;
+
 // Privacy-safe, append-only conversion telemetry. This deliberately stores no
 // request body, credential, wallet address, cookie, raw IP, or full referrer.
 // The application only ever inserts these rows; no update/delete routes exist.
@@ -377,22 +536,78 @@ export const conversionEvents = pgTable("conversion_events", {
   httpStatus: integer("http_status"),
   httpClass: varchar("http_class", { length: 3 }).notNull(),
   trafficSegment: varchar("traffic_segment", { length: 32 }).notNull(),
-  ipHash: varchar("ip_hash", { length: 64 }).notNull(),
+  // Legacy IP-based keys expire with their rows; never use them to join journeys.
+  ipHash: varchar("ip_hash", { length: 64 }),
+  // HMAC of a signed, short-lived random browser token. Null means unlinked.
+  visitorKey: varchar("visitor_key", { length: 64 }),
   referrerHost: varchar("referrer_host", { length: 128 }),
   utmSource: varchar("utm_source", { length: 128 }),
+  dedupKey: varchar("dedup_key", { length: 160 }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
   index("idx_conversion_events_day_funnel").on(table.createdAt, table.stage, table.outcome),
   index("idx_conversion_events_day_segment").on(table.createdAt, table.trafficSegment),
   index("idx_conversion_events_day_http").on(table.createdAt, table.httpClass),
   index("idx_conversion_events_ip_time").on(table.ipHash, table.createdAt),
-  check("conversion_events_stage_check", sql`stage IN ('cta', 'registration', 'proof')`),
+  index("idx_conversion_events_visitor_time").on(table.visitorKey, table.createdAt),
+  index("idx_conversion_events_dedup_lookup").on(table.dedupKey),
+  check("conversion_events_stage_check", sql`stage IN ('cta', 'registration', 'proof', 'purchase')`),
   check("conversion_events_outcome_check", sql`outcome IN ('seen', 'clicked', 'started', 'success', 'failure')`),
   check("conversion_events_http_class_check", sql`http_class IN ('0xx', '2xx', '3xx', '4xx', '5xx')`),
   check("conversion_events_http_status_check", sql`http_status IS NULL OR http_status BETWEEN 100 AND 599`),
 ]);
 
+// Failure-health rows contain only a timestamp, never the failed request or
+// event. The admin/alert paths aggregate these over bounded rolling windows.
+export const conversionTelemetryWriteFailures = pgTable("conversion_telemetry_write_failures", {
+  occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("idx_conversion_telemetry_write_failures_at").on(table.occurredAt),
+]);
+
+// One durable coordination record for conversion write-failure alerts.
+// A short lease guards delivery; nextAttemptAt holds either cooldown or retry backoff.
+export const conversionTelemetryAlertState = pgTable("conversion_telemetry_alert_state", {
+  alertKey: text("alert_key").primaryKey(),
+  leaseToken: text("lease_token"),
+  leaseUntil: timestamp("lease_until", { withTimezone: true }),
+  nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true }),
+  lastSentAt: timestamp("last_sent_at", { withTimezone: true }),
+});
+
+// One durable low-balance episode per signer, with a short delivery lease.
+export const mx8004BalanceAlertState = pgTable("mx8004_balance_alert_state", {
+  signerAddress: text("signer_address").primaryKey(),
+  observedAt: timestamp("observed_at", { withTimezone: true }).notNull(),
+  low: boolean("low").notNull(),
+  notified: boolean("notified").notNull().default(false),
+  leaseToken: text("lease_token"),
+  leaseUntil: timestamp("lease_until", { withTimezone: true }),
+});
+
+// One durable nonce-stall episode per signer; lease and episode ID coordinate
+// cross-instance delivery and stable receiver-side deduplication on retries.
+export const mx8004NonceAlertState = pgTable("mx8004_nonce_alert_state", {
+  signerAddress: text("signer_address").primaryKey(),
+  observedAt: timestamp("observed_at", { withTimezone: true }).notNull(),
+  pendingNonce: text("pending_nonce"),
+  episodeId: text("episode_id").notNull(),
+  notified: boolean("notified").notNull().default(false),
+  leaseToken: text("lease_token"),
+  leaseUntil: timestamp("lease_until", { withTimezone: true }),
+});
+
 export type ConversionEvent = typeof conversionEvents.$inferSelect;
+
+// Proof-scoped idempotency markers. These contain no visitor, request,
+// campaign, or referrer data, so telemetry rows can expire independently.
+// The proof FK keeps each marker for the proof's full lifetime, then removes it
+// automatically when that proof is permanently deleted.
+export const conversionEventDedupKeys = pgTable("conversion_event_dedup_keys", {
+  dedupKey: varchar("dedup_key", { length: 160 }).primaryKey(),
+  proofId: varchar("proof_id").notNull().references(() => certifications.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+});
 
 export type CreditPurchase = typeof creditPurchases.$inferSelect;
 
@@ -550,6 +765,7 @@ export const trustScoreSnapshots = pgTable("trust_score_snapshots", {
   // Added via raw SQL migration in server/index.ts (migrateTrustSnapshotSchema).
   // Stores the complete TrustScore object so public reads never need live computation.
   fullTrustData: jsonb("full_trust_data"),
+  finalityVersion: integer("finality_version").notNull().default(0),
 }, (table) => [
   // UNIQUE on (wallet_address, snapshot_date) — required for the ON CONFLICT upsert
   // in server/trust.ts, server/index.ts, and server/routes/admin.ts.
@@ -563,6 +779,7 @@ export const leaderboardSnapshot = pgTable("leaderboard_snapshot", {
   id: integer("id").primaryKey().default(1),
   entries: jsonb("entries").notNull(),
   computedAt: timestamp("computed_at", { withTimezone: true }).notNull().defaultNow(),
+  finalityVersion: integer("finality_version").notNull().default(0),
 }, () => [
   // Single-row constraint: id must always be 1.
   check("single_row", sql`id = 1`),
@@ -605,6 +822,140 @@ export const fleetMembers = pgTable("fleet_members", {
 ]);
 
 export type FleetMember = typeof fleetMembers.$inferSelect;
+
+// ============================================
+// PBA Verified — examination receipts and signed records
+// ============================================
+// These records are intentionally separate from xProof certifications.
+// Payment/intake state is mutable; attestation bytes are append-only, and
+// lifecycle changes are represented by separately signed events.
+export const pbaVerificationRequests = pgTable("pba_verification_requests", {
+  requestDigest: varchar("request_digest", { length: 64 }).primaryKey(),
+  subject: varchar("subject", { length: 512 }).notNull(),
+  origin: varchar("origin", { length: 256 }).notNull(),
+  amountCents: integer("amount_cents").notNull(),
+  quoteNetwork: varchar("quote_network", { length: 64 }).notNull(),
+  quotePayTo: varchar("quote_pay_to", { length: 256 }).notNull(),
+  status: varchar("status", { length: 32 }).notNull(),
+  paymentHeaderHash: varchar("payment_header_hash", { length: 64 }).unique(),
+  externalPaymentId: varchar("external_payment_id", { length: 256 }).unique(),
+  settledAt: timestamp("settled_at", { withTimezone: true }),
+  // Deliberately not a cascading FK: the nullable back-reference and the
+  // attestation's FK to request_digest form a logical cycle. Signed records
+  // must never be deleted as a side effect of removing mutable request state.
+  attestationId: varchar("attestation_id", { length: 36 }),
+  leaseUntil: timestamp("lease_until", { withTimezone: true }),
+  // Operator notification only; neither field grants permission to retry settlement.
+  reconciliationAlertClaimUntil: timestamp("reconciliation_alert_claim_until", { withTimezone: true }),
+  reconciliationAlertedAt: timestamp("reconciliation_alerted_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("idx_pba_verification_requests_status_lease").on(table.status, table.leaseUntil),
+  index("idx_pba_verification_requests_created").on(table.createdAt),
+  check("chk_pba_verification_request_digest", sql`${table.requestDigest} ~ '^[a-f0-9]{64}$'`),
+  check("chk_pba_verification_request_amount", sql`${table.amountCents} > 0`),
+  check("chk_pba_verification_request_payment_hash", sql`${table.paymentHeaderHash} IS NULL OR ${table.paymentHeaderHash} ~ '^[a-f0-9]{64}$'`),
+  check("chk_pba_verification_request_status", sql`${table.status} <> ''`),
+]);
+
+export const pbaPaymentReconciliations = pgTable("pba_payment_reconciliations", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  requestDigest: varchar("request_digest", { length: 64 }).notNull()
+    .references(() => pbaVerificationRequests.requestDigest, { onDelete: "restrict" }),
+  paymentHeaderHash: varchar("payment_header_hash", { length: 64 }).notNull(),
+  operatorWallet: varchar("operator_wallet", { length: 256 }).notNull(),
+  decision: varchar("decision", { length: 16 }).notNull(),
+  source: varchar("source", { length: 64 }).notNull(),
+  network: varchar("network", { length: 64 }).notNull(),
+  blockNumber: varchar("block_number", { length: 32 }).notNull(),
+  transactionHash: varchar("transaction_hash", { length: 66 }),
+  refundTransactionHash: varchar("refund_transaction_hash", { length: 66 }),
+  note: text("note").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("idx_pba_payment_reconciliations_request").on(table.requestDigest, table.createdAt),
+  uniqueIndex("idx_pba_payment_reconciliations_refund_tx").on(table.refundTransactionHash),
+  check("chk_pba_payment_reconciliation_decision", sql`${table.decision} IN ('confirmed', 'failed', 'refunded')`),
+  check("chk_pba_payment_reconciliation_header", sql`${table.paymentHeaderHash} ~ '^[a-f0-9]{64}$'`),
+]);
+
+export const pbaVerificationKeys = pgTable("pba_verification_keys", {
+  keyId: varchar("key_id", { length: 80 }).primaryKey(),
+  publicKey: varchar("public_key", { length: 72 }).notNull().unique(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  check("chk_pba_verification_key_id", sql`${table.keyId} ~ '^[A-Za-z0-9._:-]{1,80}$'`),
+  check("chk_pba_verification_public_key", sql`${table.publicKey} ~ '^ed25519:[a-f0-9]{64}$'`),
+  index("idx_pba_verification_keys_revoked").on(table.revokedAt),
+]);
+
+export const pbaVerificationAttestations = pgTable("pba_verification_attestations", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  requestDigest: varchar("request_digest", { length: 64 }).notNull()
+    .references(() => pbaVerificationRequests.requestDigest, { onDelete: "restrict" })
+    .unique(),
+  // Store the exact domain-separated bytes that were signed. Do not recreate
+  // this string from JSON when verifying previously issued records.
+  canonical: text("canonical").notNull(),
+  signature: varchar("signature", { length: 132 }).notNull(),
+  keyId: varchar("key_id", { length: 80 }).notNull()
+    .references(() => pbaVerificationKeys.keyId, { onDelete: "restrict" }),
+  // Indexed copies of the immutable signed receipt binding, for inventory.
+  witnessId: varchar("witness_id", { length: 128 }),
+  witnessPublicKey: varchar("witness_public_key", { length: 72 }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("idx_pba_verification_attestations_created").on(table.createdAt),
+  index("idx_pba_verification_attestations_key").on(table.keyId, table.createdAt),
+  index("idx_pba_verification_attestations_witness").on(table.witnessId, table.witnessPublicKey, table.createdAt),
+  check("chk_pba_verification_attestation_signature", sql`${table.signature} ~ '^hex:[a-f0-9]{128}$'`),
+]);
+
+export const pbaHttpWitnessRevocations = pgTable("pba_http_witness_revocations", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  witnessId: varchar("witness_id", { length: 128 }).notNull(),
+  witnessPublicKey: varchar("witness_public_key", { length: 72 }).notNull(),
+  canonical: text("canonical").notNull(),
+  signature: varchar("signature", { length: 132 }).notNull(),
+  keyId: varchar("key_id", { length: 80 }).notNull()
+    .references(() => pbaVerificationKeys.keyId, { onDelete: "restrict" }),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  uniqueIndex("idx_pba_http_witness_revocations_identity").on(table.witnessId, table.witnessPublicKey),
+  check("chk_pba_http_witness_revocation_id", sql`${table.witnessId} ~ '^[A-Za-z0-9._:-]{1,128}$'`),
+  check("chk_pba_http_witness_revocation_key", sql`${table.witnessPublicKey} ~ '^ed25519:[a-f0-9]{64}$'`),
+  check("chk_pba_http_witness_revocation_signature", sql`${table.signature} ~ '^hex:[a-f0-9]{128}$'`),
+]);
+
+export const pbaVerificationEvents = pgTable("pba_verification_events", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`gen_random_uuid()`),
+  attestationId: varchar("attestation_id", { length: 36 }).notNull()
+    .references(() => pbaVerificationAttestations.id, { onDelete: "restrict" }),
+  eventType: varchar("event_type", { length: 16 }).notNull(),
+  // Replacement links point to another immutable attestation; the referenced
+  // object is never deleted if an event or request record is removed.
+  replacementId: varchar("replacement_id", { length: 36 })
+    .references(() => pbaVerificationAttestations.id, { onDelete: "restrict" }),
+  canonical: text("canonical").notNull(),
+  signature: varchar("signature", { length: 132 }).notNull(),
+  keyId: varchar("key_id", { length: 80 }).notNull()
+    .references(() => pbaVerificationKeys.keyId, { onDelete: "restrict" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  index("idx_pba_verification_events_attestation_time").on(table.attestationId, table.createdAt),
+  index("idx_pba_verification_events_replacement").on(table.replacementId),
+  index("idx_pba_verification_events_key").on(table.keyId, table.createdAt),
+  check("chk_pba_verification_event_type", sql`${table.eventType} IN ('revoked', 'superseded')`),
+  check("chk_pba_verification_event_signature", sql`${table.signature} ~ '^hex:[a-f0-9]{128}$'`),
+  check("chk_pba_verification_event_replacement", sql`${table.eventType} <> 'superseded' OR ${table.replacementId} IS NOT NULL`),
+]);
+
+export type PbaVerificationRequest = typeof pbaVerificationRequests.$inferSelect;
+export type PbaVerificationKey = typeof pbaVerificationKeys.$inferSelect;
+export type PbaVerificationAttestation = typeof pbaVerificationAttestations.$inferSelect;
+export type PbaVerificationEvent = typeof pbaVerificationEvents.$inferSelect;
 
 // rate_limit_counters — persistent rate-limit state for PgRateLimitStore.
 // Created via raw SQL in server/pgRateLimit.ts (ensureRateLimitTable).

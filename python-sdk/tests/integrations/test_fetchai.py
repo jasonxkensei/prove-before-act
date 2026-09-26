@@ -153,6 +153,10 @@ class TestMetadata:
         assert "what" in meta
         assert "when" in meta
         assert "why" in meta
+        # why carries a fixed fingerprint-only action classification only.
+        assert meta["why"] == meta["action_type"]
+        # No raw human-readable context/description is ever placed in metadata.
+        assert "action_context" not in meta
         assert meta["framework"] == "fetchai-uagents"
         assert meta["action_type"] == "message_received"
 
@@ -390,8 +394,16 @@ class TestXproofHandler:
 
         asyncio.run(handler(MagicMock(), "sender", "msg"))
         calls = mock_client.certify_hash.call_args_list
-        assert calls[0].kwargs["metadata"]["why"] == "Query received"
-        assert calls[1].kwargs["metadata"]["why"] == "Response sent"
+        # why is a fixed fingerprint-only action classification. The custom
+        # human-readable context strings must NOT appear anywhere in metadata.
+        meta_in = calls[0].kwargs["metadata"]
+        meta_out = calls[1].kwargs["metadata"]
+        assert meta_in["why"] == "message_received"
+        assert meta_out["why"] == "message_sent"
+        assert "action_context" not in meta_in
+        assert "action_context" not in meta_out
+        assert not any("Query received" in str(v) for v in meta_in.values())
+        assert not any("Response sent" in str(v) for v in meta_out.values())
 
     def test_preserves_function_name(self, middleware):
         @xproof_handler(middleware)

@@ -46,8 +46,8 @@ describe("runTrustRefreshCycle — divergence fields survive the persist round-t
     //    (computeAllLeaderboardEntries has a HAVING COUNT(c.id) > 0 clause)
     await pool.query(
       `INSERT INTO certifications
-         (id, user_id, file_name, file_hash, blockchain_status, is_public, metadata, created_at)
-       VALUES ($1, $2, 'proof.json', $3, 'confirmed', true, '{}', NOW() - INTERVAL '5 hours')`,
+         (id, user_id, file_name, file_hash, blockchain_status, finality_checked_at, is_public, metadata, created_at)
+       VALUES ($1, $2, 'proof.json', $3, 'confirmed', NOW(), true, '{}', NOW() - INTERVAL '5 hours')`,
       [crypto.randomUUID(), userId, crypto.randomBytes(32).toString("hex")],
     );
 
@@ -57,8 +57,8 @@ describe("runTrustRefreshCycle — divergence fields survive the persist round-t
       const whyId = crypto.randomUUID();
       await pool.query(
         `INSERT INTO certifications
-           (id, user_id, file_name, file_hash, blockchain_status, is_public, metadata, created_at)
-         VALUES ($1, $2, 'why.json', $3, 'confirmed', true, '{"type":"coherence_check"}',
+           (id, user_id, file_name, file_hash, blockchain_status, finality_checked_at, is_public, metadata, created_at)
+         VALUES ($1, $2, 'why.json', $3, 'confirmed', NOW(), true, '{"type":"coherence_check"}',
                  NOW() - INTERVAL '3 hours')`,
         [whyId, userId, crypto.randomBytes(32).toString("hex")],
       );
@@ -76,15 +76,15 @@ describe("runTrustRefreshCycle — divergence fields survive the persist round-t
     const cleanWhatId = crypto.randomUUID();
     await pool.query(
       `INSERT INTO certifications
-         (id, user_id, file_name, file_hash, blockchain_status, is_public, metadata, created_at)
-       VALUES ($1, $2, 'why.json', $3, 'confirmed', true, '{"type":"coherence_check"}',
+         (id, user_id, file_name, file_hash, blockchain_status, finality_checked_at, is_public, metadata, created_at)
+       VALUES ($1, $2, 'why.json', $3, 'confirmed', NOW(), true, '{"type":"coherence_check"}',
                NOW() - INTERVAL '4 hours')`,
       [cleanWhyId, userId, crypto.randomBytes(32).toString("hex")],
     );
     await pool.query(
       `INSERT INTO certifications
-         (id, user_id, file_name, file_hash, blockchain_status, is_public, metadata, created_at)
-       VALUES ($1, $2, 'what.json', $3, 'confirmed', true, '{}', NOW() - INTERVAL '3 hours 30 minutes')`,
+         (id, user_id, file_name, file_hash, blockchain_status, finality_checked_at, is_public, metadata, created_at)
+       VALUES ($1, $2, 'what.json', $3, 'confirmed', NOW(), true, '{}', NOW() - INTERVAL '3 hours 30 minutes')`,
       [cleanWhatId, userId, crypto.randomBytes(32).toString("hex")],
     );
     await pool.query(

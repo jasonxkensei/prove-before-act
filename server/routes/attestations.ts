@@ -1,7 +1,7 @@
 import { type Express } from "express";
 import { db } from "../db";
 import { logger } from "../logger";
-import { certifications, users, attestations } from "@shared/schema";
+import { certifications, users, attestations, FINALITY_SNAPSHOT_VERSION } from "@shared/schema";
 import { eq, desc, sql, and, gte, count } from "drizzle-orm";
 import { z } from "zod";
 import { isWalletAuthenticated } from "../walletAuth";
@@ -9,6 +9,7 @@ import { attestationIssuanceRateLimiter, publicSearchRateLimiter, publicPdfRateL
 import { pgCheckRateLimitBatch } from "../pgRateLimit";
 import { computeTrustScoreByWallet, getCalibrationSummaryByWallet } from "../trust";
 import { isValidWebhookUrl, safeWebhookFetch } from "../webhook";
+import { proofWebhookHeaders } from "../webhookHeaders";
 import { safeErrMsg } from "./helpers";
 
 // Short-lived cache for the per-wallet public-profile visibility flag used by
@@ -58,6 +59,7 @@ export function registerAttestationsRoutes(app: Express) {
         JOIN users u ON u.id = c.user_id
         WHERE u.wallet_address = ${issuerWallet}
           AND c.blockchain_status = 'confirmed'
+          AND c.finality_checked_at IS NOT NULL
       `);
       const issuerConfirmedCerts = Number((issuerCertCheck.rows[0] as any)?.cnt || 0);
       if (issuerConfirmedCerts < 3) {
@@ -145,6 +147,7 @@ export function registerAttestationsRoutes(app: Express) {
   // has accumulated.
   app.get("/api/attestations/:wallet", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { wallet } = req.params;
 
       const subjectCheck = await db.execute(sql`
@@ -189,8 +192,9 @@ export function registerAttestationsRoutes(app: Express) {
   });
 
   // GET /api/attestation/:id — public, returns a single attestation by ID
-  app.get("/api/attestation/:id", async (req, res) => {
+  app.get("/api/attestation/:id", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { id } = req.params;
       const result = await db.execute(sql`
         SELECT id, subject_wallet, issuer_wallet, issuer_name, domain, standard, title, description, expires_at, status, revoked_at, created_at
@@ -275,11 +279,8 @@ export function registerAttestationsRoutes(app: Express) {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
-                "X-xProof-Signature": signature,
-                "X-xProof-Timestamp": timestamp,
-                "X-xProof-Event": "attestation.revoked",
-                "X-xProof-Delivery": id,
-                "User-Agent": "xProof-Webhook/1.0",
+                ...proofWebhookHeaders(signature, timestamp, "attestation.revoked", id),
+                "User-Agent": "ProveBeforeAct-Webhook/1.0",
               },
               body: payload,
               timeoutMs: 10000,
@@ -316,8 +317,9 @@ export function registerAttestationsRoutes(app: Express) {
   });
 
   // GET /api/issuer/:wallet — public issuer directory profile with all issued attestations
-  app.get("/api/issuer/:wallet", async (req, res) => {
+  app.get("/api/issuer/:wallet", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { wallet } = req.params;
 
       const issuerCheck = await db.execute(sql`
@@ -408,6 +410,7 @@ export function registerAttestationsRoutes(app: Express) {
         JOIN users u ON u.id = c.user_id
         WHERE u.wallet_address = ${issuerWallet}
           AND c.blockchain_status = 'confirmed'
+          AND c.finality_checked_at IS NOT NULL
       `);
       const issuerConfirmedCerts = Number((issuerCertCheck.rows[0] as any)?.cnt || 0);
       if (issuerConfirmedCerts < 3) {
@@ -471,6 +474,7 @@ export function registerAttestationsRoutes(app: Express) {
   // GET /api/trust/:wallet/history — trust score history (last 90 days snapshots)
   app.get("/api/trust/:wallet/history", publicSearchRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { wallet } = req.params;
       const days = Math.min(parseInt(req.query.days as string || "90"), 90);
 
@@ -486,6 +490,7 @@ export function registerAttestationsRoutes(app: Express) {
         SELECT score, level, cert_total, rank, snapshot_date
         FROM trust_score_snapshots
         WHERE wallet_address = ${wallet}
+          AND finality_version = ${FINALITY_SNAPSHOT_VERSION}
           AND snapshot_date >= CURRENT_DATE - (${days} || ' days')::interval
         ORDER BY snapshot_date ASC
       `);

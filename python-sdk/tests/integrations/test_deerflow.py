@@ -40,7 +40,7 @@ def test_certifies_json_input(skill, mock_client):
             "content": "Analysis report",
             "file_name": "report.md",
             "author": "analyst",
-            "why": "Quarterly review",
+            "why": "quarterly_review",
         }
     )
     skill._run(input_data)
@@ -49,7 +49,7 @@ def test_certifies_json_input(skill, mock_client):
     assert call_kwargs["file_name"] == "report.md"
     assert call_kwargs["author"] == "analyst"
     assert call_kwargs["metadata"]["who"] == "analyst"
-    assert call_kwargs["metadata"]["why"] == "Quarterly review"
+    assert call_kwargs["metadata"]["why"] == "quarterly_review"
 
 
 def test_default_file_name(skill, mock_client):
@@ -68,7 +68,8 @@ def test_default_author(skill, mock_client):
 def test_default_why(skill, mock_client):
     skill._run("some content")
     call_kwargs = mock_client.certify_hash.call_args.kwargs
-    assert call_kwargs["metadata"]["why"] == "DeerFlow agent certification"
+    # why defaults to a fixed fingerprint-only action classification.
+    assert call_kwargs["metadata"]["why"] == "skill_certification"
 
 
 def test_4w_metadata_present(skill, mock_client):
@@ -130,7 +131,7 @@ def test_dict_input(skill, mock_client):
             "content": "Dict-based input",
             "file_name": "dict-test.json",
             "author": "dict-agent",
-            "why": "Testing dict input",
+            "why": "dict_input_test",
         }
     )
     mock_client.certify_hash.assert_called_once()
@@ -139,7 +140,7 @@ def test_dict_input(skill, mock_client):
     assert call_kwargs["file_name"] == "dict-test.json"
     assert call_kwargs["author"] == "dict-agent"
     assert call_kwargs["metadata"]["who"] == "dict-agent"
-    assert call_kwargs["metadata"]["why"] == "Testing dict input"
+    assert call_kwargs["metadata"]["why"] == "dict_input_test"
 
     parsed = json.loads(result)
     assert parsed["status"] == "certified"

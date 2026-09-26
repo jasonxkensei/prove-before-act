@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PublicSiteHeader, PublicSiteFooter } from "@/components/public-site-chrome";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,14 @@ import {
 } from "lucide-react";
 
 const BASE = "https://provebeforeact.com";
+const DOC_STYLES = `
+  .pba-docs-root { --doc-rule: hsl(var(--border)); }
+  .pba-docs-root main { max-width: 72rem; }
+  .pba-docs-root p { max-width: 72ch; line-height: 1.65; }
+  .pba-docs-root section { scroll-margin-top: 6rem; }
+  .pba-docs-root pre { border: 1px solid var(--border); border-radius: .3rem; line-height: 1.65; }
+  .pba-docs-root a:focus-visible, .pba-docs-root button:focus-visible { outline: 2px solid hsl(var(--primary)); outline-offset: 3px; }
+`;
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -77,23 +86,23 @@ const tradePayload = `{
 }`;
 
 const asyncPattern = `async function executeWithProof(trade) {
-  // 1. Execute first — always
-  const result = await broker.execute(trade);
-
-  // 2. Hash payload — keep strategy private
-  const payload = buildAuditPayload(trade, result);
+  // 1. Declare the decision basis before executing — keep strategy private
+  const payload = buildAuditPayload(trade);
   const hash    = sha256(JSON.stringify(payload));
 
-  // 3. Anchor async — 2s timeout, non-blocking
-  certifyAsync(hash, payload).catch(err => {
-    localQueue.push({ hash, payload, timestamp: Date.now() });
-  });
+  // 2. Require a proof receipt, not blockchain confirmation
+  const proofId = await certifyBeforeAction(hash, payload);
+  if (!proofId) throw new Error('Pre-execution proof receipt required');
 
-  // 4. Return immediately — proof follows
+  // 3. Execute after the declared decision basis was accepted
+  const result = await broker.execute(trade);
+
+  // 4. Anchor the verified result after execution
+  certifyOutcomeAsync(result, proofId);
   return result;
 }
 
-async function certifyAsync(hash, payload) {
+async function certifyBeforeAction(hash, payload) {
   const res = await fetch('${BASE}/api/proof', {
     method: 'POST',
     headers: { 'Authorization': 'Bearer YOUR_API_KEY' },
@@ -101,7 +110,7 @@ async function certifyAsync(hash, payload) {
     signal: AbortSignal.timeout(2000)
   });
   const { proof_id } = await res.json();
-  await db.saveTrade({ ...trade, proof_id });
+  return proof_id; // receipt in ~1.1s; on-chain confirmation follows asynchronously
 }`;
 
 const settlementResponse = `{
@@ -142,28 +151,10 @@ curl ${BASE}/api/proof/a3f2b1c4-7890-4def-abcd-1234567890ab`;
 
 export default function DocsTradingPage() {
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Button asChild variant="ghost" size="icon" data-testid="button-back-docs">
-              <a href="/docs"><ArrowLeft className="h-4 w-4" /></a>
-            </Button>
-            <a href="/" className="flex items-center gap-2" data-testid="link-logo">
-              <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
-            </a>
-            <Badge variant="outline">Integration Guide</Badge>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button asChild variant="ghost" size="sm" data-testid="link-api-docs">
-              <a href="/docs">API Reference</a>
-            </Button>
-            <Button asChild variant="ghost" size="sm" data-testid="link-leaderboard">
-              <a href="/leaderboard">Leaderboard</a>
-            </Button>
-          </div>
-        </div>
-      </header>
+    <>
+      <style>{DOC_STYLES}</style>
+    <div className="pba-docs-root min-h-screen bg-background">
+      <PublicSiteHeader />
 
       <div className="container py-10 max-w-3xl mx-auto">
         <div className="mb-10">
@@ -182,7 +173,7 @@ export default function DocsTradingPage() {
             <CardContent className="p-4 flex items-center gap-3">
               <Zap className="h-5 w-5 text-primary shrink-0" />
               <p className="text-sm font-medium">
-                Core principle — <span className="text-muted-foreground font-normal">Audit must never block execution.</span>
+                  Core principle — <span className="text-muted-foreground font-normal">Submit the declared decision basis before execution; do not wait for blockchain confirmation.</span>
               </p>
             </CardContent>
           </Card>
@@ -214,10 +205,11 @@ export default function DocsTradingPage() {
           </section>
 
           <section data-testid="section-async-pattern">
-            <SectionHeader icon={Zap} number="02" title="Non-blocking async pattern" />
+            <SectionHeader icon={Zap} number="02" title="Pre-execution receipt pattern" />
             <p className="text-sm text-muted-foreground mb-4">
-              Trading execution must never depend synchronously on Prove Before Act confirmation.
-              Execute first, anchor after, always within a 2-second hard timeout.
+              Trading execution must receive a Prove Before Act proof ID for the declared decision basis before it acts.
+              It does not need to wait for a blockchain confirmation: keep the 2-second timeout on the proof receipt,
+              and fail closed or defer the trade when that receipt is unavailable.
             </p>
             <CodeBlock code={asyncPattern} language="typescript" />
           </section>
@@ -227,7 +219,7 @@ export default function DocsTradingPage() {
               <Zap className="h-5 w-5 text-primary shrink-0" />
               <div>
                 <p className="text-sm font-medium">
-                  Going further — certify the <em>reasoning</em> before acting, not just the output after.
+                  Going further — certify a <em>declared decision basis</em> before acting, never private internal reasoning, not just the output after.
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
                   The 4W workflow anchors WHO, WHAT, WHEN, and WHY for full auditability.{" "}
@@ -355,8 +347,8 @@ export default function DocsTradingPage() {
                   {[
                     ["Newcomer", "0 – 99", "Just started certifying", "text-muted-foreground"],
                     ["Active", "100 – 299", "Regular certification activity", "text-blue-600 dark:text-blue-400"],
-                    ["Trusted", "300 – 699", "Established track record", "text-green-700 dark:text-green-400"],
-                    ["Verified", "700+", "Extensive, sustained history", "text-emerald-600 dark:text-emerald-400"],
+                    ["Trusted", "300 – 699", "Established track record", "text-primary"],
+                    ["Verified", "700+", "Extensive, sustained history", "text-primary"],
                   ].map(([level, score, meaning, color], i) => (
                     <tr key={i} className={`border-b last:border-0 ${i % 2 === 0 ? "" : "bg-muted/20"}`}>
                       <td className={`px-4 py-2.5 text-sm font-semibold ${color}`}>{level}</td>
@@ -390,21 +382,9 @@ export default function DocsTradingPage() {
           </section>
         </div>
 
-        <footer className="border-t mt-12 pt-8">
-          <div className="text-center text-sm text-muted-foreground">
-            <p className="mb-3">
-              <a href={`${BASE}/leaderboard`} className="text-primary hover:underline" data-testid="link-footer-leaderboard">provebeforeact.com/leaderboard</a>
-              {" · "}
-              <a href="/docs" className="text-primary hover:underline" data-testid="link-footer-docs">API Reference</a>
-              {" · "}
-              <a href="/" className="text-primary hover:underline" data-testid="link-footer-home">provebeforeact.com</a>
-            </p>
-            <p className="text-xs">
-              If you can't prove execution, your backtests are marketing.
-            </p>
-          </div>
-        </footer>
       </div>
+      <PublicSiteFooter />
     </div>
+    </>
   );
 }

@@ -4,7 +4,7 @@ Demonstrates the WHY+WHAT dual-certification pattern:
   WHY  = hash of the incoming message (the trigger / justification)
   WHAT = hash of the agent's response (the output to prove)
 
-Both proofs share a ``decision_id`` so the full reasoning chain is
+Both proofs share a ``decision_id`` so the full declared decision-basis trail is
 independently verifiable on MultiversX mainnet.
 
 4W metadata per proof:
@@ -14,7 +14,8 @@ independently verifiable on MultiversX mainnet.
   WHY  = human-readable context / mandate
 
 Install:
-    pip install xproof uagents
+    pip install prove-before-act uagents
+    # The xproof module name below is a legacy compatibility alias.
 
 Run (demo — mocked API, no key required):
     python main.py
@@ -196,7 +197,7 @@ def main():
         print("  Incident report: https://xproof.app/incident/{agent_address}")
         print()
         print("  Production setup:")
-        print("    1. pip install xproof uagents")
+        print("    1. pip install prove-before-act uagents")
         print("    2. xp = wrap_agent(agent, api_key='pm_...')")
         print("    3. @agent.on_message(model=Query)")
         print("       @xproof_handler(xp)")

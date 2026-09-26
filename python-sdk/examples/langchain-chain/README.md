@@ -61,7 +61,7 @@ The demo uses the canonical **GDPR PII-deletion scenario**:
 - **Count:** `15_000` records
 - `confidence_level: 0.97`, `threshold_stage: "pre-commitment"`,
   `reversibility_class: "irreversible"`
-- `why: "Scheduled GDPR retention cleanup"`
+- `why: "gdpr-retention-cleanup"` (a safe public label; fingerprinted before send)
 
 ```bash
 python certify_tool_demo.py

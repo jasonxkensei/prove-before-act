@@ -3,8 +3,12 @@ import {
   TransactionComputer,
   Address,
 } from "@multiversx/sdk-core";
+import { createHash } from "crypto";
 import { recordTransaction } from "./metrics";
 import { enqueueTx } from "./txQueue";
+import { db } from "./db";
+import { certifications } from "@shared/schema";
+import { eq } from "drizzle-orm";
 import { logger } from "./logger";
 import { claimNextNonce, resyncNonceFromChain } from "./nonce";
 
@@ -14,6 +18,25 @@ const GATEWAY_URL = process.env.MULTIVERSX_GATEWAY_URL || "https://gateway.multi
 const API_URL = process.env.MULTIVERSX_API_URL || "https://api.multiversx.com";
 const CHAIN_ID = process.env.MULTIVERSX_CHAIN_ID || "1";
 
+// The validation loop currently submits five transactions with a combined
+// default gas limit of 75M. At the protocol minimum gas price (1 EGLD/Gas),
+// 50 complete loops require 3.75 EGLD. Keep this configurable because the
+// network's gas economics can change independently of the application.
+const VALIDATION_LOOP_GAS_LIMIT = 75_000_000n;
+const VALIDATION_LOOP_COUNT_WARNING = 50n;
+const MINIMUM_GAS_PRICE_ATTO_EGLD = 1_000_000_000n;
+const DEFAULT_LOW_BALANCE_EGLD =
+  Number(VALIDATION_LOOP_GAS_LIMIT * VALIDATION_LOOP_COUNT_WARNING * MINIMUM_GAS_PRICE_ATTO_EGLD) / 1e18;
+const configuredLowBalanceEgld = Number(process.env.MX8004_LOW_BALANCE_EGLD);
+
+export const MX8004_LOW_BALANCE_EGLD =
+  Number.isFinite(configuredLowBalanceEgld) && configuredLowBalanceEgld > 0
+    ? configuredLowBalanceEgld
+    : DEFAULT_LOW_BALANCE_EGLD;
+
+const BALANCE_CACHE_TTL_MS = 5 * 60 * 1000;
+const BALANCE_REQUEST_TIMEOUT_MS = 10_000;
+
 const IDENTITY_REGISTRY = process.env.MX8004_IDENTITY_REGISTRY;
 const VALIDATION_REGISTRY = process.env.MX8004_VALIDATION_REGISTRY;
 const REPUTATION_REGISTRY = process.env.MX8004_REPUTATION_REGISTRY;
@@ -21,6 +44,128 @@ const XPROOF_AGENT_NONCE = process.env.MX8004_XPROOF_AGENT_NONCE;
 
 export function isMX8004Configured(): boolean {
   return !!(PRIVATE_KEY && SENDER_ADDRESS && IDENTITY_REGISTRY && VALIDATION_REGISTRY && REPUTATION_REGISTRY && XPROOF_AGENT_NONCE);
+}
+
+export function getMx8004NetworkConfiguration() {
+  return { chain_id: CHAIN_ID, api_url: API_URL, gateway_url: GATEWAY_URL };
+}
+
+export interface Mx8004SignerBalance {
+  address: string | null;
+  balanceRaw: string | null;
+  balanceEgld: number | null;
+  nonce: number | null;
+  lowBalance: boolean;
+  thresholdEgld: number;
+  checkedAt: string | null;
+  error?: string;
+}
+
+let signerBalanceCache: Mx8004SignerBalance | null = null;
+let signerBalanceRequest: Promise<Mx8004SignerBalance> | null = null;
+
+function unavailableSignerBalance(error?: string): Mx8004SignerBalance {
+  return {
+    address: SENDER_ADDRESS || null,
+    balanceRaw: null,
+    balanceEgld: null,
+    nonce: null,
+    lowBalance: false,
+    thresholdEgld: MX8004_LOW_BALANCE_EGLD,
+    checkedAt: null,
+    ...(error ? { error } : {}),
+  };
+}
+
+/**
+ * Read and cache the MX-8004 signer wallet's EGLD balance.
+ *
+ * The cache prevents the public status endpoint from turning every poll into
+ * an upstream API request. Maintenance calls this with forceRefresh so the
+ * operator-facing status remains current even when nobody is polling it.
+ */
+export async function getMx8004SignerBalance(
+  options: { forceRefresh?: boolean } = {},
+): Promise<Mx8004SignerBalance> {
+  if (!SENDER_ADDRESS) {
+    const unavailable = unavailableSignerBalance();
+    signerBalanceCache = unavailable;
+    return unavailable;
+  }
+
+  const cachedBalance = signerBalanceCache;
+  const cacheIsFresh =
+    cachedBalance?.checkedAt &&
+    Date.now() - new Date(cachedBalance.checkedAt).getTime() < BALANCE_CACHE_TTL_MS;
+  if (!options.forceRefresh && cachedBalance && cacheIsFresh) {
+    return { ...cachedBalance };
+  }
+  if (signerBalanceRequest) {
+    return signerBalanceRequest;
+  }
+
+  signerBalanceRequest = (async () => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), BALANCE_REQUEST_TIMEOUT_MS);
+    try {
+      const response = await fetch(`${API_URL}/accounts/${SENDER_ADDRESS}?fields=balance,nonce`, {
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        throw new Error(`MultiversX API returned ${response.status}`);
+      }
+
+      const data = await response.json() as { balance?: string; nonce?: number };
+      const balanceRaw = data.balance ?? "0";
+      const balanceEgld = Number(BigInt(balanceRaw)) / 1e18;
+      const snapshot: Mx8004SignerBalance = {
+        address: SENDER_ADDRESS,
+        balanceRaw,
+        balanceEgld: Math.round(balanceEgld * 1e6) / 1e6,
+        nonce: typeof data.nonce === "number" ? data.nonce : null,
+        lowBalance: balanceEgld < MX8004_LOW_BALANCE_EGLD,
+        thresholdEgld: MX8004_LOW_BALANCE_EGLD,
+        checkedAt: new Date().toISOString(),
+      };
+      signerBalanceCache = snapshot;
+      return { ...snapshot };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Balance request failed";
+      const failure: Mx8004SignerBalance = {
+        ...(signerBalanceCache ?? unavailableSignerBalance()),
+        address: SENDER_ADDRESS,
+        error: message,
+      };
+      signerBalanceCache = failure;
+      return { ...failure };
+    } finally {
+      clearTimeout(timeout);
+      signerBalanceRequest = null;
+    }
+  })();
+
+  return signerBalanceRequest;
+}
+
+export function getMx8004SignerBalanceReport(balance: Mx8004SignerBalance | null = signerBalanceCache) {
+  const current = balance ?? unavailableSignerBalance();
+  return {
+    address: current.address,
+    balance_egld: current.balanceEgld,
+    balance_raw: current.balanceRaw,
+    nonce: current.nonce,
+    low_balance: current.lowBalance,
+    threshold_egld: current.thresholdEgld,
+    checked_at: current.checkedAt,
+    status: current.error
+      ? "unknown"
+      : current.balanceEgld === null
+        ? "not_available"
+        : current.lowBalance
+          ? "low_balance"
+          : "ok",
+    ...(current.error ? { error: current.error } : {}),
+  };
 }
 
 function toHex(str: string): string {
@@ -43,7 +188,10 @@ export function resetNonce() {
   }
 }
 
-async function signAndSubmit(tx: Transaction): Promise<string> {
+async function signAndSubmit(tx: Transaction, onNonce?: (nonce: string) => Promise<void>): Promise<string> {
+  // Persist the claimed nonce before sending: a crash after acceptance must not
+  // leave the queue unable to identify which signer nonce needs reconciliation.
+  if (onNonce) await onNonce(tx.nonce.toString());
   const privateKeyHex = PRIVATE_KEY!.replace(/^0x/i, "");
   const privateKeyBuffer = Buffer.from(privateKeyHex, "hex");
   const computer = new TransactionComputer();
@@ -103,6 +251,102 @@ async function buildScCall(
 
 const RPC_TIMEOUT_MS = 15_000;
 
+/** Gateway acceptance is not inclusion. Only a successful transaction with block metadata is final. */
+export async function getMx8004TransactionFinality(
+  txHash: string,
+): Promise<"confirmed" | "pending" | "failed"> {
+  if (!/^[a-fA-F0-9]{64}$/.test(txHash)) throw new Error("Invalid MX-8004 transaction hash");
+  const response = await fetch(`${API_URL}/transactions/${txHash}`, {
+    signal: AbortSignal.timeout(RPC_TIMEOUT_MS),
+  });
+  if (response.status === 404) return "pending";
+  if (!response.ok) throw new Error(`MX-8004 transaction lookup returned ${response.status}`);
+  const tx = await response.json();
+  if (typeof tx?.txHash !== "string" || tx.txHash.toLowerCase() !== txHash.toLowerCase()) {
+    throw new Error("MX-8004 transaction lookup returned a mismatched hash");
+  }
+  if (["fail", "failed", "invalid"].includes(tx.status)) return "failed";
+  if (tx.status === "success" && Number.isInteger(tx.round) && tx.round > 0 &&
+      Number.isInteger(tx.blockNonce) && tx.blockNonce > 0) return "confirmed";
+  return "pending";
+}
+
+/** Fetch fresh chain evidence for operator reconciliation; a missing hash is never proof of rejection. */
+export async function inspectMx8004RecoveryTransaction(hash: string) {
+  if (!/^[a-fA-F0-9]{64}$/.test(hash)) throw new Error("Invalid transaction hash");
+  const response = await fetch(`${API_URL}/transactions/${hash}`, { signal: AbortSignal.timeout(RPC_TIMEOUT_MS) });
+  if (response.status === 404) return null;
+  if (!response.ok) throw new Error(`Transaction lookup returned ${response.status}`);
+  const tx = await response.json();
+  if (tx?.txHash?.toLowerCase() !== hash.toLowerCase()) throw new Error("Transaction hash mismatch");
+  return tx;
+}
+
+export async function getMx8004FreshSignerNonce(): Promise<number> {
+  if (!SENDER_ADDRESS) throw new Error("Signer not configured");
+  const response = await fetch(`${API_URL}/accounts/${SENDER_ADDRESS}?fields=nonce`, {
+    signal: AbortSignal.timeout(RPC_TIMEOUT_MS),
+  });
+  if (!response.ok) throw new Error(`Signer lookup returned ${response.status}`);
+  const { nonce } = await response.json();
+  if (!Number.isSafeInteger(nonce) || nonce < 0) throw new Error("Invalid signer nonce from chain");
+  return nonce;
+}
+
+/** Recent signer history is discovery only; it is never evidence that an absent send was rejected. */
+export async function getMx8004RecentSignerTransactions() {
+  if (!SENDER_ADDRESS) throw new Error("Signer not configured");
+  const response = await fetch(`${API_URL}/accounts/${SENDER_ADDRESS}/transactions?from=0&size=100`, {
+    signal: AbortSignal.timeout(RPC_TIMEOUT_MS),
+  });
+  if (!response.ok) throw new Error(`Signer history lookup returned ${response.status}`);
+  const transactions = await response.json();
+  if (!Array.isArray(transactions)) throw new Error("Invalid signer history response");
+  return transactions.filter((tx: any) => tx.sender?.toLowerCase() === SENDER_ADDRESS.toLowerCase()).map((tx: any) => ({
+    hash: typeof tx.txHash === "string" ? tx.txHash : null,
+    nonce: Number.isSafeInteger(tx.nonce) ? String(tx.nonce) : null,
+    status: typeof tx.status === "string" ? tx.status : null,
+  }));
+}
+
+export function verifyMx8004RecoveryEvidence(
+  tx: any,
+  hash: string,
+  nonce: string,
+  step: number,
+  payload: Record<string, any>,
+): "confirmed" | "failed" | "pending" {
+  if (!SENDER_ADDRESS || !VALIDATION_REGISTRY || !REPUTATION_REGISTRY) throw new Error("Registry not configured");
+  if (!/^\d+$/.test(nonce) || !tx || tx.txHash?.toLowerCase() !== hash.toLowerCase() ||
+      tx.sender?.toLowerCase() !== SENDER_ADDRESS.toLowerCase() ||
+      String(tx.nonce) !== nonce || String(tx.chainID) !== CHAIN_ID) {
+    throw new Error("Transaction does not match the signer, nonce, hash and network");
+  }
+  const proof = `hash:${payload.fileHash}|tx:${payload.transactionHash}`;
+  const requestHash = (awaitHash(proof));
+  const responseHash = awaitHash(`verified:${payload.fileHash}`);
+  const specs: Array<[string | undefined, string[]]> = [
+    [VALIDATION_REGISTRY, ["init_job", toHex(payload.jobId), numberToHex(payload.agentNonce)]],
+    [VALIDATION_REGISTRY, ["submit_proof", toHex(payload.jobId), toHex(proof)]],
+    [VALIDATION_REGISTRY, ["validation_request", toHex(payload.jobId), addressToHex(payload.senderAddress), toHex(`https://provebeforeact.com/proof/${payload.certificationId}.json`), toHex(requestHash)]],
+    [VALIDATION_REGISTRY, ["validation_response", toHex(requestHash), numberToHex(100), toHex(`https://provebeforeact.com/proof/${payload.certificationId}`), toHex(responseHash), toHex("Prove Before Act-certification")]],
+    [REPUTATION_REGISTRY, ["append_response", toHex(payload.jobId), toHex(`https://provebeforeact.com/api/certificates/${payload.certificationId}.pdf`)]],
+  ];
+  const [receiver, parts] = specs[step] ?? [];
+  if (!receiver || tx.receiver?.toLowerCase() !== receiver.toLowerCase() ||
+      tx.data !== Buffer.from(parts.join("@")).toString("base64")) {
+    throw new Error("Transaction contract or call data does not match this job step");
+  }
+  if (!Number.isInteger(tx.round) || tx.round <= 0 || !Number.isInteger(tx.blockNonce) || tx.blockNonce <= 0) return "pending";
+  if (tx.status === "success") return "confirmed";
+  if (["fail", "failed", "invalid"].includes(tx.status)) return "failed";
+  return "pending";
+}
+
+function awaitHash(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
 async function vmQuery(
   contractAddress: string,
   funcName: string,
@@ -150,7 +394,8 @@ export async function registerAgent(
 export async function initJob(
   jobId: string,
   agentNonce: number,
-  serviceId?: number
+  serviceId?: number,
+  onNonce?: (nonce: string) => Promise<void>,
 ): Promise<string> {
   if (!isMX8004Configured()) throw new Error("MX-8004 not configured");
 
@@ -167,12 +412,13 @@ export async function initJob(
     BigInt(15_000_000)
   );
 
-  return signAndSubmit(tx);
+  return signAndSubmit(tx, onNonce);
 }
 
 export async function submitProof(
   jobId: string,
-  proof: string
+  proof: string,
+  onNonce?: (nonce: string) => Promise<void>,
 ): Promise<string> {
   if (!isMX8004Configured()) throw new Error("MX-8004 not configured");
 
@@ -184,14 +430,15 @@ export async function submitProof(
     BigInt(10_000_000)
   );
 
-  return signAndSubmit(tx);
+  return signAndSubmit(tx, onNonce);
 }
 
 export async function validationRequest(
   jobId: string,
   validatorAddress: string,
   requestUri: string,
-  requestHash: string
+  requestHash: string,
+  onNonce?: (nonce: string) => Promise<void>,
 ): Promise<string> {
   if (!isMX8004Configured()) throw new Error("MX-8004 not configured");
 
@@ -203,7 +450,7 @@ export async function validationRequest(
     BigInt(15_000_000)
   );
 
-  return signAndSubmit(tx);
+  return signAndSubmit(tx, onNonce);
 }
 
 export async function validationResponse(
@@ -211,7 +458,8 @@ export async function validationResponse(
   response: number,
   responseUri: string,
   responseHash: string,
-  tag: string
+  tag: string,
+  onNonce?: (nonce: string) => Promise<void>,
 ): Promise<string> {
   if (!isMX8004Configured()) throw new Error("MX-8004 not configured");
 
@@ -223,7 +471,7 @@ export async function validationResponse(
     BigInt(15_000_000)
   );
 
-  return signAndSubmit(tx);
+  return signAndSubmit(tx, onNonce);
 }
 
 export async function getReputationScore(agentNonce: number): Promise<{ score: number; totalJobs: number }> {
@@ -271,18 +519,33 @@ export async function recordCertificationAsJob(
   if (!isMX8004Configured()) return;
 
   const agentNonce = parseInt(XPROOF_AGENT_NONCE!);
-  if (isNaN(agentNonce) || agentNonce < 1) {
-    logger.error("Invalid XPROOF_AGENT_NONCE value", { component: "mx8004" });
-    return;
+  try {
+    if (isNaN(agentNonce) || agentNonce < 1) {
+      throw new Error("Invalid XPROOF_AGENT_NONCE value");
+    }
+    await enqueueTx("mx8004_validation_loop", `xproof_cert_${certificationId}`, {
+      certificationId,
+      fileHash,
+      transactionHash,
+      agentNonce,
+      senderAddress: SENDER_ADDRESS!,
+    });
+  } catch (error) {
+    // An insert may have committed even if its acknowledgement was lost.
+    // Never retry or synthesize a worker row here; a real queue row wins on reads.
+    try {
+      await db.update(certifications).set({
+        mx8004EnqueueStatus: "failed",
+        mx8004EnqueueError: "Queue handoff failed; operator review required",
+      }).where(eq(certifications.id, certificationId));
+    } catch (persistError) {
+      logger.error("Could not persist MX-8004 queue handoff failure", {
+        component: "mx8004", certificationId,
+        error: persistError instanceof Error ? persistError.message : String(persistError),
+      });
+    }
+    throw error;
   }
-
-  await enqueueTx("mx8004_validation_loop", `xproof_cert_${certificationId}`, {
-    certificationId,
-    fileHash,
-    transactionHash,
-    agentNonce,
-    senderAddress: SENDER_ADDRESS!,
-  });
 }
 
 export async function getJobData(jobId: string): Promise<{
@@ -294,13 +557,9 @@ export async function getJobData(jobId: string): Promise<{
 } | null> {
   if (!isMX8004Configured()) throw new Error("MX-8004 not configured");
 
-  try {
-    const returnData = await vmQuery(VALIDATION_REGISTRY!, "get_job_data", [toHex(jobId)]);
-    if (!returnData || returnData.length === 0 || !returnData[0]) return null;
-    return decodeJobData(returnData[0]);
-  } catch {
-    return null;
-  }
+  const returnData = await vmQuery(VALIDATION_REGISTRY!, "get_job_data", [toHex(jobId)]);
+  if (!returnData || returnData.length === 0 || !returnData[0]) return null;
+  return decodeJobData(returnData[0]);
 }
 
 /** Minimal reader for MultiversX nested-encoded structs returned by VM queries. */
@@ -533,7 +792,8 @@ export async function readFeedback(
 
 export async function appendResponse(
   jobId: string,
-  responseUri: string
+  responseUri: string,
+  onNonce?: (nonce: string) => Promise<void>,
 ): Promise<string> {
   if (!isMX8004Configured()) throw new Error("MX-8004 not configured");
 
@@ -545,7 +805,7 @@ export async function appendResponse(
     BigInt(10_000_000)
   );
 
-  return signAndSubmit(tx);
+  return signAndSubmit(tx, onNonce);
 }
 
 export function getExplorerUrl(txHash: string): string {

@@ -85,8 +85,8 @@ function CopyButton({ text, label }: { text: string; label: string }) {
 
 const CHECK_EXPLANATIONS: Record<string, string> = {
   "who": "The agent's wallet address is registered and publicly identified on MultiversX. This confirms which actor performed the action.",
-  "when": "The reasoning proof was certified on-chain BEFORE the result proof. This is the core Prove Before & After Act guarantee — the agent's intent is immutably timestamped before the outcome.",
-  "why_certified": "A WHY proof (reasoning) exists and has been committed to the MultiversX blockchain, anchoring the agent's full reasoning, context, and decision before execution.",
+  "when": "The declared decision-basis proof was certified on-chain BEFORE the result proof. This is the core Prove Before & After Act guarantee — the agent's intent is immutably timestamped before the outcome.",
+  "why_certified": "A WHY proof (declared decision basis) exists and has been committed to the MultiversX blockchain, anchoring the agent's chosen context, justification, and decision before execution — never internal chain-of-thought.",
   "what_certified": "A WHAT proof (result) exists and has been committed to the MultiversX blockchain, anchoring the actual outcome of the action after execution.",
   "session_anchored": "A session heartbeat proof was certified, recording the broader context of this agent session — total actions, duration, and karma.",
   "all_confirmed": "Every proof in this audit trail has been confirmed on-chain by MultiversX validators. Unconfirmed proofs could indicate a pending or failed blockchain transaction.",
@@ -105,7 +105,7 @@ function CheckRow({
   return (
     <div className="flex items-center gap-2.5 py-1.5">
       {pass ? (
-        <CheckCircle className="h-4 w-4 text-green-500 dark:text-green-400 shrink-0" />
+        <CheckCircle className="h-4 w-4 text-primary shrink-0" />
       ) : (
         <XCircle className="h-4 w-4 text-red-500 dark:text-red-400 shrink-0" />
       )}
@@ -133,7 +133,7 @@ function CheckRow({
 
 function RoleBadge({ role, isContested }: { role: string; isContested?: boolean }) {
   const config: Record<string, { label: string; variant: "default" | "secondary" | "outline" }> = {
-    WHY: { label: "WHY — Reasoning", variant: "default" },
+    WHY: { label: "WHY — Declared Decision Basis", variant: "default" },
     WHAT: { label: "WHAT — Result", variant: "secondary" },
     heartbeat: { label: "SESSION HEARTBEAT", variant: "outline" },
     contested: { label: "CONTESTED", variant: "outline" },
@@ -205,10 +205,10 @@ function VerdictBanner({
   > = {
     clean: {
       icon: ShieldCheck,
-      bg: "bg-green-500/5 dark:bg-green-500/10",
-      border: "border-green-500/20",
-      text: "text-green-700 dark:text-green-400",
-      badge: "text-green-700 dark:text-green-300 border-green-500/30 bg-green-500/10",
+      bg: "bg-primary/5",
+      border: "border-primary/20",
+      text: "text-primary",
+      badge: "text-primary border-primary/30 bg-primary/10",
       label: verdict.label,
     },
     gap: {
@@ -217,7 +217,7 @@ function VerdictBanner({
       border: "border-amber-500/20",
       text: "text-amber-700 dark:text-amber-400",
       badge: "text-amber-700 dark:text-amber-300 border-amber-500/30 bg-amber-500/10",
-      label: "Reasoning Link Not Found",
+      label: "Declared Decision-Basis Link Not Found",
     },
     violation: {
       icon: ShieldAlert,
@@ -291,7 +291,7 @@ function VerdictBanner({
             data-testid="text-verdict-detail"
           >
             {severity === "gap"
-              ? "The action was certified on-chain, but the system could not automatically pair a WHY (reasoning) proof to this specific action. This is often a metadata linking limitation, not evidence of misconduct."
+              ? "The action was certified on-chain, but the system could not automatically pair a WHY (declared decision basis) proof to this specific action. This is often a metadata linking limitation, not evidence of misconduct."
               : verdict.detail}
           </p>
         </div>
@@ -304,10 +304,10 @@ function VerdictBanner({
             What does this mean?
           </p>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Prove Before Act requires agents to anchor their reasoning (WHY) before acting (WHAT).
+            Prove Before Act requires agents to anchor a declared decision basis (WHY), not internal chain-of-thought, before acting (WHAT).
             This check looks for a WHY proof linked to this specific action.
             When WHY was certified before the action's target existed — for instance,
-            reasoning anchored before a post was published — the automatic pairing
+            a declared decision basis anchored before a post was published — the automatic pairing
             can fail even if both proofs are present and valid.
             Check the session heartbeat below, which lists all proofs from this session.
           </p>
@@ -320,7 +320,7 @@ function VerdictBanner({
           </p>
           <p className="text-xs text-muted-foreground leading-relaxed">
             The WHAT proof (action result) was committed to the MultiversX blockchain
-            before the WHY proof (reasoning). This reverses the "Prove Before & After Act" guarantee
+            before the WHY proof (declared decision basis). This reverses the "Prove Before & After Act" guarantee
             and is recorded as an order violation in the agent's audit trail.
           </p>
         </div>
@@ -355,14 +355,14 @@ function PlainSummaryBlock({
   const verdictPhrases: Record<string, { phrase: string; cls: string }> = {
     clean: {
       phrase: "Timeline integrity verified — intent preceded execution.",
-      cls: "text-green-700 dark:text-green-400 font-semibold",
+      cls: "text-primary font-semibold",
     },
     gap: {
-      phrase: "Reasoning link not found — the WHY proof could not be automatically paired to this action.",
+      phrase: "Declared decision-basis link not found — the WHY proof could not be automatically paired to this action.",
       cls: "text-amber-700 dark:text-amber-400 font-semibold",
     },
     violation: {
-      phrase: "Order violation — execution was recorded before the reasoning was anchored.",
+      phrase: "Order violation — execution was recorded before the declared decision basis was anchored.",
       cls: "text-red-700 dark:text-red-400 font-semibold",
     },
     incomplete: {
@@ -388,7 +388,7 @@ function PlainSummaryBlock({
         )}{" "}
         {whenStr ? (
           <>
-            certified its reasoning{" "}
+            certified its declared decision basis{" "}
             <span className="font-medium">(WHY)</span> on{" "}
             <span className="font-mono font-medium">{whenStr}</span>
           </>
@@ -479,7 +479,7 @@ function DeltaCard({
     <Card
       className={
         intentOk === true
-          ? "border-green-500/20"
+          ? "border-primary/20"
           : intentOk === false
           ? "border-red-500/20"
           : ""
@@ -494,7 +494,7 @@ function DeltaCard({
             <p
               className={`text-lg font-bold mb-1 ${
                 intentOk === true
-                  ? "text-green-600 dark:text-green-400"
+                  ? "text-primary"
                   : intentOk === false
                   ? "text-red-600 dark:text-red-400"
                   : ""
@@ -505,13 +505,13 @@ function DeltaCard({
             </p>
             <p className="text-xs text-muted-foreground">
               {deltaSec >= 0
-                ? `Reasoning anchored ${formatDuration(deltaSec)} before result`
-                : `Result anchored ${formatDuration(Math.abs(deltaSec))} before reasoning`}
+                ? `Declared decision basis anchored ${formatDuration(deltaSec)} before result`
+                : `Result anchored ${formatDuration(Math.abs(deltaSec))} before the declared decision basis`}
             </p>
             <p
               className={`text-xs font-medium mt-2 ${
                 intentOk === true
-                  ? "text-green-600 dark:text-green-400"
+                  ? "text-primary"
                   : intentOk === false
                   ? "text-red-600 dark:text-red-400"
                   : "text-muted-foreground"
@@ -532,8 +532,8 @@ function TrustCard({ trust, agent }: { trust: any; agent: any }) {
   if (!trust) return null;
 
   const levelColors: Record<string, string> = {
-    Verified: "text-green-600 dark:text-green-400",
-    Trusted: "text-green-600 dark:text-green-400",
+    Verified: "text-primary",
+    Trusted: "text-primary",
     Active: "text-blue-600 dark:text-blue-400",
     Newcomer: "text-muted-foreground",
   };
@@ -655,7 +655,7 @@ function TimelineEntry({
               {entry.blockchain_status === "confirmed" ? (
                 <Badge
                   variant="outline"
-                  className="text-[10px] text-green-600 dark:text-green-400 border-green-500/30"
+                  className="text-[10px] text-primary border-primary/30"
                 >
                   confirmed
                 </Badge>
@@ -688,8 +688,9 @@ function TimelineEntry({
 
           {isWhy && (
             <p className="text-xs text-muted-foreground mb-3 pb-2 border-b">
-              Full reasoning anchored on-chain before the agent acted. This is the
-              cryptographic commitment that preceded execution.
+              Declared decision basis anchored on-chain before the agent acted —
+              never internal chain-of-thought. This is the cryptographic commitment
+              that preceded execution.
             </p>
           )}
           {isWhat && (
@@ -727,7 +728,7 @@ function TimelineEntry({
                 <div className="flex items-center gap-2 mb-2">
                   <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Decision Chain
+                    Declared Decision Basis
                   </p>
                 </div>
                 <div className="space-y-1.5 ml-5">
@@ -856,14 +857,14 @@ function DeltaConnector({ deltaSec }: { deltaSec: number }) {
       <div className="flex flex-col items-center">
         <div className="w-px h-4 bg-border" />
         <ArrowDown
-          className={`h-4 w-4 ${ok ? "text-green-500 dark:text-green-400" : "text-red-500 dark:text-red-400"}`}
+          className={`h-4 w-4 ${ok ? "text-primary" : "text-red-500 dark:text-red-400"}`}
         />
         <div className="w-px h-4 bg-border" />
       </div>
       <div
         className={`flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs font-mono ${
           ok
-            ? "border-green-500/20 bg-green-500/5 text-green-700 dark:text-green-400"
+            ? "border-primary/20 bg-primary/5 text-primary"
             : "border-red-500/20 bg-red-500/5 text-red-700 dark:text-red-400"
         }`}
       >
@@ -1081,7 +1082,7 @@ export default function IncidentReportPage() {
               data-testid="link-logo"
             >
               <img
-                src="/pba-logo.svg"
+                src="/pba-logo.png"
                 alt="Prove Before Act"
                 className="h-7 w-auto"
               />
@@ -1318,12 +1319,12 @@ export default function IncidentReportPage() {
                   />
                   <CheckRow
                     pass={data.verification.intent_preceded_execution}
-                    label="WHEN — Reasoning before result"
+                    label="WHEN — Declared decision basis before result"
                     tooltip={CHECK_EXPLANATIONS.when}
                   />
                   <CheckRow
                     pass={data.verification.why_certified}
-                    label="WHY — Reasoning proof certified"
+                    label="WHY — Declared decision-basis proof certified"
                     tooltip={CHECK_EXPLANATIONS.why_certified}
                   />
                   <CheckRow
@@ -1357,14 +1358,14 @@ export default function IncidentReportPage() {
                         <AlertTriangle className={`h-3.5 w-3.5 shrink-0 mt-0.5 ${iconCls}`} />
                         <p>
                           {data.verification.intent_preceded_execution === false &&
-                            <><span className="font-semibold">Order violation:</span>{" "}The WHAT proof was committed on-chain before the WHY proof. This reverses the Prove Before &amp; After Act guarantee — the outcome was recorded before the stated reasoning.</>}
+                            <><span className="font-semibold">Order violation:</span>{" "}The WHAT proof was committed on-chain before the WHY proof. This reverses the Prove Before &amp; After Act guarantee — the outcome was recorded before the declared decision basis.</>}
                           {data.verification.intent_preceded_execution !== false &&
                             data.verification.all_confirmed === false &&
                             <><span className="font-semibold">Blockchain verification failed:</span>{" "}One or more transaction hashes could not be confirmed on MultiversX — they may be pending, not found on-chain, or the transaction failed. A proof is only valid once its transaction is confirmed on the blockchain.</>}
                           {data.verification.intent_preceded_execution !== false &&
                             data.verification.all_confirmed !== false &&
                             !data.verification.why_certified &&
-                            <><span className="font-semibold">Reasoning link not found:</span>{" "}The system could not automatically pair a WHY proof to this action. This typically happens when the WHY was certified before the action's target existed (e.g. before a post was published). Check the session heartbeat — it may reference both proofs.</>}
+                            <><span className="font-semibold">Declared decision-basis link not found:</span>{" "}The system could not automatically pair a WHY proof to this action. This typically happens when the WHY was certified before the action's target existed (e.g. before a post was published). Check the session heartbeat — it may reference both proofs.</>}
                           {data.verification.intent_preceded_execution !== false &&
                             data.verification.all_confirmed !== false &&
                             data.verification.why_certified &&

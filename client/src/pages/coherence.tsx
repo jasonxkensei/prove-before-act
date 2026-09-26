@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PublicSiteFooter, PublicSiteHeader } from "@/components/public-site-chrome";
 import {
   Bot,
   Zap,
@@ -48,40 +49,10 @@ function CodeBlock({ code, lang = "bash" }: { code: string; lang?: string }) {
 
 export default function CoherencePage() {
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between">
-          <a href="/" className="flex items-center gap-2">
-            <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
-          </a>
-          <nav className="hidden md:flex items-center gap-6">
-            <a href="/" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-              Home
-            </a>
-            <a href="/agent-context" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
-              <Bot className="h-3.5 w-3.5" />
-              For Agents
-            </a>
-            <a href="/docs" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-              Docs
-            </a>
-            <a href="/leaderboard" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-              Leaderboard
-            </a>
-          </nav>
-          <div className="flex items-center gap-3">
-            <Button asChild size="sm">
-              <a href="/#free-trial">
-                Start free
-                <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-              </a>
-            </Button>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-[100dvh] overflow-x-hidden bg-background text-foreground">
+      <PublicSiteHeader />
 
-      <main>
+      <main id="main-content" tabIndex={-1}>
         {/* ── Hero ──────────────────────────────────────────────────────────── */}
         <section className="container pt-16 pb-20 md:pt-24 md:pb-28">
           <div className="mx-auto max-w-4xl text-center">
@@ -147,7 +118,7 @@ export default function CoherencePage() {
                   { label: "What was intended", icon: Eye, color: "border-primary/30 bg-primary/5", textColor: "text-primary" },
                   { label: "What was understood", icon: Blocks, color: "border-border/60 bg-muted/30", textColor: "text-foreground" },
                   { label: "What was decided", icon: Shield, color: "border-border/60 bg-muted/30", textColor: "text-foreground" },
-                  { label: "What can be proven", icon: CheckCircle, color: "border-emerald-500/30 bg-emerald-500/5", textColor: "text-emerald-500 dark:text-emerald-400" },
+                  { label: "What can be proven", icon: CheckCircle, color: "border-primary/30 bg-primary/5", textColor: "text-primary" },
                 ].map((item, i) => {
                   const Icon = item.icon;
                   return (
@@ -188,8 +159,8 @@ export default function CoherencePage() {
                   The canonical accountability loop
                 </h2>
                 <p className="text-muted-foreground max-w-xl mx-auto">
-                  Anchor your WHY on-chain before acting. Anchor your WHAT after.
-                  Full 4W audit trail — immutable, public, reconstructible.
+                  Anchor a declared decision basis (WHY) before acting, then anchor the result (WHAT) after.
+                  The record is an accountability declaration — never an internal chain-of-thought.
                 </p>
               </div>
 
@@ -197,8 +168,8 @@ export default function CoherencePage() {
                 {[
                   {
                     step: "1",
-                    label: "Reason",
-                    desc: "Agent writes full reasoning: intent, context, decision",
+                    label: "Decide",
+                    desc: "Agent declares its intent, context, and decision basis",
                     icon: Eye,
                     highlight: false,
                   },
@@ -471,7 +442,7 @@ print(f"WHAT: https://provebeforeact.com/proof/{what_resp['proof_id']}")`}
                 <Network className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                 <div>
                   <p className="text-sm font-semibold mb-1">
-                    The Coherence Layer fills the WHY gap
+                    The Coherence Layer fills the declared decision-basis gap
                   </p>
                   <p className="text-sm text-muted-foreground leading-relaxed">
                     Prove Before Act already answered WHAT and WHEN. MX-8004 answers WHO. The Coherence Layer —
@@ -504,17 +475,17 @@ print(f"WHAT: https://provebeforeact.com/proof/{what_resp['proof_id']}")`}
                 {[
                   {
                     title: "Transparent",
-                    desc: "Every agent's WHY is public and on-chain. Any stakeholder can verify intent matches result without access to proprietary systems.",
+                    desc: "Every agent's declared decision basis — never internal chain-of-thought — is public and on-chain. Any stakeholder can verify intent matches result without access to proprietary systems.",
                     icon: Eye,
                   },
                   {
                     title: "Accountable",
-                    desc: "When an outcome diverges from the stated intent, the coherence anchor proves exactly what was decided and why — before the deviation occurred.",
+                    desc: "When an outcome diverges from the stated intent, the coherence anchor proves the declared decision basis before the deviation occurred.",
                     icon: Shield,
                   },
                   {
                     title: "Auditable",
-                    desc: "Full 4W history — WHO acted, WHY they decided, WHAT they produced, WHEN each step happened — reconstructible at any point in the future.",
+                    desc: "Full 4W history — WHO acted, WHY (the declared decision basis), WHAT they produced, WHEN each step happened — reconstructible at any point in the future.",
                     icon: Blocks,
                   },
                 ].map((item) => {
@@ -556,7 +527,7 @@ print(f"WHAT: https://provebeforeact.com/proof/{what_resp['proof_id']}")`}
                   The organizational layer: fleet-level coherence
                 </h2>
                 <p className="text-muted-foreground max-w-2xl mx-auto">
-                  Individual agents anchor their own WHY→WHAT loops. The Coherence Artisan is the
+                  Individual agents anchor declared decision-basis → outcome loops. The Coherence Artisan is the
                   role — an orchestrator agent or a human operator — that ensures the{" "}
                   <strong className="text-foreground">global coherence of the whole fleet</strong>:
                   every action traceable to an intent, every divergence surfaced, no execution
@@ -600,7 +571,7 @@ print(f"WHAT: https://provebeforeact.com/proof/{what_resp['proof_id']}")`}
                   </div>
                   <p className="text-sm text-muted-foreground leading-relaxed mb-4">
                     Before delegating a sub-action, the orchestrator asks: does a valid, unexpired
-                    WHY anchor exist for this intent? If not — the action is blocked until{" "}
+                    declared decision-basis anchor exist for this intent? If not — the action is blocked until{" "}
                     <code className="font-mono text-xs bg-muted px-1 rounded">check_coherence</code>{" "}
                     is called. No anchor, no execution.
                   </p>
@@ -624,9 +595,9 @@ print(f"WHAT: https://provebeforeact.com/proof/{what_resp['proof_id']}")`}
                 <div>
                   <p className="text-sm font-semibold mb-1">Divergence is detected automatically</p>
                   <p className="text-sm text-muted-foreground leading-relaxed">
-                    A background scan flags every WHY anchor that stays unlinked past its window
+                    A background scan flags every declared decision-basis anchor that stays unlinked past its window
                     (default 2 hours) as <strong className="text-foreground">divergent</strong> — a
-                    declared intent with no proven result. Divergences appear in the fleet view and
+                    declared decision basis with no proven result. Divergences appear in the fleet view and
                     on the agent's public profile as proposed violations, so a broken
                     Prove-Before-Act loop can never go unnoticed.
                   </p>
@@ -641,7 +612,7 @@ print(f"WHAT: https://provebeforeact.com/proof/{what_resp['proof_id']}")`}
           <div className="container">
             <div className="mx-auto max-w-2xl text-center">
               <h2 className="mb-4 text-2xl md:text-3xl font-bold">
-                Start anchoring your agent's reasoning today
+                Start anchoring your agent's declared decision basis today
               </h2>
               <p className="mb-8 text-muted-foreground">
                 10 free proofs — no wallet, no credit card. Full Prove Before Act loop in under 2 minutes.
@@ -670,6 +641,7 @@ print(f"WHAT: https://provebeforeact.com/proof/{what_resp['proof_id']}")`}
           </div>
         </section>
       </main>
+      <PublicSiteFooter />
     </div>
   );
 }

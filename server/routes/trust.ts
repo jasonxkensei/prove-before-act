@@ -5,7 +5,7 @@ import { logger } from "../logger";
 import { certifications, users, attestations, agentViolations } from "@shared/schema";
 import { eq, desc, sql, and, gte, count } from "drizzle-orm";
 import { isWalletAuthenticated } from "../walletAuth";
-import { publicReadRateLimiter, publicSearchRateLimiter, publicCompareRateLimiter } from "../reliability";
+import { publicReadRateLimiter, publicSearchRateLimiter, publicCompareRateLimiter, incidentReevaluationRateLimiter } from "../reliability";
 import { computeTrustScore, computeTrustScoreByWallet, getLeaderboard, generateTrustBadgeSvg, getCalibrationSummaryByWallet } from "../trust";
 import { reconstructAuditTrail } from "../audit-trail";
 import { safeHttpUrlSchema } from "@shared/url";
@@ -17,6 +17,7 @@ export function registerTrustRoutes(app: Express) {
   // GET /api/leaderboard — public, paginated + server-side filters
   app.get("/api/leaderboard", publicSearchRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const VALID_CAL_FILTERS = ["calibrated", "overconfident", "underconfident"] as const;
       type CalFilter = typeof VALID_CAL_FILTERS[number];
       const rawCalibration = req.query.calibration as string | undefined;
@@ -64,6 +65,7 @@ export function registerTrustRoutes(app: Express) {
   // GET /api/agents/compare — compare 2-5 agents side by side
   app.get("/api/agents/compare", publicCompareRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const walletsParam = req.query.wallets as string;
       if (!walletsParam) return res.status(400).json({ message: "wallets query param required (comma-separated)" });
       const wallets = walletsParam.split(",").map((w) => w.trim()).filter(Boolean).slice(0, 5);
@@ -97,6 +99,7 @@ export function registerTrustRoutes(app: Express) {
   // GET /api/agents/search — search agents by attestation domain and/or standard (must be before :wallet)
   app.get("/api/agents/search", publicSearchRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const domain = req.query.domain as string | undefined;
       const standard = req.query.standard as string | undefined;
 
@@ -135,6 +138,7 @@ export function registerTrustRoutes(app: Express) {
 
   app.get("/api/agents/:wallet/timeline", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { wallet } = req.params;
       // When limit is explicitly supplied, it must be a positive integer.
       // `Number("0") || 50` would silently return 50 for limit=0, hiding the
@@ -177,7 +181,7 @@ export function registerTrustRoutes(app: Express) {
         db.execute(sql`
           SELECT COUNT(*) AS total
           FROM certifications
-          WHERE user_id = ${user.id} AND blockchain_status = 'confirmed' AND is_public = true
+          WHERE user_id = ${user.id} AND blockchain_status = 'confirmed' AND finality_checked_at IS NOT NULL AND is_public = true
         `),
         db.execute(sql`
           SELECT
@@ -210,7 +214,7 @@ export function registerTrustRoutes(app: Express) {
               ELSE NULL
             END AS version_number
           FROM certifications
-          WHERE user_id = ${user.id} AND blockchain_status = 'confirmed' AND is_public = true
+          WHERE user_id = ${user.id} AND blockchain_status = 'confirmed' AND finality_checked_at IS NOT NULL AND is_public = true
           ORDER BY created_at DESC
           LIMIT ${limit} OFFSET ${offset}
         `),
@@ -230,7 +234,11 @@ export function registerTrustRoutes(app: Express) {
   });
 
   // GET /api/agents/:wallet/incident-report?proof_id=<uuid> — reconstruct 4W audit trail for a contested action
-  app.get("/api/agents/:wallet/incident-report", publicReadRateLimiter, async (req: any, res) => {
+  app.get(
+    "/api/agents/:wallet/incident-report",
+    publicReadRateLimiter,
+    incidentReevaluationRateLimiter,
+    async (req: any, res) => {
     try {
       const { wallet } = req.params;
       const proofId = req.query.proof_id as string;
@@ -263,18 +271,38 @@ export function registerTrustRoutes(app: Express) {
       logger.error("Incident report error", { error: err.message });
       res.status(500).json({ error: err.message });
     }
-  });
+    },
+  );
 
   // POST /api/incident/:wallet/:proofId/re-evaluate
-  // Public, rate-limited. Re-runs the audit trail with the heartbeat fallback.
-  // If the proof now resolves with a WHY found, any existing "no WHY" breach
-  // violation for that proof is rejected (voided) and the trust snapshot is invalidated.
+  // Authenticated owner/admin mutation. Re-runs the audit trail with the
+  // heartbeat fallback. If the proof now resolves with a WHY found, any
+  // existing "no WHY" breach violation for that proof is rejected (voided)
+  // and the trust snapshot is invalidated.
   const NO_WHY_REASON =
     "WHAT certified without any WHY — action executed without prior intent declaration (potential deliberate omission)";
 
-  app.post("/api/incident/:wallet/:proofId/re-evaluate", publicReadRateLimiter, async (req, res) => {
+  app.post(
+    "/api/incident/:wallet/:proofId/re-evaluate",
+    publicReadRateLimiter,
+    incidentReevaluationRateLimiter,
+    isWalletAuthenticated,
+    async (req: any, res) => {
     try {
       const { wallet, proofId } = req.params;
+      const sessionWallet = req.walletAddress as string | undefined;
+
+      // Re-evaluation can reject governance violations and invalidate trust
+      // snapshots, so the authenticated subject must own the target wallet or
+      // be a configured platform administrator. Perform this check before
+      // reconstructing the audit trail to keep unauthorized requests
+      // side-effect free.
+      if (
+        !sessionWallet ||
+        (!isAdminWallet(sessionWallet) && sessionWallet.toLowerCase() !== wallet.toLowerCase())
+      ) {
+        return res.status(403).json({ error: "Owner or admin access required" });
+      }
 
       const result = await reconstructAuditTrail(wallet, proofId);
 
@@ -316,11 +344,13 @@ export function registerTrustRoutes(app: Express) {
       logger.error("Re-evaluate error", { error: err.message });
       res.status(500).json({ error: err.message });
     }
-  });
+    },
+  );
 
   // GET /api/agents/:wallet/violations — public, returns all violations for an agent
   app.get("/api/agents/:wallet/violations", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { wallet } = req.params;
 
       const [userCheck] = await db
@@ -399,6 +429,9 @@ export function registerTrustRoutes(app: Express) {
   // GET /api/agents/:wallet — public, returns a single agent profile
   app.get("/api/agents/:wallet", publicReadRateLimiter, async (req, res) => {
     try {
+      // Public profile visibility is revocable. Prevent a cache from serving
+      // this profile after the owner opts out.
+      res.setHeader("Cache-Control", "private, no-store");
       const { wallet } = req.params;
       const [user] = await db
         .select()
@@ -433,7 +466,7 @@ export function registerTrustRoutes(app: Express) {
             createdAt: certifications.createdAt,
           })
           .from(certifications)
-          .where(and(eq(certifications.userId, user.id), eq(certifications.isPublic, true), eq(certifications.blockchainStatus, "confirmed")))
+          .where(and(eq(certifications.userId, user.id), eq(certifications.isPublic, true), eq(certifications.blockchainStatus, "confirmed"), sql`${certifications.finalityCheckedAt} IS NOT NULL`))
           .orderBy(desc(certifications.createdAt))
           .limit(20),
         // Two-step bounded query: first select the top N attestation IDs for
@@ -454,17 +487,17 @@ export function registerTrustRoutes(app: Express) {
           )
           SELECT
             a.id, a.issuer_wallet, a.issuer_name, a.domain, a.standard, a.title, a.description, a.expires_at, a.status, a.created_at,
-            COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true) AS issuer_confirmed_certs,
+            COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NOT NULL AND c.is_public = true) AS issuer_confirmed_certs,
             CASE
-              WHEN COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true) >= 30 THEN 'Verified'
-              WHEN COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true) >= 10 THEN 'Trusted'
-              WHEN COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true) >= 3 THEN 'Active'
+              WHEN COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NOT NULL AND c.is_public = true) >= 30 THEN 'Verified'
+              WHEN COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NOT NULL AND c.is_public = true) >= 10 THEN 'Trusted'
+              WHEN COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NOT NULL AND c.is_public = true) >= 3 THEN 'Active'
               ELSE 'Newcomer'
             END AS issuer_level,
             CASE
-              WHEN COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true) >= 30 THEN 50
-              WHEN COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true) >= 10 THEN 40
-              WHEN COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true) >= 3 THEN 25
+              WHEN COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NOT NULL AND c.is_public = true) >= 30 THEN 50
+              WHEN COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NOT NULL AND c.is_public = true) >= 10 THEN 40
+              WHEN COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NOT NULL AND c.is_public = true) >= 3 THEN 25
               ELSE 10
             END AS attestation_value
           FROM top_attestations a
@@ -580,6 +613,7 @@ export function registerTrustRoutes(app: Express) {
   // GET /api/trust/:wallet — public trust lookup (score only, no profile data)
   app.get("/api/trust/:wallet", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { wallet } = req.params;
 
       const [userCheck] = await db

@@ -3,12 +3,153 @@
 // bootstrapping and request handling.
 
 import { pool, db } from "./db";
-import { users } from "@shared/schema";
+import { FINALITY_SNAPSHOT_VERSION, users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { computeTrustScore } from "./trust";
 import { purgeExpiredRateLimitRows } from "./pgRateLimit";
-import { checkAndAlertViolationQueue } from "./alerts";
+import { checkAndAlertMx8004LowBalance, checkAndAlertMx8004NonceStall, checkAndAlertViolationQueue } from "./alerts";
 import { logger } from "./logger";
+import { getMx8004SignerBalance, isMX8004Configured } from "./mx8004";
+import { getMx8004NonceStall } from "./txQueue";
+import {
+  recordConversionTelemetryPurgeFailure,
+  recordConversionTelemetryPurgeSuccess,
+} from "./metrics";
+import { checkAndAlertConversionTelemetryPurge } from "./conversionTelemetryAlerts";
+import { purgeOldConversionFailureTimestamps } from "./conversion-health-store";
+
+let lastMx8004LowBalanceWarningAt = 0;
+
+/**
+ * Refresh the MX-8004 signer balance independently from the daily database
+ * maintenance. This runs on a short interval because a depleted signer wallet
+ * otherwise leaves validation jobs queued while certifications still succeed.
+ */
+export async function checkMx8004WalletBalance() {
+  if (!isMX8004Configured()) return null;
+
+  const balance = await getMx8004SignerBalance({ forceRefresh: true });
+  if (balance.error) {
+    logger.warn("MX-8004 signer wallet balance check failed", {
+      component: "maintenance",
+      address: balance.address,
+      error: balance.error,
+    });
+    return balance;
+  }
+
+  // Alert delivery must never interrupt the balance check or certification.
+  try {
+    await checkAndAlertMx8004LowBalance(balance);
+  } catch (error) {
+    logger.error("MX-8004 balance alert check failed", {
+      component: "maintenance",
+      error: error instanceof Error ? error.name : "unknown",
+    });
+  }
+
+  // An unavailable account reading must not clear a previous alert episode.
+  if (balance.nonce !== null && balance.address) {
+    try {
+      await checkAndAlertMx8004NonceStall(
+        await getMx8004NonceStall(balance.address, balance.nonce),
+        { signerAddress: balance.address, observedAt: new Date(balance.checkedAt!) },
+      );
+    } catch (error) {
+      logger.error("MX-8004 nonce stall check failed", {
+        component: "maintenance",
+        error: error instanceof Error ? error.name : "unknown",
+      });
+    }
+  }
+
+  if (balance.lowBalance && Date.now() - lastMx8004LowBalanceWarningAt >= 60 * 60 * 1000) {
+    lastMx8004LowBalanceWarningAt = Date.now();
+    logger.warn("MX-8004 signer wallet balance is low", {
+      component: "maintenance",
+      address: balance.address,
+      balanceEgld: balance.balanceEgld,
+      thresholdEgld: balance.thresholdEgld,
+      message: "Top up the signer wallet before MX-8004 validation jobs stall.",
+    });
+  }
+
+  return balance;
+}
+
+/** Install shared signer-alert state before the balance scheduler starts. */
+export async function migrateMx8004BalanceAlertState(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS mx8004_balance_alert_state (
+      signer_address TEXT PRIMARY KEY,
+      observed_at TIMESTAMPTZ NOT NULL,
+      low BOOLEAN NOT NULL,
+      notified BOOLEAN NOT NULL DEFAULT FALSE,
+      lease_token TEXT,
+      lease_until TIMESTAMPTZ
+    )
+  `);
+}
+
+/** Install shared nonce-stall episode state before the wallet scheduler starts. */
+export async function migrateMx8004NonceAlertState(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS mx8004_nonce_alert_state (
+      signer_address TEXT PRIMARY KEY,
+      observed_at TIMESTAMPTZ NOT NULL,
+      pending_nonce TEXT,
+      episode_id TEXT NOT NULL,
+      notified BOOLEAN NOT NULL DEFAULT FALSE,
+      lease_token TEXT,
+      lease_until TIMESTAMPTZ
+    )
+  `);
+}
+
+/** Install the independent operator-alert outbox before callback workers start. */
+export async function migrateProofCallbackAlertOutbox(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS proof_callback_alert_outbox (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      certification_id VARCHAR NOT NULL,
+      destination TEXT NOT NULL,
+      callback_attempts INTEGER NOT NULL,
+      status VARCHAR NOT NULL DEFAULT 'pending',
+      delivery_attempts INTEGER NOT NULL DEFAULT 0,
+      next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      lease_token TEXT,
+      lease_expires_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      delivered_at TIMESTAMPTZ
+    )
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_proof_callback_alert_outbox_due
+    ON proof_callback_alert_outbox(status, next_attempt_at)
+  `);
+}
+
+export async function purgeExpiredConversionEvents(): Promise<number> {
+  // Proof-verification deduplication markers intentionally live in
+  // conversion_event_dedup_keys beyond this reporting retention window.
+  const result = await pool.query(
+    `DELETE FROM conversion_events WHERE created_at < NOW() - INTERVAL '90 days'`
+  );
+  // Outage health needs only the most recent hour; the daily sweep caps stale
+  // timestamp-only records at roughly 25 hours without touching request data.
+  await pool.query(`
+    DELETE FROM conversion_telemetry_write_failures
+    WHERE occurred_at < NOW() - INTERVAL '1 hour'
+  `);
+  try {
+    await purgeOldConversionFailureTimestamps();
+  } catch {
+    // A failed App Storage cleanup must not interrupt the primary retention
+    // sweep. The next daily run can retry these timestamp-only objects.
+    logger.warn("Conversion failure health cleanup unavailable", { component: "maintenance" });
+  }
+  return result.rowCount || 0;
+}
 
 export async function runDailyMaintenance() {
   try {
@@ -42,15 +183,16 @@ export async function runDailyMaintenance() {
       try {
         await pool.query(
           `INSERT INTO trust_score_snapshots
-             (wallet_address, score, level, cert_total, active_attestations, rank, snapshot_date, full_trust_data)
-           VALUES ($1, $2, $3, $4, $5, $6, CURRENT_DATE, $7::jsonb)
+             (wallet_address, score, level, cert_total, active_attestations, rank, snapshot_date, full_trust_data, finality_version)
+           VALUES ($1, $2, $3, $4, $5, $6, CURRENT_DATE, $7::jsonb, ${FINALITY_SNAPSHOT_VERSION})
            ON CONFLICT (wallet_address, snapshot_date) DO UPDATE SET
              score               = EXCLUDED.score,
              level               = EXCLUDED.level,
              cert_total          = EXCLUDED.cert_total,
              active_attestations = EXCLUDED.active_attestations,
              rank                = EXCLUDED.rank,
-             full_trust_data     = EXCLUDED.full_trust_data`,
+             full_trust_data     = EXCLUDED.full_trust_data,
+             finality_version    = ${FINALITY_SNAPSHOT_VERSION}`,
           [a.wallet, a.score, a.level, a.certTotal, a.activeAttestations, i + 1, a.fullData]
         );
         snapshots++;
@@ -93,15 +235,16 @@ export async function runDailyMaintenance() {
       // Visitor keys are HMAC-derived and are never retained beyond the
       // 90-day reporting window. A SESSION_SECRET rotation deliberately
       // starts a new anonymous cohort rather than linking identities.
-      const result = await pool.query(
-        `DELETE FROM conversion_events WHERE created_at < NOW() - INTERVAL '90 days'`
-      );
-      purgedConversionEvents = result.rowCount || 0;
+      purgedConversionEvents = await purgeExpiredConversionEvents();
+      recordConversionTelemetryPurgeSuccess();
+      await checkAndAlertConversionTelemetryPurge();
     } catch (purgeErr: any) {
+      recordConversionTelemetryPurgeFailure();
       logger.debug("Conversion telemetry purge skipped during maintenance", {
         component: "maintenance",
         error: purgeErr?.message ?? String(purgeErr),
       });
+      await checkAndAlertConversionTelemetryPurge();
     }
 
     // Alert if the proposed-violation review queue has grown beyond the
@@ -289,7 +432,7 @@ export async function migrateAgentViolationsTable() {
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_certs_trust_lookup
         ON certifications (user_id, created_at DESC)
-        WHERE blockchain_status = 'confirmed' AND is_public = true
+        WHERE blockchain_status = 'confirmed' AND finality_checked_at IS NOT NULL AND is_public = true
     `);
     await pool.query(`
       CREATE INDEX IF NOT EXISTS idx_attestations_subject_active
@@ -393,20 +536,84 @@ export async function migrateConversionEventsTable() {
         http_status INTEGER,
         http_class VARCHAR(3) NOT NULL,
         traffic_segment VARCHAR(32) NOT NULL,
-        ip_hash VARCHAR(64) NOT NULL,
+        ip_hash VARCHAR(64),
+        visitor_key VARCHAR(64),
         referrer_host VARCHAR(128),
         utm_source VARCHAR(128),
+        dedup_key VARCHAR(160),
         created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
-        CONSTRAINT conversion_events_stage_check CHECK (stage IN ('cta', 'registration', 'proof')),
+        CONSTRAINT conversion_events_stage_check CHECK (stage IN ('cta', 'registration', 'proof', 'purchase')),
         CONSTRAINT conversion_events_outcome_check CHECK (outcome IN ('seen', 'clicked', 'started', 'success', 'failure')),
         CONSTRAINT conversion_events_http_class_check CHECK (http_class IN ('0xx', '2xx', '3xx', '4xx', '5xx')),
         CONSTRAINT conversion_events_http_status_check CHECK (http_status IS NULL OR http_status BETWEEN 100 AND 599)
       )
     `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS conversion_telemetry_write_failures (
+        occurred_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+      )
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_conversion_telemetry_write_failures_at
+        ON conversion_telemetry_write_failures(occurred_at)
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS conversion_telemetry_alert_state (
+        alert_key TEXT PRIMARY KEY,
+        lease_token TEXT,
+        lease_until TIMESTAMP WITH TIME ZONE,
+        next_attempt_at TIMESTAMP WITH TIME ZONE,
+        last_sent_at TIMESTAMP WITH TIME ZONE
+      )
+    `);
+    await pool.query(`
+      DELETE FROM conversion_telemetry_write_failures
+      WHERE occurred_at < NOW() - INTERVAL '1 hour'
+    `);
+    // Existing deployments may still have the original three-stage constraint.
+    await pool.query(`
+      ALTER TABLE conversion_events DROP CONSTRAINT IF EXISTS conversion_events_stage_check;
+      ALTER TABLE conversion_events ADD CONSTRAINT conversion_events_stage_check
+        CHECK (stage IN ('cta', 'registration', 'proof', 'purchase'))
+    `);
+    await pool.query(`ALTER TABLE conversion_events ADD COLUMN IF NOT EXISTS dedup_key VARCHAR(160)`);
+    await pool.query(`ALTER TABLE conversion_events ADD COLUMN IF NOT EXISTS visitor_key VARCHAR(64)`);
+    await pool.query(`ALTER TABLE conversion_events ALTER COLUMN ip_hash DROP NOT NULL`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_conversion_events_day_funnel ON conversion_events (created_at, stage, outcome)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_conversion_events_day_segment ON conversion_events (created_at, traffic_segment)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_conversion_events_day_http ON conversion_events (created_at, http_class)`);
     await pool.query(`CREATE INDEX IF NOT EXISTS idx_conversion_events_ip_time ON conversion_events (ip_hash, created_at)`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_conversion_events_visitor_time ON conversion_events (visitor_key, created_at)`);
+    await pool.query(`DROP INDEX IF EXISTS idx_conversion_events_dedup_key`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS idx_conversion_events_dedup_lookup ON conversion_events (dedup_key)`);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS conversion_event_dedup_keys (
+        dedup_key VARCHAR(160) PRIMARY KEY,
+        proof_id VARCHAR NOT NULL REFERENCES certifications(id) ON DELETE CASCADE,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+      )
+    `);
+    // Older marker rows encoded the proof only in dedup_key. Link markers whose
+    // proofs still exist, discard only true orphans, then enforce the lifecycle
+    // relationship so future proof deletion removes its marker atomically.
+    await pool.query(`ALTER TABLE conversion_event_dedup_keys ADD COLUMN IF NOT EXISTS proof_id VARCHAR`);
+    await pool.query(`
+      UPDATE conversion_event_dedup_keys d
+      SET proof_id = c.id
+      FROM certifications c
+      WHERE d.proof_id IS NULL
+        AND d.dedup_key = 'proof-verification:' || c.id
+    `);
+    await pool.query(`DELETE FROM conversion_event_dedup_keys WHERE proof_id IS NULL`);
+    await pool.query(`
+      DO $$ BEGIN
+        ALTER TABLE conversion_event_dedup_keys
+          ADD CONSTRAINT conversion_event_dedup_keys_proof_id_fkey
+          FOREIGN KEY (proof_id) REFERENCES certifications(id) ON DELETE CASCADE;
+      EXCEPTION WHEN duplicate_object THEN NULL;
+      END $$
+    `);
+    await pool.query(`ALTER TABLE conversion_event_dedup_keys ALTER COLUMN proof_id SET NOT NULL`);
     logger.info("conversion_events table ready", { component: "migration" });
   } catch (err: any) {
     logger.error("conversion_events migration error", { component: "migration", error: err.message });
@@ -420,6 +627,7 @@ export async function migrateTrustSnapshotSchema() {
       ALTER TABLE trust_score_snapshots
         ADD COLUMN IF NOT EXISTS full_trust_data JSONB
     `);
+    await pool.query(`ALTER TABLE trust_score_snapshots ADD COLUMN IF NOT EXISTS finality_version INTEGER NOT NULL DEFAULT 0`);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS leaderboard_snapshot (
         id          INTEGER PRIMARY KEY DEFAULT 1,
@@ -428,10 +636,121 @@ export async function migrateTrustSnapshotSchema() {
         CONSTRAINT single_row CHECK (id = 1)
       )
     `);
+    await pool.query(`ALTER TABLE leaderboard_snapshot ADD COLUMN IF NOT EXISTS finality_version INTEGER NOT NULL DEFAULT 0`);
     logger.info("trust snapshot schema ready", { component: "migration" });
   } catch (err: any) {
     logger.error("trust snapshot schema migration error", { component: "migration", error: err.message });
   }
+}
+
+export async function migrateProofFinalityReconciliationSchema(): Promise<void> {
+  try {
+    await pool.query(`ALTER TABLE certifications ADD COLUMN IF NOT EXISTS finality_evidence JSONB`);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS proof_finality_reconciliation_runs (
+        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        mode VARCHAR NOT NULL
+          CONSTRAINT proof_finality_reconciliation_runs_mode_check
+          CHECK (mode IN ('dry_run', 'reconcile')),
+        status VARCHAR NOT NULL DEFAULT 'running'
+          CONSTRAINT proof_finality_reconciliation_runs_status_check
+          CHECK (status IN ('running', 'paused', 'completed', 'failed')),
+        operator TEXT NOT NULL,
+        approved_dry_run_id TEXT,
+        cursor_id VARCHAR,
+        counts JSONB NOT NULL DEFAULT
+          '{"confirmed":0,"failed":0,"missing":0,"unavailable":0,"pending":0,"stale":0}'::jsonb,
+        started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        completed_at TIMESTAMPTZ
+      )
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_proof_finality_reconciliation_runs_status
+        ON proof_finality_reconciliation_runs (status, started_at)
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS proof_finality_reconciliation_items (
+        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+        run_id TEXT NOT NULL REFERENCES proof_finality_reconciliation_runs(id),
+        certification_id VARCHAR NOT NULL,
+        transaction_hash TEXT,
+        file_hash TEXT NOT NULL,
+        result VARCHAR NOT NULL
+          CONSTRAINT proof_finality_reconciliation_items_result_check
+          CHECK (result IN ('confirmed', 'failed', 'missing', 'unavailable', 'pending')),
+        reason TEXT,
+        applied BOOLEAN NOT NULL DEFAULT FALSE,
+        evidence JSONB,
+        checked_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_proof_finality_reconciliation_items_run_cert
+        ON proof_finality_reconciliation_items (run_id, certification_id)
+    `);
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS idx_proof_finality_reconciliation_items_cert
+        ON proof_finality_reconciliation_items (certification_id, checked_at)
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS proof_finality_reconciliation_lock (
+        id INTEGER PRIMARY KEY DEFAULT 1
+          CONSTRAINT proof_finality_reconciliation_lock_singleton CHECK (id = 1),
+        owner TEXT,
+        expires_at TIMESTAMPTZ
+      )
+    `);
+    await pool.query(`
+      INSERT INTO proof_finality_reconciliation_lock (id)
+      VALUES (1)
+      ON CONFLICT (id) DO NOTHING
+    `);
+    logger.info("proof finality reconciliation schema ready", { component: "migration" });
+  } catch (error: any) {
+    logger.error("proof finality reconciliation schema migration failed", {
+      component: "migration",
+      error: error?.message ?? String(error),
+    });
+    throw error;
+  }
+}
+
+/** Required before public PBA reads: a missing revocation table must not leave old marks green. */
+export async function migratePbaHttpWitnessRevocations(): Promise<void> {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS pba_http_witness_revocations (
+      id VARCHAR(36) PRIMARY KEY,
+      witness_id VARCHAR(128) NOT NULL
+        CONSTRAINT chk_pba_http_witness_revocation_id CHECK (witness_id ~ '^[A-Za-z0-9._:-]{1,128}$'),
+      witness_public_key VARCHAR(72) NOT NULL
+        CONSTRAINT chk_pba_http_witness_revocation_key CHECK (witness_public_key ~ '^ed25519:[a-f0-9]{64}$'),
+      canonical TEXT NOT NULL,
+      signature VARCHAR(132) NOT NULL
+        CONSTRAINT chk_pba_http_witness_revocation_signature CHECK (signature ~ '^hex:[a-f0-9]{128}$'),
+      key_id VARCHAR(80) NOT NULL REFERENCES pba_verification_keys(key_id) ON DELETE RESTRICT,
+      revoked_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_pba_http_witness_revocations_identity
+      ON pba_http_witness_revocations(witness_id, witness_public_key)
+  `);
+  await pool.query(`ALTER TABLE pba_verification_attestations ADD COLUMN IF NOT EXISTS witness_id VARCHAR(128)`);
+  await pool.query(`ALTER TABLE pba_verification_attestations ADD COLUMN IF NOT EXISTS witness_public_key VARCHAR(72)`);
+  // Backfill only indexed metadata; never alter historical canonical bytes or signatures.
+  await pool.query(`
+    UPDATE pba_verification_attestations
+    SET witness_id = split_part(canonical, chr(10), 2)::jsonb->'evidence'->'receipt'->>'witness_id',
+        witness_public_key = split_part(canonical, chr(10), 2)::jsonb->'evidence'->'receipt'->>'witness_public_key'
+    WHERE canonical LIKE 'PBA-VERIFIED-ATTESTATION|v1' || chr(10) || '%'
+      AND split_part(canonical, chr(10), 2)::jsonb->>'profile' = 'pba-http-delivery-v1'
+      AND (witness_id IS NULL OR witness_public_key IS NULL)
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_pba_verification_attestations_witness
+      ON pba_verification_attestations(witness_id, witness_public_key, created_at)
+  `);
 }
 
 export async function purgeStaleSnapshotAttestationCounts() {

@@ -1,0 +1,56 @@
+1
+00:00:00,000 --> 00:00:05,100
+Voici le fonctionnement de Prove Before Act
+dans une démonstration contrôlée.
+
+2
+00:00:05,100 --> 00:00:10,000
+Choisissez d’abord l’action
+que votre agent s’apprête à effectuer.
+
+3
+00:00:10,000 --> 00:00:14,400
+Ici, l’agent prépare le paiement d’un fournisseur.
+
+4
+00:00:14,400 --> 00:00:21,000
+Déclarez ensuite la base de décision :
+les conditions vérifiables qui justifient l’action.
+
+5
+00:00:21,000 --> 00:00:25,100
+Le raisonnement privé n’est pas exposé.
+
+6
+00:00:25,100 --> 00:00:31,900
+L’engagement indique qui agit, ce qui va se passer,
+et prouve que la déclaration précède l’exécution.
+
+7
+00:00:31,900 --> 00:00:38,500
+Dans cette démonstration, aucune transaction blockchain
+n’est envoyée : la limite est simulée localement.
+
+8
+00:00:38,500 --> 00:00:43,500
+Une fois l’engagement en place,
+l’action approuvée peut être exécutée.
+
+9
+00:00:43,500 --> 00:00:50,900
+Le résultat est ensuite relié à la déclaration initiale,
+pour former un dossier vérifiable.
+
+10
+00:00:50,900 --> 00:00:57,500
+L’ordre est essentiel : la base est engagée avant l’action,
+et non reconstruite après coup.
+
+11
+00:00:57,500 --> 00:01:00,600
+Décider. Prouver. Agir. Vérifier.
+
+12
+00:01:00,600 --> 00:01:04,900
+Rendre les systèmes autonomes responsables,
+sans exposer leur raisonnement privé.

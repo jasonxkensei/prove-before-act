@@ -7,7 +7,8 @@ WHEN, WHY) on MultiversX.
 Run: python main.py
 
 Requirements:
-    pip install pyautogen xproof
+    pip install prove-before-act[autogen]
+    # The xproof module name below is a legacy compatibility alias.
 
 This demo simulates two agents exchanging messages with xProof hooks
 attached, certifying each message on-chain.  It uses mock objects for

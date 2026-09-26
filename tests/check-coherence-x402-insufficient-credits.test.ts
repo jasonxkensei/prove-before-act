@@ -90,6 +90,22 @@ vi.mock("../server/db.js", () => ({
   pool: {},
 }));
 
+// MCP server setup resolves the account's default logical agent. Persistence
+// behavior is outside this payment-path test, so provide a minimal identity
+// fixture instead of requiring the DB mock to implement agent creation queries.
+vi.mock("../server/agent-identity.js", () => ({
+  ensureDefaultAgent: vi.fn(async (ownerAccountId: string) => ({
+    id: ownerAccountId,
+    ownerAccountId,
+    name: "Test agent",
+  })),
+  resolveAgentForApiKey: vi.fn(async (apiKey: { agentId?: string | null; userId?: string | null }) => ({
+    id: apiKey.agentId || apiKey.userId || "test-agent",
+    ownerAccountId: apiKey.userId,
+    name: "Test agent",
+  })),
+}));
+
 vi.mock("../server/routes/helpers.js", () => ({
   // Billing state: trial quota exhausted → balance > 0 → mcpCreditInfo set →
   // atomicConsumeCredit returns false → INSUFFICIENT_CREDITS fires at line ~1886.

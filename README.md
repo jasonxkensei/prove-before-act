@@ -10,6 +10,7 @@
   <a href="#for-agents">Agent Integration</a> &bull;
   <a href="https://provebeforeact.com/leaderboard">Trust Leaderboard</a> &bull;
   <a href="docs/architecture.md">Architecture</a> &bull;
+  <a href="docs/acquisition-fr.md">Acquisition guide (FR)</a> &bull;
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
@@ -46,6 +47,10 @@ The Prove Before Act README is certified on the MultiversX blockchain.
 ## What is Prove Before Act?
 
 **Prove Before Act** is a trust primitive. It records SHA-256 file hashes on the [MultiversX](https://multiversx.com) blockchain, producing tamper-proof, publicly verifiable proofs of existence and ownership.
+
+**Jason Petitfourg — AI Product Builder** is the founder of Prove Before Act. **Prove Before Act is the accountability pattern for autonomous agents; xProof is its reference implementation.** Before acting, an agent commits and proves a declared decision basis (WHY), then proves WHAT happened. WHY is not a request for internal chain-of-thought. See the [founder story](https://provebeforeact.com/founder) and the [public production proof](https://provebeforeact.com/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b).
+
+Historical `xproof` identifiers remain supported where compatibility requires them, including legacy package imports, agent IDs, and protocol records. They are not a separate public product brand.
 
 - **Client-side hashing** -- SHA-256 is computed locally. Your file never leaves your device.
 - **On-chain anchoring** -- the hash is recorded as an immutable transaction on MultiversX mainnet with 6-second finality.
@@ -178,8 +183,8 @@ Go to [provebeforeact.com](https://provebeforeact.com), connect your MultiversX 
 ### Self-Host
 
 ```bash
-git clone https://github.com/jasonxkensei/xProof.git  # legacy repository name retained for compatibility
-cd xProof
+git clone https://github.com/jasonxkensei/prove-before-act.git
+cd prove-before-act
 npm install
 cp .env.example .env   # configure your environment
 npm run db:push         # initialize database
@@ -219,7 +224,7 @@ curl -X POST https://provebeforeact.com/api/proof \
 
 ### POST /api/batch -- Batch Certification
 
-Certify up to 50 files in a single call.
+Certify up to 50 files in a single call. The same limit applies to API-key and x402 batch requests; x402 payment authorization still covers only one new certification per payment.
 
 ```bash
 curl -X POST https://provebeforeact.com/api/batch \
@@ -246,11 +251,73 @@ curl -X POST https://provebeforeact.com/api/batch \
 
 ### Webhooks
 
-When a proof is anchored on-chain, Prove Before Act sends a POST to your `webhook_url` with HMAC-SHA256 signature in the `X-Webhook-Signature` header. Retry policy: 3 attempts with exponential backoff.
+When a proof is confirmed on-chain, Prove Before Act sends a POST to your
+`webhook_url`. Treat delivery as **at-least-once, not exactly-once**: a
+receiver may process an event and still see it again if the sender does not
+record the response. The sender makes up to three attempts per delivery round
+with backoff. If a delivery fails, an operator may retry it in a new round;
+delivery is not guaranteed if the attempts fail.
+
+For ready-to-adapt Python and Java receivers, see the
+[partner webhook guide](docs/agent-integration.md#receive-proofcertified-webhooks-python-or-java).
+
+Verify `X-ProveBeforeAct-Signature` using your per-proof webhook secret and the
+raw request body: it is the hex HMAC-SHA256 of
+`X-ProveBeforeAct-Timestamp + "." + rawBody`. The timestamp is Unix epoch
+seconds. Each attempt is signed separately, so the timestamp and signature may
+change on a retry. `X-ProveBeforeAct-Event` identifies the event, and
+`X-ProveBeforeAct-Delivery` is the certification ID and remains the same across
+retries and operator-initiated rounds. The legacy `X-xProof-*` headers are also
+sent with identical values.
+Verify the signature and timestamp before trusting the delivery ID.
+
+Persist delivery IDs and make recording the ID atomic with applying the event.
+For example, with Express and PostgreSQL, after signature verification:
+
+```sql
+CREATE TABLE webhook_deliveries (
+  delivery_id text PRIMARY KEY
+);
+```
+
+```js
+app.post("/webhook", async (req, res) => {
+  const deliveryId = req.get("X-ProveBeforeAct-Delivery");
+  if (!deliveryId) return res.sendStatus(400);
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { rowCount } = await client.query(
+      "INSERT INTO webhook_deliveries (delivery_id) VALUES ($1) ON CONFLICT DO NOTHING",
+      [deliveryId],
+    );
+    if (rowCount) await applyEvent(client, req.body); // same transaction
+    await client.query("COMMIT");
+    return res.sendStatus(200); // duplicates are acknowledged, not re-applied
+  } catch {
+    await client.query("ROLLBACK");
+    return res.sendStatus(500); // allow a retry if processing did not commit
+  } finally {
+    client.release();
+  }
+});
+```
 
 ### API Keys
 
 Generate API keys from the [Settings](https://provebeforeact.com/settings) page after connecting your wallet. Keys use the `pm_` prefix and support per-key rate limiting.
+
+### Prepaid packs: Stripe or USDC
+
+Starter, Pro, and Business certification packs can be purchased through hosted
+Stripe Checkout with `POST /api/credits/stripe/checkout`. This is an additional
+payment option, particularly useful for buyers who do not use crypto. The existing
+USDC/Base flow (`/api/credits/purchase` then `/api/credits/confirm`) remains available.
+
+Stripe credits are granted only after the signed Stripe webhook confirms payment;
+the browser success redirect cannot add credits. See
+[`docs/api-reference.md`](docs/api-reference.md#stripe-checkout-for-prepaid-credit-packs).
 
 ---
 
@@ -262,7 +329,7 @@ Prove Before Act is designed to be discovered, consumed, and paid by autonomous 
 
 | Protocol | Endpoint / Resource | Description |
 |---|---|---|
-| **MCP** | `POST /mcp` | JSON-RPC 2.0 endpoint with `certify_file` and `verify_proof` tools |
+| **MCP** | `POST /mcp` | JSON-RPC 2.0 endpoint; discover the current tool set with `tools/list` |
 | **x402** | `POST /api/proof`, `POST /api/batch` | HTTP 402 payment flow -- no account needed |
 | **ACP** | `GET /api/acp/products` | Agent Commerce Protocol -- discover, checkout, confirm |
 | **MX-8004** | On-chain registries | Supported integration; inspect `/api/mx8004/status` for active vs `not_configured` |
@@ -286,12 +353,18 @@ Any agent can certify without an API key using the x402 payment protocol:
 
 ### MCP -- Model Context Protocol
 
-Prove Before Act exposes a live MCP server at `POST /mcp` with two tools:
+Prove Before Act exposes a live MCP server at `POST /mcp`. The core acquisition and verification tools include:
 
+- `register_trial` -- obtain a free API key without a wallet
 - `certify_file` -- certify a file hash on MultiversX
 - `verify_proof` -- verify an existing certification
+- `audit_agent_session` -- create a pre-action audit record
+- `investigate_proof` -- reconstruct the audit trail for a proof
 
-Any MCP-compatible agent can discover and call these tools directly.
+The server can expose additional tools for confidence staging, proof retrieval,
+attestations, outcomes, and calibration. Always call MCP `tools/list` (or
+`discover_services`) for the complete, current schema rather than hard-coding
+an exhaustive list.
 
 ### ACP -- Agent Commerce Protocol
 
@@ -299,7 +372,7 @@ Full commerce flow for programmatic purchasing:
 
 ```
 GET  /api/acp/products       # Discover products and pricing
-GET  /api/acp/openapi.json   # OpenAPI 3.0 specification
+GET  /api/acp/openapi.json   # OpenAPI 3.1 specification
 POST /api/acp/checkout       # Start checkout session
 POST /api/acp/confirm        # Confirm transaction
 GET  /api/acp/health          # Health check
@@ -348,7 +421,7 @@ rather than relying on historic benchmark values.
 
 ClawHub-standard skill for the OpenClaw ecosystem:
 
-- Repository: [`github.com/jasonxkensei/xproof-openclaw-skill`](https://github.com/jasonxkensei/xproof-openclaw-skill) *(legacy repository name retained for compatibility)*
+- Repository: [`github.com/jasonxkensei/prove-before-act-openclaw-skill`](https://github.com/jasonxkensei/prove-before-act-openclaw-skill)
 - Includes `SKILL.md`, `certify.sh`, and full API reference
 
 ### GitHub Action
@@ -356,9 +429,9 @@ ClawHub-standard skill for the OpenClaw ecosystem:
 Integrate Prove Before Act into your CI/CD pipeline:
 
 ```yaml
-- uses: jasonxkensei/xProof-Action@v1 # legacy action identifier retained for compatibility
+- uses: jasonxkensei/prove-before-act-action@v1
   with:
-    api_key: ${{ secrets.XPROOF_API_KEY }}
+    api_key: ${{ secrets.PROVEBEFOREACT_API_KEY }} # XPROOF_API_KEY remains accepted for existing setups
     files: dist/**
 ```
 
@@ -412,7 +485,7 @@ User/Agent                    Prove Before Act                     MultiversX
 | **Verification Badges** | Dynamic SVG badges (shields.io style) with embeddable Markdown. |
 | **Wallet Authentication** | Native Auth via xPortal, MultiversX Web Wallet, WalletConnect. |
 | **Agent Commerce Protocol** | Agents discover, purchase, and consume certifications programmatically. |
-| **MCP Server** | JSON-RPC 2.0 endpoint with `certify_file` and `verify_proof` tools. |
+| **MCP Server** | JSON-RPC 2.0 endpoint with discoverable certification, audit, verification, trial, and investigation tools. |
 | **LangChain / CrewAI** | Ready-made Python tool definitions. |
 | **Webhook Delivery** | HMAC-SHA256 signed notifications with retry and exponential backoff. |
 | **API Keys** | `pm_`-prefixed bearer tokens with per-key rate limiting. |
@@ -460,7 +533,7 @@ Full documentation: [docs/api-reference.md](docs/api-reference.md)
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
 | `GET` | `/api/acp/products` | Public | Discover products and pricing |
-| `GET` | `/api/acp/openapi.json` | Public | OpenAPI 3.0 specification |
+| `GET` | `/api/acp/openapi.json` | Public | OpenAPI 3.1 specification |
 | `POST` | `/api/acp/checkout` | API Key | Start checkout session |
 | `POST` | `/api/acp/confirm` | API Key | Confirm transaction |
 | `GET` | `/api/acp/health` | Public | Health check |

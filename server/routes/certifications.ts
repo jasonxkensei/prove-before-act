@@ -2,13 +2,16 @@ import { type Express } from "express";
 import crypto from "crypto";
 import { db } from "../db";
 import { logger } from "../logger";
-import { certifications, users, apiKeys, sha256HexSchema } from "@shared/schema";
+import { certifications, users, apiKeys, agents, sha256HexSchema } from "@shared/schema";
 import { eq, desc, sql, and, count, ne } from "drizzle-orm";
 import { z } from "zod";
 import { isWalletAuthenticated } from "../walletAuth";
 import { getCertificationPriceEgld } from "../pricing";
 import { broadcastSignedTransaction, getTxExplorerUrl } from "../blockchain";
 import { tryDisplaceAcpReservation } from "./helpers";
+import { ensureDefaultAgent } from "../agent-identity";
+import { lookupProofFinality } from "../proof-finality";
+import { refreshTrustAfterCertification } from "../trust";
 
 /**
  * Parses pipe-separated metadata from a certified tx data payload.
@@ -41,6 +44,7 @@ export function registerCertificationsRoutes(app: Express) {
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
+      const defaultAgent = await ensureDefaultAgent(user.id!);
 
       // Validate request body
       const schema = z.object({
@@ -137,6 +141,10 @@ export function registerCertificationsRoutes(app: Express) {
         return res.status(402).json({ message: "Payment verification failed", error: verificationResult.error });
       } else {
         blockchainStatus = "confirmed";
+        const finality = await lookupProofFinality(transactionHash, data.fileHash, "web");
+        if (finality !== "confirmed") {
+          return res.status(402).json({ message: "Transaction finality has not been established. Retry after block inclusion.", status: finality });
+        }
         blockchainLatencyMs = Date.now() - verifyStart;
         recordTransaction(true, blockchainLatencyMs, "certification");
         // Derive transactionUrl server-side from the verified txHash. No
@@ -241,6 +249,7 @@ export function registerCertificationsRoutes(app: Express) {
           .insert(certifications)
           .values({
             userId: user.id!,
+            agentId: defaultAgent.id,
             fileName: data.fileName,
             fileHash: data.fileHash,
             fileType: data.fileType || "unknown",
@@ -250,6 +259,7 @@ export function registerCertificationsRoutes(app: Express) {
             transactionHash,
             transactionUrl,
             blockchainStatus,
+            finalityCheckedAt: new Date(),
             isPublic: true,
             authMethod: "web",
             ...(blockchainLatencyMs !== null ? { blockchainLatencyMs } : {}),
@@ -262,6 +272,19 @@ export function registerCertificationsRoutes(app: Express) {
       }
 
       const certificateUrl = `/api/certificates/${certification.id}.pdf`;
+      await db.update(agents).set({ lastSeenAt: new Date() }).where(eq(agents.id, defaultAgent.id));
+      if (certification.blockchainStatus === "confirmed" && certification.finalityCheckedAt) {
+        try {
+          await refreshTrustAfterCertification(walletAddress, "confirmed");
+        } catch (error: any) {
+          // The proof has already been recorded; a trust refresh failure must
+          // not cause the caller to retry a successful certification.
+          logger.withRequest(req).error("Confirmed certification trust refresh failed", {
+            wallet: walletAddress,
+            error: error?.message ?? String(error),
+          });
+        }
+      }
 
       res.status(201).json({
         ...certification,
@@ -319,7 +342,9 @@ export function registerCertificationsRoutes(app: Express) {
         .where(eq(certifications.userId, userId))
         .orderBy(desc(certifications.createdAt));
 
-      res.json(userCertifications);
+      // Delivery secrets are private recovery state, not part of certification
+      // records exposed by this authenticated listing endpoint.
+      res.json(userCertifications.map(({ webhookSigningSecret, webhookBaseUrl, ...certification }) => certification));
     } catch (error) {
       logger.withRequest(req).error("Failed to fetch certifications");
       res.status(500).json({ message: "Failed to fetch certifications" });
@@ -449,6 +474,7 @@ export function registerCertificationsRoutes(app: Express) {
         if (!user) {
           return res.status(404).json({ message: "User not found" });
         }
+        const defaultAgent = await ensureDefaultAgent(user.id!);
 
         // Validate certification data
         const schema = z.object({
@@ -592,6 +618,7 @@ export function registerCertificationsRoutes(app: Express) {
           .insert(certifications)
           .values({
             userId: user.id!,
+            agentId: defaultAgent.id,
             fileName: validatedData.fileName,
             fileHash: validatedData.fileHash,
             fileType: validatedData.fileType || "unknown",
@@ -600,11 +627,12 @@ export function registerCertificationsRoutes(app: Express) {
             authorSignature: validatedData.authorSignature,
             transactionHash: txHash,
             transactionUrl: explorerUrl,
-            blockchainStatus: "confirmed",
+            blockchainStatus: "pending",
             isPublic: true,
             authMethod: "web",
           })
           .returning();
+        await db.update(agents).set({ lastSeenAt: new Date() }).where(eq(agents.id, defaultAgent.id));
 
         res.json({
           success: true,

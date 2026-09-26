@@ -3,6 +3,7 @@ import crypto from "crypto";
 import { z } from "zod";
 import { db, pool } from "../db";
 import { logger } from "../logger";
+import { refreshTrustAfterCertification } from "../trust";
 import { certifications, users, apiKeys, acpCheckouts, attestations, acpCheckoutRequestSchema, acpConfirmRequestSchema, type ACPProduct, type ACPCheckoutResponse, type ACPConfirmResponse } from "@shared/schema";
 import { eq, sql, and, gt } from "drizzle-orm";
 import { publicReadRateLimiter } from "../reliability";
@@ -13,6 +14,9 @@ import { isAdminWallet, getApiKeyOwnerWallet, getNetworkLabel, buildCanonicalId,
 import { Address } from "@multiversx/sdk-core";
 import { pgCheckRateLimit } from "../pgRateLimit";
 import { CANONICAL_PUBLIC_ORIGIN } from "../publicOrigin";
+import { getProofFinalityApiUrl, lookupProofFinality } from "../proof-finality";
+import { PBA_WEBHOOK_HEADERS } from "../webhookHeaders";
+import { toOpenApi30 } from "../openapiCompatibility";
 
 // Bounds how many unpaid ACP checkouts a single proven payer wallet may create within the
 // window. Deliberately independent of the generic per-API-key rate limiter, since the DoS
@@ -48,9 +52,10 @@ export function registerAcpRoutes(app: Express) {
     
     const products: ACPProduct[] = [
       {
-        id: "xproof-certification",
+        id: "pba-certification",
         name: "Prove Before Act Certification",
-        description: "Prove Before Act creates cryptographic proof of existence and integrity for digital files on the MultiversX blockchain. It records a SHA-256 hash with a timestamp, providing immutable evidence at a specific point in time. The product ID xproof-certification is a legacy compatibility identifier.",
+        description: "Prove Before Act creates cryptographic proof of existence and integrity for digital files on the MultiversX blockchain. It records a SHA-256 hash with a timestamp, providing immutable evidence at a specific point in time. The historical product ID xproof-certification remains accepted as a legacy compatibility alias.",
+        legacy_product_ids: ["xproof-certification"],
         pricing: {
           type: "fixed",
           amount: priceUsd.toString(),
@@ -73,9 +78,9 @@ export function registerAcpRoutes(app: Express) {
         checkout_requirements: {
           payer_wallet: "Required (non-admin). The MultiversX wallet address (erd1...) that will send the EGLD payment.",
           payer_wallet_signature: "Required (non-admin). Hex-encoded Ed25519 signature proving you control payer_wallet. Must be 64 bytes (128 hex chars).",
-          message_format: "xproof-acp-checkout:<product_id>:<file_hash>:<payer_wallet>",
-          message_format_example: "xproof-acp-checkout:xproof-certification:<sha256_file_hash>:<erd1...>",
-          signing_algorithm: "Ed25519 raw signature (no MultiversX prefix) over UTF-8 message bytes using the private key corresponding to payer_wallet's public key. Sign then hex-encode the 64-byte signature.",
+          message_format: "pba-acp-checkout:<product_id>:<file_hash>:<payer_wallet>",
+          message_format_example: "pba-acp-checkout:pba-certification:<sha256_file_hash>:<erd1...>",
+          signing_algorithm: "Ed25519 raw signature (no MultiversX prefix) over UTF-8 message bytes using the private key corresponding to payer_wallet's public key. Sign then hex-encode the 64-byte signature. Legacy xproof-certification requests continue to use xproof-acp-checkout:<product_id>:<file_hash>:<payer_wallet>.",
         },
       },
     ];
@@ -95,7 +100,8 @@ export function registerAcpRoutes(app: Express) {
       const data = acpCheckoutRequestSchema.parse(req.body);
 
       // Validate product exists
-      if (data.product_id !== "xproof-certification") {
+      const isLegacyProductId = data.product_id === "xproof-certification";
+      if (data.product_id !== "pba-certification" && !isLegacyProductId) {
         return res.status(404).json({ 
           error: "PRODUCT_NOT_FOUND",
           message: "Unknown product ID" 
@@ -132,6 +138,9 @@ export function registerAcpRoutes(app: Express) {
       // Check if the API key owner is an admin wallet
       let acpAdminExempt = false;
       const acpApiKey = (req as any).apiKey;
+      // validateApiKey resolves this from the authenticated key only. Keep it separate
+      // from buyer fields and checkout metadata, neither of which is attribution input.
+      const requestAgentId = (req as any).agentId as string | undefined;
       const requestingUserId = acpApiKey?.userId || null;
       if (acpApiKey?.userId) {
         const ownerWallet = await getApiKeyOwnerWallet(acpApiKey);
@@ -227,19 +236,22 @@ export function registerAcpRoutes(app: Express) {
       // This prevents a third party from observing a pending checkout for a file they control
       // and then using the legitimate payer's tx_hash to confirm it.
       // Ownership proof: caller must also supply a valid Ed25519 signature over the deterministic
-      // message "xproof-acp-checkout:<product_id>:<file_hash>:<payer_wallet>" signed by the
+      // message "pba-acp-checkout:<product_id>:<file_hash>:<payer_wallet>" signed by the
+      // payer's key. Legacy xproof-certification callers continue to use their
+      // historical xproof-acp-checkout message prefix.
       // private key corresponding to payer_wallet's public key. This mirrors the EIP-191 ownership
       // proof used by the Base credit-purchase flow (server/routes/credits.ts:73-103).
       let payerWallet: string | null = null;
       if (!acpAdminExempt) {
         const raw = (data.payer_wallet || "").trim();
         if (!raw.startsWith("erd1") || raw.length < 60) {
-          const ownershipMessage = `xproof-acp-checkout:${data.product_id}:${data.inputs.file_hash}:<payer_wallet>`;
+          const checkoutMessagePrefix = isLegacyProductId ? "xproof-acp-checkout" : "pba-acp-checkout";
+          const ownershipMessage = `${checkoutMessagePrefix}:${data.product_id}:${data.inputs.file_hash}:<payer_wallet>`;
           return res.status(400).json({
             error: "PAYER_WALLET_REQUIRED",
             message: "Provide the MultiversX wallet address (erd1...) that will send the EGLD payment as payer_wallet, along with payer_wallet_signature proving you control it.",
             message_to_sign: ownershipMessage.replace("<payer_wallet>", "<your_erd1_address>"),
-            message_format: "xproof-acp-checkout:<product_id>:<file_hash>:<payer_wallet>",
+            message_format: `${checkoutMessagePrefix}:<product_id>:<file_hash>:<payer_wallet>`,
           });
         }
 
@@ -247,7 +259,8 @@ export function registerAcpRoutes(app: Express) {
         // Without this, any API-key holder could claim any victim's wallet address and either
         // block them from creating their own checkout (DoS) or pre-populate the expectedSender
         // binding so a victim's future payment gets attributed to the attacker's checkout.
-        const ownershipMessage = `xproof-acp-checkout:${data.product_id}:${data.inputs.file_hash}:${raw}`;
+        const checkoutMessagePrefix = isLegacyProductId ? "xproof-acp-checkout" : "pba-acp-checkout";
+        const ownershipMessage = `${checkoutMessagePrefix}:${data.product_id}:${data.inputs.file_hash}:${raw}`;
         if (!data.payer_wallet_signature) {
           return res.status(400).json({
             error: "SIGNATURE_REQUIRED",
@@ -291,7 +304,8 @@ export function registerAcpRoutes(app: Express) {
         } catch (sigErr: any) {
           return res.status(400).json({
             error: "INVALID_SIGNATURE",
-            message: `Could not verify payer_wallet signature: ${sigErr?.message}. Sign "${`xproof-acp-checkout:${data.product_id}:${data.inputs.file_hash}:${raw}`}" with the Ed25519 private key of payer_wallet and provide the hex-encoded 64-byte result as payer_wallet_signature.`,
+            message: `Could not verify payer_wallet signature: ${sigErr?.message}. Sign "${ownershipMessage}" with the Ed25519 private key of payer_wallet and provide the hex-encoded 64-byte result as payer_wallet_signature.`,
+            message_to_sign: ownershipMessage,
           });
         }
 
@@ -460,6 +474,7 @@ export function registerAcpRoutes(app: Express) {
                 blockchainStatus: "pending",
                 isPublic: true,
                 authMethod: "acp",
+                ...(requestAgentId ? { agentId: requestAgentId } : {}),
                 ...(data.inputs.metadata ? { metadata: data.inputs.metadata } : {}),
               })
               .returning({ id: certifications.id });
@@ -660,9 +675,7 @@ export function registerAcpRoutes(app: Express) {
 
       // Verify transaction on MultiversX
       const chainId = process.env.MULTIVERSX_CHAIN_ID || "1";
-      const apiUrl = chainId === "1"
-        ? "https://api.multiversx.com"
-        : "https://devnet-api.multiversx.com";
+      const apiUrl = getProofFinalityApiUrl();
       const explorerUrl = chainId === "1"
         ? "https://explorer.multiversx.com"
         : "https://devnet-explorer.multiversx.com";
@@ -722,6 +735,14 @@ export function registerAcpRoutes(app: Express) {
           });
         }
 
+        // Independently confirm block inclusion, not just an API "success" label.
+        if (await lookupProofFinality(data.tx_hash, checkout.fileHash, "acp") !== "confirmed") {
+          return res.status(402).json({
+            error: "PAYMENT_VERIFICATION_FAILED",
+            message: "Transaction finality is not established. Retry confirmation after block inclusion.",
+            retry: true,
+          });
+        }
         // At this point txData.status === "success" — proceed with field-level verification.
         if (isAdminExempt) {
           txVerified = true;
@@ -903,7 +924,11 @@ export function registerAcpRoutes(app: Express) {
               transactionHash: data.tx_hash,
               transactionUrl: `${explorerUrl}/transactions/${data.tx_hash}`,
               blockchainStatus: "confirmed",
+              finalityCheckedAt: new Date(),
               authMethod: "acp",
+              // Deliberately do not write agentId here. The pending reservation
+              // carries the checkout-time authenticated agent attribution, and a
+              // confirm caller may be a different authenticated agent.
             })
             .where(
               and(
@@ -968,6 +993,15 @@ export function registerAcpRoutes(app: Express) {
         // Legacy path: checkout predates the reservation mechanism — INSERT the certification row.
         // This can still fail if a concurrent non-ACP route claimed the fileHash, in which case
         // we surface a clear error rather than silently failing with a 500.
+        // A confirm may be authenticated with an API key belonging to a different account than
+        // the checkout owner. Only attribute this new legacy row when validateApiKey's
+        // owner-safe resolved agent belongs to the owner retained on the checkout.
+        const currentValidatedAgent = (req as any).agent as
+          | { id?: string; ownerAccountId?: string }
+          | undefined;
+        const legacyAgentId = currentValidatedAgent?.ownerAccountId === acpOwnerId
+          ? currentValidatedAgent.id
+          : undefined;
         try {
           const [inserted] = await db
             .insert(certifications)
@@ -980,8 +1014,10 @@ export function registerAcpRoutes(app: Express) {
               transactionHash: data.tx_hash,
               transactionUrl: `${explorerUrl}/transactions/${data.tx_hash}`,
               blockchainStatus: "confirmed",
+              finalityCheckedAt: new Date(),
               isPublic: true,
               authMethod: "acp",
+              ...(legacyAgentId ? { agentId: legacyAgentId } : {}),
             })
             .returning();
           certification = inserted;
@@ -1019,6 +1055,18 @@ export function registerAcpRoutes(app: Express) {
           confirmedAt: new Date(),
         })
         .where(eq(acpCheckouts.id, checkout.id));
+
+      const [owner] = await db.select({ walletAddress: users.walletAddress })
+        .from(users).where(eq(users.id, acpOwnerId));
+      if (owner) {
+        try {
+          await refreshTrustAfterCertification(owner.walletAddress, "confirmed");
+        } catch (error) {
+          logger.withRequest(req).error("ACP confirmed certification trust refresh failed", {
+            certificationId: certification.id, error: String(error),
+          });
+        }
+      }
 
       const response: ACPConfirmResponse = {
         status: "confirmed",
@@ -1088,13 +1136,13 @@ export function registerAcpRoutes(app: Express) {
     }
   });
 
-  // OpenAPI 3.0 Specification for ACP
-  app.get("/api/acp/openapi.json", publicReadRateLimiter, async (req, res) => {
+  // One canonical ACP document; older generators receive a derived 3.0 export.
+  app.get(["/api/acp/openapi.json", "/api/acp/openapi-3.0.json"], publicReadRateLimiter, async (req, res) => {
     const baseUrl = CANONICAL_PUBLIC_ORIGIN;
     const priceUsd = await getCertificationPriceUsd();
 
     const openApiSpec = {
-      openapi: "3.0.3",
+      openapi: "3.1.0",
       info: {
         title: "Prove Before Act ACP - Agent Commerce Protocol",
         description: "API for AI agents to certify files on MultiversX blockchain. Create immutable proofs of file ownership with a simple API call. Supports x402 payment protocol (HTTP 402) as an alternative to API key auth — send requests to POST /api/proof or POST /api/batch without an API key, receive 402 with payment requirements, sign payment in USDC on Base (eip155:8453), and resend with X-PAYMENT header. Note: the product id 'xproof-certification' and the checkout message prefix 'xproof-acp-checkout' are stable legacy wire identifiers kept for backward compatibility (the service was formerly named xproof).",
@@ -1118,7 +1166,7 @@ export function registerAcpRoutes(app: Express) {
           Product: {
             type: "object",
             properties: {
-              id: { type: "string", example: "xproof-certification" },
+              id: { type: "string", example: "pba-certification", description: "Canonical product ID. The legacy xproof-certification alias is also accepted." },
               name: { type: "string", example: "Prove Before Act Certification" },
               description: { type: "string" },
               pricing: {
@@ -1137,7 +1185,7 @@ export function registerAcpRoutes(app: Express) {
             type: "object",
             required: ["product_id", "inputs"],
             properties: {
-              product_id: { type: "string", example: "xproof-certification" },
+              product_id: { type: "string", example: "pba-certification", description: "Use pba-certification. The legacy xproof-certification alias remains accepted." },
               inputs: {
                 type: "object",
                 required: ["file_hash", "filename"],
@@ -1148,6 +1196,8 @@ export function registerAcpRoutes(app: Express) {
                   metadata: { type: "object", description: "Optional JSON metadata. Supports model_hash, strategy_hash, version_number, and any custom fields. Searchable via GET /api/proofs/search.", properties: { model_hash: { type: "string" }, strategy_hash: { type: "string" }, version_number: { type: "string" } }, additionalProperties: true },
                 },
               },
+              payer_wallet: { type: "string", example: "erd1...", description: "Required for non-admin checkout: the MultiversX wallet that will send payment." },
+              payer_wallet_signature: { type: "string", example: "128-char-hex-Ed25519-signature", description: "Required for non-admin checkout. Sign pba-acp-checkout:<product_id>:<file_hash>:<payer_wallet> with payer_wallet's private key." },
               buyer: {
                 type: "object",
                 properties: {
@@ -1225,6 +1275,31 @@ export function registerAcpRoutes(app: Express) {
               message: { type: "string" },
             },
           },
+          ProofCertifiedWebhookPayload: {
+            type: "object",
+            description: "Outbound proof.certified notification sent to the subscriber's webhook_url after on-chain confirmation.",
+            required: ["event", "proof_id", "status", "file_hash", "filename", "verify_url", "certificate_url", "proof_json_url", "blockchain", "timestamp"],
+            properties: {
+              event: { type: "string", enum: ["proof.certified"] },
+              proof_id: { type: "string", description: "Certification ID; also the stable delivery ID." },
+              status: { type: "string", enum: ["certified"] },
+              file_hash: { type: "string", description: "SHA-256 file hash." },
+              filename: { type: "string" },
+              verify_url: { type: "string", format: "uri" },
+              certificate_url: { type: "string", format: "uri" },
+              proof_json_url: { type: "string", format: "uri" },
+              blockchain: {
+                type: "object",
+                required: ["network", "transaction_hash", "explorer_url"],
+                properties: {
+                  network: { type: "string", enum: ["MultiversX"] },
+                  transaction_hash: { type: "string", nullable: true, description: "MultiversX transaction hash, or null when not available." },
+                  explorer_url: { type: "string", format: "uri", nullable: true, description: "Transaction explorer URL, or null when not available." },
+                },
+              },
+              timestamp: { type: "string", format: "date-time", description: "Certification creation time (or send time if absent)." },
+            },
+          },
           ViolationCounts: {
             type: "object",
             nullable: true,
@@ -1269,6 +1344,28 @@ export function registerAcpRoutes(app: Express) {
               profile_url: { type: "string", format: "uri", nullable: true },
               trust_badge_svg: { type: "string", format: "uri", nullable: true },
             },
+          },
+        },
+      },
+      // Keep the legacy extension alongside the standard 3.1 webhooks section.
+      // Neither belongs in paths: this POST is sent to a subscriber, not hosted here.
+      "x-webhooks": {
+        "proof.certified": {
+          description: "Outbound HTTPS POST to the webhook_url supplied by the subscriber after proof finality. At-least-once delivery; deduplicate by the verified delivery ID. The per-proof webhook_secret returned by the API signs each attempt. Implement a receiver at your URL (see docs/agent-integration.md); this is not a callable /proof.certified API path.",
+          post: {
+            operationId: "proofCertifiedWebhook",
+            security: [],
+            parameters: [
+              { in: "header", name: PBA_WEBHOOK_HEADERS.signature, required: true, schema: { type: "string", pattern: "^[0-9a-f]{64}$" }, description: "Hex HMAC-SHA256(secret, timestamp + \".\" + rawBody). Sign the exact request body bytes before JSON parsing; never reserialize JSON for verification." },
+              { in: "header", name: PBA_WEBHOOK_HEADERS.timestamp, required: true, schema: { type: "string", pattern: "^[0-9]+$" }, description: "Unix epoch seconds. Reject timestamps older than 300 seconds or more than 60 seconds in the future." },
+              { in: "header", name: PBA_WEBHOOK_HEADERS.event, required: true, schema: { type: "string", enum: ["proof.certified"] }, description: "Notification event type." },
+              { in: "header", name: PBA_WEBHOOK_HEADERS.delivery, required: true, schema: { type: "string" }, description: "Certification ID, stable across delivery attempts and manual retries; deduplicate only after signature verification." },
+            ],
+            requestBody: {
+              required: true,
+              content: { "application/json": { schema: { $ref: "#/components/schemas/ProofCertifiedWebhookPayload" } } },
+            },
+            responses: { "2XX": { description: "Subscriber acknowledges the notification." } },
           },
         },
       },
@@ -1356,7 +1453,7 @@ export function registerAcpRoutes(app: Express) {
         "/mcp": {
           post: {
             summary: "MCP Server (JSON-RPC 2.0)",
-            description: "Model Context Protocol server endpoint. Accepts JSON-RPC 2.0 requests over Streamable HTTP. Supports methods: initialize, tools/list, tools/call, resources/list, resources/read. Tools: register_trial (no auth, start here), certify_file, certify_with_confidence, verify_proof, get_proof, discover_services, audit_agent_session, check_attestations, investigate_proof. Resources: xproof://specification, xproof://openapi. Stateless (no session management). Protocol version: 2025-03-26.",
+            description: "Model Context Protocol server endpoint. Accepts JSON-RPC 2.0 requests over Streamable HTTP. Supports methods: initialize, tools/list, tools/call, resources/list, resources/read. Tools: register_trial (no auth, start here), certify_file, certify_with_confidence, verify_proof, get_proof, discover_services, audit_agent_session, check_attestations, investigate_proof. Resources: xproof://specification (legacy namespace alias), xproof://openapi (legacy namespace alias). Stateless (no session management). Protocol version: 2025-03-26.",
             requestBody: {
               required: true,
               content: {
@@ -1409,7 +1506,7 @@ export function registerAcpRoutes(app: Express) {
                       file_hash: { type: "string", description: "SHA-256 hash of the file (64 hex chars)", example: "a1b2c3d4e5f678901234567890123456789012345678901234567890123456ab" },
                       filename: { type: "string", example: "document.pdf" },
                       author_name: { type: "string", example: "AI Agent", description: "Optional author name" },
-                      webhook_url: { type: "string", format: "uri", description: "Optional HTTPS URL to receive a POST notification when the proof is confirmed on-chain. Payload includes proof_id, file_hash, verify_url, blockchain details. Signed with X-xProof-Signature (HMAC-SHA256).", example: "https://your-agent.example.com/webhooks/xproof" },
+                      webhook_url: { type: "string", format: "uri", description: "Optional HTTPS URL to receive a POST notification when the proof is confirmed on-chain. Payload includes proof_id, file_hash, verify_url, blockchain details. Signed with X-ProveBeforeAct-Signature (HMAC-SHA256); X-xProof-Signature is a legacy alias.", example: "https://your-agent.example.com/webhooks/prove-before-act" },
                     },
                   },
                 },
@@ -1522,7 +1619,7 @@ export function registerAcpRoutes(app: Express) {
                     required: ["agent_name"],
                     properties: {
                       agent_name: { type: "string", minLength: 1, maxLength: 100, description: "A unique name for your agent", example: "my-trading-bot" },
-                      webhook_url: { type: "string", format: "uri", description: "Optional HTTPS webhook URL to receive certification notifications", example: "https://your-agent.example.com/webhooks/xproof" },
+                      webhook_url: { type: "string", format: "uri", description: "Optional HTTPS webhook URL to receive certification notifications", example: "https://your-agent.example.com/webhooks/prove-before-act" },
                     },
                   },
                 },
@@ -1872,7 +1969,28 @@ export function registerAcpRoutes(app: Express) {
       },
     };
 
-    res.json(openApiSpec);
+    // OpenAPI 3.1 uses JSON Schema type unions rather than the 3.0 nullable
+    // keyword. Convert all existing nullable fields, not just the webhook,
+    // so generated partner response types continue to accept null.
+    const convertNullableSchemas = (value: unknown): void => {
+      if (!value || typeof value !== "object") return;
+      if (Array.isArray(value)) {
+        value.forEach(convertNullableSchemas);
+        return;
+      }
+      const node = value as Record<string, unknown>;
+      if (node.nullable === true) {
+        if (typeof node.type === "string") node.type = [node.type, "null"];
+        else throw new Error("OpenAPI nullable schema without a type");
+        if (Array.isArray(node.enum)) node.enum = [...node.enum, null];
+        delete node.nullable;
+      }
+      Object.values(node).forEach(convertNullableSchemas);
+    };
+    convertNullableSchemas(openApiSpec.components);
+    convertNullableSchemas(openApiSpec.paths);
+    const canonical = { ...openApiSpec, webhooks: openApiSpec["x-webhooks"] };
+    res.json(req.path === "/api/acp/openapi-3.0.json" ? toOpenApi30(canonical) : canonical);
   });
 
   // ============================================

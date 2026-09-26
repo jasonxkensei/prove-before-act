@@ -6,15 +6,246 @@ id = "R6NawBePX8WEQ-20A29PB"
 uri = "file://Prove Before Act-v140-clawhub-upload.zip"
 type = "unspecified"
 title = "Prove Before Act v1.4.0 — fichiers propres pour drag-drop Clawhub"
+logical_id = "b71f7725-9976-413c-a423-5b51286d2148"
 
 [[outputs]]
 id = "mUo_jH9jFr_TnVZ9hZu9a"
 uri = "file://Prove Before Act-v150-clawhub-upload.zip"
 type = "unspecified"
 title = "Prove Before Act v1.5.0 — doc complète + Section 0 Free Trial (drag-drop Clawhub)"
+logical_id = "8915b151-c6be-4b8e-a268-ac3005a310c0"
 
 [[outputs]]
 id = "dPrHaErY0Nc_SZXRoFYVe"
 uri = "file://Prove Before Act-skill-v4.zip"
 type = "unspecified"
 title = "Prove Before Act-skill-v4.zip — 12 fichiers (sans LICENSE)"
+logical_id = "97769d67-dcd8-42de-ab4f-d6da34a926f8"
+
+[[outputs]]
+id = "Ymq4hKDf88bYB2C0DaoEd"
+uri = "file://audit/interface-audit.md"
+type = "text"
+title = "ProveBeforeAct interface audit"
+description = "Read-only UX and visual audit, prioritized findings, and protected integration zones."
+logical_id = "9f9207cf-29ff-42d2-b5eb-fac8bd1d4297"
+content_hash = "sha256:edacf522d8ea23ecda4fbf191a16f88d27b4394627ee87e71d1f1363de08b6c8"
+size = 5994
+mtime_ms = 1788511741793
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/9f9207cf-29ff-42d2-b5eb-fac8bd1d4297/81c2a145-199c-4260-a559-fe90e7b5c9d6"
+storage_version_token = "1788511834593769"
+content_type = "text/markdown"
+
+[[outputs]]
+id = "-EiC3oUNvg7lBWfxldvV-"
+uri = "file://audit/design-system-proposal.md"
+type = "text"
+title = "ProveBeforeAct design system proposal"
+description = "Proposed visual direction, semantic foundations, components, responsive rules, and approval gate."
+logical_id = "eb2673f2-1def-4f65-a83e-90747cd83ea8"
+content_hash = "sha256:8dcbe8c0475d9898be5acca15ebeca578d864cb112b7c486c2b60a902fa1ba03"
+size = 6826
+mtime_ms = 1788511759625
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/eb2673f2-1def-4f65-a83e-90747cd83ea8/7ba087a5-a703-4395-815b-e50160eed258"
+storage_version_token = "1788511835212151"
+content_type = "text/markdown"
+
+[[outputs]]
+id = "hbJeuaNhNZOHlHhYZ85-n"
+uri = "file://audit/premium-home-desktop.jpg"
+type = "image"
+title = "Premium homepage — desktop"
+description = "Verified 1280px capture of the proposed accountability-infrastructure direction."
+logical_id = "6fdde2f5-84b7-4463-bdce-670b5ae0e050"
+content_hash = "sha256:6e24c1517db766f0ea3f51fb9ba7066454de963a631c7cfb6ecb718dc701272a"
+size = 75167
+mtime_ms = 1788511696005
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/6fdde2f5-84b7-4463-bdce-670b5ae0e050/cc81e2e3-2971-4a4a-b1ee-9a9771df0404"
+storage_version_token = "1788511835902320"
+content_type = "image/jpeg"
+
+[[outputs]]
+id = "oGNYfGiH-7v1ekPOTDezf"
+uri = "file://audit/premium-home-mobile.png"
+type = "image"
+title = "Premium homepage — mobile"
+description = "Verified 390px capture of the same responsive homepage concept."
+logical_id = "440b11a1-6023-42ef-a9e7-51d369844f3b"
+content_hash = "sha256:312a12df58cfe9d2fffed2558050c130e4a6b20eb72c6919b3025775a984d6d4"
+size = 48505
+mtime_ms = 1788511712293
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/440b11a1-6023-42ef-a9e7-51d369844f3b/95bc23ab-da9d-460e-b0b9-12f657be3087"
+storage_version_token = "1788511836838231"
+content_type = "image/png"
+
+[[outputs]]
+id = "hXSI9qCLiGm8HO7sO5f6H"
+uri = "file://attached_assets/moltbook_1773578013568.ts"
+type = "unspecified"
+title = "Bot Moltbook corrigé — Prove Before Act"
+description = "Version auditée avec WHY fail-closed, metadata sans chain-of-thought, confidence trail 0.60→0.80→1.00, cohérence, policy-check, outcome et incident-report."
+logical_id = "74ac3056-7dfa-41f0-a65e-56380fb23ad9"
+content_hash = "sha256:7bd62870ffe6a13694abe1534089bb7b34bd86ab5fdf66772f583c74537520aa"
+size = 163242
+mtime_ms = 1788536338883
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/74ac3056-7dfa-41f0-a65e-56380fb23ad9/2b3cbd7a-63c3-4653-bacc-201c3c239bc2"
+storage_version_token = "1788536445730112"
+content_type = "application/octet-stream"
+
+[[outputs]]
+id = "2BNMfjs1gDEXNhoLgwegi"
+uri = "file://client/public/og-image.jpg"
+type = "image"
+title = "Prove Before Act — carte sociale"
+description = "Carte Open Graph 1200 × 630 de la nouvelle identité The Anchor, prête pour le partage."
+logical_id = "79b16baf-29e3-4084-90c4-c21f195ca90f"
+content_hash = "sha256:29957c23b84e707c8293a25c0532c9768c1929c14dce19b621d4d22cc4e597f5"
+size = 83241
+mtime_ms = 1790074124059
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/79b16baf-29e3-4084-90c4-c21f195ca90f/d9b32c51-96ee-4580-863d-aae7d5e6a9f6"
+storage_version_token = "1790074222478845"
+content_type = "image/jpeg"
+
+[[outputs]]
+id = "pw5R8vztTZCDd0CWw33ft"
+uri = "file://screenshots/agents-anchor.jpg"
+type = "image"
+title = "Page Agents harmonisée"
+description = "Capture de la page /agents après alignement complet sur l’identité The Anchor."
+logical_id = "88399382-c6a8-4a20-86c5-f2f842de1afa"
+content_hash = "sha256:4dcc809b58ab83a66a3cec9f6099476b507232964cce6139b1df5f20b23f961f"
+size = 71560
+mtime_ms = 1790074723392
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/88399382-c6a8-4a20-86c5-f2f842de1afa/cbee5a17-f720-442e-9894-ad969bd3711c"
+storage_version_token = "1790075181548070"
+content_type = "image/jpeg"
+
+[[outputs]]
+id = "LXk8LhxkQBj__Ahv_WF6Y"
+uri = "file://screenshots/product-hunt-interactive-demo.jpg"
+type = "image"
+title = "Démo interactive Product Hunt"
+description = "Aperçu desktop de la nouvelle route /demo, conçue pour raconter le parcours Prove Before Act en 90 secondes."
+logical_id = "8778465c-2b3f-4125-a9a5-5a33d16fb353"
+content_hash = "sha256:df80750d0eb914624b42eb2b99831c96a689898b228e249951799c30e3c9df9a"
+size = 58569
+mtime_ms = 1790076021597
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/8778465c-2b3f-4125-a9a5-5a33d16fb353/6aff69cb-08fb-425e-a3e5-fe429113fcdb"
+storage_version_token = "1790076070802434"
+content_type = "image/jpeg"
+
+[[outputs]]
+id = "3vyrqtu0p1rh6McltW9Be"
+uri = "file://client/public/pba-logo.svg"
+type = "image"
+title = "Logo Prove Before Act — fond sombre"
+description = "Logo officiel The Anchor pour les fonds sombres."
+logical_id = "5412b6c9-db0a-44c1-984d-83eaebe3e68a"
+content_hash = "sha256:4a6defe5fa4d827e7b6b20aa19ee23f1222157e6aacef5e475aa560a7791c683"
+size = 727
+mtime_ms = 1790074011312
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/5412b6c9-db0a-44c1-984d-83eaebe3e68a/c793e04e-3030-4a81-a265-86b0e6c9cba2"
+storage_version_token = "1790078216886184"
+content_type = "image/svg+xml"
+
+[[outputs]]
+id = "ix2qBS9B4oO-V-JiIhlvb"
+uri = "file://client/public/pba-logo-on-light.svg"
+type = "image"
+title = "Logo Prove Before Act — fond clair"
+description = "Logo officiel The Anchor pour les fonds clairs et les surfaces papier."
+logical_id = "fccc72b4-00bd-4003-9a65-29b620db8115"
+content_hash = "sha256:676a4705b24882ae4ca84d6cdd191f01e14c92e8cc6673fb7ff98332bdca23b7"
+size = 746
+mtime_ms = 1790074013476
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/fccc72b4-00bd-4003-9a65-29b620db8115/b920b789-a019-492e-b423-81a9d5e91dcb"
+storage_version_token = "1790078217542670"
+content_type = "image/svg+xml"
+
+[[outputs]]
+id = "uWbqy9jZepvj_pJrqG0AJ"
+uri = "file://attached_assets/generated_audio/pba-product-hunt-launch-en.mp3"
+type = "audio"
+title = "PBA Product Hunt launch narration"
+description = "Text-to-speech audio: AI agents are starting to act in the real world. But when something goes wrong, a reconstructed explanation is not accountability. Prove Before Act gives every consequential act…"
+logical_id = "f814747f-7bc0-42af-a802-98b31ded5b15"
+
+[[outputs]]
+id = "EO96AdGOYMPrcVSnCgtvF"
+uri = "file://attached_assets/generated_audio/pba-launch-music.mp3"
+type = "audio"
+title = "PBA launch music"
+description = "Generated music: Minimal modern technology launch music bed, understated and trustworthy, subtle electronic pulse, warm analog synth texture, restrained cinematic lift, no vocals, no dramatic drops, …"
+logical_id = "4f7a5077-6355-4f4d-a588-9501878253ff"
+
+[[outputs]]
+id = "fazBbmOFdrlv_H3u_vRh3"
+uri = "file://attached_assets/generated_audio/pba-controlled-demo-en.mp3"
+type = "audio"
+title = "PBA controlled demo narration"
+description = "Text-to-speech audio: Here is how Prove Before Act works in a controlled demonstration. First, choose the action your agent is about to perform. In this example, the agent is preparing a supplier pay…"
+logical_id = "56449b41-ee18-4bf1-86d8-e1c8571f60aa"
+
+[[outputs]]
+id = "DylhKma_RWkFMVLCifRXN"
+uri = "file://attached_assets/generated_audio/pba-demo-music.mp3"
+type = "audio"
+title = "PBA demo music"
+description = "Generated music: Minimal ambient technology explainer music bed, precise and calm, subtle electronic pulse, light percussive ticks, trustworthy and contemporary, no vocals, consistent low energy for …"
+logical_id = "430c32c9-e2c7-41b9-bb15-cf14327c986e"
+
+[[outputs]]
+id = "vkmBLoDeVDU802rQGMeQF"
+uri = "file://launch-assets/exports/pba-product-hunt-launch-bilingual.mp4"
+type = "video"
+title = "Vidéo de lancement Product Hunt"
+description = "Vidéo de lancement bilingue — MP4, 1280 × 720, 37,8 secondes."
+logical_id = "152fbf2b-c7b6-47b1-93ed-e70fa46911f2"
+content_hash = "sha256:0068bfe0bcfbb694c91c37cd7206d95105147c01a1282a1be92a6d217d529285"
+size = 2257492
+mtime_ms = 1790263524153
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/152fbf2b-c7b6-47b1-93ed-e70fa46911f2/f6fa38fb-495c-4b09-b9cd-35e845c8ba0f"
+storage_version_token = "1790332018393009"
+content_type = "video/mp4"
+
+[[outputs]]
+id = "KxguMuNeLtN8JRkEa5E74"
+uri = "file://launch-assets/exports/pba-controlled-demo-bilingual.mp4"
+type = "video"
+title = "Démonstration contrôlée bilingue"
+description = "Démonstration produit contrôlée — MP4, 1280 × 720, 65 secondes."
+logical_id = "c5cd918d-0f8c-4089-a794-e16057a6069f"
+content_hash = "sha256:70a9dbb5d073ed02c24c9698403f2b0454f980e9e82e0abb858bd9f846a16b39"
+size = 3302119
+mtime_ms = 1790263536513
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/c5cd918d-0f8c-4089-a794-e16057a6069f/6876d6f9-5a83-43d4-8eb9-377794c8457c"
+storage_version_token = "1790332019627558"
+content_type = "video/mp4"
+
+[[outputs]]
+id = "CmPUu7djdNU5pzXLeR_hV"
+uri = "file://launch-assets/product-hunt-launch-fr.srt"
+type = "unspecified"
+title = "Launch Video — French Subtitles"
+description = "Editable French subtitle source for the Product Hunt launch video."
+logical_id = "2437c946-838f-4246-a5eb-a0c0f81d45b1"
+content_hash = "sha256:2b9f3d00dcada4ad97be90ceed947db993f754cb342d913a4456a5c60795c90a"
+size = 857
+mtime_ms = 1790263342377
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/2437c946-838f-4246-a5eb-a0c0f81d45b1/cf2baa53-acc8-4ef4-a6e5-eb4586f2ab62"
+storage_version_token = "1790263552076380"
+content_type = "application/octet-stream"
+
+[[outputs]]
+id = "zAQ3jgpbRtoL4r7tNpPqP"
+uri = "file://launch-assets/controlled-demo-fr.srt"
+type = "unspecified"
+title = "Controlled Demo — French Subtitles"
+description = "Editable French subtitle source for the controlled product demonstration."
+logical_id = "11d29875-adc3-48ac-ac06-eda64e404846"
+content_hash = "sha256:c21058da9ad0e44185d578a7a56bf50484a031854b77542bf1819294478134a7"
+size = 1364
+mtime_ms = 1790263346937
+storage_uri = "gcs://replit-rams-assets-picard/rams/assets/repl:1ad27678-96e5-4fb8-8adf-aac84d5cab5d/11d29875-adc3-48ac-ac06-eda64e404846/cc606d97-c7bb-42c6-b0e7-3c8e75931496"
+storage_version_token = "1790263552981848"
+content_type = "application/octet-stream"

@@ -2,7 +2,7 @@ import { type Express } from "express";
 import crypto from "crypto";
 import { db, pool } from "../db";
 import { logger } from "../logger";
-import { certifications, users, apiKeys, MAX_ONCHAIN_FILENAME_LEN, MAX_ONCHAIN_AUTHOR_LEN, sha256HexSchema } from "@shared/schema";
+import { certifications, users, apiKeys, agents, MAX_ONCHAIN_FILENAME_LEN, MAX_ONCHAIN_AUTHOR_LEN, sha256HexSchema } from "@shared/schema";
 import { eq, desc, sql, and, count, type SQL } from "drizzle-orm";
 import { z } from "zod";
 import { paymentRateLimiter, publicSearchRateLimiter } from "../reliability";
@@ -13,6 +13,8 @@ import { auditLogSchema, AUDIT_LOG_JSON_SCHEMA, type AgentAuditLog, REVERSIBILIT
 import { isMX8004Configured, recordCertificationAsJob } from "../mx8004";
 import { checkRateLimit, isAdminWallet, getTrialUser, consumeTrialCredit, getUserCreditBalance, consumeCredit, atomicConsumeCredit, atomicConsumeTrialCredit, refundCredit, refundTrialCredit, getApiKeyOwnerWallet, TRIAL_QUOTA, RATE_LIMIT_MAX_VALUE, buildCanonicalId, tryDisplaceAcpReservation, buildX402Block, buildPrepaidCreditsBlock, buildTrialExhaustedMessage, buildPaymentRequiredMessage } from "./helpers";
 import { inArray } from "drizzle-orm";
+import { resolveAgentForApiKey } from "../agent-identity";
+import { publicProofStatus } from "../proof-finality";
 
 function build4WField(metadata: unknown, baseUrl: string, certId: number | string): Record<string, unknown> {
   if (!metadata || typeof metadata !== "object") return {};
@@ -235,6 +237,7 @@ export function registerProofWriteRoutes(app: Express) {
           metadata: certifications.metadata,
           blockchainStatus: certifications.blockchainStatus,
           transactionHash: certifications.transactionHash,
+          finalityCheckedAt: certifications.finalityCheckedAt,
           createdAt: certifications.createdAt,
           walletAddress: users.walletAddress,
         })
@@ -253,7 +256,7 @@ export function registerProofWriteRoutes(app: Express) {
           file_hash: r.file_hash || r.fileHash,
           filename: r.file_name || r.fileName,
           metadata: r.metadata,
-          blockchain_status: r.blockchain_status || r.blockchainStatus,
+          blockchain_status: publicProofStatus(r),
           transaction_hash: r.transaction_hash || r.transactionHash,
           wallet_address: r.wallet_address || null,
           verify_url: `${baseUrl}/proof/${r.id}`,
@@ -366,6 +369,7 @@ export function registerProofWriteRoutes(app: Express) {
       let trialInfo: { isTrial: boolean; remaining: number; userId: string } | null = null;
       let creditInfo: { userId: string; balance: number } | null = null;
       let apiKeyUserId: string | null = null;
+      let apiKeyAgentId: string | null = null;
 
       if (hasBearerToken) {
         const rawKey = authHeader!.slice(7);
@@ -374,6 +378,10 @@ export function registerProofWriteRoutes(app: Express) {
           return res.status(401).json({
             error: "INVALID_API_KEY",
             message: "API key must start with 'pm_' prefix",
+            next_action: {
+              instruction: "Use the exact key returned by registration.",
+              header: "Authorization: Bearer pm_YOUR_API_KEY",
+            },
           });
         }
 
@@ -385,6 +393,11 @@ export function registerProofWriteRoutes(app: Express) {
           return res.status(401).json({
             error: "INVALID_API_KEY",
             message: "Invalid or expired API key",
+            next_action: {
+              instruction: "Check the Authorization header. If the one-time registration key was lost, register a new uniquely named trial agent.",
+              header: "Authorization: Bearer pm_YOUR_API_KEY",
+              register: `POST https://${req.get("host")}/api/agent/register`,
+            },
           });
         }
 
@@ -409,6 +422,9 @@ export function registerProofWriteRoutes(app: Express) {
             retry_after: Math.ceil((rateLimit.resetAt - Date.now()) / 1000),
           });
         }
+        const logicalAgent = await resolveAgentForApiKey(apiKey);
+        apiKeyAgentId = logicalAgent.id;
+        await db.update(agents).set({ lastSeenAt: new Date() }).where(eq(agents.id, logicalAgent.id));
 
         db.update(apiKeys)
           .set({
@@ -438,6 +454,10 @@ export function registerProofWriteRoutes(app: Express) {
                 x402: buildX402Block(baseUrl),
                 prepaid_credits: buildPrepaidCreditsBlock(baseUrl),
                 check_balance: `GET ${baseUrl}/api/agent/status`,
+                next_action: {
+                  instruction: "The free trial is exhausted. Continue with prepaid credits or the x402 payment flow shown in this response.",
+                  options: ["prepaid_credits", "x402"],
+                },
               });
             }
           }
@@ -486,6 +506,12 @@ export function registerProofWriteRoutes(app: Express) {
             { type: "api_key", header: "Authorization: Bearer pm_xxx", description: "Use an existing API key" },
             { type: "x402", price: `Current live price — see ${baseUrl}/api/pricing`, network: "Base (USDC)", description: "Pay per use, no account needed" },
           ],
+          next_action: {
+            instruction: "Register for the free trial, retain the returned key in the current execution context, then retry this request with the Bearer header.",
+            method: "POST",
+            path: "/api/agent/register",
+            body: { agent_name: "your-agent-name" },
+          },
         });
       }
 
@@ -548,7 +574,7 @@ export function registerProofWriteRoutes(app: Express) {
         !occupant.transactionHash;
 
       if (occupant && !occupantIsAcpReservation) {
-        const derivedStatus = occupant.blockchainStatus === "confirmed" ? "certified" : occupant.blockchainStatus;
+        const derivedStatus = publicProofStatus(occupant) === "confirmed" ? "certified" : publicProofStatus(occupant);
         logger.withRequest(req).info("File already certified", { fileHash: data.file_hash, certificationId: occupant.id });
         return res.status(200).json({
           proof_id: occupant.id,
@@ -616,7 +642,7 @@ export function registerProofWriteRoutes(app: Express) {
           else if (creditInfo) await refundCredit(creditInfo.userId).catch(() => {});
           const [refreshed] = await db.select().from(certifications).where(eq(certifications.fileHash, data.file_hash));
           const target = refreshed ?? occupant;
-          const derivedStatus = target.blockchainStatus === "confirmed" ? "certified" : target.blockchainStatus;
+          const derivedStatus = publicProofStatus(target) === "confirmed" ? "certified" : publicProofStatus(target);
           return res.status(200).json({
             proof_id: target.id,
             status: derivedStatus,
@@ -683,11 +709,13 @@ export function registerProofWriteRoutes(app: Express) {
           .insert(certifications)
           .values({
             userId: ownerUserId,
+            ...(apiKeyAgentId ? { agentId: apiKeyAgentId } : {}),
             fileName: data.filename,
             fileHash: data.file_hash,
             fileType: data.filename.split(".").pop() || "unknown",
             authorName: effectiveAuthor,
             blockchainStatus: "pending",
+            ...(isMX8004Configured() ? { mx8004EnqueueStatus: "pending" } : {}),
             isPublic: true,
             authMethod,
             ...(data.metadata ? { metadata: data.metadata } : {}),
@@ -703,7 +731,7 @@ export function registerProofWriteRoutes(app: Express) {
           logger.withRequest(req).info("Concurrent duplicate proof request detected, credit refunded", { fileHash: data.file_hash, certificationId: existing.id });
           return res.status(200).json({
             proof_id: existing.id,
-            status: existing.blockchainStatus === "confirmed" ? "certified" : existing.blockchainStatus,
+            status: publicProofStatus(existing) === "confirmed" ? "certified" : publicProofStatus(existing),
             file_hash: existing.fileHash,
             filename: existing.fileName,
             metadata: existing.metadata || null,
@@ -745,7 +773,8 @@ export function registerProofWriteRoutes(app: Express) {
           .set({
             transactionHash: result.transactionHash,
             transactionUrl: result.transactionUrl,
-            blockchainStatus: "confirmed",
+            blockchainStatus: "pending",
+            ...(isMX8004Configured() ? { mx8004EnqueueStatus: "pending" } : {}),
             ...(result.latencyMs != null ? { blockchainLatencyMs: result.latencyMs } : {}),
           })
           .where(eq(certifications.id, pendingCertification.id))
@@ -793,16 +822,20 @@ export function registerProofWriteRoutes(app: Express) {
       if (effectiveWebhookUrl) {
         const { scheduleWebhookDelivery, isValidWebhookUrl } = await import("../webhook");
         if (isValidWebhookUrl(effectiveWebhookUrl)) {
-          await db.update(certifications)
-            .set({ webhookUrl: effectiveWebhookUrl, webhookStatus: "pending" })
-            .where(eq(certifications.id, certification.id));
-
           // Never reuse the API key as the signing secret — generate a random one-time
           // secret so webhook receivers cannot call xproof on the caller's behalf.
           if (!effectiveWebhookSecret) {
             generatedWebhookSecret = crypto.randomBytes(32).toString("hex");
             effectiveWebhookSecret = generatedWebhookSecret;
           }
+          await db.update(certifications)
+            .set({
+              webhookUrl: effectiveWebhookUrl,
+              webhookSigningSecret: effectiveWebhookSecret,
+              webhookBaseUrl: baseUrl,
+              webhookStatus: "pending",
+            })
+            .where(eq(certifications.id, certification.id));
           scheduleWebhookDelivery(certification.id, effectiveWebhookUrl, baseUrl, effectiveWebhookSecret);
         } else {
           webhookStatus = "failed";
@@ -822,7 +855,7 @@ export function registerProofWriteRoutes(app: Express) {
 
       return res.status(201).json({
         proof_id: certification.id,
-        status: "certified",
+        status: "pending",
         file_hash: certification.fileHash,
         filename: certification.fileName,
         metadata: certification.metadata || null,
@@ -837,7 +870,8 @@ export function registerProofWriteRoutes(app: Express) {
         timestamp: certification.createdAt?.toISOString() || new Date().toISOString(),
         webhook_status: webhookStatus,
         // webhook_secret is returned only for per-proof webhooks (when webhook_url is supplied in
-        // this request). Store it securely — use it to verify X-xProof-Signature on callbacks.
+        // this request). Store it securely — use it to verify X-ProveBeforeAct-Signature on callbacks.
+        // X-xProof-Signature remains an identical legacy header during migration.
         // Account-level webhooks use the secret set at registration (/api/agents/register).
         ...(isPerProofWebhook && generatedWebhookSecret ? { webhook_secret: generatedWebhookSecret } : {}),
         ...(trialInfo ? {
@@ -850,7 +884,7 @@ export function registerProofWriteRoutes(app: Express) {
         } : {}),
         ...(creditInfo ? { credits: { remaining: Math.max(0, creditInfo.balance - 1) } } : {}),
         ...build4WField(certification.metadata, baseUrl, certification.id),
-        message: "File certified on MultiversX blockchain. Proof is immutable and publicly verifiable.",
+        message: "Transaction broadcast. Proof is pending independent on-chain finality verification.",
         ...await (async () => {
           // Build the full guidance block for every proof response.
           // No gating on cert count — every agent gets all information from cert #1.
@@ -859,7 +893,13 @@ export function registerProofWriteRoutes(app: Express) {
             const [[{ cnt }], [ownerUser]] = await Promise.all([
               db.select({ cnt: sql<number>`count(*)` })
                 .from(certifications)
-                .where(and(eq(certifications.userId, ownerUserId), sql`auth_method != 'onboarding'`)),
+                .where(and(
+                  eq(certifications.userId, ownerUserId),
+                  sql`auth_method != 'onboarding'`,
+                  eq(certifications.blockchainStatus, "confirmed"),
+                  sql`${certifications.finalityCheckedAt} IS NOT NULL`,
+                  sql`transaction_hash ~ '^[a-fA-F0-9]{64}$'`,
+                )),
               db.select({
                 walletAddress: users.walletAddress,
                 agentName: users.agentName,
@@ -878,9 +918,11 @@ export function registerProofWriteRoutes(app: Express) {
             const trialLeft = ownerUser?.trialQuota != null
               ? Math.max(0, (ownerUser.trialQuota ?? TRIAL_QUOTA) - (ownerUser.trialUsed ?? 0) - 1)
               : null;
+            const proofOrdinal = Number(cnt);
 
             return {
-              ...(Number(cnt) === 1 ? { first_proof: true } : {}),
+              ...(proofOrdinal === 1 ? { first_proof: true } : {}),
+              ...(proofOrdinal === 2 ? { second_proof: true } : {}),
               guidance: {
                 // 1. Contextual 4W hints — action_type-aware, null if all fields provided
                 four_w: get4WHints(actionType, certMeta),
@@ -894,6 +936,9 @@ export function registerProofWriteRoutes(app: Express) {
                     { file_hash: "<sha256-hex>", filename: "artifact_2.json", author_name: agentName },
                   ],
                   remaining: trialLeft !== null ? `${trialLeft} trial certifications left` : "continue anchoring",
+                    activation_goal: proofOrdinal === 1
+                      ? "Create a second proof with a different locally computed SHA-256 hash, then open its verify_url."
+                      : "Second proof created. Open verify_url to complete activation.",
                 },
 
                 // 3. Coherence mode — available from cert #1, not unlocked at cert #3
@@ -977,10 +1022,11 @@ export function registerProofWriteRoutes(app: Express) {
                     note: "Certify every build artifact automatically in CI/CD.",
                     github_action: {
                       marketplace: "https://github.com/marketplace/actions/xproof-certify",
-                      repo: "https://github.com/jasonxkensei/xProof-Action",
+                        marketplace_note: "Legacy Marketplace slug maintained for existing CI pipelines; new integrations use the canonical repository below.",
+                      repo: "https://github.com/jasonxkensei/prove-before-act-action",
                       example_workflow: [
                         "- name: Certify build artifact",
-                        "  uses: jasonxkensei/xProof-Action@v1",
+                        "  uses: jasonxkensei/prove-before-act-action@v1",
                         "  with:",
                         "    api-key: ${{ secrets.PROVE_BEFORE_ACT_API_KEY }}",
                         "    file: ./dist/contract.wasm",
@@ -989,8 +1035,8 @@ export function registerProofWriteRoutes(app: Express) {
                       ].join("\n"),
                     },
                     sdk: {
-                      python: { install: "pip install xproof", import: "from xproof import XProofClient" },
-                      npm: { install: "npm install @xproof/xproof", import: "import { XProofClient } from '@xproof/xproof'" },
+                      python: { install: "pip install prove-before-act", import: "from xproof import XProofClient  # legacy module name retained by canonical package" },
+                      npm: { install: "npm install prove-before-act", import: "import { XProofClient } from 'prove-before-act'" },
                     },
                   },
 
@@ -998,7 +1044,7 @@ export function registerProofWriteRoutes(app: Express) {
                     note: "Get notified when each proof is confirmed on-chain — essential for production flows that gate on confirmation.",
                     configure: `PATCH ${baseUrl}/api/agent`,
                     body: { webhook_url: "https://your-server/callback" },
-                    verification: "Validate X-xProof-Signature header: HMAC-SHA256(webhook_secret, timestamp + '.' + raw_body)",
+                    verification: "Validate X-ProveBeforeAct-Signature header: HMAC-SHA256(webhook_secret, timestamp + '.' + raw_body). X-xProof-Signature is a legacy alias.",
                   },
                 },
               },
@@ -1013,6 +1059,13 @@ export function registerProofWriteRoutes(app: Express) {
           error: "VALIDATION_ERROR",
           message: "Invalid request data",
           details: error.errors,
+          next_action: {
+            instruction: "Hash the artifact locally with SHA-256 and submit file_hash as exactly 64 hexadecimal characters. Include a non-empty filename.",
+            example: {
+              file_hash: "<64-character-sha256-hex>",
+              filename: "decision.json",
+            },
+          },
         });
       }
       logger.withRequest(req).error("Proof creation failed");
@@ -1040,6 +1093,7 @@ export function registerProofWriteRoutes(app: Express) {
       let trialInfo: { isTrial: boolean; remaining: number; userId: string } | null = null;
       let creditInfo: { userId: string; balance: number } | null = null;
       let ownerUserId: string | null = null;
+      let apiKeyAgentId: string | null = null;
 
       if (hasBearerToken) {
         const rawKey = authHeader!.slice(7);
@@ -1058,6 +1112,9 @@ export function registerProofWriteRoutes(app: Express) {
         if (!rateLimit.allowed) {
           return res.status(429).json({ error: "RATE_LIMIT_EXCEEDED", message: "Too many requests.", retry_after: Math.ceil((rateLimit.resetAt - Date.now()) / 1000) });
         }
+        const logicalAgent = await resolveAgentForApiKey(apiKey);
+        apiKeyAgentId = logicalAgent.id;
+        await db.update(agents).set({ lastSeenAt: new Date() }).where(eq(agents.id, logicalAgent.id));
 
         db.update(apiKeys).set({ lastUsedAt: new Date(), requestCount: (apiKey.requestCount || 0) + 1 }).where(eq(apiKeys.id, apiKey.id)).execute().catch(() => {});
         authMethod = "api_key";
@@ -1257,6 +1314,7 @@ export function registerProofWriteRoutes(app: Express) {
           .insert(certifications)
           .values({
             userId: ownerUserId,
+            ...(apiKeyAgentId ? { agentId: apiKeyAgentId } : {}),
             fileName,
             fileHash,
             fileType: "json",
@@ -1285,7 +1343,7 @@ export function registerProofWriteRoutes(app: Express) {
           }
           logger.withRequest(req).info("Concurrent duplicate audit request detected, credit refunded", { fileHash, certificationId: existingOnConflict.id });
           return res.status(200).json({
-            status: existingOnConflict.blockchainStatus === "confirmed" ? "already_certified" : existingOnConflict.blockchainStatus,
+            status: publicProofStatus(existingOnConflict) === "confirmed" ? "already_certified" : publicProofStatus(existingOnConflict),
             proof_id: existingOnConflict.id,
             audit_url: `${baseUrl}/audit/${existingOnConflict.id}`,
             proof_url: `${baseUrl}/proof/${existingOnConflict.id}`,
@@ -1327,7 +1385,7 @@ export function registerProofWriteRoutes(app: Express) {
           .set({
             transactionHash: result.transactionHash,
             transactionUrl: result.transactionUrl,
-            blockchainStatus: "confirmed",
+            blockchainStatus: "pending",
             ...(result.latencyMs != null ? { blockchainLatencyMs: result.latencyMs } : {}),
           })
           .where(eq(certifications.id, auditPending.id))
@@ -1358,7 +1416,7 @@ export function registerProofWriteRoutes(app: Express) {
         proof_id: certification.id,
         audit_url: `${baseUrl}/audit/${certification.id}`,
         proof_url: `${baseUrl}/proof/${certification.id}`,
-        status: "certified",
+        status: "pending",
         decision: data.decision,
         risk_level: data.risk_level,
         action_type: data.action_type,
@@ -1383,7 +1441,7 @@ export function registerProofWriteRoutes(app: Express) {
           }
         } : {}),
         ...(creditInfo ? { credits: { remaining: Math.max(0, creditInfo.balance - 1) } } : {}),
-        message: `Agent audit log certified on MultiversX. The proof_id is your compliance certificate — the agent was authorized to ${data.action_type} with decision: ${data.decision}.`,
+        message: `Agent audit log broadcast on MultiversX; proof ${certification.id} is pending finality verification.`,
         schema: `${baseUrl}/.well-known/agent-audit-schema.json`,
       });
     } catch (error) {
@@ -1425,6 +1483,7 @@ export function registerProofWriteRoutes(app: Express) {
       let trialInfo: { isTrial: boolean; remaining: number; userId: string } | null = null;
       let creditInfo: { userId: string; balance: number } | null = null;
       let apiKeyUserId: string | null = null;
+      let apiKeyAgentId: string | null = null;
 
       if (hasBearerToken) {
         const rawKey = authHeader!.slice(7);
@@ -1468,6 +1527,9 @@ export function registerProofWriteRoutes(app: Express) {
             retry_after: Math.ceil((rateLimit.resetAt - Date.now()) / 1000),
           });
         }
+        const logicalAgent = await resolveAgentForApiKey(apiKey);
+        apiKeyAgentId = logicalAgent.id;
+        await db.update(agents).set({ lastSeenAt: new Date() }).where(eq(agents.id, logicalAgent.id));
 
         db.update(apiKeys)
           .set({
@@ -1770,6 +1832,7 @@ export function registerProofWriteRoutes(app: Express) {
             .insert(certifications)
             .values({
               userId: ownerUserId!,
+              ...(apiKeyAgentId ? { agentId: apiKeyAgentId } : {}),
               fileName: file.filename,
               fileHash: file.file_hash,
               fileType: file.filename.split(".").pop() || "unknown",
@@ -1816,7 +1879,8 @@ export function registerProofWriteRoutes(app: Express) {
             .set({
               transactionHash: result.transactionHash,
               transactionUrl: result.transactionUrl,
-              blockchainStatus: "confirmed",
+              blockchainStatus: "pending",
+              ...(isMX8004Configured() ? { mx8004EnqueueStatus: "pending" } : {}),
               ...(result.latencyMs != null ? { blockchainLatencyMs: result.latencyMs } : {}),
             })
             .where(eq(certifications.id, batchPending.id))
@@ -1862,9 +1926,6 @@ export function registerProofWriteRoutes(app: Express) {
         if (batchEffectiveWebhookUrl) {
           const { scheduleWebhookDelivery, isValidWebhookUrl } = await import("../webhook");
           if (isValidWebhookUrl(batchEffectiveWebhookUrl)) {
-            await db.update(certifications)
-              .set({ webhookUrl: batchEffectiveWebhookUrl, webhookStatus: "pending" })
-              .where(eq(certifications.id, certification.id));
             // Never reuse the API key — use account secret if available, else generate a fresh one
             if (!batchEffectiveWebhookSecret) {
               if (!batchGeneratedWebhookSecret) {
@@ -1872,6 +1933,14 @@ export function registerProofWriteRoutes(app: Express) {
               }
               batchEffectiveWebhookSecret = batchGeneratedWebhookSecret;
             }
+            await db.update(certifications)
+              .set({
+                webhookUrl: batchEffectiveWebhookUrl,
+                webhookSigningSecret: batchEffectiveWebhookSecret,
+                webhookBaseUrl: baseUrl,
+                webhookStatus: "pending",
+              })
+              .where(eq(certifications.id, certification.id));
             scheduleWebhookDelivery(certification.id, batchEffectiveWebhookUrl, baseUrl, batchEffectiveWebhookSecret);
           }
         }
@@ -1901,7 +1970,7 @@ export function registerProofWriteRoutes(app: Express) {
         existing: existingCount,
         results,
         // webhook_secret is present only when a per-batch webhook_url was provided in this request.
-        // Store it securely — use it to verify X-xProof-Signature on webhook callbacks for this batch.
+        // Store it securely — use it to verify X-ProveBeforeAct-Signature on webhook callbacks for this batch.
         // Account-level webhooks use the secret configured at registration (/api/agents/register).
         ...(data.webhook_url && batchGeneratedWebhookSecret ? { webhook_secret: batchGeneratedWebhookSecret } : {}),
         ...(trialInfo ? { trial: { remaining: Math.max(0, trialInfo.remaining - createdCount) } } : {}),

@@ -2,13 +2,15 @@
 
 Certify every AI generation in your Next.js / Vercel application.
 
+**Integration terminology:** Prove Before Act is the accountability pattern for autonomous agents; xProof is its reference implementation. Treat WHY as a declared decision basis—intent, relevant context, and authorization or policy basis—not internal chain-of-thought.
+
 ## What gets certified
 
 Each `generateText` or `streamText` call produces one certification with:
 - **WHO** — your chatbot/agent name
 - **WHAT** — SHA-256 hash of the generated text
 - **WHEN** — UTC timestamp
-- **WHY** — your configured reason (e.g. `"customer-support"`)
+- **WHY** — your configured declared decision basis (e.g. `"customer-support"`)
 
 ## Install
 

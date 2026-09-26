@@ -5,7 +5,6 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useWalletAuth } from "@/hooks/useWalletAuth";
-import { Loader2 } from "lucide-react";
 import Landing from "@/pages/landing";
 const LandingZh = lazy(() => import("@/pages/landing-zh"));
 
@@ -36,32 +35,47 @@ const AgentContextZhPage = lazy(() => import("@/pages/agent-context-zh"));
 const CoherencePage = lazy(() => import("@/pages/coherence"));
 const FleetPage = lazy(() => import("@/pages/fleet"));
 const FleetManagePage = lazy(() => import("@/pages/fleet-manage"));
+const FleetOverviewPage = lazy(() => import("@/pages/fleet-overview"));
+const JasonPage = lazy(() => import("@/pages/jason"));
+const StandardPage = lazy(() => import("@/pages/standard"));
+const LearnPage = lazy(() => import("@/pages/learn"));
+const CreditsPage = lazy(() => import("@/pages/credits"));
+const DemoPage = lazy(() => import("@/pages/demo"));
+const VerifyPage = lazy(() => import("@/pages/verify"));
+
+function ProtectedRouteRedirect() {
+  const requestedPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  return <Redirect to={`/?returnTo=${encodeURIComponent(requestedPath)}`} />;
+}
 
 function Router() {
   const { isAuthenticated, isLoading } = useWalletAuth();
 
   if (isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4">
-          <img src="/pba-logo.svg" alt="Prove Before Act" className="h-12 w-auto animate-pulse" />
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span>Loading...</span>
+      <div className="flex min-h-[100dvh] items-center justify-center bg-background px-6">
+        <div className="w-full max-w-xs space-y-5">
+          <img src="/pba-logo.png" alt="Prove Before Act" className="h-10 w-auto animate-pulse" />
+          <div className="space-y-2" aria-label="Loading application">
+            <div className="skeleton-line h-2 w-full" />
+            <div className="skeleton-line h-2 w-2/3" />
           </div>
+          <p className="font-mono text-[0.68rem] uppercase tracking-[0.16em] text-muted-foreground">Restoring secure session</p>
         </div>
       </div>
     );
   }
 
   const fallback = (
-    <div className="flex h-screen items-center justify-center bg-background">
-      <div className="flex flex-col items-center gap-4">
-        <img src="/pba-logo.svg" alt="Prove Before Act" className="h-12 w-auto animate-pulse" />
-        <div className="flex items-center gap-2 text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          <span>Loading...</span>
+    <div className="flex min-h-[100dvh] items-center justify-center bg-background px-6">
+      <div className="w-full max-w-xs space-y-5">
+        <img src="/pba-logo.png" alt="Prove Before Act" className="h-10 w-auto animate-pulse" />
+        <div className="space-y-2" aria-label="Loading page">
+          <div className="skeleton-line h-2 w-full" />
+          <div className="skeleton-line h-2 w-2/3" />
+          <div className="skeleton-line h-20 w-full" />
         </div>
+        <p className="font-mono text-[0.68rem] uppercase tracking-[0.16em] text-muted-foreground">Loading evidence surface</p>
       </div>
     </div>
   );
@@ -73,6 +87,7 @@ function Router() {
           <Route path="/" component={Landing} />
           <Route path="/zh" component={LandingZh} />
           <Route path="/proof/:id" component={ProofPage} />
+          <Route path="/verify/:id" component={VerifyPage} />
           <Route path="/audit/:id" component={AuditPage} />
           <Route path="/legal/mentions" component={MentionsLegales} />
           <Route path="/legal/privacy" component={PolitiqueConfidentialite} />
@@ -91,9 +106,22 @@ function Router() {
           <Route path="/incident/:wallet/:proofId" component={IncidentReportPage} />
           <Route path="/agent-context" component={AgentContextPage} />
           <Route path="/agent-context/zh" component={AgentContextZhPage} />
+           <Route path="/agents/zh"><Redirect to="/agent-context/zh" /></Route>
           <Route path="/coherence" component={CoherencePage} />
+           <Route path="/founder" component={JasonPage} />
+          <Route path="/standard" component={StandardPage} />
+          <Route path="/learn" component={LearnPage} />
+           <Route path="/demo" component={DemoPage} />
+           <Route path="/mcp"><Redirect to="/docs" /></Route>
           <Route path="/fleet" component={FleetPage} />
-          <Route path="/fleets" component={FleetManagePage} />
+           <Route path="/fleets"><Redirect to="/fleet" /></Route>
+           <Route path="/dashboard" component={ProtectedRouteRedirect} />
+           <Route path="/certify" component={ProtectedRouteRedirect} />
+           <Route path="/settings" component={ProtectedRouteRedirect} />
+            <Route path="/credits" component={ProtectedRouteRedirect} />
+            <Route path="/billing" component={CreditsPage} />
+            <Route path="/checkout"><Redirect to="/billing" /></Route>
+           <Route path="/fleet/overview" component={ProtectedRouteRedirect} />
           {/* /stats shows public platform metrics (unauthenticated /api/stats endpoint).
               Accessible without login — admin-only sections are protected server-side via
               requireAdmin on /api/admin/* routes and simply don't render for non-admins. */}
@@ -101,9 +129,7 @@ function Router() {
           <Route path="/admin">
             <Redirect to="/" />
           </Route>
-          <Route>
-            <Redirect to="/" />
-          </Route>
+           <Route component={NotFound} />
 
         </Switch>
       </Suspense>
@@ -117,9 +143,13 @@ function Router() {
         <Route path="/dashboard" component={Dashboard} />
         <Route path="/certify" component={Certify} />
         <Route path="/settings" component={Settings} />
+        <Route path="/credits" component={CreditsPage} />
+        <Route path="/billing" component={CreditsPage} />
+        <Route path="/checkout"><Redirect to="/billing" /></Route>
         <Route path="/stats" component={AdminDashboard} />
         <Route path="/admin" component={AdminDashboard} />
         <Route path="/proof/:id" component={ProofPage} />
+        <Route path="/verify/:id" component={VerifyPage} />
         <Route path="/audit/:id" component={AuditPage} />
         <Route path="/legal/mentions" component={MentionsLegales} />
         <Route path="/legal/privacy" component={PolitiqueConfidentialite} />
@@ -138,9 +168,16 @@ function Router() {
         <Route path="/incident/:wallet/:proofId" component={IncidentReportPage} />
         <Route path="/agent-context" component={AgentContextPage} />
         <Route path="/agent-context/zh" component={AgentContextZhPage} />
+         <Route path="/agents/zh"><Redirect to="/agent-context/zh" /></Route>
         <Route path="/coherence" component={CoherencePage} />
+         <Route path="/founder" component={JasonPage} />
+        <Route path="/standard" component={StandardPage} />
+        <Route path="/learn" component={LearnPage} />
+         <Route path="/demo" component={DemoPage} />
+         <Route path="/mcp"><Redirect to="/docs" /></Route>
         <Route path="/fleet" component={FleetPage} />
         <Route path="/fleets" component={FleetManagePage} />
+        <Route path="/fleet/overview" component={FleetOverviewPage} />
         <Route path="/zh" component={LandingZh} />
         <Route component={NotFound} />
       </Switch>

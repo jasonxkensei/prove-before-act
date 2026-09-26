@@ -69,7 +69,10 @@ class XProofCertifyTool:
             who=self.agent_name,
             what=content_hash,
             when=datetime.now(timezone.utc).isoformat(),
-            why="CrewAI agent certification",
+            # ``why`` is the legacy fingerprint-only 4W field (SHA-256 hashed
+            # before serialization, not a human-readable reason). Fixed action
+            # classification only.
+            why="agent_certification",
         )
 
         return json.dumps(
@@ -114,7 +117,7 @@ class XProofCrewCertifyTool:
                 threshold_stage="pre-commitment",
                 decision_id="del-run-2026-04-20",
                 reversibility_class="irreversible",
-                why="Scheduled GDPR data-retention cleanup",
+                why="gdpr-retention-cleanup",
             )
             print(f"Policy compliant — proceeding (tx: {tx_hash})")
         except PolicyViolationError as exc:
@@ -161,7 +164,9 @@ class XProofCrewCertifyTool:
         ``file_hash`` must be supplied; ``decision_text`` takes precedence.
 
         Args:
-            decision_text: Raw text hashed to produce ``file_hash``.
+            decision_text: Sanitized declared decision-basis record hashed to
+                produce ``file_hash``; never private step-by-step reasoning or
+                internal chain-of-thought.
             file_hash: Pre-computed 64-char hex SHA-256.  Used only when
                 ``decision_text`` is empty.
             confidence_level: Agent's self-assessed confidence between 0.0
@@ -177,7 +182,10 @@ class XProofCrewCertifyTool:
             who: 4W — agent identity (defaults to the resolved author).
             what: 4W — action description (defaults to the hash).
             when: 4W — ISO-8601 timestamp (defaults to current UTC time).
-            why: 4W — reason for the decision.
+            why: 4W — legacy fingerprint-only name for the declared decision
+                basis. Reduced to a SHA-256 fingerprint before serialization;
+                never sent as plaintext. Unsafe for private text — pass a safe
+                public classification/opaque ID or omit it.
             metadata: Extra key-value pairs stored with the proof.
 
         Returns:
@@ -336,8 +344,8 @@ class XProofCrewCallback:
     """Callback that auto-certifies CrewAI task and crew completions.
 
     Attach to a crew to automatically certify each agent's task output
-    with 4W metadata (WHO=agent role, WHAT=output hash, WHEN=timestamp,
-    WHY=task description).
+    with 4W-compatible metadata (WHO=agent role, WHAT=output hash,
+    WHEN=timestamp, WHY=legacy fingerprint of a public task classification).
 
     Example::
 
@@ -385,12 +393,17 @@ class XProofCrewCallback:
             who=agent_role,
             what=output_hash,
             when=datetime.now(timezone.utc).isoformat(),
-            why=task_description,
+            # The public-metadata boundary permits only classifications,
+            # hashes, timestamps, and opaque IDs. ``why`` is the legacy
+            # fingerprint-only 4W field and carries a fixed action
+            # classification. The human-readable ``task_description`` is NEVER
+            # stored as plaintext — only its SHA-256 hash is anchored.
+            why="task_completion",
             metadata={
                 "framework": "crewai",
                 "crew_name": self.crew_name,
                 "agent_role": agent_role,
-                "task_description": task_description,
+                "task_description_hash": _hash_data(task_description),
             },
         )
 
@@ -427,11 +440,16 @@ class XProofCrewCallback:
             who=crew_name,
             what=results_hash,
             when=datetime.now(timezone.utc).isoformat(),
-            why=goal,
+            # The public-metadata boundary permits only classifications,
+            # hashes, timestamps, and opaque IDs. ``why`` is the legacy
+            # fingerprint-only 4W field and carries a fixed action
+            # classification. The human-readable ``goal`` is NEVER stored as
+            # plaintext — only its SHA-256 hash is anchored.
+            why="crew_completion",
             metadata={
                 "framework": "crewai",
                 "crew_name": crew_name,
-                "goal": goal,
+                "goal_hash": _hash_data(goal),
                 "task_count": len(self.certifications),
                 "task_proof_ids": [c["proof_id"] for c in self.certifications],
             },

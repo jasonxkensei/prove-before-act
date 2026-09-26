@@ -2,6 +2,8 @@
 
 Certify every LLM call in your LangChain application with a tamper-proof blockchain record.
 
+**Integration terminology:** Prove Before Act is the accountability pattern for autonomous agents; xProof is its reference implementation. Treat WHY as a declared decision basis—intent, relevant context, and authorization or policy basis—not internal chain-of-thought.
+
 ## What gets certified
 
 Each `on_llm_end` event produces one certification with:
@@ -13,7 +15,8 @@ Each `on_llm_end` event produces one certification with:
 ## Install
 
 ```bash
-pip install xproof langchain-core
+# Canonical distribution; `xproof` imports below are legacy module aliases.
+pip install prove-before-act langchain-core
 ```
 
 ## Usage
@@ -58,4 +61,4 @@ https://provebeforeact.com/verify/<proof_id>
 
 - [provebeforeact.com](https://provebeforeact.com)
 - Docs (LLM-readable): [provebeforeact.com/llms.txt](https://provebeforeact.com/llms.txt)
-- [PyPI: Prove Before Act](https://pypi.org/project/xproof)
+- [PyPI: Prove Before Act](https://pypi.org/project/prove-before-act)

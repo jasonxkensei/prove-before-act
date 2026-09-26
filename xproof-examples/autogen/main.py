@@ -7,7 +7,8 @@ Each send and receive is certified with 4W metadata:
   WHY  = "message_sent" or "message_received"
 
 Install:
-    pip install xproof pyautogen
+    pip install prove-before-act pyautogen
+    # The xproof module name below is a legacy compatibility alias.
 
 Run:
     python main.py

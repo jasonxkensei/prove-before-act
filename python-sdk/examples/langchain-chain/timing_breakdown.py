@@ -1,12 +1,15 @@
 """LangChain + xProof: Timing Breakdown example.
 
-Demonstrates how to anchor the full decision chronology on-chain
-when using LangChain. Three ISO8601 timestamps mark:
+Demonstrates how to anchor decision-lifecycle timing on-chain
+when using LangChain. Prove Before Act is the accountability pattern; xProof
+is its reference implementation. Three ISO8601 timestamps mark:
   - instruction_received_at  — when the human prompt arrived
-  - reasoning_started_at     — when the LLM started thinking
+  - reasoning_started_at     — legacy field name for decision-basis preparation
   - action_taken_at          — when the chain produced its output
 
-A ``jurisdiction_type`` field captures who is accountable.
+A ``jurisdiction_type`` field captures who is accountable. Hash only a
+sanitized declared decision basis, never private step-by-step reasoning or
+internal chain-of-thought.
 
 Run: python timing_breakdown.py
 """
@@ -26,6 +29,7 @@ def _hash(data: object) -> str:
 
 
 def main() -> None:
+    # `xproof` is the legacy module name retained by the canonical prove-before-act distribution.
     from xproof import XProofClient
     from xproof.models import TimingBreakdown
 
@@ -39,9 +43,9 @@ def main() -> None:
     user_prompt = "Summarise the Q1 2026 earnings report for ACME Corp."
     print(f"[{instruction_received_at}] Instruction received: '{user_prompt}'")
 
-    # ── Step 2: LLM starts reasoning ─────────────────────────────────────────
-    reasoning_started_at = _now()
-    print(f"[{reasoning_started_at}] LangChain chain invoked — reasoning started")
+    # ── Step 2: decision-basis preparation starts ─────────────────────────────
+    decision_basis_prepared_at = _now()
+    print(f"[{decision_basis_prepared_at}] LangChain chain invoked — decision basis prepared")
 
     # Simulate the chain output
     chain_output = {
@@ -59,7 +63,7 @@ def main() -> None:
     # ── Certify with full timing breakdown ────────────────────────────────────
     timing: TimingBreakdown = {
         "instruction_received_at": instruction_received_at,
-        "reasoning_started_at": reasoning_started_at,
+        "reasoning_started_at": decision_basis_prepared_at,  # legacy field name
         "action_taken_at": action_taken_at,
         # "instruction_following": a human sent the prompt → human is accountable
         "jurisdiction_type": "instruction_following",
@@ -98,7 +102,7 @@ def main() -> None:
             print(f"  total_duration_ms:       {tb['total_duration_ms']} ms")
 
     print()
-    print("Decision chronology is permanently anchored on MultiversX.")
+    print("Decision-lifecycle timing is permanently anchored on MultiversX.")
 
 
 if __name__ == "__main__":

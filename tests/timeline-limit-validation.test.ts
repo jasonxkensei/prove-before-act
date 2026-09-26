@@ -140,13 +140,13 @@ describe("GET /api/agents/:wallet/timeline — response shape and pagination", (
       [userId, wallet],
     );
 
-    // Seed 3 confirmed, public certifications at 1-min intervals so ORDER BY
+    // Seed 3 finalized, public certifications at 1-min intervals so ORDER BY
     // created_at DESC gives a deterministic sequence: certIds[0] newest.
     for (let i = 0; i < certIds.length; i++) {
       await pool.query(
         `INSERT INTO certifications
-           (id, user_id, file_name, file_hash, blockchain_status, is_public, metadata, created_at)
-         VALUES ($1, $2, 'tl-test.json', $3, 'confirmed', true, '{}',
+           (id, user_id, file_name, file_hash, blockchain_status, finality_checked_at, is_public, metadata, created_at)
+         VALUES ($1, $2, 'tl-test.json', $3, 'confirmed', NOW(), true, '{}',
                  NOW() - INTERVAL '${i} minutes')`,
         [certIds[i], userId, crypto.randomBytes(32).toString("hex")],
       );

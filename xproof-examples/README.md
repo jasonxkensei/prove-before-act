@@ -4,6 +4,8 @@ Standalone examples showing how to certify AI agent outputs on the **MultiversX 
 
 Prove Before Act gives every agent action a tamper-proof audit trail anchored on-chain in ~6 seconds. Each certification records the **4W framework**: Who acted, What was produced, When it happened, and Why.
 
+**Integration terminology:** Prove Before Act is the accountability pattern for autonomous agents; xProof is its reference implementation. Treat WHY as a declared decision basis—intent, relevant context, and authorization or policy basis—not internal chain-of-thought.
+
 ## Examples
 
 | Framework | Language | Description |
@@ -23,7 +25,8 @@ Prove Before Act gives every agent action a tamper-proof audit trail anchored on
 
 ```bash
 # Python frameworks
-pip install xproof
+# Canonical distribution; Python's `xproof` module name is a legacy compatibility alias.
+pip install prove-before-act
 
 # TypeScript / Vercel
 npm install @prove-before-act/sdk
@@ -35,7 +38,7 @@ AI agents: read **[provebeforeact.com/llms.txt](https://provebeforeact.com/llms.
 
 ## Links
 
-- PyPI: [pypi.org/project/xproof](https://pypi.org/project/xproof)
+- PyPI: [pypi.org/project/prove-before-act](https://pypi.org/project/prove-before-act)
 - npm: [npmjs.com/package/@prove-before-act/sdk](https://www.npmjs.com/package/@prove-before-act/sdk)
 - Docs (LLM-readable): [provebeforeact.com/llms.txt](https://provebeforeact.com/llms.txt)
-- GitHub (SDK): [github.com/jasonxkensei/xProof](https://github.com/jasonxkensei/xProof)
+- GitHub (SDK): [github.com/jasonxkensei/prove-before-act](https://github.com/jasonxkensei/prove-before-act)

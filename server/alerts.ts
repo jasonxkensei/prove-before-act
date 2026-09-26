@@ -1,8 +1,12 @@
 import { logger } from "./logger";
-import { db } from "./db";
+import { db, pool } from "./db";
 import { txQueue } from "@shared/schema";
 import { eq, and, gte, sql } from "drizzle-orm";
 import { checkAndAlert as checkAndAlertRateLimitImpl } from "./rateLimitAlerts";
+import { alertWebhookHeaders } from "./webhookHeaders";
+import type { Mx8004SignerBalance } from "./mx8004";
+import type { Mx8004NonceStall } from "./txQueue";
+import { getTrustSnapshotWriteStats, recordTrustSnapshotWriteFailure, recordTrustSnapshotWriteSuccess } from "./metrics";
 
 // Rate-limit fail-open alerting now lives in its own module (server/
 // rateLimitAlerts.ts) so it carries no DB/drizzle import. Re-exported here
@@ -10,25 +14,12 @@ import { checkAndAlert as checkAndAlertRateLimitImpl } from "./rateLimitAlerts";
 export { getRateLimitAlertConfig } from "./rateLimitAlerts";
 export const checkAndAlertRateLimit = checkAndAlertRateLimitImpl;
 
-/**
- * Return a redacted representation of a webhook URL safe for structured logs.
- * Only the origin (scheme + host + port) is retained; path, query string,
- * credentials, and fragment are stripped to prevent secret leakage.
- */
-function redactWebhookUrl(url: string): string {
-  try {
-    const { origin } = new URL(url);
-    return `${origin}/[redacted]`;
-  } catch {
-    return "[invalid-url]";
-  }
-}
-
 async function sendAlertWebhook(
   webhookUrl: string,
   alertType: string,
   payload: unknown,
-): Promise<void> {
+  deliveryId?: string,
+): Promise<boolean> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
   try {
@@ -36,8 +27,9 @@ async function sendAlertWebhook(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-xProof-Alert": alertType,
-        "User-Agent": "xProof-Alert/1.0",
+        ...alertWebhookHeaders(alertType),
+        ...(deliveryId ? { "Idempotency-Key": deliveryId } : {}),
+        "User-Agent": "ProveBeforeAct-Alert/1.0",
       },
       body: JSON.stringify(payload),
       signal: controller.signal,
@@ -48,17 +40,357 @@ async function sendAlertWebhook(
         component: "alerts",
         alertType,
         status: response.status,
-        url: redactWebhookUrl(webhookUrl),
       });
     }
+    return response.ok;
   } catch (err: any) {
     clearTimeout(timeout);
     logger.error("Alert webhook network error", {
       component: "alerts",
       alertType,
-      error: err.message,
+      error: err instanceof Error ? err.name : "unknown",
     });
+    return false;
   }
+}
+
+/** A failed or unconfigured delivery is not an acknowledged operator alert. */
+export async function alertPbaPaymentReconciliation(request: {
+  requestDigest: string;
+  status: string;
+  leaseUntil: Date | null;
+  updatedAt: Date;
+}): Promise<boolean> {
+  const webhookUrl = process.env.PBA_RECONCILIATION_ALERT_WEBHOOK_URL || process.env.TX_ALERT_WEBHOOK_URL;
+  if (!webhookUrl) return false;
+  return sendAlertWebhook(webhookUrl, "pba_payment_reconciliation_stalled", {
+    alert: "pba_payment_reconciliation_stalled",
+    severity: "critical",
+    timestamp: new Date().toISOString(),
+    request_digest: request.requestDigest,
+    status: request.status,
+    lease_until: request.leaseUntil?.toISOString() ?? null,
+    uncertain_since: request.updatedAt.toISOString(),
+    review_path: "/api/admin/pba/payments/uncertain",
+    action: "Review the bound receipt and chain evidence; resolve with the authenticated operator reconciliation endpoint. Do not resubmit payment.",
+  });
+}
+
+// The webhook has a 10-second timeout; an expired lease recovers after a crash.
+// All transitions are atomic per signer, including across server instances.
+const LOW_BALANCE_LEASE_MS = 30_000;
+
+export async function checkAndAlertMx8004LowBalance(balance: Mx8004SignerBalance): Promise<void> {
+  if (balance.error || balance.balanceEgld === null || !balance.address || !balance.checkedAt) return;
+  const observedAt = new Date(balance.checkedAt);
+  if (Number.isNaN(observedAt.getTime())) return;
+  if (!balance.lowBalance) {
+    // Older readings cannot re-arm an episode after a newer low reading.
+    await pool.query(`
+      INSERT INTO mx8004_balance_alert_state (signer_address, observed_at, low, notified)
+      VALUES ($1, $2, FALSE, FALSE)
+      ON CONFLICT (signer_address) DO UPDATE
+        SET observed_at = EXCLUDED.observed_at, low = FALSE, notified = FALSE,
+            lease_token = NULL, lease_until = NULL
+      WHERE mx8004_balance_alert_state.observed_at <= EXCLUDED.observed_at
+    `, [balance.address, observedAt]);
+    return;
+  }
+
+  const webhookUrl = process.env.MX8004_BALANCE_ALERT_WEBHOOK_URL || process.env.TX_ALERT_WEBHOOK_URL;
+  if (!webhookUrl) return;
+  const token = crypto.randomUUID();
+  const claimed = await pool.query<{ lease_token: string }>(`
+    INSERT INTO mx8004_balance_alert_state
+      (signer_address, observed_at, low, notified, lease_token, lease_until)
+    VALUES ($1, $2, TRUE, FALSE, $3, NOW() + ($4::double precision * INTERVAL '1 millisecond'))
+    ON CONFLICT (signer_address) DO UPDATE
+      SET observed_at = EXCLUDED.observed_at, low = TRUE,
+          lease_token = EXCLUDED.lease_token, lease_until = EXCLUDED.lease_until
+    WHERE mx8004_balance_alert_state.notified = FALSE
+      AND (mx8004_balance_alert_state.lease_until IS NULL
+           OR mx8004_balance_alert_state.lease_until <= NOW())
+      AND (mx8004_balance_alert_state.observed_at < EXCLUDED.observed_at
+           OR (mx8004_balance_alert_state.low = TRUE
+               AND mx8004_balance_alert_state.observed_at = EXCLUDED.observed_at))
+    RETURNING lease_token
+  `, [balance.address, observedAt, token, LOW_BALANCE_LEASE_MS]);
+  if (claimed.rows[0]?.lease_token !== token) return;
+
+  let delivered = false;
+  try {
+    delivered = await sendAlertWebhook(webhookUrl, "mx8004_signer_low_balance", {
+      alert: "mx8004_signer_low_balance",
+      severity: "warning",
+      timestamp: new Date().toISOString(),
+      signer_address: balance.address,
+      balance_egld: balance.balanceEgld,
+      threshold_egld: balance.thresholdEgld,
+      top_up_action: `Transfer EGLD to signer wallet ${balance.address} before MX-8004 validation jobs stall.`,
+    });
+  } finally {
+    // A healthy reading may have invalidated this lease during delivery.
+    // In that case the old sender must not mark the new episode notified.
+    await pool.query(`
+      UPDATE mx8004_balance_alert_state
+      SET lease_token = NULL, lease_until = NULL, notified = $3
+      WHERE signer_address = $1 AND lease_token = $2 AND low = TRUE
+    `, [balance.address, token, delivered]);
+  }
+}
+
+// A webhook times out after 10 seconds; a crashed sender's claim expires.
+const NONCE_STALL_LEASE_MS = 30_000;
+
+export async function checkAndAlertMx8004NonceStall(
+  stall: Mx8004NonceStall | null,
+  observation: { signerAddress: string; observedAt: Date },
+): Promise<void> {
+  if (!Number.isFinite(observation.observedAt.getTime())) {
+    throw new Error("Invalid signer nonce observation time");
+  }
+  if (stall && stall.signer_address !== observation.signerAddress) {
+    throw new Error("Signer nonce observation does not match stalled signer");
+  }
+  if (!stall) {
+    // Persist the clear, including when this instance never saw the stall.
+    // An older observation cannot undo a newer episode.
+    await pool.query(`
+      INSERT INTO mx8004_nonce_alert_state
+        (signer_address, observed_at, pending_nonce, episode_id, notified)
+      VALUES ($1, $2, NULL, $3, FALSE)
+      ON CONFLICT (signer_address) DO UPDATE
+        SET observed_at = EXCLUDED.observed_at, pending_nonce = NULL,
+            notified = FALSE, lease_token = NULL, lease_until = NULL
+      WHERE mx8004_nonce_alert_state.observed_at <= EXCLUDED.observed_at
+    `, [observation.signerAddress, observation.observedAt, crypto.randomUUID()]);
+    return;
+  }
+
+  const token = crypto.randomUUID();
+  const claimed = await pool.query<{ episode_id: string; lease_token: string | null }>(`
+    INSERT INTO mx8004_nonce_alert_state
+      (signer_address, observed_at, pending_nonce, episode_id, notified, lease_token, lease_until)
+    VALUES ($1, $2, $3, $4, FALSE, $5, NOW() + ($6::double precision * INTERVAL '1 millisecond'))
+    ON CONFLICT (signer_address) DO UPDATE
+      SET observed_at = EXCLUDED.observed_at,
+          pending_nonce = EXCLUDED.pending_nonce,
+          episode_id = CASE
+            WHEN mx8004_nonce_alert_state.pending_nonce IS DISTINCT FROM EXCLUDED.pending_nonce
+              THEN EXCLUDED.episode_id
+            ELSE mx8004_nonce_alert_state.episode_id END,
+          notified = CASE
+            WHEN mx8004_nonce_alert_state.pending_nonce IS DISTINCT FROM EXCLUDED.pending_nonce
+              THEN FALSE
+            ELSE mx8004_nonce_alert_state.notified END,
+          lease_token = CASE
+            WHEN mx8004_nonce_alert_state.pending_nonce IS DISTINCT FROM EXCLUDED.pending_nonce
+              OR (mx8004_nonce_alert_state.notified = FALSE
+                  AND (mx8004_nonce_alert_state.lease_until IS NULL
+                       OR mx8004_nonce_alert_state.lease_until <= NOW()))
+              THEN EXCLUDED.lease_token
+            ELSE mx8004_nonce_alert_state.lease_token END,
+          lease_until = CASE
+            WHEN mx8004_nonce_alert_state.pending_nonce IS DISTINCT FROM EXCLUDED.pending_nonce
+              OR (mx8004_nonce_alert_state.notified = FALSE
+                  AND (mx8004_nonce_alert_state.lease_until IS NULL
+                       OR mx8004_nonce_alert_state.lease_until <= NOW()))
+              THEN EXCLUDED.lease_until
+            ELSE mx8004_nonce_alert_state.lease_until END
+    WHERE mx8004_nonce_alert_state.observed_at <= EXCLUDED.observed_at
+    RETURNING episode_id, lease_token
+  `, [
+    observation.signerAddress, observation.observedAt, stall.oldest_pending_nonce,
+    crypto.randomUUID(), token, NONCE_STALL_LEASE_MS,
+  ]);
+  const episodeId = claimed.rows[0]?.episode_id;
+  // A suppressed same-nonce observation still advances observed_at, but must
+  // never inherit another instance's claim or reset its notified flag.
+  if (!episodeId || claimed.rows[0].lease_token !== token) return;
+
+  let delivered = false;
+  try {
+    const payload = {
+      alert: "mx8004_signer_nonce_stalled",
+      severity: "critical",
+      timestamp: new Date().toISOString(),
+      ...stall,
+    };
+    const webhookUrl = process.env.MX8004_NONCE_ALERT_WEBHOOK_URL || process.env.TX_ALERT_WEBHOOK_URL;
+    delivered = !webhookUrl || await sendAlertWebhook(webhookUrl, payload.alert, payload, episodeId);
+    if (delivered) logger.error("MX-8004 signer nonce sequence stalled", { component: "alerts", ...payload });
+  } finally {
+    // A newer clear or episode may have replaced this claim during delivery.
+    await pool.query(`
+      UPDATE mx8004_nonce_alert_state
+      SET lease_token = NULL, lease_until = NULL, notified = $3
+      WHERE signer_address = $1 AND lease_token = $2
+        AND pending_nonce = $4 AND episode_id = $5
+    `, [observation.signerAddress, token, delivered, stall.oldest_pending_nonce, episodeId]);
+  }
+}
+
+// Only fixed labels and validated SQLSTATE codes are allowed into public health
+// and webhook payloads. Driver messages/detail can include SQL parameters,
+// connection URLs or user-provided values and must stay in restricted logs.
+function safeSnapshotDbError(error: unknown): string {
+  const labels: Record<string, string> = {
+    "42P01": "snapshot table missing",
+    "42703": "column missing",
+    "23505": "unique constraint violation",
+    "53300": "database connection limit",
+    "57P01": "database shutting down",
+    "08006": "database connection failure",
+  };
+  let current: unknown = error;
+  for (let depth = 0; depth < 4 && current && typeof current === "object"; depth++) {
+    const code = (current as { code?: unknown }).code;
+    if (typeof code === "string" && /^[0-9A-Z]{5}$/.test(code)) {
+      return `PostgreSQL ${code}: ${labels[code] ?? "database operation failed"}`;
+    }
+    current = (current as { cause?: unknown }).cause;
+  }
+  return "Database operation failed (SQLSTATE unavailable)";
+}
+
+const TRUST_SNAPSHOT_FAILURE_THRESHOLD = 3;
+const TRUST_SNAPSHOT_ALERT_COOLDOWN_MS = 30 * 60_000;
+let trustSnapshotLastError: string | null = null;
+let trustSnapshotLastAlertAt = 0;
+let trustSnapshotAlertInFlight = false;
+
+export function getTrustSnapshotWriteHealth() {
+  const stats = getTrustSnapshotWriteStats();
+  return {
+    status: stats.recent_failures >= TRUST_SNAPSHOT_FAILURE_THRESHOLD ? "degraded" : "ok",
+    ...stats,
+    threshold: TRUST_SNAPSHOT_FAILURE_THRESHOLD,
+    last_database_error: stats.recent_failures ? trustSnapshotLastError : null,
+  };
+}
+
+export function recordTrustReadThroughSnapshotSuccess(): void {
+  recordTrustSnapshotWriteSuccess();
+}
+
+// Never await alert delivery on the public read path. A failing webhook must
+// not turn a usable computed score into an error or delay the response.
+export function recordTrustReadThroughSnapshotFailure(error: unknown): void {
+  recordTrustSnapshotWriteFailure();
+  trustSnapshotLastError = safeSnapshotDbError(error);
+  const health = getTrustSnapshotWriteHealth();
+  if (health.status !== "degraded") return;
+  const now = Date.now();
+  if (trustSnapshotAlertInFlight || now - trustSnapshotLastAlertAt < TRUST_SNAPSHOT_ALERT_COOLDOWN_MS) return;
+  trustSnapshotLastAlertAt = now;
+  const payload = {
+    alert: "trust_read_through_snapshot_write_failures",
+    severity: "warning",
+    timestamp: new Date(now).toISOString(),
+    ...health,
+  };
+  logger.warn("Trust read-through snapshot writes repeatedly failed", { component: "alerts", ...payload });
+  const webhookUrl = process.env.TRUST_SNAPSHOT_ALERT_WEBHOOK_URL || process.env.TX_ALERT_WEBHOOK_URL;
+  if (!webhookUrl) return;
+  trustSnapshotAlertInFlight = true;
+  void sendAlertWebhook(webhookUrl, payload.alert, payload).finally(() => {
+    trustSnapshotAlertInFlight = false;
+  });
+}
+
+const LEADERBOARD_REFRESH_FAILURE_THRESHOLD = 3;
+const LEADERBOARD_ALERT_COOLDOWN_MS = 30 * 60_000;
+let leaderboardConsecutiveFailures = 0;
+let leaderboardLastError: string | null = null;
+let leaderboardSnapshotAt: number | null = null;
+let leaderboardLastAlertAt = 0;
+
+export function recordLeaderboardSnapshot(computedAt: number): void {
+  if (Number.isFinite(computedAt)) {
+    leaderboardSnapshotAt = Math.max(leaderboardSnapshotAt ?? 0, computedAt);
+  }
+}
+
+export function recordLeaderboardRefreshSuccess(computedAt: number): void {
+  recordLeaderboardSnapshot(computedAt);
+  leaderboardConsecutiveFailures = 0;
+  leaderboardLastError = null;
+  leaderboardLastAlertAt = 0;
+}
+
+export function getLeaderboardRefreshHealth(now = Date.now()) {
+  return {
+    status: leaderboardConsecutiveFailures >= LEADERBOARD_REFRESH_FAILURE_THRESHOLD ? "degraded" : "ok",
+    consecutive_failures: leaderboardConsecutiveFailures,
+    threshold: LEADERBOARD_REFRESH_FAILURE_THRESHOLD,
+    last_database_error: leaderboardLastError,
+    snapshot_at: leaderboardSnapshotAt === null ? null : new Date(leaderboardSnapshotAt).toISOString(),
+    snapshot_age_seconds: leaderboardSnapshotAt === null ? null : Math.max(0, Math.floor((now - leaderboardSnapshotAt) / 1000)),
+  };
+}
+
+export async function recordLeaderboardRefreshFailure(error: unknown): Promise<void> {
+  leaderboardConsecutiveFailures++;
+  leaderboardLastError = safeSnapshotDbError(error);
+  const health = getLeaderboardRefreshHealth();
+  if (health.status !== "degraded") return;
+
+  const now = Date.now();
+  if (now - leaderboardLastAlertAt < LEADERBOARD_ALERT_COOLDOWN_MS) return;
+  const payload = {
+    alert: "leaderboard_refresh_failures",
+    severity: "warning",
+    timestamp: new Date(now).toISOString(),
+    ...health,
+  };
+  logger.warn("Leaderboard refresh repeatedly failed", { component: "alerts", ...payload });
+  const webhookUrl = process.env.LEADERBOARD_ALERT_WEBHOOK_URL || process.env.TX_ALERT_WEBHOOK_URL;
+  if (webhookUrl && await sendAlertWebhook(webhookUrl, payload.alert, payload)) {
+    leaderboardLastAlertAt = now;
+  }
+}
+
+interface WebhookDeliveryExhaustedPayload {
+  alert: "proof_webhook_delivery_exhausted";
+  severity: "critical";
+  timestamp: string;
+  certification_id: string;
+  destination: string;
+  attempts: number;
+  delivery_id: string;
+}
+
+function redactWebhookDestination(url: string): string {
+  try {
+    return `${new URL(url).origin}/[redacted]`;
+  } catch {
+    return "[invalid-url]";
+  }
+}
+
+/**
+ * Notify operators that a certified proof could not be delivered to its
+ * receiver. Only a redacted destination is included in logs and alert payloads.
+ */
+export async function alertWebhookDeliveryExhausted(
+  certificationId: string,
+  webhookUrl: string,
+  attempts: number,
+  deliveryId: string,
+): Promise<boolean> {
+  const payload: WebhookDeliveryExhaustedPayload = {
+    alert: "proof_webhook_delivery_exhausted",
+    severity: "critical",
+    timestamp: new Date().toISOString(),
+    certification_id: certificationId,
+    destination: redactWebhookDestination(webhookUrl),
+    attempts,
+    delivery_id: deliveryId,
+  };
+
+  const alertWebhookUrl = process.env.TX_ALERT_WEBHOOK_URL;
+  if (!alertWebhookUrl) return false;
+  return sendAlertWebhook(alertWebhookUrl, payload.alert, payload, deliveryId);
 }
 
 // ============================================================

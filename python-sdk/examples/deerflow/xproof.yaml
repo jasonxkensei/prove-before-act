@@ -9,7 +9,7 @@ category: trust
 author: Prove Before Act
 version: "0.1.0"
 homepage: https://provebeforeact.com
-repository: https://github.com/jasonxkensei/xProof
+repository: https://github.com/jasonxkensei/prove-before-act
 
 parameters:
   - name: content
@@ -30,9 +30,12 @@ parameters:
   - name: why
     type: string
     required: false
-    default: "DeerFlow agent certification"
+    default: "skill_certification"
     description: >
-      Reason or context for the certification (maps to the 4W "Why" field).
+      Legacy fingerprint-only 4W "Why" field. It is reduced to a SHA-256
+      fingerprint before serialization and is NOT a human-readable reason —
+      pass a fixed action classification or opaque ID, never free-text
+      rationale.
 
 output:
   type: json
@@ -55,7 +58,7 @@ example:
     {
       "content": "Q3 revenue analysis: $4.2M, up 15% YoY",
       "file_name": "q3-analysis.json",
-      "why": "Quarterly earnings certification"
+      "why": "earnings_certification"
     }
   output: |
     {
@@ -67,9 +70,9 @@ example:
 
 dependencies:
   python:
-    - "xproof>=0.1.0"
+    - "prove-before-act>=0.1.0" # `xproof` remains the legacy Python module name.
 
 env:
-  - name: XPROOF_API_KEY
+  - name: PROVEBEFOREACT_API_KEY
     required: true
     description: Your Prove Before Act API key (get one at https://provebeforeact.com).

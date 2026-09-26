@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Prove Before Act Anchor</title>
+  <desc id="desc">A segmented green ring around a verified white center</desc>
+  <rect width="512" height="512" rx="112" fill="#0D1117"/>
+  <circle cx="256" cy="256" r="154" fill="none" stroke="#00FF9D" stroke-width="42"
+    stroke-linecap="round" stroke-dasharray="196 50" transform="rotate(-5 256 256)"/>
+  <circle cx="256" cy="256" r="62" fill="#FFFFFF"/>
+</svg>

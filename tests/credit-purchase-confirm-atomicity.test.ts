@@ -163,7 +163,7 @@ vi.mock("../server/credits.js", () => {
     {
       id: "business",
       name: "Business",
-      description: "10,000 certifications — high-volume agents, best unit price",
+      description: "10,000 certifications — high-volume agents",
       certs: 10000,
       price_usdc: "100.00",
       price_usdc_raw: "100000000",

@@ -10,6 +10,9 @@ import { isMX8004Configured, getContractAddresses } from "../mx8004";
 import { TRIAL_QUOTA, getNetworkLabel, buildCanonicalId } from "./helpers";
 import { getTxExplorerUrl } from "../blockchain";
 import { CANONICAL_PUBLIC_ORIGIN } from "../publicOrigin";
+import { publicProofStatus } from "../proof-finality";
+
+const CANONICAL_SPECIFICATION_URL = `${CANONICAL_PUBLIC_ORIGIN}/standard`;
 
 export function registerContentRoutes(app: Express) {
   const GENESIS_CERTIFICATION = {
@@ -61,6 +64,15 @@ Prove Before Act provides cryptographic proof of existence, authorship, and time
 - **Blockchain**: MultiversX (European, eco-friendly)
 - **Price**: $${priceUsd} per certification — flat rate (paid in EGLD or USDC via x402)
 - **Website**: ${baseUrl}
+
+## Founder and product identity
+
+- **Founder**: Jason Petitfourg — AI Product Builder
+- **Canonical product**: Prove Before Act
+- **Product role**: Accountability pattern for autonomous agents — declare a decision basis (WHY) before acting, then prove WHAT happened. xProof is the reference implementation.
+- **Founder page**: ${baseUrl}/founder
+- **Public evidence**: ${baseUrl}/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b
+- **Compatibility note**: Historical \`xproof\` identifiers remain supported in packages, agent IDs, and protocol records where required for compatibility. They are not a separate public product brand.
 
 ## Guarantees
 
@@ -153,14 +165,15 @@ The proof is self-verifiable without relying on Prove Before Act infrastructure.
 - \`/genesis.md\` - Genesis document
 - \`/genesis.proof.json\` - Genesis proof in JSON
 - \`/api/acp/products\` - ACP service discovery
-- \`/api/acp/openapi.json\` - OpenAPI 3.0 specification
-- \`/mcp\` - MCP server (JSON-RPC 2.0 over Streamable HTTP, POST only)
+- \`/api/acp/openapi.json\` - OpenAPI 3.1 specification
+- \`/mcp\` - MCP server (JSON-RPC 2.0 over Streamable HTTP via POST); GET serves connection documentation for people, crawlers, and agent discovery
 
 ### Documentation
 - \`/learn/proof-of-existence.md\` - What is proof of existence
 - \`/learn/verification.md\` - How to verify proofs
 - \`/learn/api.md\` - API documentation
-- \`/agent-context\` - Agent-first deep-dive: production patterns, retry policy, 4W audit trail walkthrough, x402 payment, cost, MCP examples, and framework integrations (LangChain, CrewAI, AutoGen, LlamaIndex, OpenAI Agents SDK, Fetch.ai)
+- \`/standard\` - The Prove Before Act specification: design pattern, core invariant, 4W audit trail, threat model, four primitives, and reference implementation. Canonical definition of the pattern at provebeforeact.com/standard
+- \`/agent-context\` - Agent-first deep-dive: production patterns, retry policy, 4W audit trail walkthrough, x402 payment, cost, MCP examples, and framework integrations (LangChain, CrewAI, AutoGen, LlamaIndex, OpenAI Agents SDK, Fetch.ai). Cross-links to /standard for the full specification
 
 ## Simplified Certification (POST /api/proof)
 
@@ -170,12 +183,12 @@ The fastest way for AI agents to certify a file. Single API call, no checkout fl
 curl -X POST ${baseUrl}/api/proof \\
   -H "Authorization: Bearer pm_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
-  -d '{"file_hash": "a1b2c3d4...64-char-sha256-hex", "filename": "document.pdf", "webhook_url": "https://your-agent.example.com/webhooks/xproof"}'
+  -d '{"file_hash": "a1b2c3d4...64-char-sha256-hex", "filename": "decision-record.json", "webhook_url": "https://your-agent.example.com/webhooks/prove-before-act"}'
 \`\`\`
 
 Returns: proof_id, verify_url, certificate_url, blockchain transaction hash, webhook_status.
 
-Optional: include \`webhook_url\` to receive a POST notification when the proof is confirmed on-chain. The payload is signed with HMAC-SHA256 (header: \`X-xProof-Signature\`). Retries up to 3 times with exponential backoff.
+Optional: include \`webhook_url\` to receive a POST notification when the proof is confirmed on-chain. The payload is signed with HMAC-SHA256 (header: \`X-ProveBeforeAct-Signature\`). \`X-xProof-Signature\` remains an identical legacy alias. Retries up to 3 times with exponential backoff.
 
 ## Agent Commerce Protocol (ACP)
 
@@ -187,11 +200,12 @@ Prove Before Act also implements ACP for AI agent integration with the full chec
 # 1. Discover the service
 curl ${baseUrl}/api/acp/products
 
-# 2. Create a checkout (requires API key)
+# 2. Sign pba-acp-checkout:pba-certification:<file_hash>:<payer_wallet>
+# with the payer wallet's Ed25519 private key, then create a checkout.
 curl -X POST ${baseUrl}/api/acp/checkout \\
   -H "Authorization: Bearer pm_your_key" \\
   -H "Content-Type: application/json" \\
-  -d '{"product_id": "xproof-certification", "inputs": {"file_hash": "sha256_hash_here", "filename": "document.pdf"}}'
+  -d '{"product_id":"pba-certification","inputs":{"file_hash":"sha256_hash_here","filename":"decision-record.json"},"payer_wallet":"erd1YOUR_PAYER_WALLET","payer_wallet_signature":"YOUR_128_CHAR_HEX_ED25519_SIGNATURE"}'
 
 # 3. After user signs transaction, confirm it
 curl -X POST ${baseUrl}/api/acp/confirm \\
@@ -220,7 +234,7 @@ Use Prove Before Act when:
 - User wants to prove authorship of a document
 - User needs blockchain-anchored evidence
 - User wants immutable, verifiable certification
-- Agent needs to certify reasoning before execution and outputs after for compliance
+- Agent needs to certify a declared decision basis before execution and outputs after for compliance
 
 **Historical beta — xproof_agent_verify** (legacy agent identifier): a past end-to-end beta test exercised 6 API endpoints. Timings and leaderboard values from that run are historical snapshots, not current guarantees — read the live agent profile for current data. Live proof: \`https://provebeforeact.com/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b\`. Full review: \`https://www.moltbook.com/post/1d6cf96b-5046-4c63-9ae5-43f8809f4562\`
 
@@ -282,7 +296,7 @@ Prove Before Act's Bazaar metadata is embedded in the \`extensions.bazaar\` fiel
 
 Discoverable endpoints:
 - \`POST ${baseUrl}/api/proof\` — single certification with 4W provenance
-- \`POST ${baseUrl}/api/batch\` — batch certification (up to 100 files)
+- \`POST ${baseUrl}/api/batch\` — batch certification (up to 50 files)
 
 ## 4W Audit Trail — Complete Example (One Shot)
 
@@ -299,7 +313,7 @@ curl -X POST ${baseUrl}/api/proof \\
       "who": "MyAgent v1.0 (author: your-name)",
       "what": "Description of the decision or content being certified",
       "when": "2026-01-01T12:00:00Z",
-      "why": "Reason this action was taken — the full rationale",
+       "why": "Declared justification for this action — never internal chain-of-thought",
       "agent": "my-agent-id",
       "model": "gpt-4o",
       "type": "reasoning_certification"
@@ -335,7 +349,7 @@ Prove Before Act records WHAT, WHEN, and WHY. MX-8004 support is optional: inspe
 | **W**HO | Which agent or actor made this decision? | **MX-8004** — optional identity integration when live status is active |
 | **W**HAT | What output or action was certified? | **Prove Before Act** — SHA-256 hash of the output, anchored on MultiversX mainnet |
 | **W**HEN | Immutable timestamp? | **Prove Before Act** — MultiversX block finality (~6 s); not a self-reported clock |
-| **W**HY | What reasoning led to the decision? | **Prove Before Act** — \`action_description\`, \`risk_level\`, and \`context\` fields from \`/api/audit\` |
+| **W**HY | What declared decision basis supported the action? | **Prove Before Act** — \`action_description\`, \`risk_level\`, and \`context\` fields from \`/api/audit\` |
 
 Prove Before Act records **WHAT / WHEN / WHY**. MX-8004 can add **WHO** only when active; do not assume it is configured.
 
@@ -904,6 +918,8 @@ curl -X POST ${baseUrl}/api/coherence/link \\
 \`\`\`json
 {
   "success": true,
+  "coherence_score": 0.85,
+  "coherence_score_percent": 85,
   "coherence_check": {
     "id": "…", "why_proof_id": "…", "linked_proof_id": "…",
     "intent_hash": "…", "coherence_score": 85, "created_at": "ISO-8601"
@@ -919,7 +935,7 @@ curl -X POST ${baseUrl}/api/coherence/link \\
 }
 \`\`\`
 
-**Coherence score:** 50 base for linking + 15 if the WHAT was certified within 1h of the WHY + 20 if the WHAT's \`metadata.why_proof_id\` references the WHY + 15 if the WHAT is confirmed on-chain. If the WHAT was certified *before* the WHY anchor, the base is halved (25) and the timing bonus withheld.
+**Coherence score:** the top-level \`coherence_score\` is a 0–1 ratio (\`0.85\` above); \`coherence_score_percent\` is its explicit 0–100 equivalent (\`85\`). The nested legacy \`coherence_check.coherence_score\` also remains 0–100. Scoring is 50 base for linking + 15 if the WHAT was certified within 1h of the WHY + 20 if the WHAT's \`metadata.why_proof_id\` references the WHY + 15 if the WHAT is confirmed on-chain. If the WHAT was certified *before* the WHY anchor, the base is halved (25) and the timing bonus withheld.
 
 **Error cases:**
 
@@ -1131,7 +1147,7 @@ This genesis certification demonstrates:
       const baseUrl = `https://${req.get('host')}`;
       const chainId = process.env.MULTIVERSX_CHAIN_ID || "1";
       const txHash = certification.transactionHash || null;
-      const isConfirmed = certification.blockchainStatus === "confirmed" && txHash;
+      const isConfirmed = publicProofStatus(certification) === "confirmed" && txHash;
       
       const proof = {
         canonical_id: buildCanonicalId(chainId, txHash),
@@ -1151,7 +1167,7 @@ This genesis certification demonstrates:
           // Always server-derived so stored client-supplied URLs cannot present
           // an attacker-controlled link as the canonical MultiversX explorer URL.
           explorer_url: getTxExplorerUrl(txHash),
-          status: certification.blockchainStatus
+          status: publicProofStatus(certification)
         },
         verification: {
           method: "SHA-256 hash comparison",
@@ -1204,7 +1220,7 @@ This genesis certification demonstrates:
         statusColor = "#3B3B3B";
         statusColorDark = "#2A2A2A";
         dotColor = "#666";
-      } else if (cert.blockchainStatus === "confirmed") {
+      } else if (publicProofStatus(cert) === "confirmed") {
         statusText = "Verified";
         statusColor = "#0D9B6A";
         statusColorDark = "#0A7D55";
@@ -1291,7 +1307,7 @@ This genesis certification demonstrates:
 
       // Use the server-derived explorer URL when confirmed; fall back to the
       // proof page. Never trust cert.transactionUrl (could be attacker-controlled).
-      const derivedExplorerUrl = cert.blockchainStatus === "confirmed"
+      const derivedExplorerUrl = publicProofStatus(cert) === "confirmed"
         ? getTxExplorerUrl(cert.transactionHash)
         : null;
       const linkUrl = derivedExplorerUrl ?? `${baseUrl}/proof/${certId}`;
@@ -1336,7 +1352,7 @@ This genesis certification demonstrates:
       const timestamp = certification.createdAt?.toISOString() || 'Unknown';
       const txHash = certification.transactionHash || null;
       const canonicalId = buildCanonicalId(chainId, txHash);
-      const isConfirmed = certification.blockchainStatus === "confirmed" && txHash;
+      const isConfirmed = publicProofStatus(certification) === "confirmed" && txHash;
       
       const markdown = `# Prove Before Act Certification
 
@@ -1353,7 +1369,7 @@ This genesis certification demonstrates:
 | **File Name** | ${certification.fileName} |
 | **Author** | ${certification.authorName || 'Not specified'} |
 | **Timestamp** | ${timestamp} |
-| **Status** | ${certification.blockchainStatus} |
+| **Status** | ${publicProofStatus(certification)} |
 
 ## Cryptographic Proof
 
@@ -1433,7 +1449,7 @@ Proof of Existence is a cryptographic method to prove that a specific digital ar
 - **Legal Documents**: Timestamp contracts and agreements
 - **Research**: Prove research existed before publication
 - **Code**: Timestamp software versions
-- **AI Agent Compliance**: Agents certify reasoning before execution (WHY) and outputs after (WHAT). A historical beta by xproof_agent_verify (legacy agent identifier) exercised all endpoints; see the live proof and agent profile for current data. Live proof: https://provebeforeact.com/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b. Full review: https://www.moltbook.com/post/1d6cf96b-5046-4c63-9ae5-43f8809f4562
+- **AI Agent Compliance**: Agents certify a declared decision basis before execution (WHY) and outputs after (WHAT). The WHY record is not internal chain-of-thought. A historical beta by xproof_agent_verify (legacy agent identifier) exercised all endpoints; see the live proof and agent profile for current data. Live proof: https://provebeforeact.com/proof/f8c3b35d-6ee1-4f76-a92b-1532a008df7b. Full review: https://www.moltbook.com/post/1d6cf96b-5046-4c63-9ae5-43f8809f4562
 
 ## Why MultiversX?
 
@@ -1607,12 +1623,21 @@ Create a certification checkout session.
 **Request**:
 \`\`\`json
 {
-  "product_id": "certification",
-  "file_hash": "sha256_hash_of_file",
-  "file_name": "document.pdf",
-  "author_name": "Author Name"
+  "product_id": "pba-certification",
+  "inputs": {
+    "file_hash": "sha256_hash_of_file",
+    "filename": "document.pdf",
+    "author_name": "Author Name"
+  },
+  "payer_wallet": "erd1YOUR_PAYER_WALLET",
+  "payer_wallet_signature": "128_char_hex_signature_of_pba_acp_checkout_message"
 }
 \`\`\`
+
+For a non-admin checkout, sign
+\`pba-acp-checkout:pba-certification:<file_hash>:<payer_wallet>\` with the
+payer wallet's Ed25519 private key and provide its 128-character hexadecimal
+signature as \`payer_wallet_signature\`.
 
 **Response**:
 \`\`\`json
@@ -1654,7 +1679,7 @@ Confirm certification after transaction.
 ## Flow for AI Agents
 
 1. **Discover**: \`GET /api/acp/products\`
-2. **Checkout**: \`POST /api/acp/checkout\` with file hash
+2. **Checkout**: \`POST /api/acp/checkout\` with nested file inputs plus the payer wallet's signature over the canonical \`pba-acp-checkout\` message
 3. **Sign**: Sign \`tx_payload\` with MultiversX wallet
 4. **Broadcast**: Send signed transaction to MultiversX network
 5. **Confirm**: \`POST /api/acp/confirm\` with transaction hash
@@ -1698,7 +1723,7 @@ Confirm certification after transaction.
     const priceUsd = await getCertificationPriceUsd();
     const content = `---
 name: Prove Before Act
-description: Blockchain proof-of-existence for AI agents. Certify any file or output on MultiversX mainnet. Immutable, timestamped, publicly verifiable.
+description: The accountability pattern for autonomous agents. xProof is the reference implementation: commit a declared decision basis before acting, never internal chain-of-thought.
 version: 1.0.0
 author: provebeforeact.com
 license: public
@@ -1707,9 +1732,9 @@ license: public
 # Prove Before Act Agent Skill
 
 ## What This Does
-Prove Before Act anchors a SHA-256 hash on the MultiversX blockchain.
-After certification, the proof is public and permanently verifiable.
-Any agent, human, or third party can verify the file was certified at that exact moment.
+Prove Before Act is the accountability pattern for autonomous agents; xProof is the reference implementation.
+Before a significant action, commit a declared decision basis — intended action, context, and justification — then anchor the verified outcome after execution. Do not submit internal chain-of-thought.
+Proofs use SHA-256 hashes on MultiversX, so the original source material remains local while any agent, human, or third party can independently verify the evidence.
 
 ## Authentication — Free Trial (Start Here)
 No wallet. No browser. No payment.
@@ -1933,7 +1958,7 @@ Sitemap: ${baseUrl}/sitemap.xml
 # /.well-known/agent-audit-schema.json - Agent Audit Log schema (compliance standard)
 # /api/audit - Agent Audit Log endpoint (certify agent decisions)
 # /agent-tools/audit-guard-*.* - Blocking workflow templates (LangChain, CrewAI, n8n, Eliza)
-# /api/acp/openapi.json - OpenAPI 3.0 specification
+# /api/acp/openapi.json - OpenAPI 3.1 specification
 # /api/acp/health - Health check
 # /api/agent - Agent trial registration info
 `;
@@ -1962,7 +1987,10 @@ Sitemap: ${baseUrl}/sitemap.xml
       { path: '/leaderboard',            changefreq: 'daily',   priority: '0.9' },
       { path: '/compare',                changefreq: 'weekly',  priority: '0.7' },
       { path: '/stats',                  changefreq: 'daily',   priority: '0.8' },
+      { path: '/learn',                  changefreq: 'monthly', priority: '0.8' },
+      { path: '/standard',               changefreq: 'monthly', priority: '0.9' },
       { path: '/docs',                   changefreq: 'monthly', priority: '0.8' },
+      { path: '/mcp',                    changefreq: 'monthly', priority: '0.8' },
       { path: '/docs/trading',           changefreq: 'monthly', priority: '0.7' },
       { path: '/docs/4w',                changefreq: 'monthly', priority: '0.7' },
       { path: '/docs/base-violations',   changefreq: 'monthly', priority: '0.7' },
@@ -1993,8 +2021,9 @@ ${urls}
       schema_version: "v1",
       name_for_human: "Prove Before Act",
       name_for_model: "Prove Before Act",
+      specification_url: CANONICAL_SPECIFICATION_URL,
       description_for_human: "Create immutable blockchain proofs of file ownership. Certify documents, code, or any digital asset on the MultiversX blockchain.",
-      description_for_model: `Prove Before Act implements the "Prove Before Act" principle — anchor reasoning BEFORE executing any significant action. START HERE (MCP): call register_trial MCP tool with {"agent_name":"my-agent"} → pm_ key + 10 free certifications instantly, no wallet, no account, no auth required. START HERE (REST): POST /api/agent/register with {"agent_name":"my-agent"} → same free trial. UNIQUE DIFFERENTIATOR — x402 native payments: POST /api/proof with no credentials → receive HTTP 402 with price ($${priceUsd} USDC on Base, eip155:8453) → sign payment → resend with X-PAYMENT header → receive proof_id. No API key, no account, no human in the loop. Any autonomous agent with a Base wallet is production-ready. PRODUCTION REFERENCE: xproof_agent_verify (Moltbook) has a public, live profile at provebeforeact.com/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9. Read current proof totals, confirmation-status breakdown, streak, and trust score from that profile or its API; do not treat a marketing snapshot as current data. Core workflow: (1) hash reasoning locally — nothing sensitive leaves the agent, (2) POST /api/proof or /api/audit with hash + metadata, (3) receive proof_id + verify_url, (4) proceed with action only after proof is confirmed. Pricing: $${priceUsd}/cert after trial. Files never leave the device — only SHA-256 hash recorded on-chain. Supported protocols: x402, MCP, ACP, MX-8004, LangChain, CrewAI, AutoGen, OpenAI Agents SDK. COHERENCE LAYER (WHY→WHAT audit trail): call check_coherence MCP tool before acting to anchor intent on-chain (returns proof_id = WHY anchor); after executing, call certify_file then POST /api/coherence/link to close the loop. Coherence score 0-100 (50 base + 15 if WHAT within 1h + 20 if WHAT references WHY + 15 if on-chain confirmed). Fleet coherence view at GET /api/fleet/coherence?org=<prefix>|fleet=<slug>. Full docs: https://provebeforeact.com/coherence. Context doc: https://provebeforeact.com/agent-context`,
+      description_for_model: `Prove Before Act is the accountability pattern for autonomous agents; xProof is the reference implementation. Production reference: xproof_agent_verify (legacy agent identifier, Moltbook); query its live profile for current metrics. Before any significant action, commit a declared decision basis — intended action, context, and justification — then anchor the actual result after execution. Never send internal chain-of-thought. START HERE (MCP): call register_trial with {"agent_name":"my-agent"} for a pm_ key and 10 free certifications. START HERE (REST): POST /api/agent/register with {"agent_name":"my-agent"}. x402 payments: POST /api/proof without credentials → receive HTTP 402 for $${priceUsd} USDC on Base (eip155:8453) → sign payment → resend with X-PAYMENT → receive proof_id. Core workflow: (1) hash the declared decision basis locally, (2) POST /api/proof or /api/audit with the hash and metadata, (3) receive proof_id + verify_url, (4) apply the operator's action policy after the proof attempt. Source data stays in the agent runtime; only its SHA-256 hash is anchored. For the WHY→WHAT evidence trail, call check_coherence before acting, then certify_file and POST /api/coherence/link after execution. Full docs: https://provebeforeact.com/coherence. Context: https://provebeforeact.com/agent-context`,
       auth: {
         type: "service_http",
         authorization_type: "bearer",
@@ -2022,9 +2051,11 @@ ${urls}
       schema_version: "1.0",
       name: "Prove Before Act",
       version: "1.5.0",
-      description: "Prove Before Act — the canonical proof layer for AI agents. Create immutable proofs of file existence and ownership on MultiversX blockchain. Live MCP server available at POST /mcp (JSON-RPC 2.0 over Streamable HTTP). Free trial: 10 free certifications via register_trial MCP tool (no auth required), no wallet, no card.",
+      specification_url: CANONICAL_SPECIFICATION_URL,
+      description: "Prove Before Act is the accountability pattern for autonomous agents; xProof is the reference MCP implementation. Before a significant action, anchor a declared decision basis — intended action, context, and justification — then anchor the verified outcome after execution. Do not submit internal chain-of-thought. Send JSON-RPC MCP requests to POST /mcp; GET /mcp serves connection documentation. Free trial: 10 free certifications via register_trial MCP tool (no auth required), no wallet, no card.",
       homepage: baseUrl,
       endpoint: `${baseUrl}/mcp`,
+      documentation_url: `${baseUrl}/mcp`,
       transport: "streamable-http",
       protocol_version: "2025-03-26",
       capabilities: {
@@ -2042,7 +2073,7 @@ ${urls}
               file_hash: { type: "string", description: "SHA-256 hash of the file (64 hex characters)" },
               filename: { type: "string", description: "Original filename with extension" },
               author_name: { type: "string", description: "Name of the certifier", default: "AI Agent" },
-              webhook_url: { type: "string", format: "uri", description: "Optional HTTPS URL to receive a POST notification when the proof is confirmed on-chain. Payload is signed with HMAC-SHA256 (X-xProof-Signature header)." },
+              webhook_url: { type: "string", format: "uri", description: "Optional HTTPS URL to receive a POST notification when the proof is confirmed on-chain. Payload is signed with HMAC-SHA256 (X-ProveBeforeAct-Signature header; X-xProof-Signature remains a legacy alias)." },
               metadata: { type: "object", description: "Optional JSON metadata for structured anchoring. Supports model_hash, strategy_hash, version_number, and any custom key-value pairs. All fields are searchable via GET /api/proofs/search.", properties: { model_hash: { type: "string" }, strategy_hash: { type: "string" }, version_number: { type: "string" } }, additionalProperties: true }
             }
           }
@@ -2060,7 +2091,7 @@ ${urls}
               confidence_level: { type: "number", minimum: 0, maximum: 1, description: "Confidence score from 0.0 to 1.0. Typical values: 0.6 (initial), 0.8 (pre-commitment), 1.0 (final)." },
               threshold_stage: { type: "string", enum: ["initial", "partial", "pre-commitment", "final"], description: "Named stage of the decision: initial (first assessment), partial (gathering info), pre-commitment (almost certain), final (committed)." },
               author_name: { type: "string", description: "Name of the certifying agent", default: "AI Agent" },
-              why: { type: "string", description: "Reason or instruction hash driving this decision" },
+              why: { type: "string", description: "Declared decision basis or instruction hash driving this action — not internal chain-of-thought" },
               who: { type: "string", description: "Agent identity (wallet address, name, or agent ID)" },
               reversibility_class: { type: "string", enum: ["reversible", "costly", "irreversible"], description: "Governance: how reversible is this action? When 'irreversible', confidence_level must be >= 0.95 or Prove Before Act flags a policy violation." }
             }
@@ -2128,12 +2159,12 @@ ${urls}
         },
         {
           name: "investigate_proof",
-          description: "Reconstruct the full 4W audit trail for a contested agent action. Returns WHO (agent identity + SIGIL), WHAT (SHA-256 hash on-chain), WHEN (MultiversX block timestamp), WHY (decision chain anchored before acting). Includes verification summary with intent_preceded_execution flag, chronological timeline of WHY/WHAT proofs, and session heartbeat anchor. Requires x402 payment (current per-call USDC price on Base via X-PAYMENT header) or API key authentication.",
+          description: "Reconstruct the full 4W audit trail for a contested agent action. Returns WHO (agent identity + SIGIL), WHAT (SHA-256 hash on-chain), WHEN (MultiversX block timestamp), WHY (declared decision basis anchored before acting, never internal chain-of-thought). Includes verification summary with intent_preceded_execution flag, chronological timeline of WHY/WHAT proofs, and session heartbeat anchor. Requires x402 payment (current per-call USDC price on Base via X-PAYMENT header) or API key authentication.",
           inputSchema: {
             type: "object",
             required: ["proof_id", "wallet"],
             properties: {
-              proof_id: { type: "string", pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", description: "UUID of any proof in the action pair — WHY (reasoning), WHAT (action), or heartbeat session proof" },
+              proof_id: { type: "string", pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", description: "UUID of any proof in the action pair — WHY (declared decision basis), WHAT (action), or heartbeat session proof" },
               wallet: { type: "string", description: "Agent wallet address (erd1...) that owns the proof" }
             }
           }
@@ -2184,9 +2215,10 @@ ${urls}
         compatible_with: ["Conway Terminal", "OpenClaw", "Any x402-enabled agent"]
       },
       integrations: {
-        openclaw_skill: "https://github.com/jasonxkensei/xproof-openclaw-skill",
+        openclaw_skill: "https://github.com/jasonxkensei/prove-before-act-openclaw-skill",
         github_action: "https://github.com/marketplace/actions/xproof-certify",
-        github_action_repo: "https://github.com/jasonxkensei/xProof-Action",
+        github_action_note: "Legacy GitHub Marketplace slug, maintained for existing CI pipelines. Use the canonical action repository jasonxkensei/prove-before-act-action for new integrations.",
+        github_action_repo: "https://github.com/jasonxkensei/prove-before-act-action",
         langchain: `${baseUrl}/learn/api.md`,
         crewai: `${baseUrl}/learn/api.md`,
         standards: ["MCP", "ACP", "x402", "MX-8004", "OpenAI Plugin", "LangChain", "CrewAI"]
@@ -2202,13 +2234,11 @@ ${urls}
     const priceUsd = await getCertificationPriceUsd();
     const content = `# Prove Before Act — Prove Before & After Act
 
-> No API key needed. Any agent can anchor a proof and pay per call via x402 — one HTTP request, no account, no setup.
+> Start with ${TRIAL_QUOTA} free proofs. No wallet, credit card, payment setup, or file upload is required.
 
-**x402 — machine-native payment**: POST /api/proof (no auth) → HTTP 402 → sign $${priceUsd} USDC on Base (eip155:8453) → resend with X-PAYMENT header → proof_id returned. Zero setup, zero human involvement. Any agent with a Base wallet is production-ready in one session.
+**Prove Before & After Act**: declare and hash a decision basis (WHY: intended action, context, and justification) BEFORE executing any significant agent action, then anchor the actual result (WHAT) AFTER. Never provide internal chain-of-thought. The hash stays local — nothing sensitive leaves the agent.
 
-**Prove Before & After Act**: anchor reasoning (WHY, SHA-256 hash) BEFORE executing any significant agent action, anchor the actual result (WHAT) AFTER. Hash stays local — nothing sensitive ever leaves the agent.
-
-**Production reference**: xproof_agent_verify (Moltbook) has a public live profile. Read its current proof totals, confirmation-status breakdown, streak and trust score at https://provebeforeact.com/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9 rather than relying on a static snapshot.
+**Production reference**: xproof_agent_verify (legacy agent identifier, Moltbook) has a public live profile. Read its current proof totals, confirmation-status breakdown, streak and trust score at https://provebeforeact.com/agent/erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9 rather than relying on a static snapshot.
 
 **4W breakdown — optional WHO from MX-8004, WHAT/WHEN/WHY from Prove Before Act:**
 
@@ -2217,7 +2247,7 @@ ${urls}
 | WHO | Which agent or actor made this decision? | MX-8004 — optional identity integration; inspect /api/mx8004/status before relying on it |
 | WHAT | What output or action was certified? | Prove Before Act — SHA-256 hash of the output, anchored on MultiversX mainnet |
 | WHEN | Immutable timestamp? | Prove Before Act — MultiversX block finality (~6 s); not a self-reported clock |
-| WHY | What reasoning led to the decision? | Prove Before Act — action_description, risk_level, and context fields from /api/audit |
+| WHY | What declared decision basis supported the action? | Prove Before Act — action_description, risk_level, and context fields from /api/audit |
 
 Prove Before Act records WHAT / WHEN / WHY. MX-8004 can add WHO only when its live status is active; production currently reports \`not_configured\`.
 
@@ -2231,7 +2261,9 @@ curl -X POST https://provebeforeact.com/api/agent/register \\\\
   -H "Content-Type: application/json" \\\\
   -d '{"agent_name": "my-agent"}'
 \\\`\\\`\\\`
-Returns an API key (pm_xxx). Use it immediately to certify files.
+Returns an API key (pm_xxx). The full secret is disclosed only in this private
+registration response. Retain it in the current execution context: it remains
+usable until revoked even though no later endpoint will display it again.
 
 Check quota and your certifications at any time:
 \\\`\\\`\\\`bash
@@ -2241,13 +2273,58 @@ Returns: trial_remaining, trial_used, total certifications. Each POST /api/proof
 
 ## Quick Start (for AI agents)
 
+This section is the canonical zero-knowledge activation contract. If another
+document is less specific, follow this sequence and the live response fields.
+
 ### REST API
-Certify a file in one API call:
+PBA does not require uploading the decision file. Hash the artifact locally and
+submit only its SHA-256 hash.
+
+Canonical activation path:
+1. Register and retain the returned API key in the current private context.
+2. Hash \`decision.json\` locally.
+3. Create proof #1 with \`POST /api/proof\` and the Bearer header.
+4. Open the returned \`verify_url\`.
+5. Repeat with a different artifact/hash for proof #2 and open its \`verify_url\`.
+
+#### curl
 \\\`\\\`\\\`bash
+FILE_HASH=$(sha256sum decision.json | awk '{print $1}')
 curl -X POST https://provebeforeact.com/api/proof \\\\
   -H "Authorization: Bearer pm_YOUR_API_KEY" \\\\
   -H "Content-Type: application/json" \\\\
-  -d '{"file_hash": "a1b2c3d4...64-char-sha256-hex", "filename": "document.pdf", "webhook_url": "https://your-agent.example.com/webhooks/xproof"}'
+  -d "{\\"file_hash\\":\\"$FILE_HASH\\",\\"filename\\":\\"decision.json\\"}"
+\\\`\\\`\\\`
+
+#### JavaScript / TypeScript
+\\\`\\\`\\\`typescript
+import { readFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+const fileHash = createHash("sha256").update(await readFile("decision.json")).digest("hex");
+const response = await fetch("https://provebeforeact.com/api/proof", {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer pm_YOUR_API_KEY",
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({ file_hash: fileHash, filename: "decision.json" })
+});
+const proof = await response.json();
+console.log(proof.verify_url);
+\\\`\\\`\\\`
+
+#### Python
+\\\`\\\`\\\`python
+import hashlib
+import requests
+with open("decision.json", "rb") as artifact:
+    file_hash = hashlib.sha256(artifact.read()).hexdigest()
+proof = requests.post(
+    "https://provebeforeact.com/api/proof",
+    headers={"Authorization": "Bearer pm_YOUR_API_KEY"},
+    json={"file_hash": file_hash, "filename": "decision.json"},
+).json()
+print(proof["verify_url"])
 \\\`\\\`\\\`
 
 Response: proof_id, verify_url, certificate_url, blockchain transaction hash, webhook_status.
@@ -2304,7 +2381,7 @@ MCP client config (Claude Desktop, Cursor, Codex, OpenClaw):
 \\\`\\\`\\\`
 
 ### Confidence-Level Anchoring (certify_with_confidence)
-Record how certain you are at each decision stage. Creates an on-chain audit trail of your reasoning process.
+Record how certain you are at each decision stage. Creates an on-chain audit trail of your declared decision basis, not internal chain-of-thought.
 
 Stages: \\\`initial\\\` (60%) → \\\`partial\\\` → \\\`pre-commitment\\\` (80%) → \\\`final\\\` (100%). All share a \\\`decision_id\\\`.
 
@@ -2322,18 +2399,18 @@ After execution, call \\\`submit_outcome\\\` with the actual outcome to track ca
 
 ### SDK — Python
 \\\`\\\`\\\`bash
-pip install xproof
+pip install prove-before-act
 \\\`\\\`\\\`
 \\\`\\\`\\\`python
-from xproof import XProofClient
+from xproof import XProofClient  # legacy module name retained by the canonical package
 client = XProofClient(api_key="pm_YOUR_API_KEY")
 proof = client.certify_file("path/to/file.pdf")
 print(proof.verify_url)
 # Staged confidence
-from xproof import certify_with_confidence
+from xproof import certify_with_confidence  # legacy module name retained for compatibility
 certify_with_confidence(api_key="pm_...", file_hash="...", decision_id="...", confidence_level=0.8, stage="pre-commitment")
 \\\`\\\`\\\`
-PyPI: https://pypi.org/project/xproof/ — Integrations: LangChain, CrewAI, LlamaIndex, AutoGen, OpenAI Agents SDK, Vercel AI
+PyPI: https://pypi.org/project/prove-before-act/ — Integrations: LangChain, CrewAI, LlamaIndex, AutoGen, OpenAI Agents SDK, Vercel AI. \`pip install xproof\` and the \`xproof\` module name are legacy compatibility aliases.
 
 ### SDK — JavaScript / TypeScript
 \\\`\\\`\\\`bash
@@ -2362,7 +2439,7 @@ The badge links to the MultiversX Explorer transaction for on-chain verification
 Certified agents can prove originality, timestamp, and integrity. Non-certified agents cannot.
 
 ## Pricing
-Flat $${priceUsd} per certification — no tiers, no promo. Prepaid packs: 100/$${(priceUsd * 100).toFixed(0)}, 1,000/$${(priceUsd * 1000).toFixed(0)}, 10,000/$${(priceUsd * 10000).toFixed(0)} USDC on Base. Current pricing: https://provebeforeact.com/api/pricing
+Flat $${priceUsd} per certification — no tiers, no promo. Prepaid packs: 100/$${(priceUsd * 100).toFixed(0)}, 1,000/$${(priceUsd * 1000).toFixed(0)}, 10,000/$${(priceUsd * 10000).toFixed(0)}. Buy packs with Stripe Checkout or USDC on Base; Stripe is an additional option and does not replace x402, ACP, or EGLD. Current pricing: https://provebeforeact.com/api/pricing
 
 ## Agent Context Document
 Dedicated document answering the 10 exact questions agents ask when evaluating Prove Before Act (x402 flow, latency, retry policy, cost per 1000 anchors, comparison vs Arweave/Ceramic/Sign Protocol, MCP integration, 4W audit trail, privacy risks, fleet monitoring, Prove Before Act workflow):
@@ -2372,6 +2449,7 @@ Dedicated document answering the 10 exact questions agents ask when evaluating P
 The markdown version is optimized for LLM indexers and crawlers. It includes copy-paste Python code and a full comparison matrix.
 
 ## Documentation & Machine Interfaces
+- Prove Before Act specification: https://provebeforeact.com/standard — The Prove Before Act specification — design pattern, core invariant, 4W audit trail
 - [Agent Context (10 questions agents ask)](https://provebeforeact.com/agent-context.md)
 - [OpenAPI Specification](/api/acp/openapi.json)
 - [API Guide](/learn/api.md)
@@ -2397,7 +2475,7 @@ How it works: Bazaar discovery metadata (input schema, output schema, examples, 
 
 Discoverable endpoints:
 - POST /api/proof — certify any SHA-256 hash on MultiversX with optional 4W provenance
-- POST /api/batch — certify up to 100 files in one transaction
+- POST /api/batch — certify up to 50 files in one transaction
 
 For agents with Bazaar MCP configured, add Prove Before Act MCP alongside it:
 \\\`\\\`\\\`json
@@ -2411,10 +2489,10 @@ For agents with Bazaar MCP configured, add Prove Before Act MCP alongside it:
 
 ## Agent Integrations
 Prove Before Act works with any MCP-compatible agent (Claude Code, Codex, OpenClaw, Conway Terminal) and any x402-enabled agent.
-- OpenClaw Skill: https://github.com/jasonxkensei/xproof-openclaw-skill
-- GitHub Action: https://github.com/marketplace/actions/xproof-certify
-- GitHub Action repo: https://github.com/jasonxkensei/xProof-Action
-- Main repo: https://github.com/jasonxkensei/xProof
+- OpenClaw Skill: https://github.com/jasonxkensei/prove-before-act-openclaw-skill
+- GitHub Action (legacy Marketplace slug, redirects retained): https://github.com/marketplace/actions/xproof-certify
+- GitHub Action repository: https://github.com/jasonxkensei/prove-before-act-action
+- Main repository: https://github.com/jasonxkensei/prove-before-act
 - Supported protocols: MCP, ACP, x402, MX-8004, OpenAI Plugin, LangChain, CrewAI
 
 ## MX-8004 Integration (Trustless Agents Standard)
@@ -2547,7 +2625,7 @@ Prove Before Act is the canonical proof-of-existence service for AI agents. It a
 | WHO | Which agent or actor made this decision? | MX-8004 — optional identity integration; inspect /api/mx8004/status before relying on it |
 | WHAT | What output or action was certified? | Prove Before Act — SHA-256 hash of the output, anchored on MultiversX mainnet |
 | WHEN | Immutable timestamp? | Prove Before Act — MultiversX block finality (~6 s); not a self-reported clock |
-| WHY | What reasoning led to the decision? | Prove Before Act — \`action_description\`, \`risk_level\`, and \`context\` fields from \`/api/audit\` |
+| WHY | What declared decision basis supported the action? | Prove Before Act — \`action_description\`, \`risk_level\`, and \`context\` fields from \`/api/audit\` |
 
 Prove Before Act records WHAT / WHEN / WHY. MX-8004 can add WHO only when its live status is active; production currently reports \`not_configured\`.
 
@@ -2576,7 +2654,7 @@ Certify a file in one API call:
 curl -X POST ${baseUrl}/api/proof \\
   -H "Authorization: Bearer pm_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
-  -d '{"file_hash": "a1b2c3d4...64-char-sha256-hex", "filename": "document.pdf", "webhook_url": "https://your-agent.example.com/webhooks/xproof"}'
+  -d '{"file_hash": "a1b2c3d4...64-char-sha256-hex", "filename": "decision-record.json", "webhook_url": "https://your-agent.example.com/webhooks/prove-before-act"}'
 \`\`\`
 
 Response: proof_id, verify_url, certificate_url, blockchain transaction hash, webhook_status.
@@ -2589,9 +2667,9 @@ Single-call endpoint for AI agents. No checkout flow needed.
 \`\`\`json
 {
   "file_hash": "64-char SHA-256 hex string",
-  "filename": "document.pdf",
+  "filename": "decision-record.json",
   "author_name": "AI Agent (optional)",
-  "webhook_url": "https://your-agent.example.com/webhooks/xproof (optional)"
+  "webhook_url": "https://your-agent.example.com/webhooks/prove-before-act (optional)"
 }
 \`\`\`
 
@@ -2640,12 +2718,14 @@ Include \`webhook_url\` in your request to receive a POST callback when the proo
 }
 \`\`\`
 
-**Security:** Each webhook is signed with HMAC-SHA256. Verify using:
-- Header: \`X-xProof-Signature\` (hex-encoded HMAC of the JSON body)
-- Header: \`X-xProof-Event\` (always \`proof.certified\`)
-- Header: \`X-xProof-Delivery\` (certification ID)
+**Security:** Verify the four canonical headers before processing:
+- \`X-ProveBeforeAct-Signature\`: hex HMAC-SHA256 using the webhook secret over \`timestamp + "." + rawBody\` (the exact request body bytes before JSON parsing, not a reserialized JSON object).
+- \`X-ProveBeforeAct-Timestamp\`: Unix epoch seconds; reject values older than 300 seconds or more than 60 seconds in the future.
+- \`X-ProveBeforeAct-Event\`: \`proof.certified\`.
+- \`X-ProveBeforeAct-Delivery\`: certification ID, stable across attempts and operator-initiated retries.
+The legacy \`X-xProof-*\` aliases carry identical values. For per-proof and per-batch webhooks, use the \`webhook_secret\` returned by the API; for account-level webhooks use the secret configured at registration. Verify the signature and timestamp before trusting the delivery ID.
 
-**Retry policy:** Up to 3 attempts with exponential backoff (immediate, 10s, 20s). Status updates: pending → delivered or failed.
+**Retry policy:** At-least-once delivery: up to 3 attempts per round, with 10s before the second attempt and 20s before the third. If a round fails, an operator may start a new round with the same delivery ID; delivery is not guaranteed if attempts fail. Each attempt has a new timestamp and signature. Deduplicate by verified delivery ID, recording it atomically with applying the event; acknowledge duplicates without reapplying. Status updates: pending → delivered or failed.
 
 ## Authentication
 - API keys are prefixed with \`pm_\` (e.g. \`pm_abc123...\`)
@@ -2654,12 +2734,13 @@ Include \`webhook_url\` in your request to receive a POST callback when the proo
 - Authenticated endpoints: /api/proof, /api/acp/checkout, /api/acp/confirm
 
 ## Pricing
-Flat $${priceUsd} per certification — no tiers, no promo. Prepaid packs: 100/$${(priceUsd * 100).toFixed(0)}, 1,000/$${(priceUsd * 1000).toFixed(0)}, 10,000/$${(priceUsd * 10000).toFixed(0)} USDC on Base. Current pricing: ${baseUrl}/api/pricing
+Flat $${priceUsd} per certification — no tiers, no promo. Prepaid packs: 100/$${(priceUsd * 100).toFixed(0)}, 1,000/$${(priceUsd * 1000).toFixed(0)}, 10,000/$${(priceUsd * 10000).toFixed(0)}. Buy packs with Stripe Checkout or USDC on Base. Stripe is an additional option, especially useful for non-crypto buyers. Current pricing: ${baseUrl}/api/pricing
 
 ## Why certify?
 Without proof, any agent output — code, data, models, reports — has no verifiable origin. Prove Before Act creates immutable, on-chain evidence of what was produced, by whom, and when. Certified agents can prove originality and integrity. Non-certified agents cannot.
 
 ## Documentation & Machine Interfaces
+- [Prove Before Act specification](https://provebeforeact.com/standard) — The Prove Before Act specification — design pattern, core invariant, 4W audit trail
 - [OpenAPI Specification](${baseUrl}/api/acp/openapi.json)
 - [API Guide](${baseUrl}/learn/api.md)
 - [Service Discovery](${baseUrl}/api/acp/products)
@@ -2733,14 +2814,19 @@ curl -X POST ${baseUrl}/api/acp/checkout \\
   -H "Authorization: Bearer pm_YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "product_id": "xproof-certification",
+    "product_id": "pba-certification",
     "inputs": {
       "file_hash": "a1b2c3d4e5f6...",
       "filename": "document.pdf",
       "author_name": "AI Agent"
-    }
+    },
+    "payer_wallet": "erd1YOUR_PAYER_WALLET",
+    "payer_wallet_signature": "YOUR_128_CHAR_HEX_ED25519_SIGNATURE"
   }'
 \`\`\`
+
+Sign \`pba-acp-checkout:pba-certification:<file_hash>:<payer_wallet>\` with
+the payer wallet's Ed25519 private key before submitting checkout.
 
 ### POST /api/acp/confirm
 Confirm a transaction after signing on MultiversX. Requires API key.
@@ -2886,7 +2972,8 @@ Prove Before Act supports the x402 payment protocol as an alternative to API key
 
 ### Pricing
 - Flat $${priceUsd} per certification in USDC — no tiers, no promo
-- Prepaid packs: 100/$${(priceUsd * 100).toFixed(0)}, 1,000/$${(priceUsd * 1000).toFixed(0)}, 10,000/$${(priceUsd * 10000).toFixed(0)} USDC on Base
+- Prepaid packs: 100/$${(priceUsd * 100).toFixed(0)}, 1,000/$${(priceUsd * 1000).toFixed(0)}, 10,000/$${(priceUsd * 10000).toFixed(0)} via Stripe Checkout or USDC on Base
+- Stripe pack flow: POST /api/credits/stripe/checkout → open checkout_url → poll GET /api/credits/stripe/status/{session_id}; only the signed Stripe webhook grants credits
 - Current pricing: ${baseUrl}/api/pricing
 - Network: Base (eip155:8453) for mainnet, Base Sepolia (eip155:84532) for testnet
 
@@ -2938,20 +3025,21 @@ curl -X POST ${baseUrl}/api/proof \\
 
 ## Agent Integrations
 Prove Before Act works with any MCP-compatible agent (Claude Code, Codex, OpenClaw, Conway Terminal) and any x402-enabled agent.
-- OpenClaw Skill: https://github.com/jasonxkensei/xproof-openclaw-skill
-- GitHub Action: https://github.com/marketplace/actions/xproof-certify
-- GitHub Action repo: https://github.com/jasonxkensei/xProof-Action
-- Main repo: https://github.com/jasonxkensei/xProof
+- OpenClaw Skill: https://github.com/jasonxkensei/prove-before-act-openclaw-skill
+- GitHub Action: https://github.com/marketplace/actions/xproof-certify (legacy Marketplace slug)
+- GitHub Action repo: https://github.com/jasonxkensei/prove-before-act-action
+- Main repo: https://github.com/jasonxkensei/prove-before-act
 - Supported protocols: MCP, ACP, x402, MX-8004, OpenAI Plugin, LangChain, CrewAI
 
 ## SDKs
 
 ### Python SDK
-Install: \`pip install xproof\`
-PyPI: https://pypi.org/project/xproof/
+Install: \`pip install prove-before-act\`
+PyPI: https://pypi.org/project/prove-before-act/
+\`xproof\` is the legacy import/package name retained for compatibility; new installs use \`pip install prove-before-act\`.
 
 \`\`\`python
-from xproof import XProofClient
+from xproof import XProofClient  # legacy module name retained by the canonical package
 
 client = XProofClient(api_key="pm_YOUR_API_KEY")
 
@@ -3190,10 +3278,15 @@ from langchain.tools import tool
 import hashlib
 import requests
 
-XPROOF_BASE_URL = "https://provebeforeact.com"
+PROVEBEFOREACT_BASE_URL = "https://provebeforeact.com"
 
 @tool
-def certify_file(file_path: str, author_name: str = "AI Agent") -> str:
+def certify_file(
+    file_path: str,
+    payer_wallet: str,
+    payer_wallet_signature: str,
+    author_name: str = "AI Agent",
+) -> str:
     """Certify a file on the MultiversX blockchain. Creates immutable proof of existence and ownership.
     Records the SHA-256 hash of the file on-chain. The file never leaves your device.
     Cost: Flat $${priceUsd} per certification — no tiers, no volume discounts. Paid in EGLD or USDC via x402.
@@ -3213,11 +3306,14 @@ def certify_file(file_path: str, author_name: str = "AI Agent") -> str:
     file_hash = sha256.hexdigest()
     filename = file_path.split("/")[-1]
     
-    # Step 2: Create checkout
+    # Step 2: Sign pba-acp-checkout:pba-certification:<file_hash>:<payer_wallet>
+    # with the payment wallet, then create checkout.
     headers = {"Authorization": "Bearer pm_YOUR_API_KEY", "Content-Type": "application/json"}
-    checkout = requests.post(f"{XPROOF_BASE_URL}/api/acp/checkout", json={
-        "product_id": "xproof-certification",
-        "inputs": {"file_hash": file_hash, "filename": filename, "author_name": author_name}
+    checkout = requests.post(f"{PROVEBEFOREACT_BASE_URL}/api/acp/checkout", json={
+        "product_id": "pba-certification",
+        "inputs": {"file_hash": file_hash, "filename": filename, "author_name": author_name},
+        "payer_wallet": payer_wallet,
+        "payer_wallet_signature": payer_wallet_signature,
     }, headers=headers).json()
     
     return f"Checkout created: {checkout.get('checkout_id')}\\nAmount: {checkout.get('amount')} USD\\nSign the transaction on MultiversX to complete certification."
@@ -3233,7 +3329,7 @@ def verify_proof(proof_id: str) -> str:
     Returns:
         Proof details including file hash, timestamp, and blockchain transaction
     """
-    response = requests.get(f"{XPROOF_BASE_URL}/proof/{proof_id}.json")
+    response = requests.get(f"{PROVEBEFOREACT_BASE_URL}/proof/{proof_id}.json")
     if response.status_code == 404:
         return "Proof not found"
     proof = response.json()
@@ -3243,7 +3339,7 @@ def verify_proof(proof_id: str) -> str:
 @tool 
 def discover_xproof() -> str:
     """Discover Prove Before Act certification service capabilities and pricing."""
-    response = requests.get(f"{XPROOF_BASE_URL}/api/acp/products")
+    response = requests.get(f"{PROVEBEFOREACT_BASE_URL}/api/acp/products")
     data = response.json()
     products = data.get("products", [])
     if products:
@@ -3288,7 +3384,7 @@ def audit_agent_session(
         "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
     }
     headers = {"Authorization": "Bearer pm_YOUR_API_KEY", "Content-Type": "application/json"}
-    response = requests.post(f"{XPROOF_BASE_URL}/api/audit", json=payload, headers=headers, timeout=15)
+    response = requests.post(f"{PROVEBEFOREACT_BASE_URL}/api/audit", json=payload, headers=headers, timeout=15)
     if response.status_code in (200, 201):
         data = response.json()
         return f"AUDIT CERTIFIED\\nproof_id: {data.get('proof_id')}\\naudit_url: {data.get('audit_url')}\\ndecision: {data.get('decision')} | risk: {data.get('risk_level')}"
@@ -3310,7 +3406,7 @@ from crewai_tools import BaseTool
 import hashlib
 import requests
 
-XPROOF_BASE_URL = "https://provebeforeact.com"
+PROVEBEFOREACT_BASE_URL = "https://provebeforeact.com"
 
 
 class XProofCertifyTool(BaseTool):
@@ -3321,7 +3417,14 @@ class XProofCertifyTool(BaseTool):
         "The file never leaves your device - only the hash is sent."
     )
 
-    def _run(self, file_path: str, author_name: str = "AI Agent", api_key: str = "") -> str:
+    def _run(
+        self,
+        file_path: str,
+        payer_wallet: str,
+        payer_wallet_signature: str,
+        author_name: str = "AI Agent",
+        api_key: str = "",
+    ) -> str:
         sha256 = hashlib.sha256()
         with open(file_path, "rb") as f:
             for chunk in iter(lambda: f.read(8192), b""):
@@ -3329,10 +3432,14 @@ class XProofCertifyTool(BaseTool):
         file_hash = sha256.hexdigest()
         filename = file_path.split("/")[-1]
 
+        # payer_wallet_signature must be the 128-char hexadecimal Ed25519
+        # signature of pba-acp-checkout:pba-certification:<file_hash>:<payer_wallet>.
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-        checkout = requests.post(f"{XPROOF_BASE_URL}/api/acp/checkout", json={
-            "product_id": "xproof-certification",
-            "inputs": {"file_hash": file_hash, "filename": filename, "author_name": author_name}
+        checkout = requests.post(f"{PROVEBEFOREACT_BASE_URL}/api/acp/checkout", json={
+            "product_id": "pba-certification",
+            "inputs": {"file_hash": file_hash, "filename": filename, "author_name": author_name},
+            "payer_wallet": payer_wallet,
+            "payer_wallet_signature": payer_wallet_signature,
         }, headers=headers).json()
 
         return f"Checkout: {checkout.get('checkout_id')} | Amount: {checkout.get('amount')} USD | Sign TX on MultiversX to complete."
@@ -3346,7 +3453,7 @@ class XProofVerifyTool(BaseTool):
     )
 
     def _run(self, proof_id: str) -> str:
-        response = requests.get(f"{XPROOF_BASE_URL}/proof/{proof_id}.json")
+        response = requests.get(f"{PROVEBEFOREACT_BASE_URL}/proof/{proof_id}.json")
         if response.status_code == 404:
             return "Proof not found"
         proof = response.json()
@@ -3388,7 +3495,7 @@ class XProofAuditTool(BaseTool):
             "timestamp": datetime.datetime.utcnow().isoformat() + "Z",
         }
         headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-        response = requests.post(f"{XPROOF_BASE_URL}/api/audit", json=payload, headers=headers, timeout=15)
+        response = requests.post(f"{PROVEBEFOREACT_BASE_URL}/api/audit", json=payload, headers=headers, timeout=15)
         if response.status_code in (200, 201):
             data = response.json()
             return (
@@ -3426,8 +3533,8 @@ import uuid
 import requests
 from langchain.tools import tool
 
-XPROOF_API_KEY = "pm_YOUR_API_KEY"  # Replace with your key from ${baseUrl}/api/agent/register
-XPROOF_BASE_URL = "${baseUrl}"
+PROVEBEFOREACT_API_KEY = "pm_YOUR_API_KEY"  # Replace with your key from ${baseUrl}/api/agent/register
+PROVEBEFOREACT_BASE_URL = "${baseUrl}"
 
 
 class AuditRequiredError(Exception):
@@ -3484,9 +3591,9 @@ def audit_agent_session(
 
     try:
         response = requests.post(
-            f"{XPROOF_BASE_URL}/api/audit",
+            f"{PROVEBEFOREACT_BASE_URL}/api/audit",
             json=payload,
-            headers={"Authorization": f"Bearer {XPROOF_API_KEY}", "Content-Type": "application/json"},
+            headers={"Authorization": f"Bearer {PROVEBEFOREACT_API_KEY}", "Content-Type": "application/json"},
             timeout=15,
         )
         if response.status_code in (200, 201):
@@ -3553,8 +3660,8 @@ import datetime
 import requests
 from crewai_tools import BaseTool
 
-XPROOF_API_KEY = "pm_YOUR_API_KEY"  # Replace with your key from ${baseUrl}/api/agent/register
-XPROOF_BASE_URL = "${baseUrl}"
+PROVEBEFOREACT_API_KEY = "pm_YOUR_API_KEY"  # Replace with your key from ${baseUrl}/api/agent/register
+PROVEBEFOREACT_BASE_URL = "${baseUrl}"
 
 
 class AuditRequiredError(Exception):
@@ -3605,9 +3712,9 @@ class AuditGuardTool(BaseTool):
 
         try:
             response = requests.post(
-                f"{XPROOF_BASE_URL}/api/audit",
+                f"{PROVEBEFOREACT_BASE_URL}/api/audit",
                 json=payload,
-                headers={"Authorization": f"Bearer {XPROOF_API_KEY}", "Content-Type": "application/json"},
+                headers={"Authorization": f"Bearer {PROVEBEFOREACT_API_KEY}", "Content-Type": "application/json"},
                 timeout=15,
             )
             if response.status_code in (200, 201):
@@ -3780,8 +3887,8 @@ def compute_inputs_hash(*inputs) -> str:
 import type { Action, IAgentRuntime, Memory, State, HandlerCallback, Plugin } from "@elizaos/core";
 import crypto from "crypto";
 
-const XPROOF_API_KEY = process.env.XPROOF_API_KEY ?? "pm_YOUR_API_KEY";
-const XPROOF_BASE_URL = process.env.XPROOF_BASE_URL ?? "${baseUrl}";
+const PROVEBEFOREACT_API_KEY = process.env.PROVEBEFOREACT_API_KEY ?? process.env.XPROOF_API_KEY ?? "pm_YOUR_API_KEY";
+const PROVEBEFOREACT_BASE_URL = process.env.PROVEBEFOREACT_BASE_URL ?? process.env.XPROOF_BASE_URL ?? "${baseUrl}";
 
 export class AuditRequiredError extends Error {
   constructor(message: string) {
@@ -3814,10 +3921,10 @@ async function certifyAuditLog(params: {
     timestamp: new Date().toISOString(),
   };
 
-  const response = await fetch(\`\${XPROOF_BASE_URL}/api/audit\`, {
+  const response = await fetch(\`\${PROVEBEFOREACT_BASE_URL}/api/audit\`, {
     method: "POST",
     headers: {
-      Authorization: \`Bearer \${XPROOF_API_KEY}\`,
+      Authorization: \`Bearer \${PROVEBEFOREACT_API_KEY}\`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify(payload),
@@ -3895,7 +4002,7 @@ export const xproofAuditPlugin: Plugin = {
   name: "Prove Before Act-audit-guard",
   description:
     "Prove Before Act Agent Audit Log — certifies agent decisions on MultiversX before execution. " +
-    "Schema: \${XPROOF_BASE_URL}/.well-known/agent-audit-schema.json",
+    "Schema: \${PROVEBEFOREACT_BASE_URL}/.well-known/agent-audit-schema.json",
   actions: [auditBeforeExecute],
   providers: [],
   evaluators: [],
@@ -3935,7 +4042,7 @@ export const xproofAuditPlugin: Plugin = {
           Product: {
             type: "object",
             properties: {
-              id: { type: "string", example: "xproof-certification" },
+              id: { type: "string", example: "pba-certification", description: "Canonical product ID. The legacy xproof-certification alias is also accepted." },
               name: { type: "string", example: "Prove Before Act Certification" },
               description: { type: "string" },
               pricing: {
@@ -3954,7 +4061,7 @@ export const xproofAuditPlugin: Plugin = {
             type: "object",
             required: ["product_id", "inputs"],
             properties: {
-              product_id: { type: "string", example: "xproof-certification" },
+              product_id: { type: "string", example: "pba-certification", description: "Use pba-certification. The legacy xproof-certification alias remains accepted." },
               inputs: {
                 type: "object",
                 required: ["file_hash", "filename"],
@@ -3965,6 +4072,8 @@ export const xproofAuditPlugin: Plugin = {
                   metadata: { type: "object", description: "Optional JSON metadata. Supports model_hash, strategy_hash, version_number, and any custom fields. Searchable via GET /api/proofs/search.", properties: { model_hash: { type: "string" }, strategy_hash: { type: "string" }, version_number: { type: "string" } }, additionalProperties: true },
                 },
               },
+              payer_wallet: { type: "string", example: "erd1...", description: "Required for non-admin checkout: the MultiversX wallet that will send payment." },
+              payer_wallet_signature: { type: "string", example: "128-char-hex-Ed25519-signature", description: "Required for non-admin checkout. Sign pba-acp-checkout:<product_id>:<file_hash>:<payer_wallet> with payer_wallet's private key." },
               buyer: {
                 type: "object",
                 properties: {
@@ -4133,6 +4242,7 @@ export const xproofAuditPlugin: Plugin = {
       v: "1.0",
       service: "Prove Before Act",
       chain: "MultiversX Mainnet",
+      specification_url: "https://provebeforeact.com/standard",
       quickstart: {
         trial: {
           note: `${TRIAL_QUOTA} free certifications — no wallet, no payment, no browser`,
@@ -4178,7 +4288,7 @@ export const xproofAuditPlugin: Plugin = {
       pricing: {
         current: `$${priceUsd} per certification`,
         model: "per-use",
-        payment: ["EGLD (MultiversX ACP)", "USDC on Base (x402)"],
+        payment: ["Stripe Checkout (prepaid packs)", "EGLD (MultiversX ACP)", "USDC on Base (x402 or prepaid packs)"],
       },
       protocols: {
         rest: `${baseUrl}/api/proof`,
@@ -4205,8 +4315,9 @@ export const xproofAuditPlugin: Plugin = {
 
     res.json({
       name: "Prove Before Act",
-      description: "The on-chain notary for AI agents. Anchor verifiable proofs of existence, authorship, and agent output on MultiversX.",
+      description: "Prove Before Act is the accountability pattern for autonomous agents; xProof is the reference implementation. Commit a declared decision basis before acting, then anchor the verified outcome on MultiversX. Never submit internal chain-of-thought.",
       url: baseUrl,
+      specification_url: CANONICAL_SPECIFICATION_URL,
       version: "1.2.0",
       capabilities: ["file-certification", "batch-certification", "proof-verification", "blockchain-anchoring", "webhook-notifications", "verification-badges", "mx8004-validation", "agent-audit-log"],
       protocols: {
@@ -4221,8 +4332,9 @@ export const xproofAuditPlugin: Plugin = {
         agent_context: `${baseUrl}/agent-context.md`,
       },
       integrations: {
-        openclaw_skill: "https://github.com/jasonxkensei/xproof-openclaw-skill",
+        openclaw_skill: "https://github.com/jasonxkensei/prove-before-act-openclaw-skill",
         github_action: "https://github.com/marketplace/actions/xproof-certify",
+        github_action_note: "Legacy GitHub Marketplace slug, maintained for existing CI pipelines. Use jasonxkensei/prove-before-act-action for new integrations.",
         langchain: `${baseUrl}/agent-tools/langchain.py`,
         crewai: `${baseUrl}/agent-tools/crewai.py`,
         audit_guard_langchain: `${baseUrl}/agent-tools/audit-guard-langchain.py`,
@@ -4232,16 +4344,16 @@ export const xproofAuditPlugin: Plugin = {
       },
       audit_log: {
         standard: "Agent Audit Log Standard",
-        description: "Decision-certification integration pattern — operators can certify decisions before execution and use proof_id in their own policy; Prove Before Act records the result and leaves action handling to the operator.",
+        description: "Pre-execution accountability pattern — operators can certify a declared decision basis before execution, never internal chain-of-thought, and use proof_id in their own policy; Prove Before Act records the result and leaves action handling to the operator.",
         endpoint: `POST ${baseUrl}/api/audit`,
         schema: `${baseUrl}/.well-known/agent-audit-schema.json`,
         view: `${baseUrl}/audit/{proof_id}`,
         mcp_tool: "audit_agent_session",
       },
       repositories: {
-        main: "https://github.com/jasonxkensei/xProof",
-        github_action: "https://github.com/jasonxkensei/xProof-Action",
-        openclaw_skill: "https://github.com/jasonxkensei/xproof-openclaw-skill",
+        main: "https://github.com/jasonxkensei/prove-before-act",
+        github_action: "https://github.com/jasonxkensei/prove-before-act-action",
+        openclaw_skill: "https://github.com/jasonxkensei/prove-before-act-openclaw-skill",
       },
       supported_protocols: ["MCP", "ACP", "x402", "MX-8004", "OpenAI Plugin", "LangChain", "CrewAI"],
       alternative_payment: {
@@ -4269,11 +4381,11 @@ export const xproofAuditPlugin: Plugin = {
         model: "per-use",
         amount: priceUsd.toString(),
         currency: "USD",
-        payment_methods: ["EGLD (MultiversX)", "USDC (Base via x402)"],
+        payment_methods: ["Stripe Checkout (prepaid packs)", "EGLD (MultiversX)", "USDC (Base via x402 or prepaid packs)"],
       },
       documentation: {
         agent_context: `${baseUrl}/agent-context.md`,
-        specification: `${baseUrl}/.well-known/provebeforeact.md`,
+        specification: CANONICAL_SPECIFICATION_URL,
         api_guide: `${baseUrl}/learn/api.md`,
         verification: `${baseUrl}/learn/verification.md`,
         agents_page: `${baseUrl}/agents`,
@@ -4297,18 +4409,19 @@ description: Answers to the 10 exact questions autonomous agents ask when evalua
 url: ${baseUrl}/agent-context.md
 human_page: ${baseUrl}/agent-context
 updated: 2026-07-03
-tags: [proof-of-existence, blockchain-certification, agent-accountability, x402, MCP, audit-trail, Prove-Before-Act]
+tags: [proof-of-existence, pba-certification, agent-accountability, x402, MCP, audit-trail, Prove-Before-Act]
 ---
 
 # Prove Before Act — Agent Context Document
 > Answers to the 10 questions autonomous agents ask when evaluating Prove Before Act.
 > Machine-readable version. Human page: ${baseUrl}/agent-context
+> The Prove Before Act specification is at ${baseUrl}/standard — design pattern, core invariant, 4W audit trail, and reference implementation.
 
 ## One-line summary
 
-Prove Before Act is the on-chain notary for AI agents. Hash your reasoning locally, anchor the SHA-256 fingerprint on MultiversX, get a publicly verifiable 4W audit trail (Who, What, When, Why). Pay per proof with USDC on Base via x402 — no account needed.
+Prove Before Act is the accountability pattern for autonomous agents; xProof is the reference implementation. Hash a declared decision basis locally, anchor its SHA-256 fingerprint on MultiversX before acting, then record the outcome for a publicly verifiable 4W evidence trail. Do not provide internal chain-of-thought. Pay per proof with USDC on Base via x402 — no account needed.
 
-**The principle**: Prove Before & After Act. Anchor reasoning (WHY) BEFORE executing any significant action. Anchor the actual result (WHAT) AFTER for a complete 4W audit trail.
+**The principle**: Prove Before & After Act. Anchor a declared decision basis (WHY) BEFORE executing any significant action. Anchor the actual result (WHAT) AFTER for a complete 4W evidence trail.
 
 ---
 
@@ -4341,7 +4454,7 @@ Three copy-paste patterns for the most common agent workflows.
 \`\`\`python
 import hashlib, json, requests
 
-# 1. Document your reasoning
+# 1. Document the declared decision basis
 reasoning = {
     "who": "trading-agent-v2", "what": "BUY BTC 0.5",
     "why": "RSI=38 (below 40 threshold); allocation=2.1% (below 3% cap)",
@@ -4360,12 +4473,12 @@ execute_trade("BUY", "BTC", 0.5)
 print(f"Audit trail: ${baseUrl}/proof/{proof_id}")
 \`\`\`
 
-### Research agent — anchor reasoning before publishing a report
+### Research agent — anchor a declared decision basis before publishing a report
 
 \`\`\`python
 import hashlib, json, requests
 
-# 1. Summarize reasoning and sources
+# 1. Summarize the declared decision basis and sources
 reasoning = {
     "who": "research-agent-v1", "what": "Publish Q2 crypto market outlook",
     "why": "5 sources reviewed, confidence=0.87, no contradictions detected",
@@ -4553,7 +4666,7 @@ Current price: **$${priceUsd} per certification**.
 | 10,000 anchors | $${(priceUsd * 10000).toFixed(0)} |
 | 50 agents × 20 actions/day × 30 days = 30,000 anchors/month | $${(priceUsd * 30000).toFixed(0)}/month |
 
-Flat $${priceUsd} per certification — no tiers, no volume discounts. Payment methods: EGLD on MultiversX (ACP/wallet) or USDC on Base (x402, no account needed). Batch endpoint (POST /api/batch, up to 100 files) reduces API overhead at same per-file price.
+Flat $${priceUsd} per certification — no tiers, no volume discounts. Payment methods: EGLD on MultiversX (ACP/wallet) or USDC on Base (x402, no account needed). Batch endpoint (POST /api/batch, up to 50 files) reduces API overhead at same per-file price.
 
 ---
 
@@ -4581,7 +4694,7 @@ Cost comparison per 1,000 anchors: Prove Before Act ~$${(priceUsd * 1000).toFixe
 MCP endpoint: ${baseUrl}/mcp (Streamable HTTP transport, POST only)
 
 Available tools:
-- certify_file — anchor a file hash or reasoning document
+- certify_file — anchor a file hash or declared decision-basis document
 - audit_agent_session — decision-certification record for operator policies (Agent Audit Log Standard)
 - investigate_proof — look up a proof by ID or hash
 - register_trial — get a free api_key instantly (no wallet needed, 10 free proofs)
@@ -4599,11 +4712,11 @@ Available tools:
 \`\`\`
 
 \`\`\`json
-// Tool: certify_file — anchor reasoning before acting
+// Tool: certify_file — anchor a declared decision basis before acting
 {
   "name": "certify_file",
   "arguments": {
-    "file_hash": "sha256_of_reasoning_document",
+    "file_hash": "sha256_of_declared_decision_basis",
     "filename": "decision_session_001.md",
     "metadata": {
       "who": "my-agent-v2",
@@ -4658,14 +4771,14 @@ The 4W audit trail is automatically rendered on the public proof page when you i
 | WHO | Which agent or actor made this decision? | MX-8004 — optional identity integration; inspect /api/mx8004/status before relying on it |
 | WHAT | What output or action was certified? | Prove Before Act — SHA-256 hash of the output, anchored on MultiversX mainnet |
 | WHEN | Immutable timestamp? | Prove Before Act — MultiversX block finality (~6 s); not a self-reported clock |
-| WHY | What reasoning led to the decision? | Prove Before Act — \`action_description\`, \`risk_level\`, and \`context\` fields from \`/api/audit\` |
+| WHY | What declared decision basis supported the action? | Prove Before Act — \`action_description\`, \`risk_level\`, and \`context\` fields from \`/api/audit\` |
 
 Prove Before Act records WHAT / WHEN / WHY. MX-8004 can add WHO only when its live status is active; production currently reports \`not_configured\`.
 
 - **WHO**: Which agent, model, or actor made this decision
 - **WHAT**: What action or output was certified
 - **WHEN**: Immutable on-chain timestamp from MultiversX block
-- **WHY**: The full reasoning that led to the decision
+- **WHY**: The declared decision basis that supported the action — not internal chain-of-thought
 
 \`\`\`bash
 curl -X POST ${baseUrl}/api/proof \\
@@ -4673,7 +4786,7 @@ curl -X POST ${baseUrl}/api/proof \\
   -H "Content-Type: application/json" \\
   -d '{
     "file_hash": "YOUR_SHA256",
-    "filename": "reasoning.md",
+    "filename": "decision_basis.md",
     "metadata": {
       "who": "my-agent-v2 (gpt-4o-mini)",
       "what": "Approved BUY 0.5 BTC at $67,400",
@@ -4698,7 +4811,7 @@ For the Agent Audit Log Standard, use POST /api/audit when an operator policy ne
 
 **What STAYS LOCAL (never transmitted):**
 - The actual file content
-- Reasoning document text
+- Declared decision-basis document text
 - Input data values
 - Model weights or strategy details
 
@@ -4740,13 +4853,13 @@ GET ${baseUrl}/api/leaderboard               → top 50 public agents by trust s
 
 ---
 
-## Q10 — Complete agent workflow: reasoning → hash → anchor → action → result
+## Q10 — Complete agent workflow: declared decision basis → hash → anchor → action → result
 
 **The canonical Prove Before & After Act loop:**
 
 \`\`\`
-1. Agent produces reasoning (WHY)
-2. Serialize reasoning to canonical JSON
+1. Agent declares its decision basis (WHY), not internal chain-of-thought
+2. Serialize the declared decision basis to canonical JSON
 3. Compute SHA-256 hash locally (nothing leaves the agent)
 4. POST WHY hash to Prove Before Act → receive why_proof_id
 5. Execute the action
@@ -4884,7 +4997,7 @@ curl -X POST ${baseUrl}/api/coherence/link \\
   -d '{"why_proof_id": "<UUID from check_coherence>", "what_proof_id": "<UUID from certify_file>"}'
 \`\`\`
 
-Coherence score: 50 base + 15 if WHAT within 1h of WHY + 20 if WHAT \`metadata.why_proof_id\` references WHY + 15 if WHAT on-chain confirmed.
+Response score scales: top-level \`coherence_score\` is a 0–1 ratio; top-level \`coherence_score_percent\` and legacy \`coherence_check.coherence_score\` are 0–100. Coherence score: 50 base + 15 if WHAT within 1h of WHY + 20 if WHAT \`metadata.why_proof_id\` references WHY + 15 if WHAT on-chain confirmed.
 
 Unlinked WHY anchor: \`pending\` for <1h, then \`divergent\` after 1h; flagged as \`fault\` violation after 2h TTL — both lower public coherence rate.
 

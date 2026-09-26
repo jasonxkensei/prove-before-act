@@ -39,7 +39,7 @@ export const CREDIT_PACKAGES: CreditPackageDefinition[] = [
   {
     id: "business",
     name: "Business",
-    description: "10,000 certifications — high-volume agents, best unit price",
+    description: "10,000 certifications — high-volume agents",
     certs: 10000,
   },
 ];

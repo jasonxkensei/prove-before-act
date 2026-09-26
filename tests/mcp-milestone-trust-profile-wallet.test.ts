@@ -1,22 +1,16 @@
 /**
- * Task #612 — trust_profile URL regression guard
+ * MCP first-proof milestone finality and trust_profile regression guard
  *
- * Task #605 changed the trust_profile URL in certify_file and
- * certify_with_confidence milestone responses from:
- *
- *   /agent/${certification.authorName || ""}   (e.g. "/agent/AI Agent")
- * to:
- *   /agent/${certOwnerWallet || authorName || ""}
- *
- * This test verifies that regression does not happen: when a user's first
- * certification is issued via either MCP tool, the trust_profile URL in
- * the milestone block contains their real wallet address — not "AI Agent"
- * and not an empty path.
+ * The broadcast-only cases below must remain pending and emit no milestone.
+ * Separate positive cases seed a test proof with independent finality fields,
+ * allowing the trust_profile URL regression guard to exercise its milestone
+ * path without treating a newly broadcast proof as finalized.
  *
  * Strategy:
- * - Two fresh DB users (one per tool) so each sees cnt=1 (first-proof milestone)
+ * - Two fresh DB users (one per tool)
  * - Real getApiKeyOwnerWallet reads the wallet from the test user row
  * - blockchain and credit functions are stubbed to avoid real on-chain writes
+ * - the blockchain stub does not provide independent finality evidence
  */
 
 import { vi, describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -57,9 +51,8 @@ vi.mock("../server/blockchain", () => ({
 }));
 
 // ── Helpers partial stub — getApiKeyOwnerWallet stays REAL (reads from DB) ───
-// This is the key dependency under test: the fix in task #605 calls
-// getApiKeyOwnerWallet({ userId: certUserId }) to get the wallet address.
-// Keeping it real ensures the test would fail if the call were removed.
+// Keep the actual owner-wallet lookup in the handler path while the unrelated
+// billing helpers are stubbed.
 vi.mock("../server/routes/helpers", async (importOriginal) => {
   const actual =
     await importOriginal<typeof import("../server/routes/helpers")>();
@@ -87,10 +80,14 @@ import { createMcpServer } from "../server/mcp";
 // is exactly 1 when the milestone fires.
 const WALLET_FILE = `erd1${"mcp612certifyfile0".padEnd(58, "0")}`;
 const WALLET_CWC  = `erd1${"mcp612certifycwc00".padEnd(58, "0")}`;
+const WALLET_FILE_FINALITY = `erd1${"mcp612finalityfile".padEnd(58, "0")}`;
+const WALLET_CWC_FINALITY = `erd1${"mcp612finalitycwc0".padEnd(58, "0")}`;
 const BASE_URL    = "https://xproof.test";
 
 let userIdFile = "";
 let userIdCwc  = "";
+let userIdFileFinality = "";
+let userIdCwcFinality = "";
 const createdCertIds: string[] = [];
 
 function freshFileHash(): string {
@@ -118,6 +115,26 @@ beforeAll(async () => {
     [WALLET_CWC],
   );
   userIdCwc = cwcRow.rows[0].id;
+
+  const fileFinalityRow = await pool.query<{ id: string }>(
+    `INSERT INTO users (wallet_address, is_public_profile, is_trial, trial_quota, trial_used)
+     VALUES ($1, TRUE, TRUE, 10, 0)
+     ON CONFLICT (wallet_address) DO UPDATE
+       SET is_trial = TRUE, trial_quota = 10, trial_used = 0
+     RETURNING id`,
+    [WALLET_FILE_FINALITY],
+  );
+  userIdFileFinality = fileFinalityRow.rows[0].id;
+
+  const cwcFinalityRow = await pool.query<{ id: string }>(
+    `INSERT INTO users (wallet_address, is_public_profile, is_trial, trial_quota, trial_used)
+     VALUES ($1, TRUE, TRUE, 10, 0)
+     ON CONFLICT (wallet_address) DO UPDATE
+       SET is_trial = TRUE, trial_quota = 10, trial_used = 0
+     RETURNING id`,
+    [WALLET_CWC_FINALITY],
+  );
+  userIdCwcFinality = cwcFinalityRow.rows[0].id;
 });
 
 afterAll(async () => {
@@ -129,7 +146,7 @@ afterAll(async () => {
   }
   await pool.query(
     `DELETE FROM users WHERE id = ANY($1)`,
-    [[userIdFile, userIdCwc].filter(Boolean)],
+    [[userIdFile, userIdCwc, userIdFileFinality, userIdCwcFinality].filter(Boolean)],
   );
 });
 
@@ -160,7 +177,67 @@ async function callTool(
   return parsed;
 }
 
-describe("MCP first-proof milestone trust_profile URL (task #605 regression guard)", () => {
+async function expectPendingWithoutFinalityEvidence(response: Record<string, unknown>) {
+  expect(response.isError).toBeUndefined();
+  expect(response.status).toBe("pending");
+  expect(response.first_proof).toBeUndefined();
+  expect(response.milestone).toBeUndefined();
+  expect(response.proof_id).toBeTypeOf("string");
+
+  const proof = await pool.query<{
+    blockchain_status: string;
+    finality_checked_at: Date | null;
+    finality_evidence: unknown;
+  }>(
+    `SELECT blockchain_status, finality_checked_at, finality_evidence
+       FROM certifications WHERE id = $1`,
+    [response.proof_id],
+  );
+  expect(proof.rows[0]?.blockchain_status).toBe("pending");
+  expect(proof.rows[0]?.finality_checked_at).toBeNull();
+  expect(proof.rows[0]?.finality_evidence).toBeNull();
+}
+
+async function seedIndependentlyFinalizedProof(userId: string): Promise<void> {
+  const fileHash = freshFileHash();
+  const transactionHash = freshFileHash();
+  const checkedAt = new Date();
+  const evidence = {
+    source: "multiversx-transaction-api",
+    apiUrl: "https://testnet-api.multiversx.com",
+    chainId: "T",
+    checkedAt: checkedAt.toISOString(),
+    transactionHash,
+    returnedTransactionHash: transactionHash,
+    transactionStatus: "success",
+    round: 1,
+    blockNonce: 1,
+    blockHash: freshFileHash(),
+    miniblockHash: null,
+    expectedFileHash: fileHash,
+    payload: `certify:${fileHash}`,
+    payloadMatches: true,
+    payloadValidation: "matched",
+  };
+  const inserted = await pool.query<{ id: string }>(
+    `INSERT INTO certifications
+       (user_id, file_name, file_hash, blockchain_status, transaction_hash,
+        transaction_url, finality_checked_at, finality_evidence, is_public, auth_method)
+     VALUES ($1, 'finalized-fixture.json', $2, 'confirmed', $3, $4, $5, $6, TRUE, 'api_key')
+     RETURNING id`,
+    [
+      userId,
+      fileHash,
+      transactionHash,
+      `https://explorer.multiversx.com/transactions/${transactionHash}`,
+      checkedAt,
+      JSON.stringify(evidence),
+    ],
+  );
+  createdCertIds.push(inserted.rows[0].id);
+}
+
+describe("MCP certification waits for independent chain finality", () => {
   describe("certify_file", () => {
     let response: Record<string, unknown>;
 
@@ -169,37 +246,11 @@ describe("MCP first-proof milestone trust_profile URL (task #605 regression guar
         file_hash: freshFileHash(),
         filename: "decision.json",
         // Intentionally omit author_name — tool defaults it to "AI Agent".
-        // Before task #605 the trust_profile used this fallback; after the
-        // fix it must use the real wallet address instead.
       });
     });
 
-    it("certify_file succeeds (no isError)", () => {
-      expect(response.isError).toBeUndefined();
-      expect(response.status).toBe("certified");
-    });
-
-    it("first_proof milestone is present for the first certification", () => {
-      expect(response.first_proof).toBe(true);
-      expect(response.milestone).toBeDefined();
-    });
-
-    it("trust_profile contains the agent's real wallet address", () => {
-      const milestone = response.milestone as Record<string, unknown>;
-      const trustProfile = milestone.trust_profile as string;
-      expect(trustProfile).toContain(WALLET_FILE);
-    });
-
-    it("trust_profile does NOT contain the authorName fallback 'AI Agent'", () => {
-      const milestone = response.milestone as Record<string, unknown>;
-      const trustProfile = milestone.trust_profile as string;
-      expect(trustProfile).not.toContain("AI Agent");
-    });
-
-    it("trust_profile is not an empty /agent/ path", () => {
-      const milestone = response.milestone as Record<string, unknown>;
-      const trustProfile = milestone.trust_profile as string;
-      expect(trustProfile).not.toBe(`${BASE_URL}/agent/`);
+    it("keeps the broadcast pending and emits no first-proof milestone", async () => {
+      await expectPendingWithoutFinalityEvidence(response);
     });
   });
 
@@ -213,35 +264,68 @@ describe("MCP first-proof milestone trust_profile URL (task #605 regression guar
         decision_id: crypto.randomUUID(),
         confidence_level: 1.0,
         threshold_stage: "final",
-        // Intentionally omit author_name to confirm the wallet fallback.
+        // Intentionally omit author_name.
       });
     });
 
-    it("certify_with_confidence succeeds (no isError)", () => {
+    it("keeps the broadcast pending and emits no first-proof milestone", async () => {
+      await expectPendingWithoutFinalityEvidence(response);
+    });
+  });
+});
+
+describe("MCP first-proof milestone trust_profile URL with finalized-proof fixture", () => {
+  describe("certify_file", () => {
+    let response: Record<string, unknown>;
+
+    beforeAll(async () => {
+      await seedIndependentlyFinalizedProof(userIdFileFinality);
+      response = await callTool("certify_file", userIdFileFinality, {
+        file_hash: freshFileHash(),
+        filename: "decision.json",
+      });
+    });
+
+    it("keeps the newly broadcast proof pending while emitting the milestone", () => {
       expect(response.isError).toBeUndefined();
-      expect(response.status).toBe("certified");
-    });
-
-    it("first_proof milestone is present for the first certification", () => {
+      expect(response.status).toBe("pending");
       expect(response.first_proof).toBe(true);
-      expect(response.milestone).toBeDefined();
     });
 
-    it("trust_profile contains the agent's real wallet address", () => {
+    it("uses the real wallet in the trust_profile URL", () => {
       const milestone = response.milestone as Record<string, unknown>;
       const trustProfile = milestone.trust_profile as string;
-      expect(trustProfile).toContain(WALLET_CWC);
-    });
-
-    it("trust_profile does NOT contain the authorName fallback 'AI Agent'", () => {
-      const milestone = response.milestone as Record<string, unknown>;
-      const trustProfile = milestone.trust_profile as string;
+      expect(trustProfile).toContain(WALLET_FILE_FINALITY);
       expect(trustProfile).not.toContain("AI Agent");
+      expect(trustProfile).not.toBe(`${BASE_URL}/agent/`);
+    });
+  });
+
+  describe("certify_with_confidence", () => {
+    let response: Record<string, unknown>;
+
+    beforeAll(async () => {
+      await seedIndependentlyFinalizedProof(userIdCwcFinality);
+      response = await callTool("certify_with_confidence", userIdCwcFinality, {
+        file_hash: freshFileHash(),
+        filename: "report.json",
+        decision_id: crypto.randomUUID(),
+        confidence_level: 1.0,
+        threshold_stage: "final",
+      });
     });
 
-    it("trust_profile is not an empty /agent/ path", () => {
+    it("keeps the newly broadcast proof pending while emitting the milestone", () => {
+      expect(response.isError).toBeUndefined();
+      expect(response.status).toBe("pending");
+      expect(response.first_proof).toBe(true);
+    });
+
+    it("uses the real wallet in the trust_profile URL", () => {
       const milestone = response.milestone as Record<string, unknown>;
       const trustProfile = milestone.trust_profile as string;
+      expect(trustProfile).toContain(WALLET_CWC_FINALITY);
+      expect(trustProfile).not.toContain("AI Agent");
       expect(trustProfile).not.toBe(`${BASE_URL}/agent/`);
     });
   });

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useWalletAuth } from "@/hooks/useWalletAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { StatusIndicator } from "@/components/status-indicator";
 import { Button } from "@/components/ui/button";
 import { 
   Shield, 
@@ -35,6 +36,7 @@ import {
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { Link } from "wouter";
+import { TxRecoveryCard } from "@/components/admin/tx-recovery";
 
 interface PublicStats {
   certifications: {
@@ -178,33 +180,132 @@ interface AdminStats {
   };
 }
 
+interface ExhaustedProofCallback {
+  certificationId: string;
+  attempts: number;
+  lastAttempt: string | null;
+  destination: string;
+}
+
+interface ExhaustedProofCallbacksData {
+  callbacks: ExhaustedProofCallback[];
+  limit: number;
+}
+
 interface ConversionFunnelData {
   timezone: string;
   window_days: number;
   rows: Array<{
     date: string;
-    stage: "cta" | "registration" | "proof";
+    stage: "cta" | "registration" | "proof" | "purchase";
     outcome: "seen" | "clicked" | "started" | "success" | "failure";
     http_class: "0xx" | "2xx" | "3xx" | "4xx" | "5xx";
     traffic_segment: "human_browser" | "declared_agent" | "crawler_scanner" | "api_client";
     events: number;
     visitors: number;
+    unlinked_events: number;
   }>;
   totals: {
     events: number;
     visitors: number;
+    unlinked_events: number;
+    unlinked_api_events: number;
     cta_views: number;
     cta_clicks: number;
+    primary_cta_clicks: number;
+    scenario_engagements: number;
     registrations: number;
     successful_proofs: number;
+    first_proof_visitors: number;
+    repeat_proof_visitors: number;
   };
   last_7_complete_days: {
     registrations: number;
     successful_proofs: number;
   };
+  collection: {
+    confirmed: boolean;
+    events_in_window: number;
+    events_last_24h: number;
+    first_event_at: string | null;
+    last_event_at: string | null;
+  };
+  activation_review: {
+    window_days: number;
+    minimum_transition_visitors: number;
+    counting_model: {
+      stage_totals: "directional_distinct_identified_browsers";
+      conversions: "same_browser_cookie_adjacent_stages_in_order";
+      sequence_window_days: number;
+      transition_attribution: "upstream_traffic_segment";
+      unlinked_activity: "events_only_excluded_from_visitors_and_transitions";
+    };
+    stage_order: Array<"scenario_selected" | "primary_cta_clicked" | "registered" | "first_proof" | "second_proof">;
+    overall: ActivationReviewSegment;
+    by_traffic_segment: ActivationReviewSegment[];
+    largest_segment_drop_off: ActivationReviewSegment | null;
+    campaign_attribution: {
+      model: "first_touch_30d";
+      missing_source_label: string;
+      minimum_entry_visitors: number;
+    };
+    by_utm_source: CampaignActivationReview[];
+    largest_campaign_drop_off: CampaignActivationReview | null;
+    recommendation: {
+      status: "ready" | "low_confidence" | "awaiting_traffic";
+      message: string;
+      hypothesis: string | null;
+      minimum_sample_size: number;
+      sample_size: number;
+    };
+  };
   alerts: Array<{ severity: "warning"; condition: string; message: string }>;
   generated_at: string;
 }
+
+interface ActivationReviewDrop {
+  from_stage: string;
+  to_stage: string;
+  from_visitors: number;
+  to_visitors: number;
+  converted_visitors: number;
+  lost_visitors: number;
+  conversion_rate: number | null;
+  drop_off_rate: number | null;
+}
+
+interface ActivationReviewSegment {
+  traffic_segment: string;
+  stages: Array<{
+    stage: "scenario_selected" | "primary_cta_clicked" | "registered" | "first_proof" | "second_proof";
+    visitors: number;
+    from_previous: number | null;
+  }>;
+  cohort_transitions: ActivationReviewDrop[];
+  largest_drop_off: ActivationReviewDrop | null;
+  low_confidence_drop_off: ActivationReviewDrop | null;
+  recommendation_sample_size: number;
+}
+
+interface CampaignActivationReview {
+  campaign_source: string;
+  original_sources: string[];
+  entry_visitors: number;
+  recommendation_eligible: boolean;
+  recommendation_sample_size: number;
+  stages: ActivationReviewSegment["stages"];
+  cohort_transitions: ActivationReviewSegment["cohort_transitions"];
+  largest_drop_off: ActivationReviewSegment["largest_drop_off"];
+  low_confidence_drop_off: ActivationReviewSegment["low_confidence_drop_off"];
+}
+
+const ACTIVATION_STAGE_LABELS: Record<string, string> = {
+  scenario_selected: "Scenario",
+  primary_cta_clicked: "Primary CTA",
+  registered: "Registered",
+  first_proof: "First proof",
+  second_proof: "Second proof",
+};
 
 interface ProposedViolation {
   id: string;
@@ -315,7 +416,7 @@ function RateLimitActivityCard({ data, isError }: { data: RateLimitStats | undef
                 </table>
               </div>
               <p className="mt-3 text-xs text-muted-foreground">
-                Showing top {data.top_n_per_namespace} per namespace · auto-refreshes every 30s · as of {new Date(data.generated_at).toLocaleTimeString()}
+                Showing top {data.top_n_per_namespace} per namespace · as of {new Date(data.generated_at).toLocaleTimeString()}
               </p>
             </>
           )}
@@ -390,7 +491,7 @@ function TrafficSourcesCard({ data }: { data: TrafficSources | undefined }) {
                 </table>
               </div>
               <p className="mt-3 text-xs text-muted-foreground">
-                Top {rows.length} referrers · last {data.window_days} days · auto-refreshes every 60s · as of {new Date(data.generated_at).toLocaleTimeString()}
+                Top {rows.length} referrers · last {data.window_days} days · as of {new Date(data.generated_at).toLocaleTimeString()}
               </p>
             </>
           )}
@@ -483,7 +584,7 @@ function UtmCampaignCard({ data }: { data: UtmStats | undefined }) {
                 </table>
               </div>
               <p className="mt-3 text-xs text-muted-foreground">
-                Top {rows.length} campaigns · auto-refreshes every 60s · as of {new Date(data.generated_at).toLocaleTimeString()}
+                Top {rows.length} campaigns · as of {new Date(data.generated_at).toLocaleTimeString()}
               </p>
             </>
           )}
@@ -508,15 +609,15 @@ function StatCard({ title, value, subtitle, icon: Icon }: { title: string; value
   );
 }
 
-function StatusIndicator({ status }: { status: string }) {
+function HealthStatusIndicator({ status }: { status: string }) {
   switch (status) {
     case "ok":
     case "healthy":
-      return <Badge variant="outline" className="bg-emerald-500/15 text-emerald-500 border-emerald-500/25"><CheckCircle2 className="h-3 w-3 mr-1" /> {status === "healthy" ? "Healthy" : "OK"}</Badge>;
+      return <StatusIndicator status="verified" badgeVariant="outline" className="border-current/30 bg-current/10"><CheckCircle2 className="h-3 w-3 mr-1" /> {status === "healthy" ? "Healthy" : "OK"}</StatusIndicator>;
     case "degraded":
-      return <Badge variant="secondary"><AlertTriangle className="h-3 w-3 mr-1" /> Degraded</Badge>;
+      return <StatusIndicator status="warning" badgeVariant="secondary"><AlertTriangle className="h-3 w-3 mr-1" /> Degraded</StatusIndicator>;
     case "down":
-      return <Badge variant="destructive"><XCircle className="h-3 w-3 mr-1" /> Down</Badge>;
+      return <StatusIndicator status="failed" badgeVariant="outline" className="border-current/30 bg-current/10"><XCircle className="h-3 w-3 mr-1" /> Down</StatusIndicator>;
     default:
       return <Badge variant="secondary">{status}</Badge>;
   }
@@ -680,6 +781,12 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
     1,
     ...lastSevenDays.map(([, day]) => Math.max(day.views, day.clicks, day.registrations, day.proofs)),
   );
+  const review = data.activation_review;
+  const largestDropOff = review.largest_segment_drop_off?.largest_drop_off;
+  const unlinkedApiSuccesses = (stage: "registration" | "proof") =>
+    data.rows.reduce((sum, row) =>
+      sum + (row.traffic_segment === "api_client" && row.stage === stage && row.outcome === "success"
+        ? row.unlinked_events : 0), 0);
 
   return (
     <Card data-testid="card-conversion-funnel">
@@ -689,32 +796,241 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
             <CardTitle className="text-sm font-medium">First Proof Funnel</CardTitle>
             <Badge variant="secondary">last {data.window_days}d</Badge>
           </div>
-          <span className="text-xs text-muted-foreground">Server-derived, no request data retained</span>
+            <div className="flex flex-wrap items-center justify-end gap-2 text-xs">
+              <Badge variant={data.collection.confirmed ? "default" : "outline"} data-testid="badge-funnel-collection">
+                {data.collection.confirmed ? "Collection confirmed" : "Awaiting published traffic"}
+              </Badge>
+               <span className="text-muted-foreground">No raw IP or credentials retained</span>
+            </div>
         </div>
         {data.alerts.length > 0 && (
           <div className="space-y-1">
             {data.alerts.map((alert) => (
-              <div key={alert.condition} className="flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400" data-testid={`alert-${alert.condition}`}>
+              <StatusIndicator as="div" status="warning" key={alert.condition} className="flex items-center gap-2 text-xs" data-testid={`alert-${alert.condition}`}>
                 <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                 {alert.message}
-              </div>
+              </StatusIndicator>
             ))}
           </div>
         )}
       </CardHeader>
       <CardContent className="space-y-5">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <p className="text-xs text-muted-foreground" data-testid="conversion-identity-confidence">
+          Visitor counts and ordered transitions use only a signed, 30-day browser identifier.
+          {" "}{data.totals.unlinked_events} event(s), including {data.totals.unlinked_api_events} API-client event(s),
+          have no browser identifier. They remain in event totals but cannot be counted as distinct
+          visitors or joined into a conversion journey. Older IP-only events are also unlinked.
+          {" "}Unlinked API activity includes {unlinkedApiSuccesses("registration")} successful registration event(s)
+          and {unlinkedApiSuccesses("proof")} successful proof event(s), not unique people.
+        </p>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {[
             ["CTA seen", data.totals.cta_views],
-            ["CTA clicked", data.totals.cta_clicks],
+            ["Scenario selected", data.totals.scenario_engagements],
+            ["Primary CTA clicked", data.totals.primary_cta_clicks],
             ["Registered", data.totals.registrations],
-            ["New proofs", data.totals.successful_proofs],
+            ["First proof", data.totals.first_proof_visitors],
+            ["Second proof", data.totals.repeat_proof_visitors],
           ].map(([label, value]) => (
             <div key={label as string} className="rounded-md border p-3">
               <p className="text-xs text-muted-foreground">{label}</p>
               <p className="mt-1 text-lg font-semibold tabular-nums">{(value as number).toLocaleString()}</p>
             </div>
           ))}
+        </div>
+
+        <div className="rounded-md border bg-muted/20 p-4" data-testid="activation-review">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <p className="text-sm font-medium">Activation review</p>
+              <p className="text-xs text-muted-foreground">
+                {data.collection.confirmed
+                  ? `Largest qualifying relative drop across the ${review.window_days}-day window`
+                  : "A decision will be available after the published app receives traffic"}
+              </p>
+            </div>
+            <Badge variant={review.recommendation.status === "ready" ? "secondary" : "outline"}>
+              {review.recommendation.status === "ready"
+                ? "Review ready"
+                : review.recommendation.status === "low_confidence" ? "Low confidence" : "Awaiting traffic"}
+            </Badge>
+          </div>
+          <p className="mt-3 text-sm text-muted-foreground">{review.recommendation.message}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+             Stage totals count identified browsers at each step independently. Conversion and drop rates count the
+             same browser identifier at both adjacent steps in order within{" "}
+             {review.counting_model.sequence_window_days} days. Transitions
+            belong to the earlier step's traffic segment; repeat visits count once per transition.
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground" data-testid="activation-transition-sample">
+            {largestDropOff ? "Recommended" : "Largest observed"} transition:{" "}
+            {review.recommendation.sample_size} starting visitors (minimum{" "}
+            {review.recommendation.minimum_sample_size}).
+          </p>
+          {largestDropOff && review.largest_segment_drop_off && (
+            <div className="mt-3 rounded border bg-background p-3 text-sm" data-testid="largest-funnel-dropoff">
+              <span className="font-medium">Largest segment drop-off: </span>
+              <span>
+                {review.largest_segment_drop_off.traffic_segment} —{" "}
+                {ACTIVATION_STAGE_LABELS[largestDropOff.from_stage] ?? largestDropOff.from_stage} →{" "}
+                {ACTIVATION_STAGE_LABELS[largestDropOff.to_stage] ?? largestDropOff.to_stage}
+              </span>
+              <span className="ml-2 text-muted-foreground">
+                ({largestDropOff.converted_visitors} converted in order / {largestDropOff.from_visitors} starting;
+                {" "}{largestDropOff.lost_visitors} not observed in order, {largestDropOff.drop_off_rate ?? 0}% drop)
+              </span>
+            </div>
+          )}
+          {review.recommendation.hypothesis && (
+            <p className="mt-3 text-xs text-muted-foreground" data-testid="funnel-hypothesis">
+              Next experiment: {review.recommendation.hypothesis}
+            </p>
+          )}
+          {review.by_traffic_segment.length > 0 && (
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full min-w-[680px] text-xs">
+                  <caption className="pb-2 text-left text-muted-foreground">Directional identified browsers; largest drop uses ordered cohorts.</caption>
+                <thead>
+                  <tr className="border-b text-left text-muted-foreground">
+                    <th className="pb-2 pr-3 font-medium">Traffic segment</th>
+                    <th className="pb-2 px-2 font-medium text-right">Scenario</th>
+                    <th className="pb-2 px-2 font-medium text-right">Primary CTA</th>
+                    <th className="pb-2 px-2 font-medium text-right">Registered</th>
+                    <th className="pb-2 px-2 font-medium text-right">First proof</th>
+                    <th className="pb-2 px-2 font-medium text-right">Second proof</th>
+                    <th className="pb-2 pl-2 font-medium">Largest drop</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {review.by_traffic_segment.map((segment) => {
+                    const stageValue = (stage: string) =>
+                      segment.stages.find((entry) => entry.stage === stage)?.visitors ?? 0;
+                    const drop = segment.largest_drop_off;
+                    return (
+                      <tr key={segment.traffic_segment} className="border-b last:border-0">
+                        <td className="py-2 pr-3 font-medium">{segment.traffic_segment}</td>
+                        <td className="py-2 px-2 text-right tabular-nums">{stageValue("scenario_selected")}</td>
+                        <td className="py-2 px-2 text-right tabular-nums">{stageValue("primary_cta_clicked")}</td>
+                        <td className="py-2 px-2 text-right tabular-nums">{stageValue("registered")}</td>
+                        <td className="py-2 px-2 text-right tabular-nums">{stageValue("first_proof")}</td>
+                        <td className="py-2 px-2 text-right tabular-nums">{stageValue("second_proof")}</td>
+                        <td className="py-2 pl-2">
+                          {drop
+                            ? `${ACTIVATION_STAGE_LABELS[drop.from_stage] ?? drop.from_stage} → ${ACTIVATION_STAGE_LABELS[drop.to_stage] ?? drop.to_stage} (${drop.converted_visitors}/${drop.from_visitors} converted in order, ${drop.drop_off_rate ?? 0}% drop)`
+                            : segment.low_confidence_drop_off
+                              ? `Low confidence (${segment.low_confidence_drop_off.from_visitors ?? 0} / ${review.minimum_transition_visitors} starting visitors)`
+                              : "—"}
+                          {segment.low_confidence_drop_off && drop && (
+                            <p className="text-muted-foreground">
+                              Excluded {segment.low_confidence_drop_off.drop_off_rate}% drop from{" "}
+                              {segment.low_confidence_drop_off.from_visitors} visitors (low confidence)
+                            </p>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <div className="mt-4 border-t pt-4" data-testid="campaign-activation-review">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <p className="text-sm font-medium">Campaign source comparison</p>
+                <p className="text-xs text-muted-foreground">
+                  First known UTM source in this {review.window_days}-day window; missing values are{" "}
+                  <span className="font-medium">{review.campaign_attribution.missing_source_label}</span>.
+                   Bounded campaign labels are retained; unsafe-looking values appear as direct / unknown.
+                   Sources are grouped ignoring case and surrounding whitespace; product-hunt is grouped with producthunt.
+                </p>
+              </div>
+              <Badge variant="outline">
+                min. {review.campaign_attribution.minimum_entry_visitors} entry visitors
+              </Badge>
+            </div>
+            {review.largest_campaign_drop_off?.largest_drop_off ? (
+              <p className="mt-3 text-sm" data-testid="largest-campaign-dropoff">
+                <span className="font-medium">Largest qualifying campaign drop: </span>
+                {review.largest_campaign_drop_off.campaign_source} —{" "}
+                {ACTIVATION_STAGE_LABELS[review.largest_campaign_drop_off.largest_drop_off.from_stage]
+                  ?? review.largest_campaign_drop_off.largest_drop_off.from_stage}{" "}
+                →{" "}
+                {ACTIVATION_STAGE_LABELS[review.largest_campaign_drop_off.largest_drop_off.to_stage]
+                  ?? review.largest_campaign_drop_off.largest_drop_off.to_stage}{" "}
+                ({review.largest_campaign_drop_off.largest_drop_off.converted_visitors} converted in order /{" "}
+                {review.largest_campaign_drop_off.largest_drop_off.from_visitors} starting,{" "}
+                {review.largest_campaign_drop_off.largest_drop_off.drop_off_rate ?? 0}% drop)
+              </p>
+            ) : (
+              <p className="mt-3 text-xs text-muted-foreground">
+                No campaign has enough entry and transition visitors for a recommendation yet.
+              </p>
+            )}
+            {review.by_utm_source.length > 0 && (
+              <div className="mt-3 overflow-x-auto">
+                <table className="w-full min-w-[720px] text-xs">
+                  <caption className="pb-2 text-left text-muted-foreground">Directional identified browsers by campaign; largest drop uses ordered cohorts.</caption>
+                  <thead>
+                    <tr className="border-b text-left text-muted-foreground">
+                      <th className="pb-2 pr-3 font-medium">UTM source</th>
+                      <th className="pb-2 px-2 font-medium text-right">Scenario</th>
+                      <th className="pb-2 px-2 font-medium text-right">Primary CTA</th>
+                      <th className="pb-2 px-2 font-medium text-right">Registered</th>
+                      <th className="pb-2 px-2 font-medium text-right">First proof</th>
+                      <th className="pb-2 px-2 font-medium text-right">Second proof</th>
+                      <th className="pb-2 pl-2 font-medium">Largest drop</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {review.by_utm_source.map((campaign) => {
+                      const stageValue = (stage: string) =>
+                        campaign.stages.find((entry) => entry.stage === stage)?.visitors ?? 0;
+                      return (
+                        <tr key={campaign.campaign_source} className="border-b last:border-0">
+                          <td className="py-2 pr-3 font-medium">
+                            {campaign.campaign_source}
+                            {campaign.original_sources?.length > 0 && (
+                              <details className="mt-1 font-normal text-muted-foreground">
+                                <summary className="cursor-pointer">Original UTM values</summary>
+                                <ul className="mt-1 list-inside list-disc">
+                                  {campaign.original_sources.map((source) => <li key={source} className="break-all">{source}</li>)}
+                                </ul>
+                              </details>
+                            )}
+                          </td>
+                          <td className="py-2 px-2 text-right tabular-nums">{stageValue("scenario_selected")}</td>
+                          <td className="py-2 px-2 text-right tabular-nums">{stageValue("primary_cta_clicked")}</td>
+                          <td className="py-2 px-2 text-right tabular-nums">{stageValue("registered")}</td>
+                          <td className="py-2 px-2 text-right tabular-nums">{stageValue("first_proof")}</td>
+                          <td className="py-2 px-2 text-right tabular-nums">{stageValue("second_proof")}</td>
+                          <td className="py-2 pl-2">
+                            {!campaign.recommendation_eligible
+                              ? campaign.entry_visitors < review.campaign_attribution.minimum_entry_visitors
+                                ? `Insufficient entry sample (${campaign.entry_visitors} / ${review.campaign_attribution.minimum_entry_visitors})`
+                                : `Low confidence transition (${campaign.low_confidence_drop_off?.from_visitors ?? campaign.recommendation_sample_size} / ${review.minimum_transition_visitors} starting visitors)`
+                              : campaign.largest_drop_off
+                                ? `${ACTIVATION_STAGE_LABELS[campaign.largest_drop_off.from_stage]
+                                  ?? campaign.largest_drop_off.from_stage} → ${
+                                  ACTIVATION_STAGE_LABELS[campaign.largest_drop_off.to_stage]
+                                  ?? campaign.largest_drop_off.to_stage
+                                } (${campaign.largest_drop_off.converted_visitors}/${campaign.largest_drop_off.from_visitors} converted in order, ${campaign.largest_drop_off.drop_off_rate ?? 0}% drop)`
+                                : "—"}
+                            {campaign.low_confidence_drop_off && campaign.recommendation_eligible && (
+                              <p className="text-muted-foreground">
+                                Excluded {campaign.low_confidence_drop_off.drop_off_rate}% drop from{" "}
+                                {campaign.low_confidence_drop_off.from_visitors} visitors (low confidence)
+                              </p>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </div>
 
         {lastSevenDays.length === 0 ? (
@@ -748,7 +1064,7 @@ function ConversionFunnelCard({ data }: { data: ConversionFunnelData | undefined
           </div>
         )}
         <p className="text-xs text-muted-foreground">
-          API outcomes include 2xx, 4xx, 429 and 5xx responses; “New proofs” counts HTTP 201 only.
+          API outcomes include 2xx, 4xx, 429 and 5xx responses. “First proof” counts visitors with at least one HTTP 201; “Second proof” counts those with at least two. Collection is confirmed when this first-party funnel receives an event from the published app.
         </p>
       </CardContent>
     </Card>
@@ -967,12 +1283,111 @@ function ProposedViolationsCard({ data, isAdmin }: { data: ProposedViolationsDat
                 </table>
               </div>
               <p className="mt-3 text-xs text-muted-foreground">
-                Sorted oldest-first · confirm applies a trust penalty · reject marks as false positive · auto-refreshes every 30s
+                Sorted oldest-first · confirm applies a trust penalty · reject marks as false positive
               </p>
             </>
           )}
         </CardContent>
       )}
+    </Card>
+  );
+}
+
+function FailedProofCallbacksCard() {
+  const queryClient = useQueryClient();
+  const { data, isLoading, isError } = useQuery<ExhaustedProofCallbacksData>({
+    queryKey: ["/api/admin/proof-callbacks/exhausted"],
+    retry: false,
+    refetchInterval: 30_000,
+  });
+  const retryable = useQuery<{ callbacks: Array<{ certificationId: string }> }>({
+    queryKey: ["/api/admin/proof-callbacks/failed"],
+    retry: false,
+    refetchInterval: 30_000,
+  });
+
+  const retryMutation = useMutation({
+    mutationFn: async (certificationId: string) => apiRequest(
+      "POST",
+      `/api/admin/proof-callbacks/${encodeURIComponent(certificationId)}/retry`,
+    ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/proof-callbacks/exhausted"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/proof-callbacks/failed"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+    },
+  });
+
+  const callbacks = data?.callbacks ?? [];
+  const retryableIds = new Set(retryable.data?.callbacks.map((callback) => callback.certificationId) ?? []);
+
+  return (
+    <Card data-testid="card-failed-proof-callbacks">
+      <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
+        <div>
+          <CardTitle className="text-sm font-medium">Recent Exhausted Proof Callbacks</CardTitle>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Latest {data?.limit ?? 25} failed deliveries · destinations show origin only. Retry requires a confirmed proof and saved callback credentials.
+          </p>
+        </div>
+        <Webhook className="h-4 w-4 text-muted-foreground" />
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading exhausted callbacks...</p>
+        ) : isError ? (
+          <p className="text-sm text-destructive">Exhausted callbacks could not be loaded.</p>
+        ) : callbacks.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No exhausted callbacks with recorded attempts.</p>
+        ) : (
+          <div className="space-y-3">
+            {callbacks.map((callback) => (
+              <div
+                key={callback.certificationId}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border p-3"
+                data-testid={`failed-callback-${callback.certificationId}`}
+              >
+                <div className="min-w-0 space-y-1">
+                  <p className="break-all text-sm font-medium">
+                    Proof {callback.certificationId}
+                  </p>
+                  <p className="break-all text-xs text-muted-foreground">
+                    Destination: {callback.destination}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {callback.attempts} failed attempts
+                    {callback.lastAttempt
+                      ? ` · Last attempt ${new Date(callback.lastAttempt).toLocaleString()}`
+                      : ""}
+                  </p>
+                </div>
+                {retryableIds.has(callback.certificationId) && <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => retryMutation.mutate(callback.certificationId)}
+                  disabled={retryMutation.isPending}
+                  data-testid={`button-retry-callback-${callback.certificationId}`}
+                >
+                  {retryMutation.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                  )}
+                  Queue retry
+                </Button>}
+              </div>
+            ))}
+          </div>
+        )}
+        {retryable.isError && (
+          <p className="mt-3 text-xs text-muted-foreground">Retry availability could not be loaded. Delivery details are still available above.</p>
+        )}
+        {retryMutation.isError && (
+          <p className="mt-3 text-sm text-destructive">
+            {retryMutation.error.message || "The callback retry could not be queued."}
+          </p>
+        )}
+      </CardContent>
     </Card>
   );
 }
@@ -997,14 +1412,12 @@ function TrendIndicator({ current, previous }: { current: number; previous: numb
 export default function AdminDashboard() {
   const { isAuthenticated } = useWalletAuth();
 
-  const { data: stats, isLoading: statsLoading, refetch: refetchStats } = useQuery<PublicStats>({
+  const { data: stats, isLoading: statsLoading } = useQuery<PublicStats>({
     queryKey: ["/api/stats"],
-    refetchInterval: 30000,
   });
 
   const { data: health, isLoading: healthLoading } = useQuery<HealthData>({
     queryKey: ["/api/health"],
-    refetchInterval: 15000,
   });
 
   const { data: authData } = useQuery<{ isAdmin?: boolean }>({
@@ -1016,42 +1429,36 @@ export default function AdminDashboard() {
 
   const { data: trafficSources } = useQuery<TrafficSources>({
     queryKey: ["/api/admin/traffic-sources"],
-    refetchInterval: 60000,
     retry: false,
     enabled: isAdmin,
   });
 
   const { data: utmStats } = useQuery<UtmStats>({
     queryKey: ["/api/admin/utm-stats"],
-    refetchInterval: 60000,
     retry: false,
     enabled: isAdmin,
   });
 
   const { data: adminStats } = useQuery<AdminStats>({
     queryKey: ["/api/admin/stats"],
-    refetchInterval: 30000,
     retry: false,
     enabled: isAdmin,
   });
 
-  const { data: conversionFunnel, refetch: refetchConversionFunnel } = useQuery<ConversionFunnelData>({
+  const { data: conversionFunnel } = useQuery<ConversionFunnelData>({
     queryKey: ["/api/admin/conversion-funnel"],
-    refetchInterval: 30000,
     retry: false,
     enabled: isAdmin,
   });
 
   const { data: rateLimitStats, isError: rateLimitError } = useQuery<RateLimitStats>({
     queryKey: ["/api/admin/rate-limit-stats?top=10"],
-    refetchInterval: 30000,
     retry: false,
     enabled: isAdmin,
   });
 
   const { data: proposedViolations } = useQuery<ProposedViolationsData>({
     queryKey: ["/api/admin/violations/proposed"],
-    refetchInterval: 30000,
     retry: false,
     enabled: isAdmin,
   });
@@ -1071,8 +1478,8 @@ export default function AdminDashboard() {
 
   return (
     <div className="min-h-screen bg-background" data-testid="admin-dashboard">
-      <div className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
-        <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+      <main id="main-content" className="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+        <header className="operational-header -mx-4 mb-8 flex flex-wrap items-center justify-between gap-4 px-4 py-4 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
           <div className="flex items-center gap-3">
             <Link href="/">
               <Button variant="ghost" size="icon" data-testid="button-back-home">
@@ -1085,20 +1492,23 @@ export default function AdminDashboard() {
               <p className="text-sm text-muted-foreground">Real-time metrics for provebeforeact.com</p>
             </div>
           </div>
-          {isAdmin && pendingViolationCount > 0 && (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-destructive/10 border border-destructive/25 rounded-md" data-testid="alert-pending-violations">
-              <ShieldAlert className="h-4 w-4 text-destructive" />
-              <span className="text-sm font-medium text-destructive">
-                {pendingViolationCount} violation{pendingViolationCount !== 1 ? "s" : ""} need review
-              </span>
-            </div>
-          )}
-        </div>
+          <div className="flex flex-wrap items-center gap-3">
+            {health && <HealthStatusIndicator status={health.status} />}
+            {isAdmin && pendingViolationCount > 0 && (
+              <div className="flex items-center gap-2 border border-destructive/25 bg-destructive/10 px-3 py-1.5" data-testid="alert-pending-violations">
+                <ShieldAlert className="h-4 w-4 text-destructive" />
+                <span className="text-sm font-medium text-destructive">
+                  {pendingViolationCount} violation{pendingViolationCount !== 1 ? "s" : ""} need review
+                </span>
+              </div>
+            )}
+          </div>
+        </header>
 
 
         {stats && (
           <>
-            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 mb-6">
+            <section className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 mb-6" aria-label="Platform summary">
               <StatCard
                 title="Total Certifications"
                 value={stats.certifications.total}
@@ -1145,9 +1555,9 @@ export default function AdminDashboard() {
                   <p className="text-xs text-muted-foreground mt-1">Certifications in last 5 min</p>
                 </CardContent>
               </Card>
-            </div>
+            </section>
 
-            <div className="grid gap-4 grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 mb-6">
+            <section className="grid gap-3 grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 mb-6" aria-label="Audience summary">
               {stats?.traffic && (
                 <>
                   <StatCard title="Total Visits" value={stats.traffic.total_visits} subtitle="All page views" icon={Globe} />
@@ -1161,7 +1571,7 @@ export default function AdminDashboard() {
                   <StatCard title="Trial Agents" value={stats.agents.trial_agents} subtitle={`${stats.agents.trial_certifications_used} certs used`} icon={Bot} />
                 </>
               )}
-            </div>
+            </section>
 
             <div className="grid gap-4 grid-cols-1 lg:grid-cols-4 mb-6">
               {stats?.traffic && (
@@ -1247,21 +1657,21 @@ export default function AdminDashboard() {
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground flex items-center gap-2">
-                        <CheckCircle2 className="h-3 w-3 text-chart-2" /> Verified
+                        <CheckCircle2 className="status-verified h-3 w-3" /> Verified
                       </span>
-                      <span className="font-medium text-chart-2">{stats.certifications.by_status.confirmed || 0}</span>
+                      <StatusIndicator status="verified" className="font-medium">{stats.certifications.by_status.confirmed || 0}</StatusIndicator>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground flex items-center gap-2">
-                        <Clock className="h-3 w-3 text-yellow-500" /> Pending
+                        <Clock className="status-pending h-3 w-3" /> Pending
                       </span>
-                      <span className="font-medium">{stats.certifications.by_status.pending || 0}</span>
+                      <StatusIndicator status="pending" className="font-medium">{stats.certifications.by_status.pending || 0}</StatusIndicator>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground flex items-center gap-2">
-                        <XCircle className="h-3 w-3 text-destructive" /> Failed
+                        <XCircle className="status-failed h-3 w-3" /> Failed
                       </span>
-                      <span className="font-medium text-destructive">{stats.certifications.by_status.failed || 0}</span>
+                      <StatusIndicator status="failed" className="font-medium">{stats.certifications.by_status.failed || 0}</StatusIndicator>
                     </div>
                   </div>
                 </CardContent>
@@ -1270,7 +1680,7 @@ export default function AdminDashboard() {
               <Card data-testid="stat-card-blockchain-latency">
                 <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground">Blockchain Latency</CardTitle>
-                  {health ? <StatusIndicator status={health.status} /> : <Activity className="h-4 w-4 text-muted-foreground" />}
+                  {health ? <HealthStatusIndicator status={health.status} /> : <Activity className="h-4 w-4 text-muted-foreground" />}
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">
@@ -1294,7 +1704,7 @@ export default function AdminDashboard() {
                     <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t">
                       {Object.entries(health.components).map(([name, comp]) => (
                         <div key={name} className="flex items-center gap-1.5">
-                          <StatusIndicator status={comp.status} />
+                          <HealthStatusIndicator status={comp.status} />
                           <span className="text-xs text-muted-foreground capitalize">{name}</span>
                           {comp.latency_ms !== undefined && (
                             <span className="text-xs text-muted-foreground">({comp.latency_ms}ms)</span>
@@ -1376,6 +1786,8 @@ export default function AdminDashboard() {
             {isAdmin && (
               <div className="mb-6 space-y-6">
                 <ProposedViolationsCard data={proposedViolations} isAdmin={isAdmin} />
+                <FailedProofCallbacksCard />
+                <TxRecoveryCard />
                 <OnboardingFunnelCard data={stats.onboarding_funnel} />
                 <ConversionFunnelCard data={conversionFunnel} />
                 <TrafficSourcesCard data={trafficSources} />
@@ -1384,25 +1796,14 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            <div className="flex flex-col items-center gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  refetchStats();
-                  refetchConversionFunnel();
-                }}
-                data-testid="button-refresh-stats"
-              >
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Refresh
-              </Button>
+            <div className="flex flex-col items-center gap-2 border-t border-border pt-5">
               <p className="text-xs text-muted-foreground">
-                Last updated: {new Date(stats.generated_at).toLocaleString()} — Auto-refreshes every 30s
+                Last updated: {new Date(stats.generated_at).toLocaleString()}
               </p>
             </div>
           </>
         )}
-      </div>
+      </main>
     </div>
   );
 }

@@ -2,6 +2,8 @@
 
 Certify every message exchanged between AutoGen agents on the MultiversX blockchain.
 
+**Integration terminology:** Prove Before Act is the accountability pattern for autonomous agents; xProof is its reference implementation. Treat WHY as a declared decision basis—intent, relevant context, and authorization or policy basis—not internal chain-of-thought.
+
 ## What gets certified
 
 - **Sent messages** (`process_message_before_send`) — WHO = sender agent name
@@ -10,7 +12,8 @@ Certify every message exchanged between AutoGen agents on the MultiversX blockch
 ## Install
 
 ```bash
-pip install xproof pyautogen
+# Canonical distribution; `xproof` imports below are legacy module aliases.
+pip install prove-before-act pyautogen
 ```
 
 ## Usage
@@ -44,5 +47,5 @@ No API key or LLM required — the demo uses simulated agents and a mock Prove B
 
 - [provebeforeact.com](https://provebeforeact.com)
 - Docs (LLM-readable): [provebeforeact.com/llms.txt](https://provebeforeact.com/llms.txt)
-- [PyPI: Prove Before Act](https://pypi.org/project/xproof)
+- [PyPI: Prove Before Act](https://pypi.org/project/prove-before-act)
 - [AutoGen](https://github.com/microsoft/autogen)

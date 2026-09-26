@@ -1,8 +1,8 @@
 # Prove Before Act
 
-[![npm SDK CI](https://github.com/jasonxkensei/xProof/actions/workflows/npm-sdk.yml/badge.svg?branch=main)](https://github.com/jasonxkensei/xProof/actions/workflows/npm-sdk.yml) [![npm version](https://img.shields.io/npm/v/prove-before-act)](https://www.npmjs.com/package/prove-before-act) [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
+[![npm SDK CI](https://github.com/jasonxkensei/prove-before-act/actions/workflows/npm-sdk.yml/badge.svg?branch=main)](https://github.com/jasonxkensei/prove-before-act/actions/workflows/npm-sdk.yml) [![npm version](https://img.shields.io/npm/v/prove-before-act)](https://www.npmjs.com/package/prove-before-act) [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue)](https://www.typescriptlang.org/)
 
-On-chain decision provenance for autonomous agents. **WHY before acting. WHAT after.** Timestamps written by the chain, not your agent.
+On-chain decision provenance for autonomous agents. **Prove Before Act is the accountability pattern; xProof is its reference implementation.** Commit a declared decision basis (WHY) before acting, then record WHAT happened. WHY is never private step-by-step reasoning or internal chain-of-thought. Timestamps are written by the chain, not your agent.
 
 ```bash
 npm install prove-before-act
@@ -26,15 +26,15 @@ curl -X POST https://provebeforeact.com/api/agent/register \
 
 ### Step 2 — Anchor WHY before acting
 
-Hash your reasoning and certify it *before* your agent executes.
+Declare and hash a decision basis—the intended action, relevant context, and authorization or policy basis—and certify it *before* your agent executes. Never submit private step-by-step reasoning or internal chain-of-thought.
 
 ```bash
 curl -X POST https://provebeforeact.com/api/proof \
   -H "Authorization: Bearer pm_..." \
   -H "Content-Type: application/json" \
   -d '{
-    "file_hash": "<sha256_of_reasoning>",
-    "file_name": "reasoning.json",
+    "file_hash": "<sha256_of_declared_decision_basis>",
+    "file_name": "decision-basis.json",
     "author": "my-agent",
     "metadata": { "action_type": "decision" }
   }'
@@ -68,6 +68,15 @@ When something goes wrong, you don't guess. You verify.
 
 ---
 
+### Environment variables
+
+For server-side integrations, `XProofClient` automatically reads
+`PROVEBEFOREACT_API_KEY` and `PROVEBEFOREACT_BASE_URL` when options are omitted.
+The historical `XPROOF_API_KEY` and `XPROOF_BASE_URL` names remain supported as
+legacy fallbacks.
+
+---
+
 ## TypeScript SDK
 
 ```typescript
@@ -80,7 +89,7 @@ const client = await XProofClient.register("my-agent");
 // Step 2: Anchor WHY before acting
 const why = await client.certifyHash(
   hashString(JSON.stringify({ action: "summarize", model: "gpt-4" })),
-  "reasoning.json",
+  "decision-basis.json",
   "my-agent",
   { metadata: { action_type: "decision" } }
 );
@@ -193,7 +202,7 @@ if (result.policyCompliant) {
 
 ## Timing Breakdown
 
-Anchor the full decision chronology on-chain alongside the confidence anchor. Three ISO8601 timestamps mark **when the instruction arrived**, **when reasoning began**, and **when the action fired**. A `jurisdictionType` field records who was accountable for the decision.
+Anchor decision-lifecycle timestamps alongside the confidence anchor. Three ISO8601 timestamps mark **when the instruction arrived**, **when decision-basis preparation began**, and **when the action fired**. The legacy-named `reasoningStartedAt` field records timing only; it never contains private reasoning or internal chain-of-thought. A `jurisdictionType` field records who was accountable for the decision.
 
 ```typescript
 import { XProofClient, hashString, JURISDICTION_TYPES } from "prove-before-act";
@@ -202,14 +211,14 @@ import type { TimingBreakdown } from "prove-before-act";
 const client = new XProofClient({ apiKey: "pm_your_key" });
 
 const instructionReceivedAt = new Date().toISOString();
-// ... agent reasons ...
-const reasoningStartedAt = new Date().toISOString();
-// ... reasoning completes, agent executes ...
+// ... agent prepares a sanitized declared decision basis ...
+const decisionBasisPreparedAt = new Date().toISOString();
+// ... decision basis is committed, agent executes ...
 const actionTakenAt = new Date().toISOString();
 
 const timing: TimingBreakdown = {
   instructionReceivedAt,
-  reasoningStartedAt,
+  reasoningStartedAt: decisionBasisPreparedAt, // legacy compatibility field name
   actionTakenAt,
   jurisdictionType: "autonomous_inference", // agent reached its own conclusion
 };
@@ -228,7 +237,7 @@ const cert = await client.certifyWithConfidence(
 );
 
 // cert.timingBreakdown is populated in the API response:
-console.log(cert.timingBreakdown?.reasoningDurationMs); // ms between reasoning_started_at and action_taken_at
+console.log(cert.timingBreakdown?.reasoningDurationMs); // legacy field: ms from decision-basis preparation to action
 console.log(cert.timingBreakdown?.totalDurationMs);     // ms between instruction_received_at and action_taken_at
 ```
 
@@ -262,12 +271,12 @@ const cert = await client.verify("certification-uuid");
 if (cert.timingBreakdown) {
   const { instructionReceivedAt, reasoningDurationMs, totalDurationMs } = cert.timingBreakdown;
   console.log(`Instruction at: ${instructionReceivedAt}`);
-  console.log(`Reasoning took: ${reasoningDurationMs}ms`);
+  console.log(`Decision-basis preparation (legacy field): ${reasoningDurationMs}ms`);
   console.log(`Total latency:  ${totalDurationMs}ms`);
 }
 ```
 
-> All four fields (`instructionReceivedAt`, `reasoningStartedAt`, `actionTakenAt`, `jurisdictionType`) are optional — you can anchor whichever timestamps are available. `reasoningDurationMs` and `totalDurationMs` are computed server-side and appear only in responses, never in requests.
+> All four fields (`instructionReceivedAt`, `reasoningStartedAt`, `actionTakenAt`, `jurisdictionType`) are optional — you can anchor whichever timestamps are available. `reasoningStartedAt` and `reasoningDurationMs` are legacy compatibility names for decision-basis timing only, never private thought content. `reasoningDurationMs` and `totalDurationMs` are computed server-side and appear only in responses, never in requests.
 
 ---
 
@@ -285,7 +294,7 @@ import { XProofClient, hashString } from "prove-before-act";
 const client = new XProofClient({ apiKey: "pm_..." });
 
 // An agent is about to execute a trade it cannot undo.
-// It certifies its reasoning at 0.72 confidence — below the 0.95 threshold.
+// It certifies its declared decision basis at 0.72 confidence — below the 0.95 threshold.
 const cert = await client.certifyWithConfidence(
   hashString(JSON.stringify({ action: "sell", ticker: "AAPL", qty: 500 })),
   "trade-decision.json",
@@ -531,8 +540,8 @@ If you use VS Code, install the [ESLint extension](https://marketplace.visualstu
 ## Links
 
 - [provebeforeact.com](https://provebeforeact.com) — dashboard & docs
-- [Python SDK](https://pypi.org/project/xproof/) — `pip install xproof`
-- [Examples](https://github.com/jasonxkensei/xproof-examples) — LangChain, CrewAI, AutoGen, LlamaIndex
+- [Python SDK](https://pypi.org/project/prove-before-act/) — `pip install prove-before-act`
+- [Examples](https://github.com/jasonxkensei/prove-before-act-examples) — LangChain, CrewAI, AutoGen, LlamaIndex
 
 ## License
 

@@ -55,3 +55,10 @@ process.env.LD_LIBRARY_PATH = [webkitExtraLibPaths(), process.env.LD_LIBRARY_PAT
 
 ## Warning
 `node_modules/playwright-core/lib/coreBundle.js` is patched and will be overwritten by `npm install`. The patch must be re-applied after reinstalls.
+
+## Keyboard focus timing
+WebKit keyboard tests must wait for a shared chrome landmark before sending the first Tab. During React session restoration, early Tab presses can leave focus on `body` and inflate focus-order counts.
+
+**Why:** WebKit accepts keyboard input before the hydrated header is mounted, unlike the Chromium and Firefox runs used by the same suite.
+
+**How to apply:** Await a visible header link or other stable chrome landmark before testing focus order from document start.

@@ -3,6 +3,7 @@ import { certifications, users, agentViolations } from "@shared/schema";
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { computeTrustScoreByWallet, type TrustScore } from "./trust";
 import { logger } from "./logger";
+import { publicProofStatus, lookupProofFinality } from "./proof-finality";
 
 // TRUST-H1: Increased from 30 minutes to 4 hours.
 //
@@ -18,31 +19,6 @@ import { logger } from "./logger";
 // and cannot be explained by timing or index lag.
 export const VIOLATION_GAP_THRESHOLD_MS = 4 * 60 * 60 * 1000; // 4 hours
 
-const MX_API_URL = process.env.MULTIVERSX_API_URL || "https://api.multiversx.com";
-
-/**
- * Checks whether a MultiversX transaction hash actually exists on-chain
- * and has status "success". Returns "confirmed" | "not_found" | "failed" | "unknown".
- * Times out after 4 seconds and returns "unknown" (so a slow API doesn't block the report).
- */
-async function checkTxOnChain(txHash: string): Promise<"confirmed" | "not_found" | "failed" | "unknown"> {
-  if (!txHash || txHash.length < 60) return "unknown";
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 4000);
-  try {
-    const res = await fetch(`${MX_API_URL}/transactions/${txHash}`, { signal: controller.signal });
-    clearTimeout(timer);
-    if (res.status === 404) return "not_found";
-    if (!res.ok) return "unknown";
-    const tx = await res.json();
-    if (tx.status === "success") return "confirmed";
-    if (tx.status === "pending") return "unknown";
-    return "failed";
-  } catch {
-    clearTimeout(timer);
-    return "unknown";
-  }
-}
 
 export interface AuditTrailError {
   status: number;
@@ -67,9 +43,10 @@ function formatProofEntry(proof: any, role: string, wallet?: string) {
     role,
     proof_id: proof.id,
     file_hash: proof.fileHash,
+    auth_method: proof.authMethod,
     filename: proof.fileName,
     action_type: m.action_type || m.type || "unknown",
-    blockchain_status: proof.blockchainStatus,
+    blockchain_status: publicProofStatus(proof),
     transaction_hash: proof.transactionHash,
     transaction_url: proof.transactionUrl,
     certified_at: safeProofTimestamp(m) || proof.createdAt,
@@ -176,6 +153,7 @@ export async function reconstructAuditTrail(
         SELECT * FROM certifications
         WHERE user_id = ${user.id}
           AND blockchain_status = 'confirmed'
+          AND finality_checked_at IS NOT NULL
           AND is_public = true
           AND metadata->>'action_type' = ${baseType}
           AND metadata->>'post_id' = ${postId}
@@ -198,7 +176,7 @@ export async function reconstructAuditTrail(
       `);
       if (pairResults.rows.length > 0) {
         const row = pairResults.rows[0] as any;
-        pairedProof = { id: row.id, fileHash: row.file_hash, fileName: row.file_name, blockchainStatus: row.blockchain_status, transactionHash: row.transaction_hash, transactionUrl: row.transaction_url, createdAt: row.created_at, metadata: row.metadata };
+        pairedProof = { id: row.id, fileHash: row.file_hash, fileName: row.file_name, blockchainStatus: row.blockchain_status, finalityCheckedAt: row.finality_checked_at, authMethod: row.auth_method, transactionHash: row.transaction_hash, transactionUrl: row.transaction_url, createdAt: row.created_at, metadata: row.metadata };
         timeline.push(formatProofEntry(pairedProof, "WHAT", wallet));
       }
     } else if (isAction && postId) {
@@ -209,6 +187,7 @@ export async function reconstructAuditTrail(
         SELECT * FROM certifications
         WHERE user_id = ${user.id}
           AND blockchain_status = 'confirmed'
+          AND finality_checked_at IS NOT NULL
           AND is_public = true
           AND metadata->>'action_type' = ${reasoningType}
           AND metadata->>'post_id' = ${postId}
@@ -232,7 +211,7 @@ export async function reconstructAuditTrail(
       `);
       if (pairResults.rows.length > 0) {
         const row = pairResults.rows[0] as any;
-        pairedProof = { id: row.id, fileHash: row.file_hash, fileName: row.file_name, blockchainStatus: row.blockchain_status, transactionHash: row.transaction_hash, transactionUrl: row.transaction_url, createdAt: row.created_at, metadata: row.metadata };
+        pairedProof = { id: row.id, fileHash: row.file_hash, fileName: row.file_name, blockchainStatus: row.blockchain_status, finalityCheckedAt: row.finality_checked_at, authMethod: row.auth_method, transactionHash: row.transaction_hash, transactionUrl: row.transaction_url, createdAt: row.created_at, metadata: row.metadata };
         timeline.push(formatProofEntry(pairedProof, "WHY", wallet));
       }
       timeline.push(formatProofEntry(contestedProof, "WHAT", wallet));
@@ -250,6 +229,7 @@ export async function reconstructAuditTrail(
       FROM certifications
       WHERE user_id = ${user.id}
         AND blockchain_status = 'confirmed'
+        AND finality_checked_at IS NOT NULL
         AND is_public = true
         AND (metadata->>'type' = 'heartbeat' OR metadata->>'action_type' = 'heartbeat')
         AND created_at >= ${contestedProof.createdAt}::timestamptz - INTERVAL '24 hours'
@@ -343,8 +323,11 @@ export async function reconstructAuditTrail(
     .map((e) => e.transaction_hash as string);
 
   const uniqueHashes = [...new Set(txHashesToCheck)];
-  const onChainResults = await Promise.all(uniqueHashes.map(checkTxOnChain));
-  const onChainMap = new Map<string, "confirmed" | "not_found" | "failed" | "unknown">(
+  const onChainResults = await Promise.all(uniqueHashes.map(h => {
+    const entry = timeline.find(e => e.transaction_hash === h)!;
+    return lookupProofFinality(h, entry.file_hash, entry.auth_method);
+  }));
+  const onChainMap = new Map<string, "confirmed" | "pending" | "failed" | "unavailable">(
     uniqueHashes.map((h, i) => [h, onChainResults[i]])
   );
 
@@ -352,8 +335,8 @@ export async function reconstructAuditTrail(
   for (const entry of timeline) {
     if (entry.transaction_hash && onChainMap.has(entry.transaction_hash)) {
       const onChain = onChainMap.get(entry.transaction_hash)!;
-      if (onChain === "not_found" || onChain === "failed") {
-        entry.blockchain_status = onChain;
+      if (onChain !== "confirmed") {
+        entry.blockchain_status = onChain === "unavailable" ? "pending" : onChain;
         logger.warn("Timeline entry claims confirmed but tx not found on-chain", {
           component: "audit-trail",
           proof_id: entry.proof_id,

@@ -3,15 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Prove Before Act — The on-chain notary for AI agents</title>
-    <meta name="description" content="The on-chain notary for AI agents. Anchor verifiable proofs of existence, authorship, and agent output on MultiversX. API-first, x402-compatible, low flat per-proof pricing (see /api/pricing)." />
+    <title>Prove Before Act — The accountability pattern for autonomous agents</title>
+    <meta name="description" content="The accountability pattern for autonomous agents. xProof is the reference implementation: commit a declared decision basis before acting, never internal chain-of-thought, then verify the outcome independently." />
     
     <!-- Favicon & Icons -->
-    <link rel="icon" href="/favicon-new.png" type="image/png" />
-    <link rel="icon" href="/favicon.ico" sizes="32x32" />
-    <link rel="apple-touch-icon" href="/favicon-new.png" />
+    <link rel="icon" href="/favicon-new.png" sizes="131x129" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/site.webmanifest" />
-    <meta name="theme-color" content="#10b981" />
+    <meta name="theme-color" content="#00FF9D" />
     
     <!-- SEO & Discovery -->
     <meta name="keywords" content="blockchain certification, proof of existence, MultiversX, AI agent, x402, MCP, proof of authorship, timestamp proof, SHA-256, agent commerce, prove before act" />
@@ -21,30 +20,25 @@
     
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="Prove Before Act — The on-chain notary for AI agents" />
-    <meta property="og:description" content="Anchor verifiable proofs of what your agent saw, decided, and produced — on-chain, composable, x402-compatible." />
+    <meta property="og:title" content="Prove Before Act — The accountability pattern for autonomous agents" />
+    <meta property="og:description" content="xProof is the reference implementation: commit a declared decision basis before acting, never internal chain-of-thought, then verify the outcome independently." />
     <meta property="og:site_name" content="Prove Before Act" />
     <meta property="og:image" content="https://provebeforeact.com/og-image.jpg" />
     <meta property="og:url" content="https://provebeforeact.com" />
     
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Prove Before Act — The on-chain notary for AI agents" />
-    <meta name="twitter:description" content="Anchor verifiable proofs of what your agent saw, decided, and produced — on-chain, composable, x402-compatible." />
+    <meta name="twitter:title" content="Prove Before Act — The accountability pattern for autonomous agents" />
+    <meta name="twitter:description" content="xProof is the reference implementation: commit a declared decision basis before acting, never internal chain-of-thought, then verify the outcome independently." />
     <meta name="twitter:image" content="https://provebeforeact.com/og-image.jpg" />
     
     <!-- AI Agent Discovery -->
     <link rel="ai-plugin" href="/.well-known/ai-plugin.json" />
     <link rel="openapi" href="/api/acp/openapi.json" type="application/json" />
-    <meta name="ai:service" content="proof-of-existence" />
+    <meta name="ai:service" content="pre-execution-accountability" />
     <meta name="ai:api" content="/api/acp/products" />
     <meta name="ai:spec" content="/.well-known/provebeforeact.md" />
     
-    <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-
     <!-- Structured Data: Organization -->
     <script type="application/ld+json">
     {
@@ -53,11 +47,18 @@
       "name": "Prove Before Act",
       "url": "https://provebeforeact.com",
       "logo": "https://provebeforeact.com/icon-512.png",
-      "description": "Proof and accountability layer for AI agents. Anchors verifiable proofs on MultiversX, enforces audit logging, detects violations on Base.",
-      "sameAs": [
-        "https://github.com/jasonxkensei/xProof",
-        "https://clawhub.ai/jasonxkensei/prove-before-act"
-      ],
+       "description": "The accountability pattern for autonomous agents. xProof is the reference implementation: commit a declared decision basis before acting, never internal chain-of-thought, then verify the outcome independently.",
+       "sameAs": [
+         "https://github.com/jasonxkensei/prove-before-act",
+         "https://clawhub.ai/jasonxkensei/skills/xproof"
+       ],
+       "founder": {
+         "@type": "Person",
+         "name": "Jason Petitfourg",
+         "jobTitle": "AI Product Builder",
+         "url": "https://provebeforeact.com/founder",
+         "sameAs": ["https://github.com/jasonxkensei"]
+       },
       "foundingDate": "2025",
       "knowsAbout": ["blockchain certification", "proof of existence", "AI agent trust", "MultiversX", "x402 protocol", "MCP", "agent accountability"]
     }
@@ -72,13 +73,12 @@
       "url": "https://provebeforeact.com",
       "applicationCategory": "DeveloperApplication",
       "operatingSystem": "Web",
-      "description": "On-chain notary for AI agents. Anchor verifiable proofs of existence, authorship, and agent decisions on MultiversX. REST API, MCP, x402 payment gate.",
-      "offers": {
-        "@type": "Offer",
-        "price": "0.01",
-        "priceCurrency": "USD",
-        "description": "Per-proof pricing. No subscription. 10 free proofs on registration."
-      },
+       "description": "Reference implementation of the accountability pattern for autonomous agents. Commit a declared decision basis before acting, never internal chain-of-thought, then verify the outcome independently with REST, MCP, or x402.",
+       "offers": {
+         "@type": "Offer",
+         "priceCurrency": "USD",
+         "description": "Live per-proof pricing at https://provebeforeact.com/api/pricing. Trial credits are available on registration."
+       },
       "featureList": [
         "SHA-256 blockchain anchoring on MultiversX",
         "Privacy-preserving: files never leave your device",
@@ -86,7 +86,7 @@
         "MCP (Model Context Protocol) for AI agents",
         "x402 HTTP-native payments with USDC on Base",
         "Agent Audit Log Standard (4W: WHO/WHAT/WHEN/WHY)",
-        "Violation detection on Base smart contracts",
+         "Operator-configurable audit trail policies",
         "GitHub Action for CI/CD integration",
         "Downloadable PDF certificate with QR code",
         "Trust scoring and agent leaderboard"
@@ -110,7 +110,7 @@
           "name": "What is Prove Before Act?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "Prove Before Act is a proof and accountability layer for AI agents. It anchors verifiable proofs of existence, authorship, and timestamp on the MultiversX blockchain. Users and agents submit a SHA-256 hash of their file or decision, which is permanently recorded on-chain as tamper-proof evidence."
+            "text": "Prove Before Act is the accountability pattern for autonomous agents. xProof is the reference implementation: agents commit a declared decision basis before acting, never internal chain-of-thought, then anchor independently verifiable evidence of the outcome."
           }
         },
         {
@@ -142,7 +142,7 @@
           "name": "How do AI agents integrate with Prove Before Act?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "AI agents can integrate via REST API with an API key, Model Context Protocol (MCP) for autonomous decision anchoring, or x402 HTTP-native payments for zero-setup proof creation. The Agent Audit Log Standard describes a pre-execution accountability pattern — agents anchor their reasoning (WHY) before acting (WHAT); blocking on a proof is a policy the operator implements in agent code."
+            "text": "AI agents can integrate via REST API with an API key, Model Context Protocol (MCP) for autonomous decision anchoring, or x402 HTTP-native payments for zero-setup proof creation. The Agent Audit Log Standard describes the pre-execution accountability pattern: agents commit a declared decision basis (WHY), never internal chain-of-thought, before acting (WHAT)."
           }
         },
         {
@@ -158,7 +158,7 @@
           "name": "What is the 4W framework?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "The 4W framework (WHO/WHAT/WHEN/WHY) is the Prove Before Act Agent Proof Standard for accountability. WHO identifies the agent, WHAT records the action, WHEN timestamps it on-chain, and WHY anchors the reasoning before execution. This creates a complete, verifiable audit trail for autonomous agent decisions."
+            "text": "The 4W framework (WHO/WHAT/WHEN/WHY) is the Prove Before Act Agent Proof Standard for accountability. WHO identifies the agent, WHAT records the action, WHEN timestamps it on-chain, and WHY records a declared decision basis before execution — never internal chain-of-thought. This creates a complete, verifiable audit trail for autonomous agent decisions."
           }
         },
         {

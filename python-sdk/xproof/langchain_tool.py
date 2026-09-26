@@ -36,7 +36,8 @@ class _CertifyInput(BaseModel):  # type: ignore[misc]  # BaseModel is Any when l
     decision_text: str = Field(
         default="",
         description=(
-            "The agent's reasoning or decision payload as a plain string. "
+            "A sanitized declared decision-basis record as a plain string, never "
+            "private step-by-step reasoning or internal chain-of-thought. "
             "SHA-256 hashed automatically to produce file_hash. "
             "Leave empty if you supply file_hash directly."
         ),
@@ -94,7 +95,13 @@ class _CertifyInput(BaseModel):  # type: ignore[misc]  # BaseModel is Any when l
     )
     why: Optional[str] = Field(
         default=None,
-        description="4W metadata — reason or instruction that triggered the decision.",
+        description=(
+            "4W metadata — legacy fingerprint-only name for the declared decision "
+            "basis. Any value is reduced to a SHA-256 fingerprint before the "
+            "request is serialized and is never transmitted as plaintext, so it is "
+            "unsafe for private rationale or policy text. Pass a safe public "
+            "classification/opaque ID or omit it."
+        ),
     )
     metadata: Optional[dict[str, Any]] = Field(
         default=None,
@@ -136,7 +143,7 @@ class XProofCertifyTool(BaseTool):  # type: ignore[misc]  # BaseTool is Any when
             "threshold_stage": "pre-commitment",
             "decision_id": "run-2026-04-20",
             "reversibility_class": "irreversible",
-            "why": "Scheduled GDPR data-retention cleanup",
+            "why": "gdpr-retention-cleanup",  # safe public label; fingerprinted before send
         })
         # result is the transaction_hash — safe to proceed.
     """
@@ -201,7 +208,10 @@ class XProofCertifyTool(BaseTool):  # type: ignore[misc]  # BaseTool is Any when
             who: 4W — agent identity (defaults to the resolved author).
             what: 4W — action description (defaults to the hash).
             when: 4W — ISO-8601 timestamp (defaults to current UTC time).
-            why: 4W — reason for the decision.
+            why: 4W — legacy fingerprint-only name for the declared decision
+                basis. Reduced to a SHA-256 fingerprint before serialization;
+                never sent as plaintext. Unsafe for private text — pass a safe
+                public classification/opaque ID or omit it.
             metadata: Extra key-value pairs stored with the proof.
 
         Returns:

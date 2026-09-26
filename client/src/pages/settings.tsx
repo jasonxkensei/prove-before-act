@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Shield, ArrowLeft, ExternalLink, Trophy, Award, BadgeCheck, Trash2, Plus, TrendingUp, Zap, Flame, Star, KeyRound, CheckCircle2, ChevronDown, LayoutDashboard } from "lucide-react";
+import { Shield, ArrowLeft, ExternalLink, Trophy, Award, BadgeCheck, Trash2, Plus, TrendingUp, Zap, Flame, Star, KeyRound, CheckCircle2, ChevronDown, LayoutDashboard, CreditCard } from "lucide-react";
 import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -46,18 +46,18 @@ const DOMAIN_LABELS: Record<string, string> = {
 };
 
 const DOMAIN_STYLES: Record<string, string> = {
-  healthcare: "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/25",
-  finance:    "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/25",
-  legal:      "bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/25",
-  security:   "bg-orange-500/10 text-orange-700 dark:text-orange-400 border-orange-500/25",
-  research:   "bg-cyan-500/10 text-cyan-700 dark:text-cyan-400 border-cyan-500/25",
+  healthcare: "bg-destructive/10 text-destructive border-destructive/25",
+  finance:    "status-warning border-current/30 bg-current/10",
+  legal:      "bg-accent text-accent-foreground border-border",
+  security:   "status-warning border-current/30 bg-current/10",
+  research:   "bg-primary/10 text-primary border-primary/25",
   other:      "bg-muted text-muted-foreground border-border",
 };
 
 const TRUST_LEVEL_STYLES: Record<string, string> = {
-  Verified: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
-  Trusted:  "bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30",
-  Active:   "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30",
+  Verified: "status-verified border-current/30 bg-current/10",
+  Trusted:  "status-verified border-current/30 bg-current/10",
+  Active:   "bg-primary/10 text-primary border-primary/30",
   Newcomer: "bg-muted text-muted-foreground border-border",
 };
 
@@ -301,10 +301,10 @@ export default function Settings() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <header className="operational-header">
         <div className="container flex h-16 items-center justify-between gap-4">
           <a href="/" className="flex items-center gap-2" data-testid="link-logo-home">
-            <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
+            <img src="/pba-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
           </a>
           <div className="flex items-center gap-2">
             <Button asChild variant="ghost" size="sm" data-testid="button-leaderboard">
@@ -322,15 +322,16 @@ export default function Settings() {
         </div>
       </header>
 
-      <div className="container mx-auto max-w-4xl py-12">
+      <main id="main-content" className="container mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
         <div className="mb-8">
-          <h1 className="mb-2 text-3xl font-bold tracking-tight">Settings</h1>
-          <p className="text-muted-foreground">Your Prove Before Act account details</p>
+          <p className="mb-2 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">Account controls</p>
+          <h1 className="mb-2 text-3xl font-semibold tracking-tight">Settings</h1>
+          <p className="text-muted-foreground">Manage your account, public record, and issued attestations.</p>
         </div>
 
         {/* Account info */}
-        <Card className="mb-6">
-          <CardHeader>
+        <Card className="mb-6 border-border/70 bg-muted/10 shadow-none">
+          <CardHeader className="border-b border-border/70 pb-4">
             <CardTitle>Account information</CardTitle>
             <CardDescription>Your wallet connection details</CardDescription>
           </CardHeader>
@@ -356,9 +357,34 @@ export default function Settings() {
           </CardContent>
         </Card>
 
+        {/* Billing and prepaid credits */}
+        <Card className="mb-6 border-primary/25 bg-primary/5 shadow-none" data-testid="card-billing">
+          <CardHeader className="border-b border-primary/15 pb-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <CreditCard className="h-5 w-5 text-primary" />
+                  Billing and credits
+                </CardTitle>
+                <CardDescription className="mt-1">
+                  Buy prepaid certification packs with Stripe. USDC on Base remains available for API purchases.
+                </CardDescription>
+              </div>
+              <Button asChild size="sm" data-testid="button-open-billing">
+                <Link href="/billing">View packs</Link>
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-4">
+            <p className="text-sm text-muted-foreground">
+              Stripe checkout is hosted securely and credits are added only after the signed payment confirmation is verified.
+            </p>
+          </CardContent>
+        </Card>
+
         {/* Claim trial key */}
-        <Card className="mb-6" data-testid="card-claim-trial">
-          <CardHeader>
+        <Card className="mb-6 border-border/70 bg-muted/10 shadow-none" data-testid="card-claim-trial">
+          <CardHeader className="border-b border-border/70 pb-4">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <CardTitle className="flex items-center gap-2">
@@ -386,7 +412,7 @@ export default function Settings() {
           {(showClaimForm || claimResult?.success) && (
             <CardContent>
               {claimResult?.success ? (
-                <div className="flex items-start gap-3 rounded-md border border-primary/20 bg-primary/5 p-4" data-testid="claim-success">
+                <div className="flex items-start gap-3 border-l-2 border-primary bg-primary/5 p-4" data-testid="claim-success">
                   <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
                   <div className="space-y-2">
                     <p className="text-sm font-medium">{claimResult.message}</p>
@@ -454,8 +480,8 @@ export default function Settings() {
         </Card>
 
         {/* Agent profile */}
-        <Card className="mb-6">
-          <CardHeader>
+        <Card className="mb-6 border-border/70 bg-muted/10 shadow-none">
+          <CardHeader className="border-b border-border/70 pb-4">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <CardTitle className="flex items-center gap-2">
@@ -536,7 +562,7 @@ export default function Settings() {
                 />
               </div>
 
-              <div className="flex items-center justify-between rounded-md border px-4 py-3">
+              <div className="flex items-center justify-between border-y border-border/70 py-3">
                 <div>
                   <p className="text-sm font-medium">Make my profile public</p>
                   <p className="text-xs text-muted-foreground">
@@ -557,7 +583,7 @@ export default function Settings() {
               </div>
 
               {isPublic && user?.walletAddress && (
-                <div className="flex items-center gap-2 rounded-md bg-muted/50 px-4 py-3 text-sm">
+                <div className="flex items-center gap-2 border-l-2 border-primary bg-muted/30 px-4 py-3 text-sm">
                   <span className="text-muted-foreground">Public profile URL:</span>
                   <a
                     href={`/agent/${user.walletAddress}`}
@@ -587,8 +613,8 @@ export default function Settings() {
 
         {/* Trust Score Preview */}
         {trustPreview && (
-          <Card className="mb-6" data-testid="card-trust-preview">
-            <CardHeader>
+          <Card className="mb-6 border-border/70 bg-muted/10 shadow-none" data-testid="card-trust-preview">
+            <CardHeader className="border-b border-border/70 pb-4">
               <CardTitle className="flex items-center gap-2">
                 <Trophy className="h-5 w-5 text-primary" />
                 Trust Score Preview
@@ -599,44 +625,49 @@ export default function Settings() {
             </CardHeader>
             <CardContent className="space-y-5">
               <div className="flex flex-wrap items-center gap-4">
-                <Badge
-                  variant="outline"
-                  className={`text-sm ${TRUST_LEVEL_STYLES[trustPreview.level] ?? TRUST_LEVEL_STYLES.Newcomer}`}
-                  data-testid="badge-trust-level"
-                >
-                  {trustPreview.level === "Verified" && <Shield className="mr-1 h-3.5 w-3.5" />}
-                  {trustPreview.level}
-                </Badge>
-                <span className="text-3xl font-bold tabular-nums" data-testid="text-trust-score">
-                  {trustPreview.score}
-                </span>
-                <span className="text-sm text-muted-foreground">pts</span>
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">Current level</p>
+                  <div className="mt-1 flex items-center gap-3">
+                    <Badge
+                      variant="outline"
+                      className={`text-sm ${TRUST_LEVEL_STYLES[trustPreview.level] ?? TRUST_LEVEL_STYLES.Newcomer}`}
+                      data-testid="badge-trust-level"
+                    >
+                      {trustPreview.level === "Verified" && <Shield className="mr-1 h-3.5 w-3.5" />}
+                      {trustPreview.level}
+                    </Badge>
+                    <span className="text-3xl font-semibold tabular-nums" data-testid="text-trust-score">
+                      {trustPreview.score}
+                    </span>
+                    <span className="text-sm text-muted-foreground">pts</span>
+                  </div>
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <div className="rounded-md border p-3 text-center" data-testid="stat-cert-total">
+                <div className="border border-border/70 bg-background/20 p-3 text-center" data-testid="stat-cert-total">
                   <Zap className="mx-auto mb-1 h-4 w-4 text-muted-foreground" />
                   <p className="text-xl font-semibold tabular-nums">{trustPreview.certTotal}</p>
                   <p className="text-xs text-muted-foreground">Total Certs</p>
                 </div>
-                <div className="rounded-md border p-3 text-center" data-testid="stat-cert-month">
+                <div className="border border-border/70 bg-background/20 p-3 text-center" data-testid="stat-cert-month">
                   <TrendingUp className="mx-auto mb-1 h-4 w-4 text-muted-foreground" />
                   <p className="text-xl font-semibold tabular-nums">{trustPreview.certLast30d}</p>
                   <p className="text-xs text-muted-foreground">This Month</p>
                 </div>
-                <div className="rounded-md border p-3 text-center" data-testid="stat-streak">
+                <div className="border border-border/70 bg-background/20 p-3 text-center" data-testid="stat-streak">
                   <Flame className="mx-auto mb-1 h-4 w-4 text-muted-foreground" />
                   <p className="text-xl font-semibold tabular-nums">{trustPreview.streakWeeks}</p>
                   <p className="text-xs text-muted-foreground">Streak (weeks)</p>
                 </div>
-                <div className="rounded-md border p-3 text-center" data-testid="stat-attestations">
+                <div className="border border-border/70 bg-background/20 p-3 text-center" data-testid="stat-attestations">
                   <Star className="mx-auto mb-1 h-4 w-4 text-muted-foreground" />
                   <p className="text-xl font-semibold tabular-nums">{trustPreview.activeAttestations}</p>
                   <p className="text-xs text-muted-foreground">Attestations</p>
                 </div>
               </div>
 
-              <div className="rounded-md bg-muted/50 px-4 py-3 text-sm" data-testid="text-rank-info">
+                <div className="border-l-2 border-border bg-muted/30 px-4 py-3 text-sm" data-testid="text-rank-info">
                 {trustPreview.isPublicProfile ? (
                   <span>
                     Currently ranked <span className="font-semibold">#{trustPreview.hypotheticalRank}</span>.{" "}
@@ -656,7 +687,7 @@ export default function Settings() {
                 )}
               </div>
 
-              <div className="rounded-md border border-dashed px-4 py-3 text-sm text-muted-foreground" data-testid="text-next-level">
+              <div className="status-warning border-l-2 border-current bg-current/5 px-4 py-3 text-sm text-muted-foreground" data-testid="text-next-level">
                 {NEXT_LEVEL_HINTS[trustPreview.level] ?? NEXT_LEVEL_HINTS.Newcomer}
               </div>
             </CardContent>
@@ -665,8 +696,8 @@ export default function Settings() {
 
         {/* Issue Domain Attestation */}
         {isAuthenticated && (
-          <Card className="mb-6">
-            <CardHeader>
+          <Card className="mb-6 border-border/70 bg-muted/10 shadow-none">
+            <CardHeader className="border-b border-border/70 pb-4">
               <div className="flex flex-wrap items-start justify-between gap-2">
                 <div>
                   <CardTitle className="flex items-center gap-2">
@@ -694,7 +725,7 @@ export default function Settings() {
               {showAttestForm && (
                 <form
                   onSubmit={handleSubmitAttest((data) => attestMutation.mutate(data))}
-                  className="space-y-4 rounded-md border bg-muted/30 p-4"
+                  className="space-y-4 border-l-2 border-primary bg-muted/20 p-4"
                   data-testid="form-issue-attestation"
                 >
                   <p className="text-sm font-medium">New attestation</p>
@@ -836,11 +867,11 @@ export default function Settings() {
                         <div
                           key={att.id}
                           data-testid={`row-issued-attestation-${att.id}`}
-                          className="flex flex-wrap items-start justify-between gap-3 rounded-md border p-3"
+                          className="flex flex-wrap items-start justify-between gap-3 border border-border/70 bg-background/20 p-3"
                         >
                           <div className="space-y-1">
                             <div className="flex flex-wrap items-center gap-2">
-                              <BadgeCheck className="h-4 w-4 text-emerald-500" />
+                              <BadgeCheck className="h-4 w-4 text-primary" />
                               <span className="text-sm font-medium">{att.title}</span>
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
@@ -879,7 +910,7 @@ export default function Settings() {
                         <div
                           key={att.id}
                           data-testid={`row-revoked-attestation-${att.id}`}
-                          className="flex flex-wrap items-start gap-3 rounded-md border border-dashed p-3 opacity-60"
+                          className="flex flex-wrap items-start gap-3 border-l-2 border-destructive/60 bg-muted/20 p-3 opacity-70"
                         >
                           <div className="space-y-1">
                             <span className="text-sm font-medium line-through">{att.title}</span>
@@ -902,7 +933,7 @@ export default function Settings() {
             </CardContent>
           </Card>
         )}
-      </div>
+      </main>
     </div>
   );
 }

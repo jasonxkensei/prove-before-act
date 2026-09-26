@@ -11,8 +11,10 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { StatusIndicator } from "@/components/status-indicator";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { PublicSiteFooter, PublicSiteHeader } from "@/components/public-site-chrome";
 import { format, formatDistanceToNow } from "date-fns";
 import { useState } from "react";
 
@@ -52,7 +54,7 @@ function CopyButton({ value, label }: { value: string; label: string }) {
   return (
     <Button size="icon" variant="ghost" onClick={copy} data-testid={`button-copy-${label.toLowerCase().replace(/\s+/g, '-')}`}>
       {copied
-        ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+        ? <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
         : <Copy className="h-3.5 w-3.5" />
       }
     </Button>
@@ -79,19 +81,7 @@ export default function AttestationDetailPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between">
-          <Link href="/" data-testid="link-logo-home" className="flex items-center gap-2">
-            <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
-          </Link>
-          <Button asChild variant="ghost" size="sm" data-testid="button-back-leaderboard">
-            <Link href="/leaderboard">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Leaderboard
-            </Link>
-          </Button>
-        </div>
-      </header>
+      <PublicSiteHeader />
 
       <div className="container mx-auto max-w-2xl py-12">
         {isLoading && (
@@ -127,18 +117,18 @@ export default function AttestationDetailPage() {
                     {/* Status badge */}
                     <div className="flex items-center gap-2">
                       {isRevoked ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-md border border-destructive/30 bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive" data-testid="badge-revoked">
+                        <StatusIndicator status="failed" className="inline-flex items-center gap-1.5 rounded-md border border-current/30 bg-current/10 px-2.5 py-1 text-xs font-semibold" data-testid="badge-revoked">
                           Revoked
-                        </span>
+                        </StatusIndicator>
                       ) : isExpired ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground" data-testid="badge-expired">
+                        <StatusIndicator status="warning" className="inline-flex items-center gap-1.5 rounded-md border border-current/30 bg-current/10 px-2.5 py-1 text-xs font-semibold" data-testid="badge-expired">
                           Expired
-                        </span>
+                        </StatusIndicator>
                       ) : (
-                        <span className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400" data-testid="badge-active">
+                        <StatusIndicator status="verified" className="inline-flex items-center gap-1.5 rounded-md border border-current/30 bg-current/10 px-2.5 py-1 text-xs font-semibold" data-testid="badge-active">
                           <BadgeCheck className="h-3.5 w-3.5" />
                           Active attestation
-                        </span>
+                        </StatusIndicator>
                       )}
                       <span className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-medium ${domainStyle.color}`} data-testid="badge-domain">
                         {domainStyle.label}
@@ -265,8 +255,8 @@ export default function AttestationDetailPage() {
 
             {/* Trust impact */}
             {isActive && (
-              <div className="rounded-md border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-sm" data-testid="card-trust-impact">
-                <p className="font-medium text-emerald-700 dark:text-emerald-400">
+              <div className="rounded-md border border-primary/20 bg-primary/5 px-4 py-3 text-sm" data-testid="card-trust-impact">
+                <p className="font-medium text-primary">
                   +50 trust score contribution
                 </p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
@@ -277,6 +267,7 @@ export default function AttestationDetailPage() {
           </div>
         )}
       </div>
+      <PublicSiteFooter />
     </div>
   );
 }

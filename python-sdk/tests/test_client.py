@@ -417,7 +417,9 @@ def test_certify_hash_with_4w_metadata():
     assert meta["who"] == "erd1abc..."
     assert meta["what"] == "sha256-of-action"
     assert meta["when"] == "2026-03-20T12:00:00Z"
-    assert meta["why"] == "sha256-of-instruction"
+    # why is fingerprint-only: raw text never appears; it is SHA-256 hashed.
+    assert meta["why"] == hashlib.sha256(b"sha256-of-instruction").hexdigest()
+    assert "sha256-of-instruction" not in _body_text(responses.calls[0])
     assert meta["custom_key"] == "custom_value"
 
 
@@ -557,7 +559,9 @@ def test_certify_with_confidence_includes_4w_fields():
     assert meta["who"] == "erd1agent..."
     assert meta["what"] == "sha256-of-plan"
     assert meta["when"] == "2026-04-20T09:00:00Z"
-    assert meta["why"] == "sha256-of-goal"
+    # why is fingerprint-only: raw text never appears; it is SHA-256 hashed.
+    assert meta["why"] == hashlib.sha256(b"sha256-of-goal").hexdigest()
+    assert "sha256-of-goal" not in _body_text(responses.calls[0])
     assert meta["extra_key"] == "extra_value"
 
 
@@ -897,8 +901,10 @@ def test_certify_with_confidence_why_present_when_provided():
         decision_id="dec-4w-why",
         why="GDPR cleanup scheduled",
     )
+    # why is fingerprint-only: raw text never appears; it is SHA-256 hashed.
     meta = json.loads(responses.calls[0].request.body)["metadata"]
-    assert meta["why"] == "GDPR cleanup scheduled"
+    assert meta["why"] == hashlib.sha256(b"GDPR cleanup scheduled").hexdigest()
+    assert "GDPR cleanup scheduled" not in _body_text(responses.calls[0])
 
 
 @responses.activate
@@ -1045,6 +1051,10 @@ def test_batch_certify_with_metadata_in_certify_entry():
     }
     result = client.batch_certify([entry])
     assert result.summary.created == 1
+    # why in a batch entry's metadata is fingerprint-only: raw text never sent.
+    file_meta = json.loads(responses.calls[0].request.body)["files"][0]["metadata"]
+    assert file_meta["why"] == hashlib.sha256(b"audit").hexdigest()
+    assert "audit" not in _body_text(responses.calls[0])
 
 
 # ---------------------------------------------------------------------------
@@ -1250,7 +1260,8 @@ def test_certify_with_confidence_timing_and_4w_combined():
     )
     meta = json.loads(responses.calls[0].request.body)["metadata"]
     assert meta["who"] == "erd1xyz..."
-    assert meta["why"] == "GDPR retention audit"
+    # why is fingerprint-only: raw text never appears; it is SHA-256 hashed.
+    assert meta["why"] == hashlib.sha256(b"GDPR retention audit").hexdigest()
     assert meta["reversibility_class"] == "irreversible"
     assert meta["instruction_received_at"] == "2026-04-20T08:00:00Z"
     assert meta["action_taken_at"] == "2026-04-20T08:00:10Z"
@@ -1375,3 +1386,143 @@ def test_batch_certify_invalid_jurisdiction_type_raises():
     }
     with pytest.raises(ValueError, match="timing\\['jurisdiction_type'\\] must be one of"):
         client.batch_certify([entry])
+
+
+# ---------------------------------------------------------------------------
+# Privacy: legacy `why` name is fingerprint-only (never plaintext on the wire)
+# ---------------------------------------------------------------------------
+
+_RAW_WHY = "delete 15000 EU PII records because retention window expired"
+
+
+def _fp(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _body_text(call) -> str:
+    """Return a request body as text regardless of bytes/str encoding."""
+    body = call.request.body
+    return body.decode("utf-8") if isinstance(body, (bytes, bytearray)) else body
+
+
+@responses.activate
+def test_certify_hash_why_argument_is_fingerprinted():
+    """An explicit `why` argument is SHA-256 fingerprinted before serialization."""
+    responses.add(responses.POST, f"{BASE}/api/proof", json=CERT_RESPONSE, status=201)
+    client = XProofClient(api_key="pm_test")
+    client.certify_hash("a" * 64, "f.json", "agent", why=_RAW_WHY)
+    body = _body_text(responses.calls[0])
+    meta = json.loads(body)["metadata"]
+    assert meta["why"] == _fp(_RAW_WHY)
+    assert _RAW_WHY not in body
+
+
+@responses.activate
+def test_certify_hash_metadata_only_why_is_fingerprinted():
+    """A `metadata['why']` entry (no explicit arg) is fingerprinted too."""
+    responses.add(responses.POST, f"{BASE}/api/proof", json=CERT_RESPONSE, status=201)
+    client = XProofClient(api_key="pm_test")
+    client.certify_hash("a" * 64, "f.json", "agent", metadata={"why": _RAW_WHY})
+    body = _body_text(responses.calls[0])
+    meta = json.loads(body)["metadata"]
+    assert meta["why"] == _fp(_RAW_WHY)
+    assert _RAW_WHY not in body
+
+
+@responses.activate
+def test_certify_with_confidence_why_is_fingerprinted():
+    """certify_with_confidence fingerprints an explicit `why` argument."""
+    responses.add(responses.POST, f"{BASE}/api/proof", json=CERT_RESPONSE, status=201)
+    client = XProofClient(api_key="pm_test")
+    client.certify_with_confidence(
+        file_hash="a" * 64,
+        file_name="f.json",
+        author="agent",
+        confidence_level=0.9,
+        threshold_stage="pre-commitment",
+        decision_id="dec-priv-1",
+        why=_RAW_WHY,
+    )
+    body = _body_text(responses.calls[0])
+    meta = json.loads(body)["metadata"]
+    assert meta["why"] == _fp(_RAW_WHY)
+    assert _RAW_WHY not in body
+
+
+@responses.activate
+def test_certify_with_confidence_metadata_only_why_is_fingerprinted():
+    """certify_with_confidence fingerprints a metadata-only `why` entry."""
+    responses.add(responses.POST, f"{BASE}/api/proof", json=CERT_RESPONSE, status=201)
+    client = XProofClient(api_key="pm_test")
+    client.certify_with_confidence(
+        file_hash="a" * 64,
+        file_name="f.json",
+        author="agent",
+        confidence_level=0.9,
+        threshold_stage="pre-commitment",
+        decision_id="dec-priv-2",
+        metadata={"why": _RAW_WHY},
+    )
+    body = _body_text(responses.calls[0])
+    meta = json.loads(body)["metadata"]
+    assert meta["why"] == _fp(_RAW_WHY)
+    assert _RAW_WHY not in body
+
+
+@responses.activate
+def test_batch_certify_why_in_each_entry_is_fingerprinted():
+    """Each batch entry's `metadata['why']` is fingerprinted independently."""
+    responses.add(
+        responses.POST,
+        f"{BASE}/api/batch",
+        json={
+            "batch_id": "batch-priv",
+            "total": 2,
+            "created": 2,
+            "existing": 0,
+            "results": [
+                {"file_hash": "h1", "filename": "a.json", "proof_id": "p1",
+                 "verify_url": "", "badge_url": "", "status": "created"},
+                {"file_hash": "h2", "filename": "b.json", "proof_id": "p2",
+                 "verify_url": "", "badge_url": "", "status": "created"},
+            ],
+        },
+        status=201,
+    )
+    client = XProofClient(api_key="pm_test")
+    why_a = _RAW_WHY + " A"
+    why_b = _RAW_WHY + " B"
+    client.batch_certify(
+        [
+            {"file_hash": "h1", "file_name": "a.json", "metadata": {"why": why_a}},
+            {"file_hash": "h2", "file_name": "b.json", "metadata": {"why": why_b}},
+        ]
+    )
+    body = _body_text(responses.calls[0])
+    files = json.loads(body)["files"]
+    assert files[0]["metadata"]["why"] == _fp(why_a)
+    assert files[1]["metadata"]["why"] == _fp(why_b)
+    assert why_a not in body
+    assert why_b not in body
+
+
+@responses.activate
+def test_why_canonical_hash_is_preserved():
+    """An already-canonical 64-hex `why` value is preserved verbatim (idempotent)."""
+    responses.add(responses.POST, f"{BASE}/api/proof", json=CERT_RESPONSE, status=201)
+    client = XProofClient(api_key="pm_test")
+    canonical = _fp("something already hashed")
+    client.certify_hash("a" * 64, "f.json", "agent", why=canonical)
+    meta = json.loads(responses.calls[0].request.body)["metadata"]
+    assert meta["why"] == canonical
+
+
+@responses.activate
+def test_why_non_string_value_is_fingerprinted():
+    """A non-string `why` value is coerced to text then fingerprinted."""
+    responses.add(responses.POST, f"{BASE}/api/proof", json=CERT_RESPONSE, status=201)
+    client = XProofClient(api_key="pm_test")
+    client.certify_hash("a" * 64, "f.json", "agent", metadata={"why": 12345})
+    body = _body_text(responses.calls[0])
+    meta = json.loads(body)["metadata"]
+    assert meta["why"] == _fp("12345")

@@ -56,7 +56,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/jasonxkensei/xproof.git"
+    "url": "git+https://github.com/jasonxkensei/prove-before-act.git"
   },
   "homepage": "https://provebeforeact.com",
   "engines": {
@@ -68,6 +68,11 @@
     "eslint": "^9.0.0",
     "tsup": "^8.0.0",
     "typescript": "^5.0.0",
-    "vitest": "^3.2.6"
+    "vitest": "^4.1.11"
+  },
+  "overrides": {
+    "esbuild": "^0.28.2",
+    "nanoid": "^3.3.18",
+    "js-yaml": "^4.3.2"
   }
 }

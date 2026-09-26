@@ -6,7 +6,8 @@ MultiversX blockchain using xProof's REST API directly.
 Run: python main.py
 
 Requirements:
-    pip install openai-agents xproof
+    pip install prove-before-act[openai-agents]
+    # The xproof module name below is a legacy compatibility alias.
 
 This demo uses mock objects so no real API key or LLM backend is
 needed. In production replace XProofClient with your real API key.

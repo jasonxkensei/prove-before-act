@@ -28,7 +28,9 @@ class TimingBreakdown(TypedDict, total=False):
     """Decomposed decision timeline for forensic audit.
 
     Pass a ``TimingBreakdown`` to :meth:`~xproof.XProofClient.certify_with_confidence`
-    via the ``timing`` parameter to anchor the full decision chronology on-chain.
+    via the ``timing`` parameter to anchor decision-lifecycle timing on-chain.
+    Timing fields describe a sanitized declared decision basis, never private
+    step-by-step reasoning or internal chain-of-thought.
 
     All fields are optional and ISO8601 date-time strings with timezone offset
     (e.g. ``"2026-04-20T14:31:58Z"``).
@@ -37,8 +39,8 @@ class TimingBreakdown(TypedDict, total=False):
     :class:`~xproof.ConfidenceTrailStage`, two additional computed fields are
     included:
 
-    - ``reasoning_duration_ms`` — milliseconds between *reasoning_started_at*
-      and *action_taken_at* (the verifiable "thinking time").
+    - ``reasoning_duration_ms`` — legacy response field for milliseconds between
+      decision-basis preparation and *action_taken_at*.
     - ``total_duration_ms`` — milliseconds between *instruction_received_at*
       and *action_taken_at*.
     """

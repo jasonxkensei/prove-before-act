@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { hashFile } from "@/lib/hashUtils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +17,9 @@ import {
   Copy,
   Loader2,
   Key,
+  File,
+  ExternalLink,
+  Upload,
   Zap,
   Play,
   Network,
@@ -29,7 +33,14 @@ import {
   Users,
 } from "lucide-react";
 import { WalletLoginModal } from "@/components/wallet-login-modal";
-import { trackAgentCta, useAgentCtaExposure } from "@/lib/conversionTracking";
+import { ensureConversionVisitor, trackAgentCta, useAgentCtaExposure } from "@/lib/conversionTracking";
+import { trackEvent } from "@/lib/analytics";
+import {
+  clearStoredTrialKey,
+  markTrialKeyHandled,
+  readStoredTrialKey,
+  storeTrialKey,
+} from "@/lib/trial-key-storage";
 import {
   Accordion,
   AccordionContent,
@@ -50,32 +61,86 @@ export default function LandingZh() {
   const [trialAgentName, setTrialAgentName] = useState<string>("");
   const [copied, setCopied] = useState(false);
   const [trialError, setTrialError] = useState<string | null>(null);
-  const heroTrialCtaRef = useAgentCtaExposure<HTMLButtonElement>("landing_zh", "trial_register");
+  const trialErrorRef = useRef<HTMLParagraphElement>(null);
+  const [trialKeyHandled, setTrialKeyHandled] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [proofHash, setProofHash] = useState("");
+  const [isHashing, setIsHashing] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [proofResult, setProofResult] = useState<{
+    proof_id?: string | number;
+    verify_url?: string;
+    blockchain?: { transaction_hash?: string; explorer_url?: string };
+    trial?: { remaining?: number };
+  } | null>(null);
+  const [proofError, setProofError] = useState<string | null>(null);
+  const heroTrialCtaRef = useAgentCtaExposure<HTMLAnchorElement>("landing_zh", "hero_free_trial");
+  const trialRegisterCtaRef = useAgentCtaExposure<HTMLButtonElement>("landing_zh", "trial_register");
+
+  useEffect(() => {
+    const storedTrial = readStoredTrialKey();
+    if (storedTrial) {
+      setTrialKey(storedTrial.apiKey);
+      setTrialAgentName(storedTrial.agentName);
+      setTrialKeyHandled(storedTrial.handled);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!trialKey || trialKeyHandled) return;
+    const warnBeforeLeaving = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "您的试用 API 密钥尚未复制或下载。";
+    };
+    window.addEventListener("beforeunload", warnBeforeLeaving);
+    return () => window.removeEventListener("beforeunload", warnBeforeLeaving);
+  }, [trialKey, trialKeyHandled]);
+
+  useEffect(() => {
+    if (trialError) trialErrorRef.current?.focus();
+  }, [trialError]);
 
   // Single entry point for trial registration so the button click and the
   // Enter key record the same conversion telemetry before submitting.
   const submitTrialRegistration = () => {
     const name = agentName.trim();
     if (name.length < 2 || registerMutation.isPending) return;
+    setTrialError(null);
     trackAgentCta("cta_clicked", "landing_zh", "trial_register");
     registerMutation.mutate(name);
   };
 
   const registerMutation = useMutation({
     mutationFn: async (name: string) => {
+      await ensureConversionVisitor();
       const res = await fetch("/api/agent/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ agent_name: name }),
+      }).catch(() => {
+        throw new Error("网络连接失败，请检查连接后重试。");
       });
-      const data = await res.json();
-      if (!res.ok)
-        throw new Error(data.message || "注册失败，请换一个名称重试。");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (res.status === 409 && data.error === "DUPLICATE_AGENT_NAME") {
+          throw new Error("该智能体名称已被使用，请换一个名称重试。");
+        }
+        if (res.status === 429) {
+          throw new Error("注册次数过多，请稍后再试。");
+        }
+        throw new Error("注册暂时失败，请重试。");
+      }
+      if (typeof data.api_key !== "string" || !data.api_key.startsWith("pm_")) {
+        throw new Error("注册成功但未收到有效 API 密钥，请重试。");
+      }
       return data;
     },
     onSuccess: (data, name) => {
       setTrialKey(data.api_key);
       setTrialAgentName(name);
+      setTrialKeyHandled(false);
+      storeTrialKey(data.api_key, name);
       setTrialError(null);
     },
     onError: (err: Error) => {
@@ -85,18 +150,89 @@ export default function LandingZh() {
 
   const handleCopyKey = () => {
     if (!trialKey) return;
-    navigator.clipboard.writeText(trialKey);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    navigator.clipboard.writeText(trialKey).then(() => {
+      markTrialKeyHandled();
+      setTrialKeyHandled(true);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(() => {
+      setTrialError("复制失败。请使用下载按钮，或手动复制密钥。");
+    });
   };
 
+  const handleDownloadKey = () => {
+    if (!trialKey) return;
+    const blob = new Blob([`${trialKey}\n`], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${trialAgentName || "prove-before-act"}-api-key.txt`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    markTrialKeyHandled();
+    setTrialKeyHandled(true);
+  };
+
+  const handleClearTrialKey = () => {
+    clearStoredTrialKey();
+    setTrialKey(null);
+    setTrialAgentName("");
+    setTrialKeyHandled(false);
+    setProofFile(null);
+    setProofHash("");
+    setProofResult(null);
+    setProofError(null);
+  };
+
+  const handleFileSelect = async (file: File) => {
+    setProofFile(file);
+    setProofResult(null);
+    setProofError(null);
+    setIsHashing(true);
+    try {
+      setProofHash(await hashFile(file));
+    } finally {
+      setIsHashing(false);
+    }
+  };
+
+  const submitProofMutation = useMutation({
+    mutationFn: async ({ hash, filename }: { hash: string; filename: string }) => {
+      const res = await fetch("/api/proof", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${trialKey}`,
+        },
+        body: JSON.stringify({ file_hash: hash, filename }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || data.error || "存证失败，请重试。");
+      if (
+        typeof data.verify_url !== "string" &&
+        (typeof data.proof_id !== "string" && typeof data.proof_id !== "number")
+      ) {
+        throw new Error("存证已返回，但没有可用的验证标识。请重试。");
+      }
+      return data;
+    },
+    onSuccess: (data) => {
+      setProofResult(data);
+      setProofError(null);
+    },
+    onError: (err: Error) => {
+      setProofError(err.message);
+    },
+  });
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-[100dvh] min-w-0 max-w-full overflow-x-hidden bg-background">
+      <a href="#main-content" className="skip-link">跳转到主要内容</a>
       {/* Header */}
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <header className="public-site-header sticky top-0 z-50 border-b backdrop-blur">
         <div className="container flex h-16 items-center justify-between">
           <a href="/zh" className="flex items-center gap-2" data-testid="link-logo-home-zh">
-            <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
+              <img src="/pba-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
           </a>
           <nav className="hidden md:flex items-center gap-6">
             <a href="#how-it-works" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
@@ -140,61 +276,72 @@ export default function LandingZh() {
         </div>
       </header>
 
+      <main id="main-content" tabIndex={-1}>
       {/* Hero */}
       <section className="container pt-14 pb-20 md:pt-20 md:pb-28">
         <div className="mx-auto max-w-5xl text-center">
           <div className="mb-5 flex justify-center">
-            <Badge variant="outline" className="text-xs px-3 py-1 gap-1.5" data-testid="badge-prove-before-act-zh">
+              <Badge variant="outline" className="text-xs px-3 py-1 gap-1.5" data-testid="badge-prove-before-act-zh">
               <AlertTriangle className="h-3 w-3 text-amber-500" />
-              AI决策无留痕，监管追责无依据
+                Prove Before Act — 自主智能体的问责模式
             </Badge>
           </div>
 
           <h1 className="mb-6 text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-tight">
-            AI决策，
+            你的智能体可以行动。
             <br />
-            <span className="text-primary">链上留痕。</span>
+            <span className="text-primary">它能证明为何行动吗？</span>
           </h1>
 
           <p className="mx-auto mb-5 max-w-2xl text-lg md:text-xl text-muted-foreground leading-relaxed">
-            监管检查时，您能提供AI决策的完整证明吗？Prove Before Act 为每次智能体操作生成<strong className="text-foreground">不可篡改的合规存证</strong>——
-            决策前锚定推理依据，执行后锚定实际结果，构建完整的<strong className="text-foreground">风控留痕与审计追溯链</strong>。
+            当智能体付款、修改生产环境、签署法律承诺或委托另一个智能体时，审计轨迹不能等到事故后才开始。
+            <strong className="text-foreground">执行前提交决策依据，留下任何审查者都能验证的证据。</strong>
           </p>
 
-          <div className="mb-8 flex justify-center">
-            <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/5 px-4 py-1.5 text-sm" data-testid="badge-x402-hero-zh">
-              <Zap className="h-3.5 w-3.5 text-primary shrink-0" />
-              <span className="text-muted-foreground">
-                无需注册 — 通过 <strong className="text-foreground">x402</strong> 协议直接支付 · 一次HTTP请求 · Base链USDC
-              </span>
-            </div>
+          <div className="mx-auto mb-8 grid max-w-2xl grid-cols-2 gap-2 text-left text-xs text-muted-foreground sm:grid-cols-4" data-testid="hero-risk-scenarios-zh">
+            {[
+              ["付款授权", "scenario_payment"],
+              ["生产部署", "scenario_devops"],
+              ["法律承诺", "scenario_legal"],
+              ["智能体委托", "scenario_multi_agent"],
+            ].map(([label, cta]) => (
+              <a
+                key={cta}
+                href="#free-trial"
+                className="rounded-md border border-border/60 bg-muted/20 px-3 py-2 text-center transition-colors hover:border-primary/40 hover:text-foreground"
+                onClick={() => {
+                  trackAgentCta("cta_clicked", "landing_zh", cta as "scenario_payment" | "scenario_devops" | "scenario_legal" | "scenario_multi_agent");
+                  trackEvent("risk_scenario_selected", { scenario: cta.replace("scenario_", ""), language: "zh" });
+                }}
+              >
+                {label}
+              </a>
+            ))}
           </div>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Button
-              size="lg"
-              className="text-base h-12 px-8"
-              onClick={() => setIsLoginModalOpen(true)}
-              data-testid="button-submit-proof-zh"
-            >
-              <Shield className="mr-2 h-5 w-5" />
-              提交存证
-            </Button>
-            <Button
               asChild
-              variant="outline"
               size="lg"
               className="text-base h-12 px-8"
               data-testid="button-free-trial-zh"
             >
-              <a href="#free-trial">
+              <a
+                href="#free-trial"
+                ref={heroTrialCtaRef}
+                onClick={() => {
+                  trackAgentCta("cta_clicked", "landing_zh", "hero_free_trial");
+                  trackEvent("free_trial_cta_clicked", { location: "hero_zh" });
+                }}
+              >
                 <Bot className="mr-2 h-4 w-4" />
-                免费体验 10 次
+                证明第一个智能体决策
               </a>
             </Button>
           </div>
 
-          <p className="mt-4 text-sm text-muted-foreground">{price} / 次 · 不限量</p>
+          <p className="mt-4 text-sm text-muted-foreground">10 次免费证明 · 无需钱包 · 无需信用卡</p>
+          <p className="mt-3 text-xs text-muted-foreground">Prove Before Act 是公开问责模式，xProof 是参考实现。之后按 {price} 的实时费率计费。</p>
         </div>
       </section>
 
@@ -309,14 +456,14 @@ export default function LandingZh() {
                   合规风控的标准操作闭环
                 </h2>
                 <p className="text-muted-foreground max-w-xl mx-auto text-sm">
-                  执行前将推理依据（WHY）锚定链上，形成<strong className="text-foreground">合规留痕</strong>；
+                  执行前将声明的决策依据（WHY）锚定链上，形成<strong className="text-foreground">合规留痕</strong>；
                   执行后将实际结果（WHAT）存证，完成<strong className="text-foreground">风控审计轨迹</strong>。
                   全程可供审计员、监管机构或合作系统随时独立验证。
                 </p>
               </div>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-0">
                 {[
-                  { step: "1", label: "推理", sublabel: "Reason", desc: "智能体记录完整推理过程与决策依据（WHY）", icon: Bot },
+                  { step: "1", label: "决策", sublabel: "Decide", desc: "智能体声明决策依据、上下文与意图（WHY）", icon: Bot },
                   { step: "2", label: "锚定WHY", sublabel: "Anchor WHY", desc: "哈希后在执行前锚定上链", icon: Blocks },
                   { step: "3", label: "执行", sublabel: "Execute", desc: "行动执行，WHY的链上引用不可篡改", icon: Play },
                   { step: "4", label: "锚定WHAT", sublabel: "Anchor WHAT", desc: "执行完成后将实际结果存证上链", icon: Shield },
@@ -393,14 +540,14 @@ export default function LandingZh() {
                   desc: "区块链时间戳 + 交易哈希，独立于智能体系统，任何第三方均可独立核验",
                   reg: "《网络安全法》第21条：保留网络日志不少于六个月",
                   icon: Clock,
-                  color: "text-green-500",
-                  border: "border-green-500/20",
-                  bg: "bg-green-500/5",
+                  color: "text-primary",
+                  border: "border-primary/20",
+                  bg: "bg-primary/5",
                 },
                 {
                   w: "WHY",
                   zh: "决策依据",
-                  desc: "完整推理链在执行前锚定——出现争议时，这是证明AI决策合理性的核心证据",
+                  desc: "声明的决策依据在执行前锚定——而非内部思维链；出现争议时，这是证明AI决策合理性的核心证据",
                   reg: "《算法推荐管理规定》：算法决策须有可解释的依据",
                   icon: Network,
                   color: "text-amber-500",
@@ -471,7 +618,7 @@ export default function LandingZh() {
                   <li className="flex items-start gap-1.5"><span className="text-primary mt-0.5 shrink-0">✓</span>每日1000次决策全量存证：<strong className="text-foreground">按实时费率计算</strong></li>
                   <li className="flex items-start gap-1.5"><span className="text-primary mt-0.5 shrink-0">✓</span>监管检查：随时出具链上证明</li>
                   <li className="flex items-start gap-1.5"><span className="text-primary mt-0.5 shrink-0">✓</span>客户争议：完整4W审计轨迹即时导出</li>
-                  <li className="flex items-start gap-1.5"><span className="text-primary mt-0.5 shrink-0">✓</span>批量API：单次提交100条，3行代码集成</li>
+                  <li className="flex items-start gap-1.5"><span className="text-primary mt-0.5 shrink-0">✓</span>批量API：单次提交50条，3行代码集成</li>
                 </ul>
               </div>
             </div>
@@ -482,8 +629,8 @@ export default function LandingZh() {
                   icon: Blocks,
                   title: "批量认证",
                   subtitle: "Batch Certification",
-                  desc: `单次API调用可提交最多100个哈希值，适用于高频操作的智能体集群。每次按 ${price} 的实时费率计费，按需扩展。`,
-                  code: `# 批量提交100个操作哈希
+                  desc: `单次API调用可提交最多50个哈希值，适用于高频操作的智能体集群。每次按 ${price} 的实时费率计费，按需扩展。`,
+                  code: `# 批量提交50个操作哈希
 POST /api/batch
 {
   "hashes": [
@@ -559,7 +706,7 @@ GET /api/agents/{wallet}/incident-report
               </div>
               <div className="p-4 font-mono text-xs text-[#e6edf3] overflow-x-auto leading-relaxed">
                 <div className="text-[#8b949e]">import hashlib, json</div>
-                <div className="text-[#8b949e]">import xproof  <span className="text-[#8b949e]"># pip install xproof</span></div>
+                <div className="text-[#8b949e]">import xproof  <span className="text-[#8b949e]"># 旧版兼容模块；pip install prove-before-act</span></div>
                 <div className="mt-3"><span className="text-[#f97583]">client</span> = xproof.Client(api_key=<span className="text-[#a5d6ff]">"pm_..."</span>)</div>
                 <div className="mt-4 text-[#8b949e]"># 步骤1：执行前，锚定决策依据（WHY）</div>
                 <div><span className="text-[#e3b341]">why_proof</span> = client.certify(</div>
@@ -608,7 +755,12 @@ GET /api/agents/{wallet}/incident-report
                   <Input
                     placeholder="智能体名称（如 my-agent-001）"
                     value={agentName}
-                    onChange={(e) => setAgentName(e.target.value)}
+                    onChange={(e) => {
+                      setAgentName(e.target.value);
+                      setTrialError(null);
+                    }}
+                    aria-invalid={!!trialError}
+                    aria-describedby={trialError ? "trial-register-error-zh" : undefined}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         submitTrialRegistration();
@@ -618,7 +770,7 @@ GET /api/agents/{wallet}/incident-report
                     className="flex-1"
                   />
                   <Button
-                    ref={heroTrialCtaRef}
+                    ref={trialRegisterCtaRef}
                     onClick={submitTrialRegistration}
                     disabled={agentName.trim().length < 2 || registerMutation.isPending}
                     data-testid="button-register-trial-zh"
@@ -637,7 +789,16 @@ GET /api/agents/{wallet}/incident-report
                   </Button>
                 </div>
                 {trialError && (
-                  <p className="mt-3 text-sm text-destructive text-left">{trialError}</p>
+                  <p
+                    id="trial-register-error-zh"
+                    ref={trialErrorRef}
+                    role="alert"
+                    tabIndex={-1}
+                    className="mt-3 text-sm text-destructive text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                    data-testid="text-trial-error-zh"
+                  >
+                    {trialError}
+                  </p>
                 )}
                 <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
                   {["10次免费存证", "无需钱包", "无需信用卡", "随时绑定钱包升级"].map((label) => (
@@ -653,10 +814,149 @@ GET /api/agents/{wallet}/incident-report
                     {copied ? <CheckCircle className="h-4 w-4 text-primary" /> : <Copy className="h-4 w-4" />}
                   </Button>
                 </div>
+                {!trialKeyHandled && (
+                  <p className="mb-3 text-left text-xs text-amber-600 dark:text-amber-300" role="status">
+                    请立即保存此密钥。关闭此浏览器标签页后，密钥不会再次显示或恢复。
+                  </p>
+                )}
+                <div className="mb-5 flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" onClick={handleDownloadKey} data-testid="button-download-trial-key-zh">
+                    下载密钥
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={handleClearTrialKey} data-testid="button-clear-trial-key-zh">
+                    我已保存 — 隐藏密钥
+                  </Button>
+                </div>
                 <p className="text-sm text-muted-foreground mb-5">
-                  您的密钥已就绪 — <strong>{trialAgentName}</strong> 享有 10 次免费存证。
+                  您的密钥已就绪 — <strong>{trialAgentName}</strong> 享有 10 次免费存证。现在就试一次：
                 </p>
-                <pre className="text-left text-xs font-mono bg-[#0d1117] rounded-md p-4 text-[#e6edf3] overflow-x-auto leading-relaxed">
+                {!proofResult ? (
+                  <>
+                    <div
+                      data-testid="dropzone-proof-zh"
+                      className={`border-2 border-dashed rounded-md p-7 text-center cursor-pointer transition-colors select-none ${isDragging ? "border-primary bg-primary/5" : "border-muted-foreground/30 hover:border-primary/40"}`}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={proofFile ? `重新选择文件。当前文件：${proofFile.name}` : "选择要存证的文件"}
+                      onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                      onDragLeave={() => setIsDragging(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setIsDragging(false);
+                        const file = e.dataTransfer.files[0];
+                        if (file) handleFileSelect(file);
+                      }}
+                      onClick={() => fileInputRef.current?.click()}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          fileInputRef.current?.click();
+                        }
+                      }}
+                    >
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        className="hidden"
+                        data-testid="input-proof-file-zh"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleFileSelect(file);
+                        }}
+                      />
+                      {!proofFile ? (
+                        <>
+                          <Upload className="h-7 w-7 text-muted-foreground/50 mx-auto mb-3" />
+                          <p className="text-sm font-medium text-muted-foreground">选择输出、决策日志、数据快照或构建产物</p>
+                          <p className="text-xs text-muted-foreground/60 mt-1">仅传输 SHA-256 哈希，源文件留在当前运行环境</p>
+                        </>
+                      ) : (
+                        <div className="flex items-center gap-3 justify-center">
+                          <File className="h-6 w-6 text-primary shrink-0" />
+                          <div className="text-left min-w-0">
+                            <p className="text-sm font-medium truncate max-w-xs">{proofFile.name}</p>
+                            {isHashing ? (
+                              <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                正在计算 SHA-256 哈希…
+                              </p>
+                            ) : (
+                              <p className="text-xs text-muted-foreground font-mono mt-0.5">{proofHash.slice(0, 20)}…</p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {proofFile && !isHashing && (
+                      <Button
+                        className="w-full mt-3"
+                        onClick={() => submitProofMutation.mutate({ hash: proofHash, filename: proofFile.name })}
+                        disabled={submitProofMutation.isPending}
+                        data-testid="button-anchor-proof-zh"
+                      >
+                        {submitProofMutation.isPending ? (
+                          <><Loader2 className="mr-2 h-4 w-4 animate-spin" />正在提交链上存证…</>
+                        ) : (
+                          <> <Shield className="mr-2 h-4 w-4" />提交存证</>
+                        )}
+                      </Button>
+                    )}
+
+                    {proofError && (
+                      <p className="mt-2 text-sm text-destructive text-left" data-testid="text-proof-error-zh">{proofError}</p>
+                    )}
+                  </>
+                ) : (
+                  <div className="rounded-md bg-primary/10 border border-primary/20 p-5 text-left" data-testid="card-proof-result-zh">
+                    <div className="flex items-center gap-2 mb-3">
+                      <CheckCircle className="h-5 w-5 text-primary shrink-0" />
+                      <p className="text-sm font-semibold text-primary">已在 MultiversX 上完成存证！</p>
+                    </div>
+                    <div className="space-y-1 mb-4">
+                      <p className="text-xs text-muted-foreground">
+                        文件：<span className="font-medium text-foreground">{proofFile?.name}</span>
+                      </p>
+                      <p className="text-xs text-muted-foreground font-mono">
+                        SHA-256：{proofHash.slice(0, 24)}…
+                      </p>
+                      {proofResult.proof_id && (
+                        <p className="text-xs text-muted-foreground">
+                          存证 ID：<span className="font-mono">{proofResult.proof_id}</span>
+                        </p>
+                      )}
+                      {proofResult.blockchain?.transaction_hash && (
+                        <p className="text-xs text-muted-foreground font-mono">
+                          交易：{proofResult.blockchain.transaction_hash.slice(0, 20)}…
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {proofResult.verify_url || proofResult.proof_id ? (
+                        <Button asChild size="sm" variant="outline" data-testid="button-view-proof-zh">
+                          <a
+                            href={proofResult.verify_url || `/proof/${encodeURIComponent(String(proofResult.proof_id))}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                            查看验证页面
+                          </a>
+                        </Button>
+                      ) : (
+                        <p className="text-sm text-destructive" role="alert">
+                          存证已返回，但没有可用的验证链接。请稍后从文档中的 API 查询 proof_id。
+                        </p>
+                      )}
+                      {proofResult.trial?.remaining !== undefined && (
+                        <span className="text-xs text-muted-foreground">
+                          剩余免费次数：{proofResult.trial.remaining}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+                <pre className="mt-4 text-left text-xs font-mono bg-[#0d1117] rounded-md p-4 text-[#e6edf3] overflow-x-auto leading-relaxed">
 {`import xproof, hashlib, json
 
 client = xproof.Client(api_key="${trialKey}")
@@ -711,7 +1011,7 @@ print(proof["verify_url"])  # 链上可验证`}
                   price,
                   priceUnit: "/ 次",
                   desc: "无限次，随时可用",
-                  features: ["不限量存证", "批量API（100条/次）", "信任评分", "事件报告", "链上锚定"],
+                  features: ["不限量存证", "批量API（50条/次）", "信任评分", "事件报告", "链上锚定"],
                   cta: "连接钱包",
                   ctaHref: "#",
                   highlight: true,
@@ -809,7 +1109,7 @@ print(proof["verify_url"])  # 链上可验证`}
                 },
                 {
                   q: "批量认证适合高频操作的集群吗？",
-                  a: `是的。Prove Before Act的批量API支持单次请求提交最多100个哈希值，按当前实时费率 ${price} 计费，无任何批量溢价。对于每秒产生大量操作的集群，您可以在本地缓冲操作记录，定期批量提交，实现高效可扩展的审计基础设施。`,
+                  a: `是的。Prove Before Act的批量API支持单次请求提交最多50个哈希值，按当前实时费率 ${price} 计费，无任何批量溢价。对于每秒产生大量操作的集群，您可以在本地缓冲操作记录，定期批量提交，实现高效可扩展的审计基础设施。`,
                 },
                 {
                   q: "x402协议如何工作？智能体无需账号也能存证吗？",
@@ -870,13 +1170,14 @@ print(proof["verify_url"])  # 链上可验证`}
           </div>
         </div>
       </section>
+      </main>
 
       {/* Footer */}
       <footer className="border-t py-8">
         <div className="container">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <img src="/pba-logo.svg" alt="Prove Before Act" className="h-6 w-auto" />
+              <img src="/pba-logo.png" alt="Prove Before Act" className="h-6 w-auto" />
               <span className="text-xs text-muted-foreground">智能体经济的可信证明层</span>
             </div>
             <nav className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground justify-center">
@@ -896,6 +1197,7 @@ print(proof["verify_url"])  # 链上可验证`}
       <WalletLoginModal
         open={isLoginModalOpen}
         onOpenChange={setIsLoginModalOpen}
+        redirectTo="/dashboard"
       />
     </div>
   );

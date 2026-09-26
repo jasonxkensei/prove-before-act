@@ -1,0 +1,38 @@
+1
+00:00:00,000 --> 00:00:04,300
+Les agents IA commencent à agir dans le monde réel.
+
+2
+00:00:04,300 --> 00:00:09,500
+Mais après un incident, une explication reconstruite
+n’est pas une preuve de responsabilité.
+
+3
+00:00:09,500 --> 00:00:14,600
+Prove Before Act donne une limite vérifiable
+à chaque action ayant des conséquences.
+
+4
+00:00:14,600 --> 00:00:20,400
+Avant d’agir, l’agent déclare sa base de décision
+et crée un engagement indépendant.
+
+5
+00:00:20,400 --> 00:00:25,000
+Après l’action, le résultat est relié
+à cet enregistrement initial.
+
+6
+00:00:25,000 --> 00:00:29,600
+Ni raisonnement privé exposé.
+Ni promesse ajoutée après coup.
+
+7
+00:00:29,600 --> 00:00:33,700
+Une séquence vérifiable :
+décider, prouver, agir, vérifier.
+
+8
+00:00:33,700 --> 00:00:37,800
+Prove Before Act.
+Rendez d’abord la décision prouvable.

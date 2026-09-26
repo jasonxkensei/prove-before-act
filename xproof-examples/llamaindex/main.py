@@ -7,7 +7,8 @@ Each event produces a certification with 4W metadata:
   WHY  = event type (LLM, QUERY)
 
 Install:
-    pip install xproof llama-index-core
+    pip install prove-before-act llama-index-core
+    # The xproof module name below is a legacy compatibility alias.
 
 Run:
     python main.py

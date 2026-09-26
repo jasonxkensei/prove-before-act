@@ -15,6 +15,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { PublicSiteFooter, PublicSiteHeader } from "@/components/public-site-chrome";
 import { formatDistanceToNow } from "date-fns";
 
 interface CalibrationPoint {
@@ -59,14 +60,14 @@ const TREND_CONFIG = {
   improving: {
     icon: TrendingUp,
     label: "Improving",
-    className: "text-emerald-600 dark:text-emerald-400",
-    bgClassName: "border-emerald-500/30 bg-emerald-500/10",
+    className: "text-[hsl(var(--status-verified))]",
+    bgClassName: "border-[hsl(var(--status-verified)/.3)] bg-[hsl(var(--status-verified)/.1)]",
   },
   worsening: {
     icon: TrendingDown,
     label: "Worsening",
-    className: "text-red-600 dark:text-red-400",
-    bgClassName: "border-red-500/30 bg-red-500/10",
+    className: "text-[hsl(var(--status-failed))]",
+    bgClassName: "border-[hsl(var(--status-failed)/.3)] bg-[hsl(var(--status-failed)/.1)]",
   },
   stable: {
     icon: Minus,
@@ -77,9 +78,9 @@ const TREND_CONFIG = {
 } as const;
 
 const BIAS_STYLES = {
-  calibrated:    { badge: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30", bar: "bg-emerald-500", label: "Calibrated",    Icon: Minus },
-  overconfident: { badge: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30",   bar: "bg-amber-500",   label: "Overconfident", Icon: TrendingUp },
-  underconfident:{ badge: "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30",       bar: "bg-blue-500",    label: "Underconfident",Icon: TrendingDown },
+  calibrated:    { badge: "status-chip status-chip--calibrated", bar: "bg-[hsl(var(--status-verified))]", label: "Calibrated",    Icon: Minus },
+  overconfident: { badge: "status-chip status-chip--overconfident", bar: "bg-[hsl(var(--status-pending))]", label: "Overconfident", Icon: TrendingUp },
+  underconfident:{ badge: "status-chip status-chip--underconfident", bar: "bg-[hsl(190_65%_60%)]", label: "Underconfident",Icon: TrendingDown },
 };
 
 const N_OPTIONS = [
@@ -218,7 +219,7 @@ function CalibrationTrendChart({ points }: { points: CalibrationPoint[] }) {
         <polyline
           points={polyline}
           fill="none"
-          stroke="rgb(16,185,129)"
+          stroke="hsl(var(--status-verified))"
           strokeWidth="1.75"
           strokeLinejoin="round"
           strokeLinecap="round"
@@ -231,7 +232,7 @@ function CalibrationTrendChart({ points }: { points: CalibrationPoint[] }) {
             fill={
               p.gap > 0.10 ? "rgb(251,191,36)"
               : p.gap < -0.10 ? "rgb(59,130,246)"
-              : "rgb(16,185,129)"
+              : "hsl(var(--status-verified))"
             }
             stroke="white" strokeWidth="1.25"
           />
@@ -271,7 +272,7 @@ function CalibrationTrendChart({ points }: { points: CalibrationPoint[] }) {
           <line
             x1={pts[hoveredIdx].x} y1={PAD.top}
             x2={pts[hoveredIdx].x} y2={H - PAD.bottom}
-            stroke="rgb(16,185,129)" strokeWidth="0.75" opacity="0.5"
+            stroke="hsl(var(--status-verified))" strokeWidth="0.75" opacity="0.5"
           />
         )}
       </svg>
@@ -294,7 +295,7 @@ function CalibrationTrendChart({ points }: { points: CalibrationPoint[] }) {
                   ? "text-amber-600 dark:text-amber-400"
                   : hovered.gap < -0.10
                   ? "text-blue-600 dark:text-blue-400"
-                  : "text-emerald-600 dark:text-emerald-400"
+                  : "text-[hsl(var(--status-verified))]"
               }`}
             >
               {hovered.gap > 0 ? "+" : ""}{hovered.gap.toFixed(4)}
@@ -448,7 +449,7 @@ function RunningAverageChart({ points }: { points: CalibrationPoint[] }) {
           <p className="font-medium">{pts[hoveredIdx].date}</p>
           <p className="tabular-nums">
             {WINDOW}-pt avg gap:{" "}
-            <span className={`font-semibold ${pts[hoveredIdx].avg > 0.10 ? "text-amber-600 dark:text-amber-400" : pts[hoveredIdx].avg < -0.10 ? "text-blue-600 dark:text-blue-400" : "text-emerald-600 dark:text-emerald-400"}`}>
+            <span className={`font-semibold ${pts[hoveredIdx].avg > 0.10 ? "text-[hsl(var(--status-pending))]" : pts[hoveredIdx].avg < -0.10 ? "text-[hsl(190_65%_70%)]" : "text-[hsl(var(--status-verified))]"}`}>
               {pts[hoveredIdx].avg > 0 ? "+" : ""}{pts[hoveredIdx].avg.toFixed(4)}
             </span>
           </p>
@@ -535,20 +536,8 @@ export default function AgentCalibrationPage() {
     : null;
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between gap-4">
-          <Link href="/" data-testid="link-logo-home" className="flex items-center gap-2">
-            <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
-          </Link>
-          <Button asChild variant="ghost" size="sm" data-testid="button-back-profile">
-            <Link href={`/agent/${wallet}`}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Agent profile
-            </Link>
-          </Button>
-        </div>
-      </header>
+    <div className="page-shell dossier-shell">
+      <PublicSiteHeader />
 
       <div className="container mx-auto max-w-4xl py-10 space-y-6">
         {isLoading && (
@@ -650,7 +639,7 @@ export default function AgentCalibrationPage() {
                             ? "text-amber-600 dark:text-amber-400"
                             : cal.mean_gap < -0.10
                             ? "text-blue-600 dark:text-blue-400"
-                            : "text-emerald-600 dark:text-emerald-400"
+                            : "text-[hsl(var(--status-verified))]"
                         }`}
                         data-testid="text-mean-gap"
                       >
@@ -724,14 +713,14 @@ export default function AgentCalibrationPage() {
                       </span>
                       <div className="flex items-center gap-3 text-xs font-normal text-muted-foreground">
                         {gapTrend !== null && (
-                          <span className={`flex items-center gap-1 ${Math.abs(gapTrend) < 0.01 ? "" : gapTrend > 0 ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400"}`} data-testid="text-gap-trend">
+                          <span className={`flex items-center gap-1 ${Math.abs(gapTrend) < 0.01 ? "" : gapTrend > 0 ? "text-[hsl(var(--status-pending))]" : "text-[hsl(var(--status-verified))]"}`} data-testid="text-gap-trend">
                             {Math.abs(gapTrend) < 0.01 ? "Stable" : gapTrend > 0 ? "Worsening" : "Improving"} trend
                           </span>
                         )}
                         <span className="flex items-center gap-2">
                           <span className="inline-flex h-2 w-2 rounded-full bg-amber-400" /> overconfident
                           <span className="inline-flex h-2 w-2 rounded-full bg-blue-500" /> underconfident
-                          <span className="inline-flex h-2 w-2 rounded-full bg-emerald-500" /> calibrated
+                          <span className="inline-flex h-2 w-2 rounded-full bg-[hsl(var(--status-verified))]" /> calibrated
                         </span>
                       </div>
                     </CardTitle>
@@ -830,7 +819,7 @@ export default function AgentCalibrationPage() {
                                       ? "text-amber-600 dark:text-amber-400"
                                       : p.confidence_gap < -0.10
                                       ? "text-blue-600 dark:text-blue-400"
-                                      : "text-emerald-600 dark:text-emerald-400"
+                                      : "text-[hsl(var(--status-verified))]"
                                   }`}
                                   data-testid={`text-gap-${i}`}
                                 >
@@ -859,6 +848,7 @@ export default function AgentCalibrationPage() {
           </>
         )}
       </div>
+      <PublicSiteFooter />
     </div>
   );
 }

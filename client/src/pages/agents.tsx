@@ -21,11 +21,12 @@ import {
   Crosshair,
 } from "lucide-react";
 import { WalletLoginModal } from "@/components/wallet-login-modal";
+import { PublicSiteFooter, PublicSiteHeader } from "@/components/public-site-chrome";
 
 const CALIBRATION_STYLES: Record<string, { badge: string; label: string }> = {
-  calibrated:     { badge: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30", label: "Calibrated" },
-  overconfident:  { badge: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30",   label: "Overconfident" },
-  underconfident: { badge: "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30",       label: "Underconfident" },
+  calibrated:     { badge: "status-chip status-chip--calibrated", label: "Calibrated" },
+  overconfident:  { badge: "status-chip status-chip--overconfident", label: "Overconfident" },
+  underconfident: { badge: "status-chip status-chip--underconfident", label: "Underconfident" },
 };
 
 interface CalibratedEntry {
@@ -84,7 +85,7 @@ const protocols = [
     name: "OpenClaw",
     subtitle: "Agent Skill Marketplace",
     description: "Install Prove Before Act as a skill in OpenClaw-compatible agents. One command certification.",
-    link: "https://github.com/jasonxkensei/xproof-openclaw-skill",
+    link: "https://github.com/jasonxkensei/prove-before-act-openclaw-skill",
     icon: Cog,
     badge: "Marketplace",
   },
@@ -180,71 +181,49 @@ export default function AgentsPage() {
   };
 
   useEffect(() => {
-    document.title = "Integrations - Prove Before Act";
+    document.title = "Prove Before Act — The accountability pattern for autonomous agents";
     const meta = document.querySelector('meta[name="description"]');
     if (meta) {
-      meta.setAttribute("content", "Prove Before Act integrates with every major agent protocol. One proof layer, every platform.");
+      meta.setAttribute("content", "Prove Before Act is the accountability pattern for autonomous agents. xProof is its reference implementation across MCP, x402, ACP, and REST.");
     } else {
       const newMeta = document.createElement("meta");
       newMeta.name = "description";
-      newMeta.content = "Prove Before Act integrates with every major agent protocol. One proof layer, every platform.";
+      newMeta.content = "Prove Before Act is the accountability pattern for autonomous agents. xProof is its reference implementation across MCP, x402, ACP, and REST.";
       document.head.appendChild(newMeta);
     }
   }, []);
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between">
-          <a href="/" className="flex items-center gap-2" data-testid="link-logo-home">
-            <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
-          </a>
-          <nav className="hidden md:flex items-center gap-6">
-            <a href="/#how-it-works" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-how-it-works">
-              How it works
-            </a>
-            <a href="/leaderboard" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-leaderboard">
-              Leaderboard
-            </a>
-            <a href="/stats" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-metrics">
-              Metrics
-            </a>
-            <a href="/#faq" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors" data-testid="link-nav-faq">
-              FAQ
-            </a>
-          </nav>
-          <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleConnect}
-              data-testid="button-login"
-            >
-              <Wallet className="mr-2 h-4 w-4" />
-              Connect
-            </Button>
-          </div>
-        </div>
-      </header>
-      <section className="container py-20 md:py-28">
+    <div className="page-shell dossier-shell">
+      <PublicSiteHeader onConnect={handleConnect} />
+      <section className="container py-14 md:py-20">
         <div className="mx-auto max-w-5xl text-center">
-          <Badge variant="secondary" className="mb-6 px-4 py-1.5" data-testid="badge-universal-compatibility">
+          <Badge variant="outline" className="mb-6 border-primary/30 bg-primary/5 px-4 py-1.5 font-mono text-[10px] uppercase tracking-[0.16em] text-primary" data-testid="badge-universal-compatibility">
             <Zap className="mr-2 h-3.5 w-3.5" />
             Universal compatibility
           </Badge>
 
-          <h1 className="mb-6 text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-tight" data-testid="text-hero-title">
-            Works everywhere
+          <h1 className="mb-6 text-4xl font-semibold leading-[1.04] tracking-[-0.04em] sm:text-5xl md:text-6xl lg:text-7xl" data-testid="text-hero-title">
+            The accountability pattern
             <br />
-            <span className="text-primary">agents work.</span>
+            <span className="text-primary">for autonomous agents.</span>
           </h1>
 
           <p className="mx-auto mb-8 max-w-2xl text-lg md:text-xl text-muted-foreground leading-relaxed" data-testid="text-hero-subtitle">
-            Prove Before Act integrates with every major agent protocol. One proof layer, every platform.
+            Prove Before Act lets an agent commit a declared decision basis before it acts. xProof is the reference implementation across MCP, x402, ACP, and REST.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Certifying a file as an individual?{" "}
+            <a href="/certify" className="font-medium text-primary underline-offset-4 hover:underline">
+              Use Certify a file.
+            </a>
+          </p>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Connect through the <a href="/mcp" className="font-medium text-primary underline-offset-4 hover:underline">MCP Server</a> or use another integration below.
           </p>
         </div>
       </section>
-      <section className="border-y bg-muted/30 py-20 md:py-28">
+       <section className="border-y border-border/70 bg-card/30 py-16 md:py-24">
         <div className="container">
           <div className="mx-auto max-w-5xl">
             <div className="mb-16 text-center">
@@ -257,7 +236,7 @@ export default function AgentsPage() {
               </p>
             </div>
 
-            <div className="grid gap-6 md:grid-cols-2">
+             <div className="grid gap-4 md:grid-cols-2">
               {protocols.map((protocol, i) => (
                 <ProtocolCard
                   key={protocol.name}
@@ -386,62 +365,11 @@ export default function AgentsPage() {
           </div>
         </div>
       </section>
-      <footer className="border-t py-12">
-        <div className="container">
-          <div className="mx-auto max-w-5xl">
-            <div className="grid gap-8 md:grid-cols-4 mb-12">
-              <div className="md:col-span-2">
-                <div className="flex items-center gap-2 mb-4">
-                  <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
-                </div>
-                <p className="text-sm text-muted-foreground max-w-xs">
-                  The on-chain notary for AI agents. Verifiable trust, anchored on MultiversX.
-                </p>
-              </div>
-
-              <div>
-                <h4 className="font-semibold mb-4">Product</h4>
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li><a href="/#how-it-works" className="hover:text-foreground transition-colors">How it works</a></li>
-                  <li><a href="/#faq" className="hover:text-foreground transition-colors">FAQ</a></li>
-                  <li><a href="/agents" className="hover:text-foreground transition-colors" data-testid="link-footer-agents">For AI Agents</a></li>
-                  <li><a href="/leaderboard" className="hover:text-foreground transition-colors" data-testid="link-footer-leaderboard">Leaderboard</a></li>
-                  <li><a href="/stats" className="hover:text-foreground transition-colors" data-testid="link-footer-stats">Metrics</a></li>
-                </ul>
-              </div>
-
-              <div>
-                <h4 className="font-semibold mb-4">Legal</h4>
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li><a href="/legal/mentions" className="hover:text-foreground transition-colors" data-testid="link-legal-mentions">Legal notices</a></li>
-                  <li><a href="/legal/privacy" className="hover:text-foreground transition-colors" data-testid="link-legal-privacy">Privacy policy</a></li>
-                  <li><a href="/legal/terms" className="hover:text-foreground transition-colors" data-testid="link-legal-terms">Terms</a></li>
-                </ul>
-              </div>
-            </div>
-
-            <div className="border-t pt-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <p className="text-sm text-muted-foreground">
-                © {new Date().getFullYear()} Prove Before Act. All rights reserved.
-              </p>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>Powered by</span>
-                <a
-                  href="https://multiversx.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-medium text-primary hover:underline"
-                >
-                  MultiversX
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-      </footer>
+      <PublicSiteFooter />
       <WalletLoginModal
         open={isLoginModalOpen}
         onOpenChange={setIsLoginModalOpen}
+        redirectTo="/agents"
       />
     </div>
   );

@@ -11,6 +11,22 @@ Prove Before Act provides blockchain-anchored file certification on MultiversX. 
 
 Each certification costs a low flat rate (current price served at /api/pricing) and produces a permanent, publicly verifiable record on the MultiversX blockchain.
 
+## Prepaid credit packs: Stripe and USDC/Base
+
+API-key accounts can purchase Starter, Pro, and Business credit packs via hosted
+Stripe Checkout (`POST /api/credits/stripe/checkout`) or the existing USDC/Base
+purchase and confirmation flow. Stripe is an additional payment option; it does
+not replace x402, ACP, or EGLD.
+
+The Checkout response contains a `checkout_url` and `session_id`. Open the URL,
+then poll `GET /api/credits/stripe/status/{session_id}` until its status becomes
+`paid`. Only a signed Stripe webhook can grant credits; the browser return URL
+never changes an account balance.
+
+### Accountability terminology
+
+**Prove Before Act is the accountability pattern for autonomous agents; xProof is its reference implementation.** Before executing, create and anchor a declared decision basis (WHY): the intended action, relevant context, and any authorization or policy basis needed for an audit. Do not submit private step-by-step reasoning or internal chain-of-thought. Existing API and SDK field names such as `why`, `why_proof_id`, and `XProofClient` remain unchanged for compatibility.
+
 ---
 
 ## Discovery
@@ -23,6 +39,7 @@ AI agents can automatically discover Prove Before Act through several standardiz
 |-----|----------|-------------|
 | `/.well-known/ai-plugin.json` | OpenAI Plugin | ChatGPT Plugin manifest with auth and API info |
 | `/.well-known/mcp.json` | MCP | Model Context Protocol manifest |
+| `/mcp` | MCP | Indexable connection guide on GET; JSON-RPC Streamable HTTP transport on POST |
 | `/.well-known/agent.json` | Agent Protocol | General-purpose agent discovery |
 | `/.well-known/provebeforeact.md` | Custom | Full service specification in Markdown |
 
@@ -37,8 +54,67 @@ AI agents can automatically discover Prove Before Act through several standardiz
 
 | URL | Format | Description |
 |-----|--------|-------------|
-| `/api/acp/openapi.json` | OpenAPI 3.0 | Full API specification for ACP endpoints |
-| `/agent-tools/openapi-actions.json` | OpenAPI 3.0 | GPT Actions-compatible specification |
+| `/api/acp/openapi.json` | OpenAPI 3.1 | Full API specification for ACP endpoints and outbound webhooks |
+| `/api/acp/openapi-3.0.json` | OpenAPI 3.0.3 | Public full ACP API compatibility export for generators that cannot read 3.1 (no authentication required) |
+| `/agent-tools/openapi-actions.json` | OpenAPI 3.0 | GPT Actions-compatible subset (not the full ACP partner API) |
+
+Use `/api/acp/openapi.json` when your tooling accepts OpenAPI 3.1. If your
+client generator only supports OpenAPI 3.0, import
+`/api/acp/openapi-3.0.json` instead. The 3.0 document is generated from the
+same canonical 3.1 specification, with nullable response fields translated to
+3.0 syntax; both describe the same API paths and models. OpenAPI 3.0 cannot
+describe outbound webhooks in the standard top-level `webhooks` section, so
+the compatibility export keeps the `x-webhooks` extension and the
+`ProofCertifiedWebhookPayload` model but does **not** add a callable webhook
+API path. For receiver setup, use the examples below or the 3.1 document.
+
+---
+
+## Receive proof.certified webhooks (Python or Java)
+
+Supply your own public HTTPS `webhook_url` when requesting certification. Once
+the proof is confirmed on-chain, **Prove Before Act POSTs to your URL**; it does
+not host a `/proof.certified` endpoint. Save the `webhook_secret` returned for
+each proof under its certification/proof ID before receiving the callback. This
+is a signing secret, not your API key; do not put it in source control or logs.
+
+Runnable receiver examples:
+
+- [Python 3.11+ standard-library receiver](../examples/webhooks/python_receiver.py):
+  `PBA_WEBHOOK_DB=webhooks.sqlite python3 examples/webhooks/python_receiver.py`.
+  Insert the per-proof ID and secret into `proof_secrets` after the API response,
+  before callback delivery (for example, use `sqlite3 webhooks.sqlite
+  "INSERT INTO proof_secrets VALUES ('<proof_id>', '<webhook_secret>');"`).
+  The example stores each verified payload and delivery ID atomically in SQLite.
+- [Java 17 Spring Boot receiver](../examples/webhooks/java/src/main/java/example/pba/ProofWebhookReceiver.java):
+  from `examples/webhooks/java`, run
+  `PBA_PROOF_ID=<proof_id> PBA_WEBHOOK_SECRET=<webhook_secret> mvn spring-boot:run`.
+  This single-proof demo uses in-memory storage; replace its secret lookup and
+  delivery handling with durable storage and an atomic insert/business action
+  before acknowledging in production. Its [Maven project](../examples/webhooks/java/pom.xml)
+  includes the required dependencies.
+
+Both examples listen on `/webhooks/prove-before-act` (port 8080); terminate TLS
+at a reverse proxy and make this URL publicly reachable over HTTPS. They
+receive the `ProofCertifiedWebhookPayload` and all four canonical headers:
+`X-ProveBeforeAct-Signature`, `X-ProveBeforeAct-Timestamp`,
+`X-ProveBeforeAct-Event`, and `X-ProveBeforeAct-Delivery`. The event must be
+`proof.certified`; the delivery header is the stable proof ID. The JSON body's
+`timestamp` is an ISO creation time **not** the Unix-seconds header timestamp.
+Verify `HMAC-SHA256(per-proof secret, UTF8(header timestamp + ".") + raw HTTP body
+bytes)` with a constant-time comparison before parsing or trusting the delivery
+ID. Reject timestamps older than 300 seconds or more than 60 seconds ahead.
+Retries may have different timestamps/signatures but the same delivery ID;
+acknowledge previously committed IDs without repeating the action. Legacy
+`X-xProof-*` aliases are sent too, but new receivers should use canonical names.
+
+OpenAPI 3.1 describes this notification in `webhooks`, not `paths`. OpenAPI
+Generator 7.25.0 can generate Java's payload model and header parameters with
+webhooks enabled, but its synthetic `/proof.certified` *client call* is not a
+hosted API route and must not be called. Default Python generation skips webhook
+operations; enabling them in that generator version produced invalid Python
+parameter annotations. Use these receiver examples/types rather than generated
+client methods for inbound callbacks.
 
 ---
 
@@ -97,12 +173,12 @@ import hashlib
 import requests
 from langchain.tools import tool
 
-XPROOF_BASE_URL = "https://provebeforeact.com"
-XPROOF_API_KEY = "pm_your_api_key_here"
+PROVEBEFOREACT_BASE_URL = "https://provebeforeact.com"
+PROVEBEFOREACT_API_KEY = "pm_your_api_key_here"
 
 HEADERS = {
     "Content-Type": "application/json",
-    "Authorization": f"Bearer {XPROOF_API_KEY}",
+    "Authorization": f"Bearer {PROVEBEFOREACT_API_KEY}",
 }
 
 
@@ -131,15 +207,26 @@ def certify_file(file_path: str, author_name: str = "") -> str:
     with open(file_path, "rb") as f:
         file_hash = compute_sha256(f.read())
 
-    # Step 1: Start checkout
+    # Step 1: Prove control of the wallet that will pay. Sign this exact
+    # pba-acp-checkout message with the payer wallet's Ed25519 private key.
+    payer_wallet = "erd1_your_payer_wallet"
+    payer_wallet_signature = sign_checkout_message(
+        f"pba-acp-checkout:pba-certification:{file_hash}:{payer_wallet}"
+    )
+
+    # Step 2: Start checkout
     checkout_resp = requests.post(
-        f"{XPROOF_BASE_URL}/api/acp/checkout",
+        f"{PROVEBEFOREACT_BASE_URL}/api/acp/checkout",
         headers=HEADERS,
         json={
-            "product_id": "blockchain-certification",
-            "file_hash": file_hash,
-            "file_name": file_name,
-            "author_name": author_name,
+            "product_id": "pba-certification",
+            "inputs": {
+                "file_hash": file_hash,
+                "filename": file_name,
+                "author_name": author_name,
+            },
+            "payer_wallet": payer_wallet,
+            "payer_wallet_signature": payer_wallet_signature,
         },
     )
     checkout_resp.raise_for_status()
@@ -155,7 +242,7 @@ def certify_file(file_path: str, author_name: str = "") -> str:
 
     # Step 3: Confirm the checkout
     confirm_resp = requests.post(
-        f"{XPROOF_BASE_URL}/api/acp/confirm",
+        f"{PROVEBEFOREACT_BASE_URL}/api/acp/confirm",
         headers=HEADERS,
         json={
             "checkout_id": checkout_id,
@@ -178,6 +265,11 @@ def send_egld_payment(address: str, amount: str) -> str:
     raise NotImplementedError(
         "Implement EGLD payment using your wallet provider."
     )
+
+
+def sign_checkout_message(message: str) -> str:
+    """Sign with the payment wallet's Ed25519 private key; return 128-char hex."""
+    raise NotImplementedError("Implement with your MultiversX wallet SDK.")
 ```
 
 ### Step 3: Register with Your Agent
@@ -219,12 +311,12 @@ import requests
 from crewai import Agent, Task, Crew
 from crewai.tools import tool
 
-XPROOF_BASE_URL = "https://provebeforeact.com"
-XPROOF_API_KEY = "pm_your_api_key_here"
+PROVEBEFOREACT_BASE_URL = "https://provebeforeact.com"
+PROVEBEFOREACT_API_KEY = "pm_your_api_key_here"
 
 HEADERS = {
     "Content-Type": "application/json",
-    "Authorization": f"Bearer {XPROOF_API_KEY}",
+    "Authorization": f"Bearer {PROVEBEFOREACT_API_KEY}",
 }
 
 
@@ -245,15 +337,24 @@ def certify_file_tool(file_path: str, author_name: str = "") -> str:
     with open(file_path, "rb") as f:
         file_hash = hashlib.sha256(f.read()).hexdigest()
 
+    payer_wallet = "erd1_your_payer_wallet"
+    payer_wallet_signature = sign_checkout_message(
+        f"pba-acp-checkout:pba-certification:{file_hash}:{payer_wallet}"
+    )
+
     # Start checkout
     checkout = requests.post(
-        f"{XPROOF_BASE_URL}/api/acp/checkout",
+        f"{PROVEBEFOREACT_BASE_URL}/api/acp/checkout",
         headers=HEADERS,
         json={
-            "product_id": "blockchain-certification",
-            "file_hash": file_hash,
-            "file_name": file_name,
-            "author_name": author_name,
+            "product_id": "pba-certification",
+            "inputs": {
+                "file_hash": file_hash,
+                "filename": file_name,
+                "author_name": author_name,
+            },
+            "payer_wallet": payer_wallet,
+            "payer_wallet_signature": payer_wallet_signature,
         },
     ).json()
 
@@ -265,7 +366,7 @@ def certify_file_tool(file_path: str, author_name: str = "") -> str:
 
     # Confirm
     result = requests.post(
-        f"{XPROOF_BASE_URL}/api/acp/confirm",
+        f"{PROVEBEFOREACT_BASE_URL}/api/acp/confirm",
         headers=HEADERS,
         json={"checkout_id": checkout["checkout_id"], "tx_hash": tx_hash},
     ).json()
@@ -276,6 +377,11 @@ def certify_file_tool(file_path: str, author_name: str = "") -> str:
 def send_egld_payment(address: str, amount: str) -> str:
     """Implement EGLD payment with your wallet provider."""
     raise NotImplementedError("Implement EGLD payment.")
+
+
+def sign_checkout_message(message: str) -> str:
+    """Sign with the payment wallet's Ed25519 private key; return 128-char hex."""
+    raise NotImplementedError("Implement with your MultiversX wallet SDK.")
 
 
 # Define agent and task
@@ -344,9 +450,16 @@ https://provebeforeact.com/.well-known/mcp.json
 ### Integration Steps
 
 1. Point your MCP-compatible agent to the Prove Before Act MCP manifest URL.
-2. The agent will discover available tools (certification, proof retrieval).
+2. The agent will call `tools/list` (or `discover_services`) to discover the
+   current tools. The core set includes `register_trial`, `certify_file`,
+   `verify_proof`, `audit_agent_session`, and `investigate_proof`.
 3. Configure authentication by providing your API key (`pm_...`) as a bearer token.
 4. The agent can then invoke Prove Before Act tools as part of its workflow.
+
+`register_trial` is the exception: it requires no Authorization header and
+returns a one-time `pm_` key with 10 free certifications. The full MCP tool
+catalog can change as capabilities are added, so clients should not hard-code
+an exhaustive list.
 
 The MCP manifest describes:
 
@@ -374,8 +487,8 @@ Response:
 {
   "products": [
     {
-      "id": "blockchain-certification",
-      "name": "Blockchain File Certification",
+      "id": "pba-certification",
+      "name": "Prove Before Act Certification",
       "pricing": {
         "amount": "0.01",
         "currency": "USD",
@@ -395,15 +508,29 @@ sha256sum report.pdf
 
 **Step 3: Create a checkout**
 
+Before calling checkout, sign this exact UTF-8 message with the Ed25519 private
+key of the wallet that will send the EGLD payment:
+
+```text
+pba-acp-checkout:pba-certification:<file_hash>:<payer_wallet>
+```
+
+Send the resulting 64-byte signature as a 128-character hexadecimal
+`payer_wallet_signature`.
+
 ```bash
 curl -X POST https://provebeforeact.com/api/acp/checkout \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer pm_your_api_key" \
   -d '{
-    "product_id": "blockchain-certification",
-    "file_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "file_name": "report.pdf",
-    "author_name": "Alice"
+    "product_id": "pba-certification",
+    "inputs": {
+      "file_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "filename": "report.pdf",
+      "author_name": "Alice"
+    },
+    "payer_wallet": "erd1YOUR_PAYER_WALLET",
+    "payer_wallet_signature": "YOUR_128_CHAR_HEX_ED25519_SIGNATURE"
   }'
 ```
 
@@ -542,7 +669,7 @@ After certification, proofs are publicly accessible in multiple formats:
 |-----------|-------|------------|
 | 401 | Missing or invalid API key | Verify the `Authorization` header contains `Bearer pm_<key>` |
 | 400 | Invalid file hash format | Ensure the hash is a 64-character lowercase hexadecimal string |
-| 400 | Invalid product_id | Use `blockchain-certification` as the product ID |
+| 400 | Invalid product_id or checkout ownership proof | Use `pba-certification`; provide the payer wallet and its valid Ed25519 signature over the documented `pba-acp-checkout` message |
 | 409 | File hash already certified | The same file content has been certified before; retrieve the existing proof |
 | 410 | Checkout expired | Checkouts expire after 30 minutes; create a new one |
 | 500 | Server error | Retry after a short delay; check `/api/acp/health` for service status |

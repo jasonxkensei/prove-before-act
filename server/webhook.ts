@@ -3,22 +3,32 @@ import dns from "dns";
 import https from "https";
 import { db } from "./db";
 import { certifications } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, gt, isNotNull, isNull, lte, or } from "drizzle-orm";
 import { logger } from "./logger";
+import { proofWebhookHeaders } from "./webhookHeaders";
+import { publicProofStatus } from "./proof-finality";
+import { CANONICAL_PUBLIC_ORIGIN } from "./publicOrigin";
+import { markProofCallbackExhausted } from "./proofCallbackAlerts";
 
 /**
- * xProof Webhook Signature Contract
+ * Prove Before Act Webhook Signature Contract
  *
  * Signature = HMAC-SHA256(secret, timestamp + "." + JSON.stringify(payload))
  *
  * Headers sent with each webhook:
- *   X-xProof-Signature  — hex-encoded HMAC-SHA256
- *   X-xProof-Timestamp  — unix epoch seconds (string)
- *   X-xProof-Event      — event type (e.g. "proof.certified")
- *   X-xProof-Delivery   — unique delivery ID (certification ID)
+ *   X-ProveBeforeAct-Signature  — hex-encoded HMAC-SHA256
+ *   X-ProveBeforeAct-Timestamp  — unix epoch seconds (string)
+ *   X-ProveBeforeAct-Event      — event type (e.g. "proof.certified")
+ *   X-ProveBeforeAct-Delivery   — stable delivery ID (certification ID), reused on retries
+ *
+ * The historical X-xProof-* names are sent as identical legacy aliases.
+ * Delivery uses at-least-once semantics: up to three attempts may be sent,
+ * and a receiver can accept one even if the sender fails to record its response.
+ * Each attempt has a fresh timestamp and signature, so receivers should
+ * deduplicate using the verified delivery ID rather than either value.
  *
  * Verification steps (in order):
- *   1. Check X-xProof-Timestamp is present and valid integer
+ *   1. Check X-ProveBeforeAct-Timestamp is present and valid integer
  *   2. Reject if timestamp > now + 60s (clock skew)
  *   3. Reject if timestamp < now - 300s (replay window)
  *   4. Compute expected = HMAC-SHA256(secret, timestamp + "." + rawBody)
@@ -27,23 +37,126 @@ import { logger } from "./logger";
 
 const MAX_WEBHOOK_ATTEMPTS = 3;
 const WEBHOOK_TIMEOUT_MS = 10000; // 10 seconds
+const WEBHOOK_DELIVERY_LEASE_MS = 2 * 60 * 1000;
+const activeDeliveries = new Set<string>();
+const queuedDuringDelivery = new Set<string>();
 
 /**
- * Return a redacted representation of a webhook URL safe for structured logs.
- * Only the origin (scheme + host + port) is retained; the path, query string,
- * credentials (userinfo), and fragment are all stripped so that bearer tokens
- * embedded in URLs never reach log aggregation systems.
+ * Return only the origin (scheme + host + port) of a webhook URL.
+ * The same redaction is used for logs and admin responses so credentials,
+ * paths, query strings, and fragments never leave the server.
  */
-function redactWebhookUrl(url: string): string {
+export function redactWebhookUrl(url: string): string {
   try {
-    const { origin } = new URL(url);
-    return `${origin}/[redacted]`;
+    const parsed = new URL(url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "[invalid-url]";
+    return parsed.origin;
   } catch {
     return "[invalid-url]";
   }
 }
 
-interface WebhookPayload {
+function isRetryableFailedDelivery(cert: {
+  blockchainStatus: string | null;
+  transactionHash: string | null;
+  finalityCheckedAt: Date | null;
+  webhookStatus: string | null;
+  webhookUrl: string | null;
+  webhookSigningSecret: string | null;
+}): boolean {
+  return cert.webhookStatus === "failed" &&
+    publicProofStatus(cert) === "confirmed" &&
+    Boolean(cert.webhookUrl && isValidWebhookUrl(cert.webhookUrl)) &&
+    Boolean(cert.webhookSigningSecret);
+}
+
+export interface RetryableFailedWebhook {
+  certificationId: string;
+  fileName: string | null;
+  attempts: number;
+  lastAttempt: Date | null;
+  destination: string;
+}
+
+/**
+ * List failed callbacks that can be safely retried. Persisted signing material
+ * and full destinations stay server-side; only a redacted destination is
+ * returned to the admin UI.
+ */
+export async function listRetryableFailedWebhookDeliveries(): Promise<RetryableFailedWebhook[]> {
+  const failed = await db.select({
+    id: certifications.id,
+    fileName: certifications.fileName,
+    blockchainStatus: certifications.blockchainStatus,
+    transactionHash: certifications.transactionHash,
+    finalityCheckedAt: certifications.finalityCheckedAt,
+    webhookStatus: certifications.webhookStatus,
+    webhookUrl: certifications.webhookUrl,
+    webhookSigningSecret: certifications.webhookSigningSecret,
+    webhookAttempts: certifications.webhookAttempts,
+    webhookLastAttempt: certifications.webhookLastAttempt,
+  }).from(certifications)
+    .where(eq(certifications.webhookStatus, "failed"));
+  return failed
+    .filter(isRetryableFailedDelivery)
+    .map(cert => ({
+      certificationId: cert.id,
+      fileName: cert.fileName,
+      attempts: cert.webhookAttempts || 0,
+      lastAttempt: cert.webhookLastAttempt,
+      destination: redactWebhookUrl(cert.webhookUrl!),
+    }));
+}
+
+/**
+ * Requeue an exhausted callback using its persisted destination and signing
+ * secret. The conditional update makes the retry single-use across operators
+ * and instances; the existing delivery worker rechecks finality and uses the
+ * SSRF-safe sender. Attempts are counted per delivery round, so a manual retry
+ * starts a fresh three-attempt round.
+ */
+export async function retryFailedWebhookDelivery(
+  certificationId: string,
+): Promise<{ retried: true; previousAttempts: number } | { retried: false }> {
+  const [cert] = await db.select().from(certifications)
+    .where(eq(certifications.id, certificationId));
+  if (!cert || !isRetryableFailedDelivery(cert)) return { retried: false };
+
+  const previousAttempts = cert.webhookAttempts || 0;
+  const [requeued] = await db.update(certifications).set({
+    webhookStatus: "pending",
+    webhookAttempts: 0,
+    webhookLastAttempt: null,
+    webhookLeaseToken: null,
+    webhookLeaseExpiresAt: null,
+    updatedAt: new Date(),
+  }).where(and(
+    eq(certifications.id, certificationId),
+    eq(certifications.webhookStatus, "failed"),
+    eq(certifications.blockchainStatus, "confirmed"),
+    eq(certifications.webhookUrl, cert.webhookUrl!),
+    eq(certifications.webhookSigningSecret, cert.webhookSigningSecret!),
+  )).returning({ id: certifications.id });
+
+  if (!requeued) return { retried: false };
+
+  queueWebhookDelivery({
+    id: cert.id,
+    webhookUrl: cert.webhookUrl,
+    webhookSigningSecret: cert.webhookSigningSecret,
+    webhookBaseUrl: cert.webhookBaseUrl,
+  });
+  return { retried: true, previousAttempts };
+}
+
+function safeWebhookErrorCode(error: unknown): string {
+  const code = error && typeof error === "object" && "code" in error
+    ? String((error as { code?: unknown }).code || "")
+    : "";
+  return /^[A-Z][A-Z0-9_]{0,39}$/.test(code) ? code : "unknown";
+}
+
+export interface WebhookPayload {
   event: "proof.certified";
   proof_id: string;
   status: "certified";
@@ -60,6 +173,28 @@ interface WebhookPayload {
   timestamp: string;
 }
 
+export function buildWebhookPayload(
+  cert: Pick<typeof certifications.$inferSelect, "id" | "fileHash" | "fileName" | "transactionHash" | "transactionUrl" | "createdAt">,
+  baseUrl: string,
+): WebhookPayload {
+  return {
+    event: "proof.certified",
+    proof_id: cert.id,
+    status: "certified",
+    file_hash: cert.fileHash,
+    filename: cert.fileName,
+    verify_url: `${baseUrl}/proof/${cert.id}`,
+    certificate_url: `${baseUrl}/api/certificates/${cert.id}.pdf`,
+    proof_json_url: `${baseUrl}/proof/${cert.id}.json`,
+    blockchain: {
+      network: "MultiversX",
+      transaction_hash: cert.transactionHash,
+      explorer_url: cert.transactionUrl,
+    },
+    timestamp: cert.createdAt?.toISOString() || new Date().toISOString(),
+  };
+}
+
 /**
  * Generate HMAC-SHA256 signature for webhook payload
  */
@@ -71,8 +206,8 @@ function signPayload(payload: string, secret: string): string {
  * Verify webhook signature and timestamp validity
  * 
  * @param body - Raw request body string
- * @param signature - Hex-encoded signature from X-xProof-Signature header
- * @param timestamp - Unix epoch seconds from X-xProof-Timestamp header
+ * @param signature - Hex-encoded signature from X-ProveBeforeAct-Signature header
+ * @param timestamp - Unix epoch seconds from X-ProveBeforeAct-Timestamp header
  * @param secret - Signing secret for HMAC verification
  * @returns Object with valid boolean and optional error message
  */
@@ -157,23 +292,9 @@ export async function deliverWebhook(
       logger.error("Certification not found", { component: "webhook", certificationId });
       return false;
     }
+    if (publicProofStatus(cert) !== "confirmed") return false;
 
-    const payload: WebhookPayload = {
-      event: "proof.certified",
-      proof_id: cert.id,
-      status: "certified",
-      file_hash: cert.fileHash,
-      filename: cert.fileName,
-      verify_url: `${baseUrl}/proof/${cert.id}`,
-      certificate_url: `${baseUrl}/api/certificates/${cert.id}.pdf`,
-      proof_json_url: `${baseUrl}/proof/${cert.id}.json`,
-      blockchain: {
-        network: "MultiversX",
-        transaction_hash: cert.transactionHash,
-        explorer_url: cert.transactionUrl,
-      },
-      timestamp: cert.createdAt?.toISOString() || new Date().toISOString(),
-    };
+    const payload = buildWebhookPayload(cert, baseUrl);
 
     const payloadStr = JSON.stringify(payload);
     const timestamp = Math.floor(Date.now() / 1000).toString();
@@ -202,11 +323,8 @@ export async function deliverWebhook(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-xProof-Signature": signature,
-          "X-xProof-Timestamp": timestamp,
-          "X-xProof-Event": "proof.certified",
-          "X-xProof-Delivery": certificationId,
-          "User-Agent": "xProof-Webhook/1.0",
+          ...proofWebhookHeaders(signature, timestamp, "proof.certified", certificationId),
+          "User-Agent": "ProveBeforeAct-Webhook/1.0",
         },
         body: payloadStr,
         timeoutMs: WEBHOOK_TIMEOUT_MS,
@@ -222,16 +340,16 @@ export async function deliverWebhook(
         return true;
       } else {
         logger.warn("Webhook delivery failed", { component: "webhook", webhookUrl: redactWebhookUrl(webhookUrl), status: result.status });
-        await markWebhookFailed(certificationId);
+        await markWebhookFailed(certificationId, webhookUrl);
         return false;
       }
     } catch (fetchError: any) {
       // safeWebhookFetch throws for SSRF rejections, redirect attempts, timeouts,
       // TLS failures, and connection errors. All of these are treated as
       // delivery failures so they enter the retry/backoff path normally.
-      const reason = fetchError?.code || fetchError?.message || "unknown";
+      const reason = safeWebhookErrorCode(fetchError);
       logger.warn("Webhook network error", { component: "webhook", webhookUrl: redactWebhookUrl(webhookUrl), error: reason });
-      await markWebhookFailed(certificationId);
+      await markWebhookFailed(certificationId, webhookUrl);
       return false;
     }
   } catch (error) {
@@ -240,58 +358,215 @@ export async function deliverWebhook(
   }
 }
 
-async function markWebhookFailed(certificationId: string) {
+async function markWebhookFailed(certificationId: string, webhookUrl: string) {
   const [cert] = await db
     .select()
     .from(certifications)
     .where(eq(certifications.id, certificationId));
-  
+
   if (!cert) return;
-  
+
   const status = (cert.webhookAttempts || 0) >= MAX_WEBHOOK_ATTEMPTS ? "failed" : "pending";
+  if (status === "failed") {
+    await markWebhookExhausted(certificationId, webhookUrl);
+    return;
+  }
   await db
     .update(certifications)
     .set({ webhookStatus: status })
     .where(eq(certifications.id, certificationId));
 }
 
+async function markWebhookExhausted(certificationId: string, webhookUrl: string): Promise<void> {
+  await markProofCallbackExhausted(certificationId, webhookUrl, MAX_WEBHOOK_ATTEMPTS);
+}
+
+type PendingWebhook = {
+  id: string;
+  webhookUrl: string | null;
+  webhookSigningSecret: string | null;
+  webhookBaseUrl: string | null;
+};
+
+async function claimWebhookDelivery(certificationId: string): Promise<string | null> {
+  const now = new Date();
+  const leaseToken = crypto.randomUUID();
+  const [claimed] = await db.update(certifications).set({
+    webhookLeaseToken: leaseToken,
+    webhookLeaseExpiresAt: new Date(now.getTime() + WEBHOOK_DELIVERY_LEASE_MS),
+  }).where(and(
+    eq(certifications.id, certificationId),
+    eq(certifications.webhookStatus, "pending"),
+    or(
+      isNull(certifications.webhookLeaseExpiresAt),
+      lte(certifications.webhookLeaseExpiresAt, now),
+    ),
+  )).returning({ id: certifications.id });
+  return claimed ? leaseToken : null;
+}
+
+async function renewWebhookDeliveryLease(certificationId: string, leaseToken: string): Promise<boolean> {
+  const now = new Date();
+  const [renewed] = await db.update(certifications).set({
+    webhookLeaseToken: leaseToken,
+    webhookLeaseExpiresAt: new Date(now.getTime() + WEBHOOK_DELIVERY_LEASE_MS),
+  }).where(and(
+    eq(certifications.id, certificationId),
+    eq(certifications.webhookLeaseToken, leaseToken),
+    gt(certifications.webhookLeaseExpiresAt, now),
+  )).returning({ id: certifications.id });
+  return Boolean(renewed);
+}
+
+async function releaseWebhookDeliveryLease(certificationId: string, leaseToken: string): Promise<void> {
+  await db.update(certifications).set({
+    webhookLeaseToken: null,
+    webhookLeaseExpiresAt: null,
+  }).where(and(
+    eq(certifications.id, certificationId),
+    eq(certifications.webhookLeaseToken, leaseToken),
+  ));
+}
+
+function queueWebhookDelivery(delivery: PendingWebhook, rescheduleWhenActive = true): void {
+  if (!delivery.webhookUrl) return;
+  if (activeDeliveries.has(delivery.id)) {
+    if (rescheduleWhenActive) queuedDuringDelivery.add(delivery.id);
+    return;
+  }
+  activeDeliveries.add(delivery.id);
+  void claimWebhookDelivery(delivery.id)
+    .then(leaseToken => {
+      if (!leaseToken) return undefined;
+      return deliverWebhookWithRetries(
+        delivery.id,
+        delivery.webhookUrl!,
+        delivery.webhookBaseUrl || CANONICAL_PUBLIC_ORIGIN,
+        leaseToken,
+        delivery.webhookSigningSecret || undefined,
+      );
+    })
+    .catch(error => logger.error("Webhook scheduling failed", {
+      component: "webhook", certificationId: delivery.id, error: safeWebhookErrorCode(error),
+    }))
+    .finally(() => {
+      activeDeliveries.delete(delivery.id);
+      if (queuedDuringDelivery.delete(delivery.id)) {
+        void schedulePersistedWebhookDelivery(delivery.id).catch(error => logger.error(
+          "Queued webhook delivery rescheduling failed",
+          { component: "webhook", certificationId: delivery.id, error: safeWebhookErrorCode(error) },
+        ));
+      }
+    });
+}
+
+async function deliverWebhookWithRetries(
+  certificationId: string,
+  webhookUrl: string,
+  baseUrl: string,
+  leaseToken: string,
+  signingSecret?: string,
+): Promise<void> {
+  try {
+    let [cert] = await db.select().from(certifications).where(eq(certifications.id, certificationId));
+    if (!cert || cert.webhookStatus !== "pending") return;
+    if (cert.blockchainStatus === "failed") {
+      await db.update(certifications).set({ webhookStatus: "failed" }).where(eq(certifications.id, certificationId));
+      return;
+    }
+    // Finality polling, not an in-memory timer, will enqueue this again after
+    // blockchainStatus and finalityCheckedAt are durably updated.
+    if (publicProofStatus(cert) !== "confirmed") return;
+
+    let nextAttemptNumber = cert.webhookAttempts || 0;
+    if (nextAttemptNumber >= MAX_WEBHOOK_ATTEMPTS) {
+      await markWebhookExhausted(certificationId, webhookUrl);
+      return;
+    }
+
+    let attemptsRemaining = MAX_WEBHOOK_ATTEMPTS - nextAttemptNumber;
+    while (attemptsRemaining > 0) {
+      if (nextAttemptNumber > 0) {
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, nextAttemptNumber) * 5000));
+      }
+
+      if (!await renewWebhookDeliveryLease(certificationId, leaseToken)) return;
+      [cert] = await db.select().from(certifications).where(eq(certifications.id, certificationId));
+      if (!cert || cert.webhookStatus === "delivered" || cert.webhookStatus === "failed") return;
+      if (cert.blockchainStatus === "failed") {
+        await db.update(certifications).set({ webhookStatus: "failed" }).where(eq(certifications.id, certificationId));
+        return;
+      }
+      if (publicProofStatus(cert) !== "confirmed") return;
+      if ((cert.webhookAttempts || 0) >= MAX_WEBHOOK_ATTEMPTS) {
+        await markWebhookExhausted(certificationId, webhookUrl);
+        return;
+      }
+
+      const attemptsBeforeDelivery = cert.webhookAttempts || 0;
+      attemptsRemaining--;
+      if (await deliverWebhook(certificationId, webhookUrl, baseUrl, signingSecret)) return;
+      [cert] = await db.select().from(certifications).where(eq(certifications.id, certificationId));
+      if (!cert || cert.webhookStatus === "delivered" || cert.webhookStatus === "failed") return;
+      nextAttemptNumber = Math.max(attemptsBeforeDelivery + 1, cert.webhookAttempts || 0);
+    }
+
+    // A failure before the attempt counter could be persisted still consumes an
+    // attempt in this worker, preserving the three-attempt ceiling.
+    await markWebhookExhausted(certificationId, webhookUrl);
+  } finally {
+    await releaseWebhookDeliveryLease(certificationId, leaseToken);
+  }
+}
+
 /**
- * Schedule webhook delivery with retry logic.
- * First attempt is immediate, retries are delayed with exponential backoff.
+ * Queue a delivery when proof finality is recorded. Pending proofs are not
+ * polled in memory; pollProofFinality calls this again only after confirmation.
  */
 export function scheduleWebhookDelivery(
   certificationId: string,
   webhookUrl: string,
   baseUrl: string,
-  signingSecret?: string
+  signingSecret?: string,
 ): void {
-  deliverWebhook(certificationId, webhookUrl, baseUrl, signingSecret).then(async (success) => {
-    if (!success) {
-      for (let attempt = 1; attempt < MAX_WEBHOOK_ATTEMPTS; attempt++) {
-        const delay = Math.pow(2, attempt) * 5000; // 10s, 20s
-        await new Promise((resolve) => setTimeout(resolve, delay));
-        
-        const [cert] = await db
-          .select()
-          .from(certifications)
-          .where(eq(certifications.id, certificationId));
-        
-        if (cert?.webhookStatus === "delivered" || cert?.webhookStatus === "failed") {
-          break;
-        }
-        
-        if ((cert?.webhookAttempts || 0) >= MAX_WEBHOOK_ATTEMPTS) {
-          await db.update(certifications)
-            .set({ webhookStatus: "failed" })
-            .where(eq(certifications.id, certificationId));
-          break;
-        }
-        
-        const retrySuccess = await deliverWebhook(certificationId, webhookUrl, baseUrl, signingSecret);
-        if (retrySuccess) break;
-      }
-    }
+  queueWebhookDelivery({
+    id: certificationId,
+    webhookUrl,
+    webhookBaseUrl: baseUrl,
+    webhookSigningSecret: signingSecret || null,
   });
+}
+
+/**
+ * Resume one persisted webhook delivery. Used by the finality poller after a
+ * confirmed transition and by startup recovery.
+ */
+export async function schedulePersistedWebhookDelivery(certificationId: string): Promise<void> {
+  const [cert] = await db.select({
+    id: certifications.id,
+    webhookUrl: certifications.webhookUrl,
+    webhookSigningSecret: certifications.webhookSigningSecret,
+    webhookBaseUrl: certifications.webhookBaseUrl,
+  }).from(certifications).where(eq(certifications.id, certificationId));
+  if (cert) queueWebhookDelivery(cert);
+}
+
+/**
+ * Re-enqueue durable pending rows after an app restart. Unfinalized rows are
+ * observed once and left for the finality poller; no certification event is
+ * sent until that poller independently confirms chain inclusion.
+ */
+export async function recoverPendingWebhookDeliveries(): Promise<void> {
+  const pending = await db.select({
+    id: certifications.id,
+    webhookUrl: certifications.webhookUrl,
+    webhookSigningSecret: certifications.webhookSigningSecret,
+    webhookBaseUrl: certifications.webhookBaseUrl,
+  }).from(certifications).where(and(
+    eq(certifications.webhookStatus, "pending"),
+    isNotNull(certifications.webhookUrl),
+  ));
+  for (const delivery of pending) queueWebhookDelivery(delivery, false);
 }
 
 /**

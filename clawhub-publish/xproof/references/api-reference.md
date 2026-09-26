@@ -14,6 +14,10 @@ Alternative: x402 payment protocol (no API key needed). Send request without aut
 
 ## Endpoints
 
+### Batch limit
+
+`POST /api/batch` accepts up to 50 files per call.
+
 ### POST /api/proof
 
 Certify a single file.
@@ -67,6 +71,19 @@ Get proof details in Markdown format (LLM-friendly).
 ### GET /badge/{id}
 
 Dynamic SVG badge showing certification status.
+
+### Agent Proof Standard
+
+- `GET /api/standard/spec` — Machine-readable JSON specification.
+- `POST /api/standard/validate` — Validate a proof document against the standard.
+- `GET /standard` — Human-readable specification page (HTML).
+
+### Public OpenAPI exports
+
+- `GET /api/acp/openapi.json` — OpenAPI 3.1 specification.
+- `GET /api/acp/openapi-3.0.json` — OpenAPI 3.0.3 compatibility export.
+
+Both OpenAPI documents are public and require no authentication.
 
 ### GET /api/acp/products
 

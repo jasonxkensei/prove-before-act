@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
+import { PublicSiteHeader, PublicSiteFooter } from "@/components/public-site-chrome";
 import { Shield, Trophy, Search, Bot, ArrowRight, TrendingUp, TrendingDown, Flame, BadgeCheck, Award, ChevronLeft, ChevronRight, Sparkles, AlertTriangle, Crosshair, UserPlus, Loader2, Key, Copy, Check } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +21,8 @@ import {
 } from "@/components/ui/select";
 import { formatDistanceToNow } from "date-fns";
 import { SHORTLIST_KEY, SHORTLIST_MAX, readShortlist, writeShortlist, clearShortlist, toggleWallet, shouldShowCompareBar, isCompareEnabled } from "@/lib/compare-shortlist";
-import { trackAgentCta, useAgentCtaExposure } from "@/lib/conversionTracking";
+import { ensureConversionVisitor, trackAgentCta, useAgentCtaExposure } from "@/lib/conversionTracking";
+import { trackEvent } from "@/lib/analytics";
 
 interface LeaderboardEntry {
   walletAddress: string;
@@ -56,9 +58,9 @@ interface LeaderboardResponse {
 }
 
 const TRUST_LEVEL_STYLES: Record<string, { badge: string; label: string }> = {
-  Verified:  { badge: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30", label: "Verified" },
-  Trusted:   { badge: "bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/30", label: "Trusted" },
-  Active:    { badge: "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30", label: "Active" },
+  Verified:  { badge: "status-chip status-chip--verified", label: "Verified" },
+  Trusted:   { badge: "status-chip status-chip--trusted", label: "Trusted" },
+  Active:    { badge: "status-chip status-chip--active", label: "Active" },
   Newcomer:  { badge: "bg-muted text-muted-foreground border-border", label: "Newcomer" },
 };
 
@@ -97,9 +99,9 @@ function TrustBadge({ level }: { level: string }) {
 }
 
 const CALIBRATION_STYLES: Record<string, { badge: string; label: string }> = {
-  calibrated:    { badge: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30", label: "Calibrated" },
+  calibrated:    { badge: "status-chip status-chip--calibrated", label: "Calibrated" },
   overconfident: { badge: "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30",   label: "Overconfident" },
-  underconfident:{ badge: "bg-blue-500/15 text-blue-700 dark:text-blue-400 border-blue-500/30",       label: "Underconfident" },
+  underconfident:{ badge: "status-chip status-chip--underconfident",       label: "Underconfident" },
 };
 
 function CalibrationBadge({ label }: { label: "calibrated" | "overconfident" | "underconfident" }) {
@@ -117,7 +119,7 @@ function CalibrationBadge({ label }: { label: "calibrated" | "overconfident" | "
 function AttestationBadge({ count }: { count: number }) {
   if (count === 0) return null;
   return (
-    <span className="inline-flex items-center gap-0.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+    <span className="status-chip status-chip--verified">
       <BadgeCheck className="h-3 w-3" />
       {count}
     </span>
@@ -159,6 +161,7 @@ export default function Leaderboard() {
 
   const registerMutation = useMutation({
     mutationFn: async () => {
+      await ensureConversionVisitor();
       const res = await fetch("/api/agent/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -168,12 +171,19 @@ export default function Leaderboard() {
       if (!res.ok) throw new Error(json.message || json.error || "Registration failed");
       return json;
     },
-    onSuccess: (data) => setRegResult(data),
-    onError: (err: Error) => toast({ title: "Registration failed", description: err.message, variant: "destructive" }),
+    onSuccess: (data) => {
+      setRegResult(data);
+      trackEvent("trial_registration_succeeded", { location: "leaderboard" });
+    },
+    onError: (err: Error) => {
+      trackEvent("trial_registration_failed", { location: "leaderboard" });
+      toast({ title: "Registration failed", description: err.message, variant: "destructive" });
+    },
   });
 
   function copyKey(key: string) {
     navigator.clipboard.writeText(key).catch(() => {});
+    trackEvent("trial_api_key_copied", { location: "leaderboard" });
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
@@ -271,22 +281,8 @@ export default function Leaderboard() {
 
   return (
     <>
-    <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between gap-4">
-          <Link href="/" data-testid="link-logo-home" className="flex items-center gap-2">
-            <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
-          </Link>
-          <nav className="flex items-center gap-4">
-            <Button asChild variant="ghost" size="sm" data-testid="link-nav-home">
-              <Link href="/">Home</Link>
-            </Button>
-            <Button asChild variant="ghost" size="sm" data-testid="link-nav-dashboard">
-              <Link href="/dashboard">Dashboard</Link>
-            </Button>
-          </nav>
-        </div>
-      </header>
+    <div className="page-shell dossier-shell">
+      <PublicSiteHeader />
 
       <div className="container mx-auto max-w-5xl py-12">
         <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
@@ -320,21 +316,21 @@ export default function Leaderboard() {
 
         {!isLoading && total > 0 && (
           <div className="mb-6 grid grid-cols-3 gap-4 sm:grid-cols-3">
-            <div className="rounded-md border bg-muted/30 px-4 py-3">
+             <div className="panel-inset px-4 py-3">
               <p className="text-xs text-muted-foreground">Agents</p>
               <p className="text-2xl font-bold tabular-nums" data-testid="stat-agent-count">{total}</p>
             </div>
-            <div className="rounded-md border bg-muted/30 px-4 py-3">
+             <div className="panel-inset px-4 py-3">
               <p className="text-xs text-muted-foreground">Showing</p>
-              <p className="text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+              <p className="text-2xl font-bold tabular-nums text-[hsl(var(--status-verified))]">
                 {entries.length}
               </p>
             </div>
-            <div className="rounded-md border bg-muted/30 px-4 py-3">
+             <div className="panel-inset px-4 py-3">
               <p className="text-xs text-muted-foreground flex items-center gap-1 flex-wrap">
-                <BadgeCheck className="h-3 w-3 text-emerald-500" /> Page
+                <BadgeCheck className="h-3 w-3 text-[hsl(var(--status-verified))]" /> Page
               </p>
-              <p className="text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+              <p className="text-2xl font-bold tabular-nums text-[hsl(var(--status-verified))]">
                 {page} / {totalPages}
               </p>
             </div>
@@ -461,7 +457,7 @@ export default function Leaderboard() {
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span className="inline-flex items-center gap-1 cursor-help">
-                          <BadgeCheck className="h-3.5 w-3.5 text-emerald-500" />
+                          <BadgeCheck className="h-3.5 w-3.5 text-[hsl(var(--status-verified))]" />
                           Attested
                         </span>
                       </TooltipTrigger>
@@ -518,7 +514,7 @@ export default function Leaderboard() {
                             {entry.agentName || truncateWallet(entry.walletAddress)}
                           </span>
                           {(entry.activeAttestations || 0) > 0 && (
-                            <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-emerald-500" data-testid={`icon-attested-${entry.walletAddress}`} />
+                            <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-[hsl(var(--status-verified))]" data-testid={`icon-attested-${entry.walletAddress}`} />
                           )}
                         </div>
                         <span className="font-mono text-xs text-muted-foreground">
@@ -578,7 +574,7 @@ export default function Leaderboard() {
                                   data-testid={`badge-coherence-${entry.walletAddress}`}
                                   className={`border text-[10px] px-1.5 py-0 font-medium ${
                                     entry.coherenceRate >= 70
-                                      ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-emerald-500/30"
+                                      ? "status-chip status-chip--verified"
                                       : entry.coherenceRate >= 40
                                         ? "bg-amber-500/15 text-amber-700 dark:text-amber-400 border-amber-500/30"
                                         : "bg-red-500/15 text-red-700 dark:text-red-400 border-red-500/30"
@@ -599,7 +595,7 @@ export default function Leaderboard() {
                             {entry.trustScore} pts
                           </span>
                           {entry.scoreDelta7d > 0 && (
-                            <span className="inline-flex items-center text-[10px] text-emerald-600 dark:text-emerald-400 tabular-nums" data-testid={`delta-up-${entry.walletAddress}`}>
+                            <span className="inline-flex items-center text-[10px] text-[hsl(var(--status-verified))] tabular-nums" data-testid={`delta-up-${entry.walletAddress}`}>
                               <TrendingUp className="h-3 w-3 mr-0.5" />
                               +{entry.scoreDelta7d}
                             </span>
@@ -624,7 +620,7 @@ export default function Leaderboard() {
                       <div className="flex flex-col gap-0.5 items-end">
                         <span className="font-medium tabular-nums">{entry.certTotal}</span>
                         {entry.certLast30d > 0 && (
-                          <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
+                          <span className="flex items-center gap-1 text-xs text-[hsl(var(--status-verified))]">
                             <TrendingUp className="h-3 w-3" />
                             {entry.certLast30d} this month
                           </span>
@@ -687,10 +683,10 @@ export default function Leaderboard() {
         <p className="mt-4 text-center text-xs text-muted-foreground">
           Trust scores are computed from on-chain proof history. No self-reporting.
           {attestedOnly && (
-            <span className="ml-2 text-emerald-600 dark:text-emerald-400">· Attested agents only</span>
+            <span className="ml-2 text-[hsl(var(--status-verified))]">· Attested agents only</span>
           )}
           {calibrationFilter !== "all" && (
-            <span className="ml-2 text-emerald-600 dark:text-emerald-400">
+            <span className="ml-2 text-[hsl(var(--status-verified))]">
               · {calibrationFilter.charAt(0).toUpperCase() + calibrationFilter.slice(1)} agents only
             </span>
           )}
@@ -724,6 +720,7 @@ export default function Leaderboard() {
           </div>
         </div>
       )}
+      <PublicSiteFooter />
     </div>
 
     {/* ── Register your agent dialog ───────────────────────────────────────── */}
@@ -774,7 +771,10 @@ export default function Leaderboard() {
                   size="sm"
                   data-testid="button-reg-submit"
                   disabled={!regName.trim() || registerMutation.isPending}
-                  onClick={() => registerMutation.mutate()}
+                  onClick={() => {
+                    trackEvent("trial_registration_started", { location: "leaderboard" });
+                    registerMutation.mutate();
+                  }}
                 >
                   {registerMutation.isPending ? (
                     <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Registering…</>
@@ -788,7 +788,7 @@ export default function Leaderboard() {
         ) : (
           <>
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+              <DialogTitle className="flex items-center gap-2 text-[hsl(var(--status-verified))]">
                 <BadgeCheck className="h-5 w-5" />
                 Agent registered
               </DialogTitle>
@@ -810,7 +810,7 @@ export default function Leaderboard() {
                     data-testid="button-copy-key"
                     onClick={() => copyKey(regResult!.api_key)}
                   >
-                    {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
+                    {copied ? <Check className="h-4 w-4 text-[hsl(var(--status-verified))]" /> : <Copy className="h-4 w-4" />}
                   </Button>
                 </div>
               </div>

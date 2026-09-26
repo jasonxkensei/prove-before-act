@@ -15,15 +15,24 @@ Demonstrates on-chain proof anchoring for Fetch.ai uAgent messages using
 ## Run
 
 ```bash
-pip install xproof
+# The example itself only needs the SDK and its mock client.
+pip install prove-before-act
 python main.py
 ```
 
 The example uses a mock client — no live API key or MultiversX node required.
 
+> The published SDK no longer bundles a `fetchai` extra. The upstream Fetch.ai
+> uAgents dependency currently pulls in `ecdsa`, which has no patched release
+> for CVE-2024-23342. This integration remains available as source reference,
+> but installing uAgents is intentionally left to consumers who have assessed
+> that upstream dependency for their own environment.
+
 ## Real usage
 
 ```python
+# `xproof` is the legacy module compatibility alias in the canonical
+# prove-before-act distribution.
 from xproof import XProofClient
 from xproof.integrations.fetchai import XProofuAgentMiddleware
 

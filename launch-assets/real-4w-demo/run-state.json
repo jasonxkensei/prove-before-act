@@ -1,0 +1,13 @@
+{
+  "runId": "9899f0ad-2c90-4c4e-a5df-82858c47df98",
+  "wallet": "erd1hlx4xanncp2wm9aly2q6ywuthl2q9jwe9sxvxpx4gg62zcrvd0uqr8gyu9",
+  "agentName": "xproof_agent_verify",
+  "actionType": "funnel_report_9899f0ad",
+  "sourceSha256": "93fda5839160b7bdcd36c9e047436e42d95d791586c903148e3edcc5dc74a5a4",
+  "why": {
+    "attempted": true,
+    "file_hash": "337f4ef57c69c73b573d701783913e0399aaac38c0b3bdf61907230b914a2150",
+    "proof_id": "daa18cee-aa22-4a01-a2c7-44bddb481a60",
+    "transaction_hash": "ddbc908c6265faad855120c87fe731af6bdc9865c8889d6faaa5a828af4bbba2"
+  }
+}

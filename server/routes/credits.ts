@@ -27,11 +27,32 @@ export function registerCreditsRoutes(app: Express) {
         pay_to: process.env.X402_PAY_TO || "",
         note: "Send USDC on Base to pay_to, then confirm via POST /api/credits/confirm",
       },
+      payment_methods: [
+        {
+          provider: "stripe",
+          label: "Stripe Checkout (cards and locally available methods)",
+          checkout_endpoint: `${baseUrl}/api/credits/stripe/checkout`,
+          status_endpoint_template: `${baseUrl}/api/credits/stripe/status/{session_id}`,
+          note: "Additional hosted checkout option, particularly useful for buyers who do not use crypto.",
+        },
+        {
+          provider: "usdc_base",
+          label: "USDC on Base",
+          purchase_endpoint: `${baseUrl}/api/credits/purchase`,
+          confirm_endpoint: `${baseUrl}/api/credits/confirm`,
+        },
+      ],
       workflow: [
         `1. GET ${baseUrl}/api/credits/packages — pick a package_id`,
         `2. POST ${baseUrl}/api/credits/purchase — get payment requirements`,
         `3. Send USDC on Base to the pay_to address`,
         `4. POST ${baseUrl}/api/credits/confirm — confirm with tx_hash to credit your account`,
+      ],
+      stripe_workflow: [
+        `1. GET ${baseUrl}/api/credits/packages — pick a package_id`,
+        `2. POST ${baseUrl}/api/credits/stripe/checkout — receive checkout_url`,
+        "3. Complete payment on Stripe Checkout",
+        `4. GET ${baseUrl}/api/credits/stripe/status/{session_id} — wait for status paid`,
       ],
     });
   });

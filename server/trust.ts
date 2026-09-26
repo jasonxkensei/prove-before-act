@@ -1,7 +1,8 @@
 import { db, pool } from "./db";
-import { certifications, users, agentViolations } from "@shared/schema";
+import { certifications, users, agentViolations, FINALITY_SNAPSHOT_VERSION } from "@shared/schema";
 import { eq, sql, and } from "drizzle-orm";
 import { logger } from "./logger";
+import { getLeaderboardRefreshHealth, recordLeaderboardRefreshFailure, recordLeaderboardRefreshSuccess, recordLeaderboardSnapshot, recordTrustReadThroughSnapshotFailure, recordTrustReadThroughSnapshotSuccess } from "./alerts";
 
 export type TrustLevel = "Newcomer" | "Active" | "Trusted" | "Verified";
 
@@ -414,6 +415,7 @@ async function computeStreakWeeks(userId: string): Promise<number> {
     FROM certifications
     WHERE user_id = ${userId}
       AND blockchain_status = 'confirmed'
+      AND finality_checked_at IS NOT NULL
       AND is_public = true
       AND (auth_method IS NULL OR auth_method != 'onboarding')
     ORDER BY week_num DESC
@@ -431,6 +433,7 @@ async function computeStreakWeeksBatch(userIds: string[]): Promise<Map<string, n
        FROM certifications
        WHERE user_id = ANY($1)
          AND blockchain_status = 'confirmed'
+         AND finality_checked_at IS NOT NULL
          AND is_public = true
          AND (auth_method IS NULL OR auth_method != 'onboarding')
        ORDER BY user_id, week_num DESC`,
@@ -458,7 +461,7 @@ async function computeAttestationBonus(walletAddress: string): Promise<{ bonus: 
     const rows = await db.execute(sql`
       SELECT
         a.issuer_wallet,
-        COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true) AS issuer_confirmed_certs
+        COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NOT NULL AND c.is_public = true) AS issuer_confirmed_certs
       FROM attestations a
       LEFT JOIN users u ON u.wallet_address = a.issuer_wallet
       LEFT JOIN certifications c ON c.user_id = u.id
@@ -495,7 +498,7 @@ async function computeAttestationBonusBatch(walletAddresses: string[]): Promise<
       `SELECT
          a.subject_wallet,
          a.issuer_wallet,
-         COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true) AS issuer_confirmed_certs
+         COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NOT NULL AND c.is_public = true) AS issuer_confirmed_certs
        FROM attestations a
        LEFT JOIN users u ON u.wallet_address = a.issuer_wallet
        LEFT JOIN certifications c ON c.user_id = u.id
@@ -541,8 +544,8 @@ async function computeTransparencyCounts(userId: string): Promise<{ metadataCoun
         // model_hash / strategy_hash must be ≥ 16 chars (shortest sensible hash fragment).
         // version_number must be ≥ 3 chars (e.g. "1.0").
         // agent_id must be ≥ 8 chars to be a meaningful reference.
-        metadataCount: sql<number>`COUNT(*) FILTER (WHERE blockchain_status = 'confirmed' AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding') AND metadata IS NOT NULL AND (length(metadata->>'model_hash') >= 16 OR length(metadata->>'strategy_hash') >= 16 OR length(metadata->>'version_number') >= 3))`,
-        auditCount: sql<number>`COUNT(*) FILTER (WHERE blockchain_status = 'confirmed' AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding') AND metadata IS NOT NULL AND length(metadata->>'agent_id') >= 8)`,
+        metadataCount: sql<number>`COUNT(*) FILTER (WHERE blockchain_status = 'confirmed' AND finality_checked_at IS NOT NULL AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding') AND metadata IS NOT NULL AND (length(metadata->>'model_hash') >= 16 OR length(metadata->>'strategy_hash') >= 16 OR length(metadata->>'version_number') >= 3))`,
+        auditCount: sql<number>`COUNT(*) FILTER (WHERE blockchain_status = 'confirmed' AND finality_checked_at IS NOT NULL AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding') AND metadata IS NOT NULL AND length(metadata->>'agent_id') >= 8)`,
       })
       .from(certifications)
       .where(eq(certifications.userId, userId));
@@ -560,10 +563,10 @@ export async function computeTrustScore(userId: string): Promise<TrustScore> {
 
   const [totals] = await db
     .select({
-      confirmed: sql<number>`COUNT(*) FILTER (WHERE blockchain_status = 'confirmed' AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding'))`,
-      last30d: sql<number>`COUNT(*) FILTER (WHERE created_at >= ${cutoff30d} AND blockchain_status = 'confirmed' AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding'))`,
-      firstAt: sql<Date>`MIN(created_at) FILTER (WHERE blockchain_status = 'confirmed' AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding'))`,
-      lastAt: sql<Date>`MAX(created_at) FILTER (WHERE blockchain_status = 'confirmed' AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding'))`,
+      confirmed: sql<number>`COUNT(*) FILTER (WHERE blockchain_status = 'confirmed' AND finality_checked_at IS NOT NULL AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding'))`,
+      last30d: sql<number>`COUNT(*) FILTER (WHERE created_at >= ${cutoff30d} AND blockchain_status = 'confirmed' AND finality_checked_at IS NOT NULL AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding'))`,
+      firstAt: sql<Date>`MIN(created_at) FILTER (WHERE blockchain_status = 'confirmed' AND finality_checked_at IS NOT NULL AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding'))`,
+      lastAt: sql<Date>`MAX(created_at) FILTER (WHERE blockchain_status = 'confirmed' AND finality_checked_at IS NOT NULL AND is_public = true AND (auth_method IS NULL OR auth_method != 'onboarding'))`,
     })
     .from(certifications)
     .where(eq(certifications.userId, userId));
@@ -618,48 +621,200 @@ export async function computeTrustScore(userId: string): Promise<TrustScore> {
 
 // ─── Per-wallet trust score read-through cache ───────────────────────────────
 //
-// Security guarantee: public read paths NEVER trigger live trust recomputation.
-// The cache is populated ONLY by the scheduled background refresh worker.
-// Public reads go: in-memory cache → trust_score_snapshots.full_trust_data → null.
-// A null response means the wallet has not yet been indexed; it will appear after
-// the next scheduled refresh cycle.
+// Security guarantee: public read paths never perform more than one bounded,
+// single-wallet trust computation for a wallet that has no snapshot. The cache
+// is populated by the scheduled refresh worker or this first-read fallback.
+// Public reads go: in-memory cache → trust_score_snapshots.full_trust_data →
+// one read-through computation for a known public wallet.
 //
 const TRUST_CACHE_MAX_ENTRIES = 5000;
-const trustCache = new Map<string, { value: TrustScore | null; cachedAt: number }>();
+const TRUST_CACHE_TTL_MS = 60_000;
+const trustCache = new Map<string, { value: TrustScore | null; cachedAt: number; revision: string | null }>();
+const trustReadThroughInFlight = new Map<string, Promise<TrustScore | null>>();
 
-function setTrustCache(key: string, value: TrustScore | null) {
+// Computation uses the regular pool in addition to the transaction connection.
+// Keep spare connections for those queries even when many wallets go cold at once.
+const TRUST_LOCK_LOCAL_CONCURRENCY = 4;
+let activeTrustLocks = 0;
+const trustLockWaiters: Array<() => void> = [];
+
+// Transaction-scoped and namespaced: distinct wallets can proceed independently.
+// Try-lock avoids occupying pool connections while another instance is computing.
+async function withWalletTrustLock<T>(walletAddress: string, work: () => Promise<T>): Promise<T> {
+  if (activeTrustLocks >= TRUST_LOCK_LOCAL_CONCURRENCY) {
+    await new Promise<void>((resolve) => trustLockWaiters.push(resolve));
+  }
+  activeTrustLocks++;
+  try {
+    for (let attempt = 0; attempt < 200; attempt++) {
+      const outcome = await db.transaction(async (tx) => {
+        const result = await tx.execute(sql`SELECT pg_try_advisory_xact_lock(hashtext('trust-snapshot'), hashtext(${walletAddress})) AS acquired`);
+        if (!result.rows[0]?.acquired) return { acquired: false as const };
+        return { acquired: true as const, value: await work() };
+      });
+      if (outcome.acquired) return outcome.value;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    throw new Error("Timed out waiting for wallet trust snapshot lock");
+  } finally {
+    activeTrustLocks--;
+    trustLockWaiters.shift()?.();
+  }
+}
+
+async function loadTrustSnapshot(walletAddress: string): Promise<{ value: TrustScore; revision: string } | null> {
+  const snap = await pool.query<{ full_trust_data: unknown; revision: string }>(
+    `SELECT full_trust_data, xmin::text AS revision
+     FROM trust_score_snapshots
+     WHERE wallet_address = $1
+       AND finality_version = ${FINALITY_SNAPSHOT_VERSION}
+       AND full_trust_data IS NOT NULL
+     ORDER BY snapshot_date DESC LIMIT 1`,
+    [walletAddress],
+  );
+  const row = snap.rows[0];
+  return row ? { value: row.full_trust_data as TrustScore, revision: row.revision } : null;
+}
+
+function setTrustCache(key: string, value: TrustScore | null, revision: string | null = null) {
   if (trustCache.size >= TRUST_CACHE_MAX_ENTRIES) {
     const oldestKey = trustCache.keys().next().value;
     if (oldestKey !== undefined) trustCache.delete(oldestKey);
   }
-  trustCache.set(key, { value, cachedAt: Date.now() });
+  trustCache.set(key, { value, cachedAt: Date.now(), revision });
 }
 
-// Public read — bounded: in-memory cache first, then single indexed snapshot row.
-// NO live computation is ever triggered from this function.
+async function computeAndSnapshotTrustScoreByWallet(walletAddress: string, requireSnapshot = false): Promise<TrustScore | null> {
+  const [user] = await db
+    .select({ id: users.id, isPublicProfile: users.isPublicProfile })
+    .from(users)
+    .where(eq(users.walletAddress, walletAddress));
+
+  // Do not compute or persist trust data for unknown/private wallets. This
+  // preserves the visibility gate used by all public profile and partner reads.
+  if (!user?.isPublicProfile) {
+    return null;
+  }
+
+  const trust = await computeTrustScore(user.id);
+
+  try {
+    await pool.query(
+      `INSERT INTO trust_score_snapshots
+         (wallet_address, score, level, cert_total, active_attestations, rank, snapshot_date, full_trust_data, finality_version)
+       VALUES ($1, $2, $3, $4, $5, 0, CURRENT_DATE, $6::jsonb, ${FINALITY_SNAPSHOT_VERSION})
+       ON CONFLICT (wallet_address, snapshot_date) DO UPDATE SET
+         score               = EXCLUDED.score,
+         level               = EXCLUDED.level,
+         cert_total          = EXCLUDED.cert_total,
+         active_attestations = EXCLUDED.active_attestations,
+         full_trust_data     = EXCLUDED.full_trust_data,
+         finality_version    = ${FINALITY_SNAPSHOT_VERSION}`,
+      [
+        walletAddress,
+        trust.score,
+        trust.level,
+        trust.certTotal,
+        trust.activeAttestations ?? 0,
+        JSON.stringify(trust),
+      ],
+    );
+    if (!requireSnapshot) recordTrustReadThroughSnapshotSuccess();
+  } catch (error: any) {
+    if (requireSnapshot) throw error;
+    recordTrustReadThroughSnapshotFailure(error);
+    // The score is still useful for this request and is cached to prevent a
+    // database write failure from turning every public read into a recompute.
+    logger.warn("Trust read-through snapshot write failed", {
+      component: "trust-read-through",
+      wallet: walletAddress,
+      error: error?.message ?? String(error),
+    });
+  }
+
+  setTrustCache(walletAddress, trust);
+  return trust;
+}
+
+// A confirmed proof changes a wallet's score before the next scheduled cycle.
+// Refresh the persisted snapshot as well as this process's cache, so a cold
+// partner/profile read does not reload the old score from the database.
+export async function refreshTrustAfterCertification(
+  walletAddress: string,
+  status: "confirmed" | "pending" | "failed",
+): Promise<void> {
+  if (status !== "confirmed") return;
+
+  // A first public read may already be computing the pre-certification score.
+  // Let it finish before replacing its snapshot and cache entry.
+  const inFlight = trustReadThroughInFlight.get(walletAddress);
+  if (inFlight) await inFlight;
+  trustCache.delete(walletAddress);
+  await withWalletTrustLock(walletAddress, () => computeAndSnapshotTrustScoreByWallet(walletAddress, true));
+}
+
+// Public read — bounded: in-memory cache first, then one indexed snapshot row.
+// If the wallet is a known public profile but has not been indexed yet, perform
+// exactly one single-wallet computation and persist it for subsequent reads.
 export async function computeTrustScoreByWallet(walletAddress: string): Promise<TrustScore | null> {
   const cached = trustCache.get(walletAddress);
-  if (cached) return cached.value;
+  if (cached && cached.revision && Date.now() - cached.cachedAt < TRUST_CACHE_TTL_MS) {
+    // A cheap indexed version read coordinates all app instances. A confirmation
+    // commits its snapshot before the caller returns; a different process must
+    // not serve its old 60-second cache entry on the next public request.
+    // On an outage, do not treat an unverified cached score as current.
+    try {
+      const current = await pool.query<{ revision: string }>(
+        `SELECT xmin::text AS revision FROM trust_score_snapshots
+         WHERE wallet_address = $1 AND finality_version = ${FINALITY_SNAPSHOT_VERSION}
+           AND full_trust_data IS NOT NULL
+         ORDER BY snapshot_date DESC LIMIT 1`,
+        [walletAddress],
+      );
+      if (current.rows[0]?.revision === cached.revision) return cached.value;
+    } catch {
+      // Fall through to the existing snapshot/read-through failure path.
+    }
+  }
+  if (cached) trustCache.delete(walletAddress);
 
   // Single bounded indexed read from the precomputed snapshot table.
   try {
-    const snap = await pool.query<{ full_trust_data: unknown }>(
-      `SELECT full_trust_data
-       FROM trust_score_snapshots
-       WHERE wallet_address = $1
-         AND full_trust_data IS NOT NULL
-       ORDER BY snapshot_date DESC LIMIT 1`,
-      [walletAddress],
-    );
-    if (snap.rows.length > 0 && snap.rows[0].full_trust_data) {
-      const value = snap.rows[0].full_trust_data as TrustScore;
-      setTrustCache(walletAddress, value);
-      return value;
+    const value = await loadTrustSnapshot(walletAddress);
+    if (value) {
+      setTrustCache(walletAddress, value.value, value.revision);
+      return value.value;
     }
   } catch { /* snapshot read failure is non-fatal; return null below */ }
 
-  // Wallet not yet indexed.  The scheduled refresh will populate it.
-  return null;
+  const inFlight = trustReadThroughInFlight.get(walletAddress);
+  if (inFlight) return inFlight;
+
+  const computation = withWalletTrustLock(walletAddress, async () => {
+    // Another instance may have filled the snapshot while we waited for its
+    // lock. In that case do not repeat the expensive trust queries.
+    const snapshot = await loadTrustSnapshot(walletAddress);
+    if (snapshot) {
+      setTrustCache(walletAddress, snapshot.value, snapshot.revision);
+      return snapshot.value;
+    }
+    return computeAndSnapshotTrustScoreByWallet(walletAddress);
+  }).catch((error) => {
+    logger.warn("Trust read-through computation failed", {
+      component: "trust-read-through",
+      wallet: walletAddress,
+      error: error?.message ?? String(error),
+    });
+    return null;
+  });
+  trustReadThroughInFlight.set(walletAddress, computation);
+  try {
+    return await computation;
+  } finally {
+    if (trustReadThroughInFlight.get(walletAddress) === computation) {
+      trustReadThroughInFlight.delete(walletAddress);
+    }
+  }
 }
 
 export type CalibrationLabel = "calibrated" | "overconfident" | "underconfident";
@@ -742,13 +897,13 @@ async function computeAllLeaderboardEntries(): Promise<LeaderboardEntry[]> {
         u.agent_category,
         u.agent_description,
         u.agent_website,
-        COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) AS cert_total,
-        COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding') AND c.created_at >= ${cutoff30d}) AS cert_last_30d,
-        MIN(c.created_at) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) AS first_cert_at,
-        MAX(c.created_at) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) AS last_cert_at,
+        COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NOT NULL AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) AS cert_total,
+        COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NOT NULL AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding') AND c.created_at >= ${cutoff30d}) AS cert_last_30d,
+        MIN(c.created_at) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NOT NULL AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) AS first_cert_at,
+        MAX(c.created_at) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NOT NULL AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) AS last_cert_at,
         -- TRUST-C2: require minimum field lengths (mirrors computeTransparencyCounts fix).
-        COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding') AND c.metadata IS NOT NULL AND (length(c.metadata->>'model_hash') >= 16 OR length(c.metadata->>'strategy_hash') >= 16 OR length(c.metadata->>'version_number') >= 3)) AS metadata_count,
-        COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding') AND c.metadata IS NOT NULL AND length(c.metadata->>'agent_id') >= 8) AS audit_count,
+        COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NOT NULL AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding') AND c.metadata IS NOT NULL AND (length(c.metadata->>'model_hash') >= 16 OR length(c.metadata->>'strategy_hash') >= 16 OR length(c.metadata->>'version_number') >= 3)) AS metadata_count,
+        COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NOT NULL AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding') AND c.metadata IS NOT NULL AND length(c.metadata->>'agent_id') >= 8) AS audit_count,
         -- active_attest_count is a correlated subquery against the attestations table — it counts
         -- active, non-expired attestations whose issuer has a public profile, matching the filter
         -- used by computeAttestationBonusBatch.  The correlated subquery runs once per post-HAVING
@@ -768,7 +923,7 @@ async function computeAllLeaderboardEntries(): Promise<LeaderboardEntry[]> {
       WHERE u.is_public_profile = true
         AND u.wallet_address NOT LIKE 'erd1trial%'
       GROUP BY u.id, u.wallet_address, u.agent_name, u.agent_category, u.agent_description, u.agent_website
-      HAVING COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) > 0
+      HAVING COUNT(c.id) FILTER (WHERE c.blockchain_status = 'confirmed' AND c.finality_checked_at IS NOT NULL AND c.is_public = true AND (c.auth_method IS NULL OR c.auth_method != 'onboarding')) > 0
     ) ranked
     -- TRUST-H4: cap at 200 so the leaderboard job doesn't scale with total user count.
     -- We order by a composite score proxy so that all trust-score components are represented
@@ -859,7 +1014,6 @@ async function computeAllLeaderboardEntries(): Promise<LeaderboardEntry[]> {
   entries.sort((a, b) => b.trustScore - a.trustScore);
   entries.forEach((e, i) => { e.rank = i + 1; });
 
-  leaderboardCache = { allEntries: entries, cachedAt: Date.now(), computedAt: Date.now() };
   return entries;
 }
 
@@ -887,6 +1041,29 @@ const SCHEDULER_STARTUP_JITTER   = 20_000;          // 0-20 s startup jitter
 let _trustRefreshRunning       = false;
 let _leaderboardRefreshRunning = false;
 
+function databaseErrorDetails(error: unknown): Record<string, string> {
+  const details: Record<string, string> = {};
+  let current = error as Record<string, unknown> | null;
+  let depth = 0;
+
+  // Drizzle wraps driver errors. Walk the short cause chain so the log keeps
+  // PostgreSQL's useful code/detail/hint instead of only "Failed query".
+  while (current && depth < 4) {
+    if (typeof current.message === "string" && !details.message) {
+      details.message = current.message;
+    }
+    for (const key of ["code", "detail", "hint", "position", "schema", "table", "column", "constraint", "routine"]) {
+      const value = current[key];
+      if (value != null && !details[key]) details[key] = String(value);
+    }
+    current = (current.cause as Record<string, unknown> | undefined) ?? null;
+    depth++;
+  }
+
+  if (!details.message) details.message = String(error);
+  return details;
+}
+
 export async function runTrustRefreshCycle(): Promise<void> {
   if (_trustRefreshRunning) {
     logger.debug("Trust refresh cycle already running, skipping", { component: "trust-scheduler" });
@@ -909,27 +1086,30 @@ export async function runTrustRefreshCycle(): Promise<void> {
       const batch = rows.slice(i, i + TRUST_REFRESH_CONCURRENCY);
       await Promise.all(batch.map(async ({ id, wallet_address }) => {
         try {
-          const trust = await computeTrustScore(id);
-          setTrustCache(wallet_address, trust);
-          await pool.query(
-            `INSERT INTO trust_score_snapshots
-               (wallet_address, score, level, cert_total, active_attestations, rank, snapshot_date, full_trust_data)
-             VALUES ($1, $2, $3, $4, $5, 0, CURRENT_DATE, $6::jsonb)
-             ON CONFLICT (wallet_address, snapshot_date) DO UPDATE
-               SET full_trust_data      = EXCLUDED.full_trust_data,
-                   score                = EXCLUDED.score,
-                   level                = EXCLUDED.level,
-                   cert_total           = EXCLUDED.cert_total,
-                   active_attestations  = EXCLUDED.active_attestations`,
-            [
-              wallet_address,
-              trust.score,
-              trust.level,
-              trust.certTotal,
-              trust.activeAttestations ?? 0,
-              JSON.stringify(trust),
-            ],
-          );
+          await withWalletTrustLock(wallet_address, async () => {
+            const trust = await computeTrustScore(id);
+            await pool.query(
+              `INSERT INTO trust_score_snapshots
+                 (wallet_address, score, level, cert_total, active_attestations, rank, snapshot_date, full_trust_data, finality_version)
+               VALUES ($1, $2, $3, $4, $5, 0, CURRENT_DATE, $6::jsonb, ${FINALITY_SNAPSHOT_VERSION})
+               ON CONFLICT (wallet_address, snapshot_date) DO UPDATE
+                 SET full_trust_data      = EXCLUDED.full_trust_data,
+                     score                = EXCLUDED.score,
+                     level                = EXCLUDED.level,
+                     cert_total           = EXCLUDED.cert_total,
+                     active_attestations  = EXCLUDED.active_attestations,
+                     finality_version     = ${FINALITY_SNAPSHOT_VERSION}`,
+              [
+                wallet_address,
+                trust.score,
+                trust.level,
+                trust.certTotal,
+                trust.activeAttestations ?? 0,
+                JSON.stringify(trust),
+              ],
+            );
+            setTrustCache(wallet_address, trust);
+          });
           succeeded++;
         } catch (err: any) {
           failed++;
@@ -968,23 +1148,26 @@ export async function runLeaderboardRefreshCycle(): Promise<void> {
     const entries = await computeAllLeaderboardEntries();
     const computedAt = Date.now();
     await pool.query(
-      `INSERT INTO leaderboard_snapshot (id, entries, computed_at)
-       VALUES (1, $1::jsonb, NOW())
+      `INSERT INTO leaderboard_snapshot (id, entries, computed_at, finality_version)
+       VALUES (1, $1::jsonb, NOW(), ${FINALITY_SNAPSHOT_VERSION})
        ON CONFLICT (id) DO UPDATE
          SET entries     = EXCLUDED.entries,
-             computed_at = EXCLUDED.computed_at`,
+             computed_at = EXCLUDED.computed_at,
+             finality_version = ${FINALITY_SNAPSHOT_VERSION}`,
       [JSON.stringify(entries)],
     );
     leaderboardCache = { allEntries: entries, cachedAt: Date.now(), computedAt };
+    recordLeaderboardRefreshSuccess(computedAt);
     logger.info("Leaderboard refresh cycle complete", {
       component: "trust-scheduler",
       entries: entries.length,
       durationMs: Date.now() - cycleStart,
     });
   } catch (err: any) {
+    await recordLeaderboardRefreshFailure(err);
     logger.error("Leaderboard refresh cycle error", {
       component: "trust-scheduler",
-      error: err?.message ?? String(err),
+      databaseError: getLeaderboardRefreshHealth().last_database_error,
       durationMs: Date.now() - cycleStart,
     });
   } finally { _leaderboardRefreshRunning = false; }
@@ -995,7 +1178,7 @@ export async function runLeaderboardRefreshCycle(): Promise<void> {
 export async function warmCachesFromSnapshots(): Promise<void> {
   try {
     const snap = await pool.query<{ entries: LeaderboardEntry[]; computed_at: string }>(
-      `SELECT entries, computed_at FROM leaderboard_snapshot WHERE id = 1`,
+      `SELECT entries, computed_at FROM leaderboard_snapshot WHERE id = 1 AND finality_version = ${FINALITY_SNAPSHOT_VERSION}`,
     );
     if (snap.rows.length > 0) {
       const computedAt = new Date(snap.rows[0].computed_at).getTime();
@@ -1004,6 +1187,7 @@ export async function warmCachesFromSnapshots(): Promise<void> {
         cachedAt: Date.now(),
         computedAt: Number.isFinite(computedAt) ? computedAt : Date.now(),
       };
+      if (Number.isFinite(computedAt)) recordLeaderboardSnapshot(computedAt);
       logger.info("Leaderboard cache warmed from snapshot", {
         component: "trust-scheduler",
         entries: snap.rows[0].entries.length,
@@ -1042,7 +1226,7 @@ export async function getLeaderboard(filters: LeaderboardFilters = {}): Promise<
 
   let allEntries: LeaderboardEntry[];
 
-  if (leaderboardCache) {
+  if (leaderboardCache && Date.now() - leaderboardCache.cachedAt < TRUST_CACHE_TTL_MS) {
     // Serve from in-memory cache — no DB work.
     allEntries = leaderboardCache.allEntries;
   } else {
@@ -1051,7 +1235,7 @@ export async function getLeaderboard(filters: LeaderboardFilters = {}): Promise<
     // This NEVER calls computeAllLeaderboardEntries().
     try {
       const snap = await pool.query<{ entries: LeaderboardEntry[]; computed_at: string }>(
-        `SELECT entries, computed_at FROM leaderboard_snapshot WHERE id = 1`,
+        `SELECT entries, computed_at FROM leaderboard_snapshot WHERE id = 1 AND finality_version = ${FINALITY_SNAPSHOT_VERSION}`,
       );
       if (snap.rows.length > 0) {
         const computedAt = new Date(snap.rows[0].computed_at).getTime();
@@ -1060,6 +1244,7 @@ export async function getLeaderboard(filters: LeaderboardFilters = {}): Promise<
           cachedAt: Date.now(),
           computedAt: Number.isFinite(computedAt) ? computedAt : Date.now(),
         };
+        if (Number.isFinite(computedAt)) recordLeaderboardSnapshot(computedAt);
         allEntries = leaderboardCache.allEntries;
       } else {
         // No snapshot yet — first scheduled refresh hasn't run.
@@ -1154,7 +1339,10 @@ async function computeCalibrationLabelBatch(): Promise<Map<string, CalibrationLa
       ])
     );
   } catch (err: any) {
-    logger.error("[leaderboard] calibration batch failed", { error: err?.message });
+    logger.error("[leaderboard] calibration batch failed", {
+      component: "trust-scheduler",
+      ...databaseErrorDetails(err),
+    });
     return new Map();
   }
 }
@@ -1198,7 +1386,7 @@ async function getOldScoreBatch(wallets: string[], cutoff: Date): Promise<Map<st
     const result = await pool.query<{ wallet_address: string; score: string }>(
       `SELECT DISTINCT ON (wallet_address) wallet_address, score
        FROM trust_score_snapshots
-       WHERE wallet_address = ANY($1) AND snapshot_date <= $2
+       WHERE wallet_address = ANY($1) AND snapshot_date <= $2 AND finality_version = ${FINALITY_SNAPSHOT_VERSION}
        ORDER BY wallet_address, snapshot_date DESC`,
       [wallets, cutoff.toISOString().split("T")[0]],
     );
@@ -1221,7 +1409,7 @@ async function getPreviousLevelBatch(wallets: string[]): Promise<Map<string, Tru
          SELECT wallet_address, level,
                 ROW_NUMBER() OVER (PARTITION BY wallet_address ORDER BY snapshot_date DESC) AS rn
          FROM trust_score_snapshots
-         WHERE wallet_address = ANY($1)
+         WHERE wallet_address = ANY($1) AND finality_version = ${FINALITY_SNAPSHOT_VERSION}
        ) ranked
        WHERE rn = 2`,
       [wallets],
@@ -1380,8 +1568,10 @@ export function _resetLeaderboardCacheForTesting(): void {
 export function _resetTrustCacheForTesting(walletAddress?: string): void {
   if (walletAddress) {
     trustCache.delete(walletAddress);
+    trustReadThroughInFlight.delete(walletAddress);
   } else {
     trustCache.clear();
+    trustReadThroughInFlight.clear();
   }
 }
 

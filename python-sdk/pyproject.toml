@@ -43,9 +43,6 @@ dev = [
     "types-requests>=2.25.0",
     "pre-commit>=3.0",
 ]
-llamaindex = [
-    "llama-index-core>=0.14.20",
-]
 autogen = [
     "pyautogen>=0.2.0",
 ]
@@ -53,16 +50,13 @@ openai-agents = [
     "openai-agents>=0.0.3",
 ]
 deerflow = []
-fetchai = [
-    "uagents>=0.9.0",
-]
 
 [project.urls]
 Homepage = "https://provebeforeact.com"
-Repository = "https://github.com/jasonxkensei/xProof"
+Repository = "https://github.com/jasonxkensei/prove-before-act"
 Documentation = "https://provebeforeact.com/docs"
-Issues = "https://github.com/jasonxkensei/xProof/issues"
-Changelog = "https://github.com/jasonxkensei/xProof/releases"
+Issues = "https://github.com/jasonxkensei/prove-before-act/issues"
+Changelog = "https://github.com/jasonxkensei/prove-before-act/releases"
 
 [tool.setuptools.packages.find]
 include = ["xproof*"]

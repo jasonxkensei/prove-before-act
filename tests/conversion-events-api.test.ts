@@ -17,10 +17,11 @@ import { pool } from "../server/db";
 
 const BASE = process.env.TEST_BASE_URL || "http://127.0.0.1:5000";
 
-// Unique marker so we can find rows created by this test run via ip_hash
-// seeding (aggregation tests) without interfering with real telemetry.
+// Unique markers keep seeded aggregation rows and visitor-linked request
+// outcomes isolated from real telemetry and other test runs.
 const RUN_TAG = crypto.randomBytes(8).toString("hex");
 const seededIpHashes: string[] = [];
+const seededVisitorKeys: string[] = [];
 
 function seededHash(tag: string): string {
   const h = crypto.createHash("sha256").update(`cta-test-${RUN_TAG}-${tag}`).digest("hex");
@@ -28,16 +29,23 @@ function seededHash(tag: string): string {
   return h;
 }
 
-function telemetryHashForIp(ip: string): string {
+function testVisitor(tag: string): { cookie: string; visitorKey: string } {
   const secret = process.env.SESSION_SECRET;
   if (!secret) throw new Error("SESSION_SECRET is required for conversion telemetry tests");
-  const hash = crypto
+  const random = crypto.createHash("sha256").update(`conversion-test-${RUN_TAG}-${tag}`).digest("hex").slice(0, 32);
+  const payload = `v2.${Date.now().toString(36)}.${random}`;
+  const signature = crypto
     .createHmac("sha256", secret)
-    .update("pba-conversion-visitor-v1\0")
-    .update(ip, "utf8")
+    .update("pba-conversion-cookie\0")
+    .update(payload)
     .digest("hex");
-  seededIpHashes.push(hash);
-  return hash;
+  const visitorKey = crypto
+    .createHmac("sha256", secret)
+    .update("pba-conversion-visitor-v2\0")
+    .update(random)
+    .digest("hex");
+  seededVisitorKeys.push(visitorKey);
+  return { cookie: `${payload}.${signature}`, visitorKey };
 }
 
 async function insertCtaEvent(ipHash: string, outcome: "seen" | "clicked") {
@@ -53,16 +61,16 @@ async function countRows(where: string, params: unknown[]): Promise<number> {
   return r.rows[0].n as number;
 }
 
-async function waitForOutcomeRows(ipHash: string, stage: "registration" | "proof") {
+async function waitForOutcomeRows(visitorKey: string, stage: "registration" | "proof") {
   let rows: Array<Record<string, unknown>> = [];
   for (let i = 0; i < 30; i++) {
     const result = await pool.query(
       `SELECT event_type, stage, outcome, http_status, http_class, ip_hash,
               referrer_host, utm_source, to_jsonb(conversion_events) AS stored_event
        FROM conversion_events
-       WHERE ip_hash = $1 AND stage = $2
+       WHERE visitor_key = $1 AND stage = $2
        ORDER BY id`,
-      [ipHash, stage],
+      [visitorKey, stage],
     );
     rows = result.rows;
     if (rows.length >= 2) return rows;
@@ -74,6 +82,9 @@ async function waitForOutcomeRows(ipHash: string, stage: "registration" | "proof
 afterAll(async () => {
   if (seededIpHashes.length > 0) {
     await pool.query(`DELETE FROM conversion_events WHERE ip_hash = ANY($1)`, [seededIpHashes]);
+  }
+  if (seededVisitorKeys.length > 0) {
+    await pool.query(`DELETE FROM conversion_events WHERE visitor_key = ANY($1)`, [seededVisitorKeys]);
   }
 });
 
@@ -157,12 +168,14 @@ describe("POST /api/conversion-events", () => {
 describe("conversion outcome middleware", () => {
   it("records registration started + final 4xx outcome without request payload data", async () => {
     const ip = `198.51.100.${Number.parseInt(RUN_TAG.slice(0, 2), 16)}`;
-    const ipHash = telemetryHashForIp(ip);
+    const visitor = testVisitor("registration");
     const res = await fetch(`${BASE}/api/agent/register`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        // getClientIp intentionally uses the rightmost proxy-attested value.
+        "Sec-Fetch-Site": "same-origin",
+        "Cookie": `pba_conversion_v2=${visitor.cookie}`,
+        // Supply a proxy-attested address, which conversion telemetry must not retain.
         "X-Forwarded-For": `203.0.113.1, ${ip}`,
       },
       body: JSON.stringify({}), // Invalid registration: validate the final failure path.
@@ -170,7 +183,7 @@ describe("conversion outcome middleware", () => {
     expect(res.status).toBeGreaterThanOrEqual(400);
     expect(res.status).toBeLessThan(500);
 
-    const rows = await waitForOutcomeRows(ipHash, "registration");
+    const rows = await waitForOutcomeRows(visitor.visitorKey, "registration");
     expect(rows).toHaveLength(2);
     expect(rows.map((row) => ({
       event_type: row.event_type,
@@ -185,26 +198,29 @@ describe("conversion outcome middleware", () => {
     // The telemetry row is deliberately an allow-list: prove no raw request
     // body, raw IP, URL, cookie, or user-agent can be retained by this path.
     expect(Object.keys(rows[0].stored_event as object).sort()).toEqual([
-      "created_at", "event_type", "http_class", "http_status", "id", "ip_hash",
-      "outcome", "referrer_host", "stage", "traffic_segment", "utm_source",
+      "created_at", "dedup_key", "event_type", "http_class", "http_status", "id", "ip_hash",
+      "outcome", "referrer_host", "stage", "traffic_segment", "utm_source", "visitor_key",
     ]);
+    expect(rows.every((row) => row.ip_hash === null)).toBe(true);
   });
 
   it("records proof started + final 4xx outcome even when authentication rejects it", async () => {
     const ip = `198.51.101.${Number.parseInt(RUN_TAG.slice(2, 4), 16)}`;
-    const ipHash = telemetryHashForIp(ip);
+    const visitor = testVisitor("proof");
     const res = await fetch(`${BASE}/api/proof`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": "Bearer pm_not_a_real_key",
+        "Sec-Fetch-Site": "same-origin",
+        "Cookie": `pba_conversion_v2=${visitor.cookie}`,
         "X-Forwarded-For": `203.0.113.1, ${ip}`,
       },
       body: JSON.stringify({ file_name: "must-not-be-stored.json", secret: "must-not-be-stored" }),
     });
     expect(res.status).toBe(401);
 
-    const rows = await waitForOutcomeRows(ipHash, "proof");
+    const rows = await waitForOutcomeRows(visitor.visitorKey, "proof");
     expect(rows).toHaveLength(2);
     expect(rows.map((row) => ({
       event_type: row.event_type,
@@ -215,6 +231,7 @@ describe("conversion outcome middleware", () => {
       { event_type: "proof_request", outcome: "started", http_status: null, http_class: "0xx" },
       { event_type: "proof_request", outcome: "failure", http_status: 401, http_class: "4xx" },
     ]);
+    expect(rows.every((row) => row.ip_hash === null)).toBe(true);
     expect(JSON.stringify(rows.map((row) => row.stored_event))).not.toContain("must-not-be-stored");
   });
 });

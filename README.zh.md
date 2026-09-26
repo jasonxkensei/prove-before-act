@@ -6,7 +6,7 @@
 [![MultiversX](https://img.shields.io/badge/区块链-MultiversX-blue)](https://multiversx.com)
 [![x402 协议](https://img.shields.io/badge/支付协议-x402-purple)](https://provebeforeact.com/docs)
 
-**Prove Before Act** 是面向人工智能智能体的链上可信证明基础设施，将智能体的操作决策与实际结果永久锚定在 MultiversX 区块链上。
+**Prove Before Act** 是面向人工智能智能体的链上可信证明基础设施，将智能体的操作决策与实际结果永久锚定在 MultiversX 区块链上。xProof 是本标准的参考实现。
 
 ---
 
@@ -18,17 +18,21 @@
 - **操作审计**：如何向监管机构证明智能体的操作流程合规？
 - **智能体问责**：多智能体协作场景中，责任如何归属？
 
-Prove Before Act 通过**行动前证明**（Prove Before Act）机制，为每次操作建立四维审计轨迹。
+Prove Before Act 通过**行动前证明**机制，为每次操作建立四维审计轨迹。
 
 ---
 
-## 核心概念：行动前证明（行动前证明）
+## 核心概念：行动前证明
 
 ```
-执行前  →  锚定WHY（决策依据）  →  执行操作  →  锚定WHAT（实际结果）
+执行前  →  锚定WHY（声明的决策依据）  →  执行操作  →  锚定WHAT（实际结果）
 ```
 
-**关键原则**：在执行之前，将推理过程（WHY）的哈希值锚定上链；执行完成后，将实际结果（WHAT）锚定上链。这就在密码学层面证明了**意图先于结果**。
+**关键原则**：在执行之前，将声明的决策依据（WHY）的哈希值锚定上链；执行完成后，将实际结果（WHAT）锚定上链。这就在密码学层面证明了**意图先于结果**。
+
+> **安全说明：WHY 必须是可披露的声明文件**
+>
+> `instruction_hash` 所承诺的内容必须是经过脱敏处理、可向审计方出示的声明文件，包含：操作意图、相关上下文、授权/策略依据。**严禁**将私有推理链（internal chain-of-thought）直接作为 WHY 内容哈希——若底层文件无法被审计方查阅，则存证失去问责意义。
 
 ### 4W 审计框架
 
@@ -37,7 +41,7 @@ Prove Before Act 通过**行动前证明**（Prove Before Act）机制，为每�
 | 操作主体 | WHO | 通过 MX-8004 可信智能体标准进行身份认证 | 每次请求 |
 | 操作结果 | WHAT | 实际产出内容的 SHA-256 哈希值 | **执行后** |
 | 操作时间 | WHEN | 链上时间戳 + 交易哈希，不可篡改 | 自动记录 |
-| 决策依据 | WHY | 完整推理过程、上下文与决策意图 | **执行前** |
+| 决策依据 | WHY | 声明的决策依据（意图、相关上下文、授权/策略依据）；须可披露，不得为私有推理链 | **执行前** |
 
 ---
 
@@ -46,7 +50,8 @@ Prove Before Act 通过**行动前证明**（Prove Before Act）机制，为每�
 ### 方式一：Python SDK
 
 ```bash
-pip install xproof
+# 安装规范发行版；`xproof` 模块名仅保留为旧版兼容别名。
+pip install prove-before-act
 ```
 
 ```python
@@ -54,22 +59,24 @@ import xproof, hashlib, json
 
 client = xproof.Client(api_key="pm_你的密钥")
 
-# 步骤1：执行前，锚定决策依据（WHY）
-reasoning = {
-    "reasoning": "基于用户画像分析，判断最优内容推荐策略",
-    "decision": "执行个性化内容推荐",
-    "confidence": 0.94,
-    "rules_applied": ["内容安全规则v2", "用户偏好权重模型"]
+# 步骤1：执行前，锚定声明的决策依据（WHY）
+# 注意：此对象须为可向审计方披露的声明文件，不得包含私有推理链。
+decision_basis = {
+    "intent": "基于用户画像分析，执行个性化内容推荐",
+    "context": "用户画像已更新，当前会话合规检查通过",
+    "policy_basis": ["内容安全规则v2", "用户偏好权重模型"],
+    "confidence": 0.94
 }
 
 why_proof = client.certify(
     file_hash=hashlib.sha256(
-        json.dumps(reasoning, sort_keys=True).encode()
+        json.dumps(decision_basis, sort_keys=True).encode()
     ).hexdigest(),
     metadata={
         "role": "WHY",
         "action_type": "content_recommendation",
-        "decision_chain": list(reasoning["rules_applied"])
+        "category": "personalization",
+        "decision_id": "recommendation-001"
     }
 )
 print(f"WHY已锚定: {why_proof['proof_id']}")
@@ -104,11 +111,15 @@ import crypto from "crypto";
 
 const client = new XProofClient({ apiKey: "pm_你的密钥" });
 
-// 执行前锚定推理过程
-const reasoning = { decision: "执行搜索操作", confidence: 0.91 };
+// 执行前锚定声明的决策依据（须为可披露文件，不得为私有推理链）
+const decisionBasis = {
+  intent: "执行搜索操作",
+  context: "用户授权的搜索请求",
+  confidence: 0.91
+};
 const whyHash = crypto
   .createHash("sha256")
-  .update(JSON.stringify(reasoning, Object.keys(reasoning).sort()))
+  .update(JSON.stringify(decisionBasis, Object.keys(decisionBasis).sort()))
   .digest("hex");
 
 const whyProof = await client.certify({
@@ -132,13 +143,13 @@ await client.certify({
 ### 方式三：REST API（无需SDK）
 
 ```bash
-# 1. 锚定决策依据（WHY）
+# 1. 锚定声明的决策依据（WHY）
 curl -X POST https://provebeforeact.com/api/proof \
   -H "Authorization: Bearer pm_你的密钥" \
   -H "Content-Type: application/json" \
   -d '{
     "file_hash": "sha256哈希值",
-    "filename": "reasoning_001.json",
+    "filename": "decision_basis_001.json",
     "metadata": {"role": "WHY", "action_type": "your_action"}
   }'
 
@@ -168,18 +179,32 @@ proof = requests.post("https://provebeforeact.com/api/proof",
 # {"proof_id": "...", "verify_url": "..."}
 ```
 
+### 方式五：MCP（智能体原生接入）
+
+MCP 服务地址为 `POST https://provebeforeact.com/mcp`。首次接入且没有
+API 密钥时，先调用 `register_trial`（无需钱包）获取 10 次免费存证：
+
+```json
+{"name":"register_trial","arguments":{"agent_name":"my-agent"}}
+```
+
+核心工具包括 `register_trial`、`certify_file`、`verify_proof`、
+`audit_agent_session` 和 `investigate_proof`。服务端还可能提供置信度分级、
+证明检索、结果回报与校准等工具；请通过 MCP `tools/list` 或
+`discover_services` 获取当前完整工具和参数定义，不要将此列表视为穷举。
+
 ---
 
 ## 集群运营商：批量认证
 
 ```python
-# 单次API调用提交最多100个操作哈希
+# 单次API调用提交最多50个操作哈希
 result = client.batch_certify([
-    {"file_hash": "hash_001", "filename": "action_001.json",
+    {"file_hash": "hash_001", "filename": "decision_basis_001.json",
      "metadata": {"role": "WHY", "agent_id": "agent-001"}},
-    {"file_hash": "hash_002", "filename": "action_002.json",
+    {"file_hash": "hash_002", "filename": "action_result_001.json",
      "metadata": {"role": "WHAT", "agent_id": "agent-001"}},
-    # ...最多100条
+    # ...最多50条
 ])
 print(f"已批量存证: {len(result['results'])} 条")
 ```
@@ -203,7 +228,7 @@ curl https://provebeforeact.com/api/agents/{钱包地址}/incident-report?proof_
 ```
 
 报告包含：
-- 自然语言摘要（"智能体X在14:22:07锚定推理，8秒后执行，结果已链上确认"）
+- 自然语言摘要（"智能体X在14:22:07锚定决策依据，8秒后执行，结果已链上确认"）
 - 4W验证状态（含WHY→WHAT时序证明）
 - 完整操作时间线
 - 信任评分与违规记录
@@ -245,8 +270,19 @@ curl -X POST https://provebeforeact.com/api/agent/register \
 |------|------|------|
 | 免费试用 | 免费 | 10次，无需钱包 |
 | 按需付费 | 当前实时价格（见 /api/pricing） | 预充积分，不限量 |
+| Stripe积分包 | 当前实时价格（见 /api/pricing） | Stripe托管结账，适合不使用加密货币的中国及国际客户 |
 | x402协议 | 当前实时价格（见 /api/pricing） | USDC on Base，无需账号 |
 | 批量API | 当前实时价格（见 /api/pricing） | 无批量溢价 |
+
+### 通过 Stripe 购买积分包
+
+Stripe 是新增的支付选项，不会取代 USDC/Base、x402、ACP 或 EGLD。使用 API
+密钥调用 `POST /api/credits/stripe/checkout`，请求体为
+`{"package_id":"starter"}`，然后打开返回的 `checkout_url`。
+
+支付完成后，只有经过签名验证的 Stripe webhook 才会增加积分；浏览器成功
+跳转本身不能增加积分。可调用
+`GET /api/credits/stripe/status/{session_id}` 查询到账状态。
 
 ---
 
@@ -269,7 +305,7 @@ Prove Before Act 提供的链上存证记录可作为合规审计的技术支撑
 - 智能体集成：[provebeforeact.com/agent-context](https://provebeforeact.com/agent-context)
 - 4W框架说明：[provebeforeact.com/docs/4w](https://provebeforeact.com/docs/4w)
 - 信任排行榜：[provebeforeact.com/leaderboard](https://provebeforeact.com/leaderboard)
-- GitHub：[github.com/jasonxkensei/xProof](https://github.com/jasonxkensei/xProof)
+- GitHub：[github.com/jasonxkensei/prove-before-act](https://github.com/jasonxkensei/prove-before-act)
 
 ---
 

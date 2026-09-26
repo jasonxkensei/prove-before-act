@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-labelledby="title desc">
+  <title id="title">Prove Before Act</title>
+  <desc id="desc">The accountability pattern for autonomous agents</desc>
+  <defs>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(922 108) rotate(128) scale(520 610)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#00FF9D" stop-opacity=".18"/>
+      <stop offset="1" stop-color="#00FF9D" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="line" x1="110" y1="0" x2="1090" y2="0" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#00FF9D" stop-opacity=".8"/>
+      <stop offset="1" stop-color="#00FF9D" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="#0D1117"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+  <path d="M0 126H1200M0 252H1200M0 378H1200M0 504H1200M240 0V630M480 0V630M720 0V630M960 0V630"
+    stroke="#1A1F26" stroke-width="1"/>
+  <g transform="translate(92 78)">
+    <circle cx="54" cy="54" r="42" fill="none" stroke="#00FF9D" stroke-width="11"
+      stroke-linecap="round" stroke-dasharray="54 14" transform="rotate(-5 54 54)"/>
+    <circle cx="54" cy="54" r="17" fill="#FFFFFF"/>
+  </g>
+  <text x="222" y="122" fill="#FFFFFF"
+    font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+    font-size="42" font-weight="600" letter-spacing="-1.4">
+    Prove Before <tspan fill="#00FF9D">Act</tspan>
+  </text>
+  <rect x="92" y="205" width="980" height="1" fill="url(#line)"/>
+  <text x="92" y="314" fill="#FFFFFF"
+    font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+    font-size="54" font-weight="700" letter-spacing="-2.2">
+    Accountability before autonomy.
+  </text>
+  <text x="96" y="378" fill="#8B949E"
+    font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+    font-size="29" font-weight="400">
+    Commit the decision basis. Act. Verify the outcome.
+  </text>
+  <g transform="translate(92 470)">
+    <rect width="265" height="58" rx="10" fill="#00FF9D"/>
+    <text x="132.5" y="38" text-anchor="middle" fill="#0D1117"
+      font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+      font-size="20" font-weight="700">10 free proofs</text>
+  </g>
+  <text x="1092" y="511" text-anchor="end" fill="#8B949E"
+    font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
+    font-size="18" font-weight="500">provebeforeact.com</text>
+</svg>

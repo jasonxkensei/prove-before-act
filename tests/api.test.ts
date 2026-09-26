@@ -25,7 +25,8 @@ describe("Prove Before Act API", () => {
       expect(Array.isArray(body.products)).toBe(true);
       expect(body.products.length).toBeGreaterThan(0);
       const product = body.products[0];
-      expect(product.id).toBe("xproof-certification");
+      expect(product.id).toBe("pba-certification");
+      expect(product.legacy_product_ids).toContain("xproof-certification");
       expect(product.pricing).toBeDefined();
       expect(product.inputs).toBeDefined();
       expect(product.outputs).toBeDefined();
@@ -40,11 +41,59 @@ describe("Prove Before Act API", () => {
       expect(text).toContain("Prove Before Act");
     });
 
-    it("GET /.well-known/xproof.md (legacy alias) returns the Prove Before Act specification", async () => {
-      const res = await fetch(`${BASE_URL}/.well-known/xproof.md`, { redirect: "follow" });
-      expect(res.status).toBe(200);
-      expect(res.headers.get("content-type")).toContain("text/markdown");
-      expect(await res.text()).toContain("Prove Before Act Specification");
+    it.each([
+      {
+        alias: "/.well-known/xproof.json",
+        target: "/.well-known/provebeforeact.json",
+        contentType: "application/json",
+      },
+      {
+        alias: "/.well-known/xproof.md",
+        target: "/.well-known/provebeforeact.md",
+        contentType: "text/markdown",
+      },
+      {
+        alias: "/.well-known/proofmint.md",
+        target: "/.well-known/provebeforeact.md",
+        contentType: "text/markdown",
+      },
+    ])("GET $alias permanently redirects to $target and serves its canonical content", async ({
+      alias, target, contentType,
+    }) => {
+      const redirect = await fetch(`${BASE_URL}${alias}`, { redirect: "manual" });
+      expect(redirect.status, `${alias} must remain a permanent redirect`).toBe(301);
+      expect(redirect.headers.get("location"), `${alias} must redirect to ${target}`).toBe(target);
+
+      const [followed, canonical] = await Promise.all([
+        fetch(`${BASE_URL}${alias}`, { redirect: "follow" }),
+        fetch(`${BASE_URL}${target}`),
+      ]);
+      expect(followed.status, `${alias} must resolve successfully`).toBe(200);
+      expect(new URL(followed.url).pathname, `${alias} must resolve to ${target}`).toBe(target);
+      expect(canonical.status, `${target} must remain available`).toBe(200);
+      expect(followed.headers.get("content-type"), `${alias} content type`).toContain(contentType);
+      expect(canonical.headers.get("content-type"), `${target} content type`).toContain(contentType);
+
+      if (contentType === "application/json") {
+        const [body, canonicalBody] = await Promise.all([followed.json(), canonical.json()]);
+        for (const manifest of [body, canonicalBody]) {
+          expect(manifest.service, `${alias} discovery service`).toBe("Prove Before Act");
+          expect(manifest.specification_url, `${alias} specification link`).toBe(
+            "https://provebeforeact.com/standard",
+          );
+          expect(manifest.docs.spec, `${alias} Markdown specification link`).toBe(
+            "https://provebeforeact.com/.well-known/provebeforeact.md",
+          );
+        }
+      } else {
+        const [body, canonicalBody] = await Promise.all([followed.text(), canonical.text()]);
+        expect(body, `${alias} must serve the canonical specification`).toContain(
+          "# Prove Before Act Specification",
+        );
+        expect(canonicalBody, `${target} must serve the specification`).toContain(
+          "# Prove Before Act Specification",
+        );
+      }
     });
 
     it("GET /robots.txt should return robots content", async () => {
@@ -65,6 +114,9 @@ describe("Prove Before Act API", () => {
       const text = await res.text();
       expect(text).toContain("urlset");
       expect(text).toContain("<?xml");
+      expect(text).toMatch(
+        /<loc>https?:\/\/[^<]+\/standard<\/loc>\s*<changefreq>monthly<\/changefreq>\s*<priority>0\.9<\/priority>/,
+      );
     });
 
     it("GET /.well-known/mcp.json should return MCP manifest", async () => {
@@ -91,10 +143,78 @@ describe("Prove Before Act API", () => {
       expect(body.name_for_model).toBe("Prove Before Act");
       expect(body.description_for_human).toBeDefined();
       expect(body.description_for_model).toBeDefined();
+      expect(body.specification_url).toBe("https://provebeforeact.com/standard");
       expect(body.auth).toBeDefined();
       expect(body.api).toBeDefined();
       expect(body.api.type).toBe("openapi");
     });
+
+    it("GET /.well-known/provebeforeact.json should link to the canonical PBA specification", async () => {
+      const res = await fetch(`${BASE_URL}/.well-known/provebeforeact.json`);
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.specification_url).toBe("https://provebeforeact.com/standard");
+    });
+
+    it("keeps the canonical specification link consistent across discovery manifests", async () => {
+      const canonicalSpecificationUrl = "https://provebeforeact.com/standard";
+      const manifests: Array<{
+        path: string;
+        readSpecificationUrl: (body: Record<string, any>) => unknown;
+      }> = [
+        {
+          path: "/.well-known/provebeforeact.json",
+          readSpecificationUrl: (body) => body.specification_url,
+        },
+        {
+          path: "/.well-known/ai-plugin.json",
+          readSpecificationUrl: (body) => body.specification_url,
+        },
+        {
+          path: "/.well-known/agent.json",
+          readSpecificationUrl: (body) => body.specification_url,
+        },
+        {
+          path: "/.well-known/mcp.json",
+          readSpecificationUrl: (body) => body.specification_url,
+        },
+      ];
+
+      const responses = await Promise.all(
+        manifests.map(async ({ path, readSpecificationUrl }) => {
+          const res = await fetch(`${BASE_URL}${path}`);
+          expect(res.status, `${path} should return a discovery manifest`).toBe(200);
+          return { path, readSpecificationUrl, body: await res.json() as Record<string, any> };
+        }),
+      );
+
+      for (const { path, readSpecificationUrl, body } of responses) {
+        expect(
+          readSpecificationUrl(body),
+          `${path} must expose the canonical specification URL`,
+        ).toBe(canonicalSpecificationUrl);
+      }
+    });
+
+    it.each(["/llms.txt", "/llms-full.txt", "/agent-context.md"])(
+      "GET %s links crawlers to the canonical specification",
+      async (path) => {
+        const res = await fetch(`${BASE_URL}${path}`);
+        expect(res.status, `${path} must remain available`).toBe(200);
+        expect(res.headers.get("content-type"), `${path} must remain a text document`)
+          .toMatch(/^text\/(?:plain|markdown)/);
+        const text = await res.text();
+        const specificationLine = text.split("\n").find(
+          (line) => /Prove Before Act specification/i.test(line) && /https?:\/\//.test(line),
+        );
+        expect(specificationLine, `${path} must contain a specification link`).toBeDefined();
+        const links = [...(specificationLine ?? "").matchAll(/https?:\/\/[^\s<>)\]]+/g)]
+          .map(([url]) => url.replace(/[.,;!?]+$/, ""));
+        expect(links, `${path} must link only to the canonical specification URL`).toEqual([
+          "https://provebeforeact.com/standard",
+        ]);
+      },
+    );
   });
 
   describe("POST /api/proof (auth required)", () => {
@@ -243,11 +363,11 @@ describe("Prove Before Act API", () => {
   });
 
   describe("GET /api/acp/openapi.json", () => {
-    it("should return valid OpenAPI 3.0 specification", async () => {
+    it("should return an OpenAPI 3.1 specification with outbound webhooks", async () => {
       const res = await fetch(`${BASE_URL}/api/acp/openapi.json`);
       expect(res.status).toBe(200);
       const body = await res.json();
-      expect(body.openapi).toBe("3.0.3");
+      expect(body.openapi).toBe("3.1.0");
       expect(body.info).toBeDefined();
       expect(body.info.title).toContain("Prove Before Act");
       expect(body.info.version).toBeDefined();
@@ -261,6 +381,10 @@ describe("Prove Before Act API", () => {
       expect(body.paths["/api/acp/checkout"]).toBeDefined();
       expect(body.paths["/api/acp/confirm"]).toBeDefined();
       expect(body.paths["/api/proof"]).toBeDefined();
+      expect(body.webhooks["proof.certified"].post.requestBody.content["application/json"].schema.$ref)
+        .toBe("#/components/schemas/ProofCertifiedWebhookPayload");
+      expect(body.paths["/webhooks/proof.certified"]).toBeUndefined();
+      expect(body["x-webhooks"]).toEqual(body.webhooks);
     });
   });
 
@@ -366,13 +490,11 @@ describe("Prove Before Act API", () => {
   });
 
   describe("MCP Endpoint", () => {
-    it("GET /mcp should return 405 Method Not Allowed", async () => {
+    it("GET /mcp should return indexable MCP connection documentation", async () => {
       const res = await fetch(`${BASE_URL}/mcp`);
-      expect(res.status).toBe(405);
-      const body = await res.json();
-      expect(body.jsonrpc).toBe("2.0");
-      expect(body.error).toBeDefined();
-      expect(body.error.message).toContain("Method not allowed");
+      expect(res.status).toBe(200);
+      expect(res.headers.get("content-type")).toContain("text/html");
+      expect(await res.text()).toContain("Prove Before Act for AI agents");
     });
   });
 

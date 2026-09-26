@@ -2,10 +2,11 @@ import express from "express";
 import crypto from "crypto";
 import { db } from "../db";
 import { logger } from "../logger";
-import { users, apiKeys, certifications, acpCheckouts } from "@shared/schema";
+import { users, apiKeys, certifications, acpCheckouts, agents } from "@shared/schema";
 import { eq, and, gte } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { pgCheckRateLimit } from "../pgRateLimit";
+import { resolveAgentForApiKey } from "../agent-identity";
 
 /**
  * Attempt to displace an ACP-pending reservation row for the given fileHash.
@@ -84,6 +85,28 @@ export async function tryDisplaceAcpReservation(
 
 export const TRIAL_QUOTA = 10;
 
+export function buildAgentTrialOnboarding() {
+  return {
+    message: `No API key? Register in 1 call and get ${TRIAL_QUOTA} free proofs — no wallet, no credit card.`,
+    trial: {
+      free_proofs: TRIAL_QUOTA,
+      wallet_required: false,
+      credit_card_required: false,
+    },
+    mcp: {
+      endpoint: "/mcp",
+      tool: "register_trial",
+      arguments: { agent_name: "my-agent" },
+    },
+    rest: {
+      method: "POST",
+      endpoint: "/api/agent/register",
+      body: { agent_name: "my-agent" },
+    },
+    after_registration: "Use the returned api_key as: Authorization: Bearer <api_key>",
+  };
+}
+
 /**
  * Extract the real client IP from the request.
  *
@@ -133,7 +156,8 @@ export const RATE_LIMIT_MAX_VALUE = RATE_LIMIT_MAX;
 export async function validateApiKey(req: express.Request, res: express.Response, next: express.NextFunction) {
   const authHeader = req.headers.authorization;
 
-  if (req.path === "/products" || req.path === "/openapi.json" || req.path === "/health") {
+  if (req.path === "/products" || req.path === "/openapi.json" ||
+      req.path === "/openapi-3.0.json" || req.path === "/health") {
     return next();
   }
 
@@ -187,6 +211,11 @@ export async function validateApiKey(req: express.Request, res: express.Response
     });
   }
 
+  const logicalAgent = await resolveAgentForApiKey(apiKey);
+  await db.update(agents)
+    .set({ lastSeenAt: new Date() })
+    .where(eq(agents.id, logicalAgent.id));
+
   db.update(apiKeys)
     .set({
       lastUsedAt: new Date(),
@@ -197,6 +226,10 @@ export async function validateApiKey(req: express.Request, res: express.Response
     .catch((err) => logger.error("Failed to update API key stats", { error: err.message }));
 
   (req as any).apiKey = apiKey;
+  // Logical attribution is intentionally based only on the authenticated key.
+  // Do not derive it from request metadata or caller-supplied identifiers.
+  (req as any).agent = logicalAgent;
+  (req as any).agentId = logicalAgent.id;
   next();
 }
 

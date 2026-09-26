@@ -1,25 +1,24 @@
 /**
- * Regression guard: /fleet and /coherence must always serve prerendered HTML —
- * even to a visitor that looks like a real browser (standard User-Agent +
- * Sec-Fetch-Mode: navigate), i.e. a request that would FAIL the isCrawler()
- * check and fall through to the React SPA for every other route.
+ * Regression guard: /coherence must always serve prerendered HTML, while
+ * /fleet serves the interactive React app to browser navigations and keeps
+ * prerendered documentation for crawler-like requests.
  *
- * These two routes live in the always-serve block of server/prerender.ts
- * (before the isCrawler() gate).  If they are accidentally moved back behind
- * the gate, or if a new middleware intercepts them first, the React SPA shell
- * will be returned instead — and crawlers / LLM agents (like Grok, which
- * renders JS but sends no Sec-Fetch-Mode) will see an empty page.
+ * The fleet route must not be intercepted before the isCrawler() gate:
+ * browser visitors need the live lookup controls, while crawlers / LLM agents
+ * (like Grok, which renders JS but sends no Sec-Fetch-Mode) need the complete
+ * static documentation.
  *
  * Test strategy
  * ─────────────
- * • Send GET /fleet and GET /coherence with a full browser-style UA and a
- *   Sec-Fetch-Mode: navigate header.  isCrawler() returns false for this
- *   combination, so passing the gate is NOT sufficient — the always-serve
- *   block must fire first.
+ * • Send GET /fleet with a full browser-style UA and Sec-Fetch-Mode: navigate.
+ *   isCrawler() returns false, so the request must fall through to the SPA.
+ * • Send GET /fleet without Sec-Fetch-Mode.  isCrawler() returns true, so the
+ *   request must receive the complete prerendered documentation.
+ * • Send GET /coherence with a full browser-style UA and Sec-Fetch-Mode:
+ *   navigate.  It remains an always-prerendered documentation page.
  * • Assert HTTP 200.
- * • Assert the response body contains the page-specific h1 headline that only
- *   the prerendered HTML contains.  The React SPA shell is a bare <div id="root">
- *   with no fleet/coherence text in its static form.
+ * • Assert the browser fleet response is the SPA shell and the crawler fleet
+ *   response contains the page-specific documentation headline.
  */
 
 import { describe, it, expect } from "vitest";
@@ -36,22 +35,34 @@ const BROWSER_HEADERS = {
   Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 };
 
-describe("/fleet and /coherence always-serve regression guard", () => {
-  it("GET /fleet with a browser UA returns 200 with the prerendered Fleet Coherence headline", async () => {
+describe("/fleet browser and crawler delivery regression guard", () => {
+  it("GET /fleet with a browser UA returns the interactive SPA shell", async () => {
     const res = await fetch(`${BASE}/fleet`, { headers: BROWSER_HEADERS });
     expect(res.status).toBe(200);
 
     const body = await res.text();
 
-    // The prerendered page contains this h1.  The React SPA shell does not.
-    expect(body).toContain("Fleet Coherence");
+    // Browser navigations must reach the React route, where the live lookup
+    // controls can load initial ?org= or ?fleet= values.
+    expect(body).toMatch(/<div id="root">\s*<\/div>/);
+    expect(body).not.toContain('class="fleet-main"');
+  });
 
-    // Sanity: confirm it is not the bare SPA shell.
-    // The SPA shell has <div id="root"> with no fleet content around it.
+  it("GET /fleet with a crawler-like request returns the prerendered documentation", async () => {
+    const res = await fetch(`${BASE}/fleet`, {
+      headers: {
+        "User-Agent": "Googlebot/2.1 (+http://www.google.com/bot.html)",
+        Accept: BROWSER_HEADERS["Accept"],
+      },
+    });
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain("Fleet Coherence");
+    expect(body).toContain("Two query modes");
     expect(body).not.toMatch(/<div id="root">\s*<\/div>/);
   });
 
-  it("GET /coherence with a browser UA returns 200 with the prerendered Coherence Layer headline", async () => {
+  it("GET /coherence with a browser UA returns the prerendered Coherence Layer headline", async () => {
     const res = await fetch(`${BASE}/coherence`, { headers: BROWSER_HEADERS });
     expect(res.status).toBe(200);
 
@@ -62,22 +73,6 @@ describe("/fleet and /coherence always-serve regression guard", () => {
 
     // Sanity: confirm it is not the bare SPA shell.
     expect(body).not.toMatch(/<div id="root">\s*<\/div>/);
-  });
-
-  it("GET /fleet without Sec-Fetch-Mode (crawler / LLM agent) also returns 200 with the headline", async () => {
-    // This path goes through isCrawler() → true, but should still hit the
-    // always-serve block and never reach the crawler branch.  Both paths
-    // must serve the same prerendered output.
-    const res = await fetch(`${BASE}/fleet`, {
-      headers: {
-        "User-Agent": BROWSER_HEADERS["User-Agent"],
-        Accept: BROWSER_HEADERS["Accept"],
-        // Deliberately no Sec-Fetch-Mode — mimics Grok / headless HTTP client
-      },
-    });
-    expect(res.status).toBe(200);
-    const body = await res.text();
-    expect(body).toContain("Fleet Coherence");
   });
 
   it("GET /coherence without Sec-Fetch-Mode (crawler / LLM agent) also returns 200 with the headline", async () => {
@@ -94,8 +89,8 @@ describe("/fleet and /coherence always-serve regression guard", () => {
 });
 
 /**
- * Regression guard: /agents/zh and /agent-context must always serve
- * prerendered HTML — even to a visitor that looks like a real browser
+ * Regression guard: the canonical Chinese context page and /agent-context
+ * always serve prerendered HTML, while /agents/zh remains a permanent alias.
  * (standard User-Agent + Sec-Fetch-Mode: navigate).
  *
  * These two routes live in the always-serve block of server/prerender.ts
@@ -103,9 +98,20 @@ describe("/fleet and /coherence always-serve regression guard", () => {
  * the gate, or if a new middleware intercepts them first, the React SPA shell
  * will be returned instead.
  */
-describe("/agents/zh and /agent-context always-serve regression guard", () => {
-  it("GET /agents/zh with a browser UA returns 200 with the prerendered headline", async () => {
-    const res = await fetch(`${BASE}/agents/zh`, { headers: BROWSER_HEADERS });
+describe("Chinese context canonical route and /agent-context prerender guard", () => {
+  it("GET /agents/zh permanently redirects to the canonical Chinese route", async () => {
+    const res = await fetch(`${BASE}/agents/zh`, {
+      headers: BROWSER_HEADERS,
+      redirect: "manual",
+    });
+    expect(res.status).toBe(301);
+    const location = res.headers.get("location");
+    expect(location).toBeTruthy();
+    expect(new URL(location!).pathname).toBe("/agent-context/zh");
+  });
+
+  it("GET /agent-context/zh with a browser UA returns 200 with the prerendered headline", async () => {
+    const res = await fetch(`${BASE}/agent-context/zh`, { headers: BROWSER_HEADERS });
     expect(res.status).toBe(200);
 
     const body = await res.text();
@@ -130,8 +136,8 @@ describe("/agents/zh and /agent-context always-serve regression guard", () => {
     expect(body).not.toMatch(/<div id="root">\s*<\/div>/);
   });
 
-  it("GET /agents/zh without Sec-Fetch-Mode (crawler / LLM agent) also returns 200 with the headline", async () => {
-    const res = await fetch(`${BASE}/agents/zh`, {
+  it("GET /agent-context/zh without Sec-Fetch-Mode (crawler / LLM agent) also returns 200 with the headline", async () => {
+    const res = await fetch(`${BASE}/agent-context/zh`, {
       headers: {
         "User-Agent": BROWSER_HEADERS["User-Agent"],
         Accept: BROWSER_HEADERS["Accept"],

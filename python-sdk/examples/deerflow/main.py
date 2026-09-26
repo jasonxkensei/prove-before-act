@@ -6,7 +6,8 @@ to certify its outputs on-chain with 4W metadata.
 Run: python main.py
 
 Requirements:
-    pip install xproof
+    pip install prove-before-act[deerflow]
+    # The xproof module name below is a legacy compatibility alias.
 """
 
 import json
@@ -41,7 +42,10 @@ def main():
                 "content": "Market analysis: AI sector growing 40% annually",
                 "file_name": "market-analysis.json",
                 "author": "market-analyst",
-                "why": "Annual market review certification",
+                # ``why`` is the legacy fingerprint-only 4W field (SHA-256
+                # hashed before sending, not a human-readable reason). Use a
+                # fixed action classification / opaque ID here.
+                "why": "market_review",
             }
         )
     )

@@ -12,12 +12,17 @@ import {
   setupProcessErrorHandlers 
 } from "./reliability";
 import { startTxQueueWorker } from "./txQueue";
+import { startProofFinalityPoller } from "./proof-finality";
+import { db } from "./db";
+import { sql } from "drizzle-orm";
 import { ensureRateLimitTable } from "./pgRateLimit";
 import { warmCachesFromSnapshots, startTrustRefreshScheduler } from "./trust";
 import { startCoherenceDivergenceScheduler } from "./coherence-divergence";
 import { requestIdMiddleware, logger } from "./logger";
 import { x402PriceConfigWarning, x402NetworkConfigWarning } from "./routes/helpers";
-import { conversionOutcomeMiddleware } from "./conversion-telemetry";
+import { conversionOutcomeMiddleware, conversionVisitorMiddleware } from "./conversion-telemetry";
+import { initializeStripe } from "./stripe";
+import { checkStalledPbaPayments, migratePbaReconciliationAlerts } from "./routes/pba-verification";
 import { getCanonicalPublicUrl, isLegacyPublicHost } from "./publicOrigin";
 import {
   runDailyMaintenance,
@@ -30,6 +35,12 @@ import {
   purgeOnboardingCertifications,
   sweepExpiredAcpReservations,
   migrateConversionEventsTable,
+  migrateMx8004BalanceAlertState,
+  migrateMx8004NonceAlertState,
+  migrateProofFinalityReconciliationSchema,
+  migrateProofCallbackAlertOutbox,
+  migratePbaHttpWitnessRevocations,
+  checkMx8004WalletBalance,
 } from "./maintenance";
 
 setupProcessErrorHandlers();
@@ -114,7 +125,7 @@ app.use("/api", (req: Request, res: Response, next: NextFunction) => {
 
 app.use("/mcp", (req: Request, res: Response, next: NextFunction) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "POST, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Payment");
   if (req.method === "OPTIONS") {
     res.status(204).end();
@@ -125,14 +136,16 @@ app.use("/mcp", (req: Request, res: Response, next: NextFunction) => {
 
 // Capture the two conversion-critical API request outcomes before parsing,
 // global rate limiting, and timeouts can send an early response.
-app.use(conversionOutcomeMiddleware);
+app.use(conversionVisitorMiddleware, conversionOutcomeMiddleware);
 
 // Skip JSON parsing for webhooks to preserve raw body for signature verification
 app.use((req, res, next) => {
   if (req.path.startsWith('/api/webhooks/')) {
     next();
   } else {
-    express.json()(req, res, next);
+    // The bounded PBA evidence profile allows a 256 KiB envelope; keep the
+    // existing smaller global limit for all other endpoints.
+    express.json({ limit: req.path === '/api/pba/verify' ? '256kb' : '100kb' })(req, res, next);
   }
 });
 
@@ -234,6 +247,29 @@ app.use((req, res, next) => {
   // present. This idempotent migration is non-destructive and is mirrored in
   // shared/schema.ts for publish-time schema reconciliation.
   await migrateConversionEventsTable();
+  await migrateMx8004BalanceAlertState();
+  await migrateMx8004NonceAlertState();
+  // Additive only: legacy confirmed rows remain untouched and unverified until
+  // a separately planned reconciliation. Never stamp them during deployment.
+  await db.execute(sql`ALTER TABLE certifications ADD COLUMN IF NOT EXISTS finality_checked_at timestamp`);
+  await db.execute(sql`ALTER TABLE certifications ADD COLUMN IF NOT EXISTS mx8004_enqueue_status varchar`);
+  await db.execute(sql`ALTER TABLE certifications ADD COLUMN IF NOT EXISTS mx8004_enqueue_error text`);
+  // Pending proof-certified webhooks need their original signing key and URL
+  // context after a process restart. These fields are internal delivery state.
+  await db.execute(sql`ALTER TABLE certifications ADD COLUMN IF NOT EXISTS webhook_signing_secret text`);
+  await db.execute(sql`ALTER TABLE certifications ADD COLUMN IF NOT EXISTS webhook_base_url text`);
+  await migrateProofCallbackAlertOutbox();
+  await migrateProofFinalityReconciliationSchema();
+  await migratePbaHttpWitnessRevocations();
+  await migratePbaReconciliationAlerts();
+  try {
+    await initializeStripe();
+  } catch (error) {
+    logger.error("Stripe initialization failed; non-Stripe payment rails remain available", {
+      component: "stripe",
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 
   server.listen({
     port,
@@ -242,16 +278,20 @@ app.use((req, res, next) => {
   }, () => {
     log(`serving on port ${port}`);
     startTxQueueWorker();
+    startProofFinalityPoller();
     migrateSystemUserCertifications();
     migrateAgentViolationsTable();
-    migrateAgentOutcomesTable();
     purgeStaleSnapshotAttestationCounts();
     purgeOnboardingCertifications();
-    // Schema migration must complete before the refresh scheduler reads snapshots.
-    // Sequence: schema → warm caches from existing snapshots (zero compute) →
-    // start background scheduler (runs first cycle with jitter, then every 5 min).
+    // Schema migrations must complete before the refresh scheduler reads any
+    // trust-related tables. In particular, the leaderboard's calibration
+    // subquery reads agent_outcomes; starting both migrations independently
+    // made the first refresh race CREATE TABLE on a fresh/older deployment.
+    // Sequence: snapshot schema → outcomes schema → warm caches from existing
+    // snapshots (zero compute) → start background scheduler.
     // Daily maintenance continues to run independently once per day.
     migrateTrustSnapshotSchema()
+      .then(() => migrateAgentOutcomesTable())
       .then(() => warmCachesFromSnapshots())
       .then(() => startTrustRefreshScheduler())
       .catch((err) => {
@@ -268,8 +308,12 @@ app.use((req, res, next) => {
       });
     runDailyMaintenance().catch((err) => Sentry.captureException(err, { tags: { component: "daily-maintenance" } }));
     setInterval(() => runDailyMaintenance().catch((err) => Sentry.captureException(err, { tags: { component: "daily-maintenance" } })), 24 * 60 * 60 * 1000);
+    checkMx8004WalletBalance().catch((err) => Sentry.captureException(err, { tags: { component: "mx8004-balance" } }));
+    setInterval(() => checkMx8004WalletBalance().catch((err) => Sentry.captureException(err, { tags: { component: "mx8004-balance" } })), 5 * 60 * 1000);
     sweepExpiredAcpReservations().catch((err) => Sentry.captureException(err, { tags: { component: "acp-sweep" } }));
     setInterval(() => sweepExpiredAcpReservations().catch((err) => Sentry.captureException(err, { tags: { component: "acp-sweep" } })), 5 * 60 * 1000);
+    checkStalledPbaPayments().catch((err) => Sentry.captureException(err, { tags: { component: "pba-reconciliation-alert" } }));
+    setInterval(() => checkStalledPbaPayments().catch((err) => Sentry.captureException(err, { tags: { component: "pba-reconciliation-alert" } })), 60 * 1000);
   });
 
   setupGracefulShutdown(server);

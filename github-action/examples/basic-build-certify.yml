@@ -15,9 +15,9 @@ jobs:
 
       - name: Certify with Prove Before Act
         id: certify
-        uses: jasonxkensei/xProof-Action@v1
+        uses: jasonxkensei/prove-before-act-action@v1
         with:
-          api_key: ${{ secrets.XPROOF_API_KEY }}
+          api_key: ${{ secrets.PROVEBEFOREACT_API_KEY }}
           files: 'build.zip'
           author_name: 'CI Bot'
 

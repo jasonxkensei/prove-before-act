@@ -2,6 +2,8 @@
 
 Certify tool executions and agent completions on-chain using the OpenAI Agents SDK.
 
+**Integration terminology:** Prove Before Act is the accountability pattern for autonomous agents; xProof is its reference implementation. Treat WHY as a declared decision basis—intent, relevant context, and authorization or policy basis—not internal chain-of-thought.
+
 Two integration styles are available — pick the one that fits your architecture.
 
 ## What gets certified
@@ -16,7 +18,8 @@ Both record the 4W framework: WHO = agent/tool name at runtime, WHAT = SHA-256 o
 ## Install
 
 ```bash
-pip install xproof openai-agents
+# Canonical distribution; `xproof` imports below are legacy module aliases.
+pip install prove-before-act openai-agents
 ```
 
 ## Usage
@@ -57,5 +60,5 @@ No API key or OpenAI key needed for the demo — runs entirely with simulated ob
 
 - [provebeforeact.com](https://provebeforeact.com)
 - Docs (LLM-readable): [provebeforeact.com/llms.txt](https://provebeforeact.com/llms.txt)
-- [PyPI: Prove Before Act](https://pypi.org/project/xproof)
+- [PyPI: Prove Before Act](https://pypi.org/project/prove-before-act)
 - [OpenAI Agents SDK](https://github.com/openai/openai-agents-python)

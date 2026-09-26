@@ -7,7 +7,8 @@ This example is self-contained and works with the base `Prove Before Act>=0.1.0`
 ## Installation
 
 ```bash
-pip install openai-agents Prove Before Act
+# Canonical distribution; `xproof` imports below are legacy module aliases.
+pip install prove-before-act[openai-agents]
 ```
 
 ## Quick Start — RunHooks
@@ -84,4 +85,4 @@ The demo uses mock objects — no real API key or LLM backend needed.
 
 ## Links
 
-- [Prove Before Act](https://provebeforeact.com) · [API docs](https://provebeforeact.com/docs) · [PyPI](https://pypi.org/project/xproof/) · [GitHub](https://github.com/jasonxkensei/xProof)
+- [Prove Before Act](https://provebeforeact.com) · [API docs](https://provebeforeact.com/docs) · [PyPI](https://pypi.org/project/prove-before-act/) · [GitHub](https://github.com/jasonxkensei/prove-before-act)

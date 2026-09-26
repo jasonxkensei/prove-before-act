@@ -1,5 +1,10 @@
 # Prove Before Act PR Descriptions — Ready to Paste
 
+> **Python package note:** New integrations should install the canonical
+> `prove-before-act` distribution. The `xproof` module import remains available
+> only as a legacy compatibility alias, so existing integration code can keep
+> using imports such as `from xproof.integrations...`.
+
 ## PR 1 — bytedance/deer-flow
 
 **Title:** `feat: add Prove Before Act blockchain certification skill`
@@ -35,7 +40,7 @@ Prove Before Act's 4W framework solves this:
 #### Integration surface
 
 - Skill definition: `skills/xproof.yaml` (standard YAML frontmatter)
-- Python implementation: `pip install xproof` → `XProofDeerFlowSkill`
+- Python implementation: `pip install prove-before-act` → `XProofDeerFlowSkill`
 - Zero DeerFlow core changes — uses the standard skill interface
 - Also works via the LangChain callback handler (DeerFlow uses LangGraph internally)
 
@@ -50,7 +55,7 @@ Prove Before Act's 4W framework solves this:
 
 #### Links
 
-- [Prove Before Act](https://provebeforeact.com) · [API docs](https://provebeforeact.com/docs) · [Python SDK](https://pypi.org/project/xproof/) · [GitHub](https://github.com/jasonxkensei/xProof) · [MCP endpoint](https://provebeforeact.com/mcp)
+- [Prove Before Act](https://provebeforeact.com) · [API docs](https://provebeforeact.com/docs) · [Python SDK](https://pypi.org/project/prove-before-act/) · [GitHub](https://github.com/jasonxkensei/prove-before-act) · [MCP endpoint](https://provebeforeact.com/mcp)
 
 ---
 
@@ -111,11 +116,11 @@ result = await Runner.run(agent, input="Analyze Q3 metrics", hooks=hooks)
 |------|---------|
 | `examples/xproof/main.py` | Demo with RunHooks and TracingProcessor (mock objects) |
 | `examples/xproof/README.md` | Usage documentation |
-| `examples/xproof/requirements.txt` | Dependencies: `openai-agents>=0.0.3`, `xproof>=0.1.0` |
+| `examples/xproof/requirements.txt` | Dependencies: `openai-agents>=0.0.3`, `prove-before-act>=0.1.0` |
 
 #### Links
 
-- [Prove Before Act](https://provebeforeact.com) · [API docs](https://provebeforeact.com/docs) · [Python SDK](https://pypi.org/project/xproof/) · [GitHub](https://github.com/jasonxkensei/xProof) · [MCP endpoint](https://provebeforeact.com/mcp)
+- [Prove Before Act](https://provebeforeact.com) · [API docs](https://provebeforeact.com/docs) · [Python SDK](https://pypi.org/project/prove-before-act/) · [GitHub](https://github.com/jasonxkensei/prove-before-act) · [MCP endpoint](https://provebeforeact.com/mcp)
 
 ---
 
@@ -182,11 +187,11 @@ user_proxy.initiate_chat(assistant, message="Summarize the Q3 earnings report.")
 |------|---------|
 | `examples/xproof/main.py` | Two-agent conversation demo (mock objects) |
 | `examples/xproof/README.md` | Usage documentation |
-| `examples/xproof/requirements.txt` | Dependencies: `pyautogen>=0.2.0`, `xproof>=0.1.0` |
+| `examples/xproof/requirements.txt` | Dependencies: `pyautogen>=0.2.0`, `prove-before-act>=0.1.0` |
 
 #### Links
 
-- [Prove Before Act](https://provebeforeact.com) · [API docs](https://provebeforeact.com/docs) · [Python SDK](https://pypi.org/project/xproof/) · [GitHub](https://github.com/jasonxkensei/xProof) · [MCP endpoint](https://provebeforeact.com/mcp)
+- [Prove Before Act](https://provebeforeact.com) · [API docs](https://provebeforeact.com/docs) · [Python SDK](https://pypi.org/project/prove-before-act/) · [GitHub](https://github.com/jasonxkensei/prove-before-act) · [MCP endpoint](https://provebeforeact.com/mcp)
 
 ---
 
@@ -256,10 +261,10 @@ response = query_engine.query("What is AI?")
 |------|---------|
 | `examples/xproof/main.py` | Pipeline simulation demo (uses trial API) |
 | `examples/xproof/README.md` | Usage documentation |
-| `examples/xproof/requirements.txt` | Dependencies: `llama-index-core>=0.10.0`, `xproof>=0.1.0` |
+| `examples/xproof/requirements.txt` | Dependencies: `llama-index-core>=0.10.0`, `prove-before-act>=0.1.0` |
 
 #### Links
 
-- [Prove Before Act](https://provebeforeact.com) · [API docs](https://provebeforeact.com/docs) · [Python SDK](https://pypi.org/project/xproof/) · [GitHub](https://github.com/jasonxkensei/xProof) · [MCP endpoint](https://provebeforeact.com/mcp)
+- [Prove Before Act](https://provebeforeact.com) · [API docs](https://provebeforeact.com/docs) · [Python SDK](https://pypi.org/project/prove-before-act/) · [GitHub](https://github.com/jasonxkensei/prove-before-act) · [MCP endpoint](https://provebeforeact.com/mcp)
 
 ---

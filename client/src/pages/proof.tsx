@@ -7,6 +7,8 @@ import { Shield, ExternalLink, Download, Copy, CheckCircle, Calendar, Hash, User
 import { format } from "date-fns";
 import { formatHash, copyToClipboard } from "@/lib/hashUtils";
 import { useToast } from "@/hooks/use-toast";
+import { PublicSiteFooter, PublicSiteHeader } from "@/components/public-site-chrome";
+import { StatusIndicator } from "@/components/status-indicator";
 import type { Certification } from "@shared/schema";
 import { safeHref } from "@shared/url";
 
@@ -94,126 +96,64 @@ export default function ProofPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container flex h-16 items-center justify-between">
-          <a href="/" className="flex items-center gap-2" data-testid="link-logo-home">
-            <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
-          </a>
-          <Button asChild variant="outline" size="sm" data-testid="button-home-header">
-            <a href="/">Home</a>
-          </Button>
-        </div>
-      </header>
+      <PublicSiteHeader />
 
-      <div className="container mx-auto max-w-4xl py-16">
-        {/* Verification Badge */}
-        <div className="mb-12 flex flex-col items-center text-center">
-          <div className={`mb-6 flex h-24 w-24 items-center justify-center rounded-full ${
-            isVerified ? "bg-chart-2/10" : "bg-muted"
-          }`}>
-            {isVerified ? (
-              <CheckCircle className="h-12 w-12 text-chart-2" />
-            ) : (
-              <Shield className="h-12 w-12 text-muted-foreground" />
-            )}
-          </div>
-          <h1 className="mb-3 text-3xl md:text-4xl font-bold tracking-tight">
-            {isVerified ? "Verified on the blockchain" : "Proof anchoring in progress"}
-          </h1>
-          <p className="text-lg text-muted-foreground max-w-2xl">
-            The authenticity of this document has been {isVerified ? "verified" : "recorded"} on the MultiversX blockchain
-          </p>
-        </div>
-
-        {/* Main Proof Card */}
-        <Card className="mb-8">
-          <CardContent className="space-y-6 pt-6">
-            {/* File Information */}
+      <main id="main-content" className="container mx-auto max-w-4xl px-4 py-10 sm:py-16">
+        <header className="mb-8 border-b border-border pb-6">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Public evidence record</p>
+          <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
             <div>
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-xl font-semibold">File information</h2>
-                {isVerified && (
-                  <Badge className="bg-chart-2 hover:bg-chart-2" data-testid="badge-verified">
-                    <CheckCircle className="mr-1 h-3 w-3" />
-                    Verified
-                  </Badge>
-                )}
-              </div>
-              <div className="space-y-4">
-                <div className="flex items-start gap-3 rounded-lg bg-muted/30 p-4">
-                  <Shield className="mt-0.5 h-5 w-5 text-primary" />
-                  <div className="flex-1 min-w-0">
-                    <p className="mb-1 text-sm font-medium text-muted-foreground">File name</p>
-                    <p className="font-semibold break-all" data-testid="text-proof-filename">
-                      {certification.fileName}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3 rounded-lg bg-muted/30 p-4">
-                  <Hash className="mt-0.5 h-5 w-5 text-primary" />
-                  <div className="flex-1 min-w-0">
-                    <p className="mb-1 text-sm font-medium text-muted-foreground">SHA-256 hash</p>
-                    <div className="flex items-center gap-2">
-                      <p className="flex-1 break-all font-mono text-sm" data-testid="text-proof-hash">
-                        {certification.fileHash}
-                      </p>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0 shrink-0"
-                        onClick={() => handleCopy(certification.fileHash)}
-                        data-testid="button-copy-proof-hash"
-                      >
-                        <Copy className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3 rounded-lg bg-muted/30 p-4">
-                  <Calendar className="mt-0.5 h-5 w-5 text-primary" />
-                  <div className="flex-1">
-                    <p className="mb-1 text-sm font-medium text-muted-foreground">Proof date</p>
-                    <p className="font-semibold" data-testid="text-proof-date">
-                      {certification.createdAt ? format(new Date(certification.createdAt), "MM/dd/yyyy 'at' HH:mm") : "Unknown date"}
-                    </p>
-                  </div>
-                </div>
-
-                {certification.authorName && (
-                  <div className="flex items-start gap-3 rounded-lg bg-muted/30 p-4">
-                    <User className="mt-0.5 h-5 w-5 text-primary" />
-                    <div className="flex-1">
-                      <p className="mb-1 text-sm font-medium text-muted-foreground">Anchored by</p>
-                      <p className="font-semibold" data-testid="text-proof-author">
-                        {certification.authorName}
-                      </p>
-                      {certification.authorSignature && (
-                        <p className="mt-1 text-sm text-muted-foreground" data-testid="text-proof-signature">
-                          {certification.authorSignature}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
+              <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">Proof case file</h1>
+              <p className="mt-2 max-w-2xl text-muted-foreground">A recorded file commitment with its issuer and independent verification status.</p>
             </div>
+            <StatusIndicator as="div" status={isVerified ? "verified" : "pending"} className={`flex shrink-0 items-center gap-2 border px-3 py-2 text-sm font-medium ${isVerified ? "border-current/30 bg-current/10" : "border-border bg-muted/40"}`}>
+              {isVerified ? <CheckCircle className="h-4 w-4" /> : <Shield className="h-4 w-4" />}
+              <span>{isVerified ? "Independently verified" : "Anchoring in progress"}</span>
+            </StatusIndicator>
+          </div>
+        </header>
 
-            {/* Confidence Level */}
+        <article className="mb-8 border border-border bg-card shadow-sm">
+          <div className="border-b border-border bg-muted/20 px-5 py-4 sm:px-8">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Claim / file identity</p>
+            <h2 className="mt-2 break-all text-xl font-semibold" data-testid="text-proof-filename">{certification.fileName}</h2>
+          </div>
+          <div className="divide-y divide-border px-5 sm:px-8">
+            <section className="grid gap-5 py-6 sm:grid-cols-[10rem_1fr]">
+              <div><p className="text-sm font-medium">Commitment</p><p className="mt-1 text-xs text-muted-foreground">File fingerprint</p></div>
+              <div className="min-w-0">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">SHA-256</p>
+                <div className="flex items-start gap-2">
+                  <p className="min-w-0 flex-1 overflow-x-auto font-mono text-sm" data-testid="text-proof-hash">{certification.fileHash}</p>
+                  <Button variant="ghost" size="sm" className="h-8 w-8 shrink-0 p-0" onClick={() => handleCopy(certification.fileHash)} data-testid="button-copy-proof-hash" aria-label="Copy file hash"><Copy className="h-4 w-4" /></Button>
+                </div>
+              </div>
+            </section>
+            <section className="grid gap-5 py-6 sm:grid-cols-[10rem_1fr]">
+              <div><p className="text-sm font-medium">Commitment time</p><p className="mt-1 text-xs text-muted-foreground">Evidence recorded</p></div>
+              <p className="font-mono text-sm" data-testid="text-proof-date">{certification.createdAt ? format(new Date(certification.createdAt), "MM/dd/yyyy 'at' HH:mm") : "Unknown date"}</p>
+            </section>
+            {certification.authorName && (
+              <section className="grid gap-5 py-6 sm:grid-cols-[10rem_1fr]">
+                <div><p className="text-sm font-medium">Issuer</p><p className="mt-1 text-xs text-muted-foreground">Anchored by</p></div>
+                <div><p className="font-medium" data-testid="text-proof-author">{certification.authorName}</p>{certification.authorSignature && <p className="mt-1 break-all font-mono text-xs text-muted-foreground" data-testid="text-proof-signature">{certification.authorSignature}</p>}</div>
+              </section>
+            )}
+
             {hasConfidence && confidenceLevel !== null && (
-              <div className="border-t pt-6">
-                <div className="mb-4 flex items-center justify-between gap-2 flex-wrap">
-                  <h3 className="text-lg font-semibold">Confidence anchoring</h3>
+              <section className="grid gap-5 py-6 sm:grid-cols-[10rem_1fr]">
+                <div><p className="text-sm font-medium">Declared justification</p><p className="mt-1 text-xs text-muted-foreground">Confidence at commitment</p></div>
+                <div>
+                  <div className="mb-4 flex items-center justify-between gap-2 flex-wrap">
+                  <h3 className="text-base font-semibold">Confidence anchoring</h3>
                   {thresholdStage && (
                     <Badge className={stageColors[thresholdStage] || "bg-muted text-muted-foreground"} data-testid="badge-threshold-stage">
                       {stageLabels[thresholdStage] || thresholdStage}
                     </Badge>
                   )}
                 </div>
-                <div className="space-y-4">
-                  <div className="flex items-start gap-3 rounded-lg bg-muted/30 p-4">
+                  <div className="space-y-4">
+                   <div className="bg-muted/30 p-4">
                     <Gauge className="mt-0.5 h-5 w-5 text-primary" />
                     <div className="flex-1">
                       <p className="mb-2 text-sm font-medium text-muted-foreground">Confidence level</p>
@@ -233,10 +173,10 @@ export default function ProofPage() {
                   </div>
 
                   {decisionId && (
-                    <div className="flex items-start gap-3 rounded-lg bg-muted/30 p-4">
+                    <div className="bg-muted/30 p-4">
                       <GitBranch className="mt-0.5 h-5 w-5 text-primary" />
                       <div className="flex-1 min-w-0">
-                        <p className="mb-1 text-sm font-medium text-muted-foreground">Decision chain</p>
+                        <p className="mb-1 text-sm font-medium text-muted-foreground">Declared decision basis</p>
                         <div className="flex items-center gap-2">
                           <p className="flex-1 break-all font-mono text-sm" data-testid="text-decision-id">
                             {decisionId}
@@ -255,17 +195,19 @@ export default function ProofPage() {
                     </div>
                   )}
                 </div>
-              </div>
+                </div>
+              </section>
             )}
 
-            {/* Blockchain Information */}
             {certification.transactionHash && (
-              <div className="border-t pt-6">
-                <h3 className="mb-4 text-lg font-semibold">Blockchain details</h3>
+              <section className="grid gap-5 py-6 sm:grid-cols-[10rem_1fr]">
+                <div><p className="text-sm font-medium">Independent verification</p><p className="mt-1 text-xs text-muted-foreground">{isVerified ? "Confirmation available" : "Confirmation pending"}</p></div>
+                <div>
+                <h3 className="mb-4 text-base font-semibold">Blockchain commitment</h3>
                 <div className="space-y-3">
                   <div className="rounded-lg bg-muted/30 p-4">
                     <p className="mb-1 text-sm font-medium text-muted-foreground">Transaction hash</p>
-                    <p className="break-all font-mono text-sm" data-testid="text-transaction-hash">
+                    <p className="overflow-x-auto font-mono text-sm" data-testid="text-transaction-hash">
                       {certification.transactionHash}
                     </p>
                   </div>
@@ -283,10 +225,11 @@ export default function ProofPage() {
                     </Button>
                   )}
                 </div>
-              </div>
+                </div>
+              </section>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </article>
 
         {/* Context Drift Card */}
         {contextDrift && contextDrift.total_anchors > 1 && (
@@ -333,7 +276,7 @@ export default function ProofPage() {
                     </span>
                   </div>
                   <p className="mt-2 text-xs text-muted-foreground">
-                    Across {contextDrift.total_anchors} anchors in this decision chain
+                    Across {contextDrift.total_anchors} anchors in this declared decision basis
                   </p>
                 </div>
 
@@ -417,7 +360,7 @@ export default function ProofPage() {
             <Button asChild variant="outline" size="lg" data-testid="button-view-trail">
               <a href={`/api/confidence-trail/${encodeURIComponent(decisionId)}`} target="_blank" rel="noopener noreferrer">
                 <GitBranch className="mr-2 h-5 w-5" />
-                View full decision trail
+                View declared decision record
               </a>
             </Button>
           )}
@@ -448,7 +391,8 @@ export default function ProofPage() {
             - The Truth Machine
           </p>
         </div>
-      </div>
+      </main>
+      <PublicSiteFooter />
     </div>
   );
 }

@@ -1,16 +1,16 @@
 ---
 name: Prove Before Act
-version: 3.1.0
-description: Prove Before Act proof and accountability integration for AI agents. REST API, MCP, and x402. Check live endpoints for availability, pricing, and proof status.
+version: 3.3.14
+description: Prove Before Act accountability integration for AI agents. REST API, MCP, and x402. The @jasonxkensei/xproof ClawHub slug is a legacy compatibility identifier.
 homepage: https://provebeforeact.com
 metadata: {"prove-before-act": {"category":"proof,security,compliance,accountability","api_base":"https://provebeforeact.com"}}
 ---
 
-# Prove Before Act -- Proof & Accountability Layer for AI Agents
+# Prove Before Act — Accountability Layer for AI Agents
 
-This skill enables an agent to anchor hash-based proof records on MultiversX and use the Prove Before Act API for audit context. Always check a returned proof's live status before relying on it.
+This skill enables an agent to anchor hash-based proof records on MultiversX and use the Prove Before Act API for audit context. Prove Before Act is the accountability pattern for autonomous agents; xProof is its reference implementation. Treat WHY as a declared decision basis—intent, relevant context, and authorization or policy basis—not private step-by-step reasoning or internal chain-of-thought. Always check a returned proof's live status before relying on it.
 
-> **Current product and compatibility notice:** Prove Before Act is the product name. `xproof`, `XProofClient`, `XPROOF_*`, `xProof-Action`, and `jasonxkensei/xProof` are legacy package, protocol, action, or repository identifiers retained for compatibility. MX-8004 support is not active unless `GET /api/mx8004/status` reports `status: "active"`; the current production response is `status: "not_configured"`.
+> **Current product and compatibility notice:** Prove Before Act is the product name. The ClawHub install slug `@jasonxkensei/xproof` is retained as a legacy compatibility identifier for existing OpenClaw installations. Install the canonical Python package as `prove-before-act`; its supported Python module namespace is `xproof`. `XProofClient`, `XPROOF_*`, `xProof-Action`, and `jasonxkensei/xProof` are legacy protocol, action, or repository identifiers retained for compatibility. MX-8004 support is not active unless `GET /api/mx8004/status` reports `status: "active"`; the current production response is `status: "not_configured"`.
 
 **Why anchor proofs?** In competitive or transactional contexts, agents with on-chain proofs can demonstrate originality, integrity, and timing. Agents without proofs cannot. Verifiable proof is a structural advantage.
 
@@ -48,7 +48,13 @@ curl -H "Authorization: Bearer pm_your_key" https://provebeforeact.com/api/agent
 # Response: { "credits_remaining": 9, "last_proof": {...}, ... }
 ```
 
-### MCP (Clawhub install)
+### MCP: register a trial after installation
+
+Install the verified ClawHub skill first:
+
+```bash
+openclaw skills install @jasonxkensei/xproof
+```
 
 ```json
 {"jsonrpc":"2.0","id":1,"method":"tools/call","params":{
@@ -71,8 +77,22 @@ console.log(proof.verifyUrl);
 
 ### Python SDK
 
+Install the canonical package:
+
+```bash
+pip install prove-before-act
+```
+
 ```python
+import hashlib
+import json
+
 from xproof import XProofClient
+
+decision = {"action": "publish report", "reason": "approved by operator"}
+sha256_hex = hashlib.sha256(
+    json.dumps(decision, sort_keys=True).encode("utf-8"),
+).hexdigest()
 
 client = XProofClient.register("my-agent")  # 10 free certs
 proof = client.certify_hash(sha256_hex, "decision.json", "my-agent")
@@ -95,16 +115,25 @@ Use the live pricing and payment responses to determine what happens when a tria
 ```bash
 mkdir -p .agent/skills/prove-before-act/references
 
-# Core Skill — from the canonical main repository (jasonxkensei/xProof)
-curl -sL https://raw.githubusercontent.com/jasonxkensei/xProof/main/clawhub-publish/xproof/SKILL.md \
+# Core Skill — from the canonical main repository
+curl -sL https://raw.githubusercontent.com/jasonxkensei/prove-before-act/main/clawhub-publish/xproof/SKILL.md \
   > .agent/skills/prove-before-act/SKILL.md
 
 # Reference Manuals
 for f in certification x402 mcp; do
-  curl -sL "https://raw.githubusercontent.com/jasonxkensei/xProof/main/clawhub-publish/xproof/references/${f}.md" \
+  curl -sL "https://raw.githubusercontent.com/jasonxkensei/prove-before-act/main/clawhub-publish/xproof/references/${f}.md" \
     > ".agent/skills/prove-before-act/references/${f}.md"
 done
 ```
+
+## First successful integration
+
+Use this four-step path to create a verified record without exposing the original content:
+
+1. **Install** — run `openclaw skills install @jasonxkensei/xproof`. Its package slug is legacy; the installed skill and product are **Prove Before Act**.
+2. **Hash locally** — compute a SHA-256 hash of the decision or output. Do not send raw text, files, prompts, or credentials.
+3. **Anchor** — call `certify_file` through MCP or `POST /api/proof` with the hash and a filename.
+4. **Verify before relying on it** — retain the returned `proof_id` and use `verify_proof` or `GET /api/proof/<proof_id>` until the status is confirmed. Your own operator policy decides whether to continue, retry, request review, or block an action.
 
 ## Security
 
@@ -151,7 +180,7 @@ No configuration needed. Pay the current live per-proof USDC rate on Base (eip15
 > **WARNING -- autonomous payments:** x402 is an opt-in mode that enables your agent to initiate on-chain USDC transactions without per-transaction user confirmation. Before enabling x402 in production:
 > - Set a **spending cap** in your agent framework (e.g. max $N/day or $N/session).
 > - Require **human approval** for any single call that would exceed your risk threshold.
-> - Note that `POST /api/batch` supports up to 100 items per call; calculate any session spending cap from the current live rate at `/api/pricing`.
+> - Note that `POST /api/batch` supports up to 50 items per call; calculate any session spending cap from the current live rate at `/api/pricing`.
 > - Disable x402 entirely in environments where autonomous spending is not authorised.
 
 ---
@@ -182,7 +211,7 @@ No configuration needed. Pay the current live per-proof USDC rate on Base (eip15
 |:---|:---|:---|
 | `register_free_trial` | **None** | Get a free `pm_` key + 10 proofs without an account or wallet |
 | `certify_file` | Bearer | Create blockchain proof -- SHA-256 hash, filename, optional author/webhook |
-| `certify_with_confidence` | Bearer | Certify with confidence score, model name, and reasoning trace |
+| `certify_with_confidence` | Bearer | Certify with confidence score, model name, and declared decision-basis context (never private reasoning or internal chain-of-thought) |
 | `verify_proof` | None | Verify existing proof by UUID |
 | `get_proof` | None | Retrieve proof in JSON or Markdown format |
 | `discover_services` | None | List capabilities, pricing, and usage guidance |
@@ -446,9 +475,9 @@ curl -X POST https://provebeforeact.com/api/audit \
 ```
 
 Guard templates for multiple frameworks (pinned in the main repository — do not fetch from runtime URLs):
-- **LangChain / CrewAI / LlamaIndex**: use the `Prove Before Act` PyPI package (`pip install xproof`) — integrations are in `xproof.integrations.*`
-- **ElizaOS Plugin**: `npm install xproof-eliza-plugin`
-- **n8n / AutoGen / custom**: see `xproof-examples/` in [github.com/jasonxkensei/xProof](https://github.com/jasonxkensei/xProof)
+- **LangChain / CrewAI / LlamaIndex**: use the canonical `prove-before-act` PyPI package (`pip install prove-before-act`) — integrations are in the supported `xproof.integrations.*` module namespace
+- **ElizaOS / npm agents**: `npm install prove-before-act`
+- **n8n / AutoGen / custom**: see the [canonical examples repository](https://github.com/jasonxkensei/prove-before-act-examples)
 
 ### When to Audit
 
@@ -488,7 +517,7 @@ Auto-confirmed for irrefutable anomalies (gap > threshold). Operators can subscr
 IXProofViolations(xproofContract).getViolations(agentId)
 ```
 
-Legacy compatibility contract paths: [XProofViolations.sol](https://github.com/jasonxkensei/xProof/blob/main/contracts/XProofViolations.sol) | [ViolationWatcher.sol](https://github.com/jasonxkensei/xProof/blob/main/contracts/ViolationWatcher.sol)
+Legacy compatibility contract paths: [XProofViolations.sol](https://github.com/jasonxkensei/prove-before-act/blob/main/contracts/XProofViolations.sol) | [ViolationWatcher.sol](https://github.com/jasonxkensei/prove-before-act/blob/main/contracts/ViolationWatcher.sol)
 
 Docs: [https://provebeforeact.com/docs/base-violations](https://provebeforeact.com/docs/base-violations)
 
@@ -502,9 +531,11 @@ Prove Before Act implements the open Agent Proof Standard -- a composable, chain
 - **Signature**: Mandatory in v1
 - **agent_id**: Free string (wallet address, DID, or plain identifier)
 
-Full specification: [AGENT_PROOF_STANDARD.md](https://github.com/jasonxkensei/xProof/blob/main/AGENT_PROOF_STANDARD.md)
+Full specification: [AGENT_PROOF_STANDARD.md](https://github.com/jasonxkensei/prove-before-act/blob/main/AGENT_PROOF_STANDARD.md)
 
-Standard API: `GET /api/standard` | `POST /api/standard/validate`
+Standard API: `GET /api/standard/spec` | `POST /api/standard/validate`
+
+Human-readable specification: `GET /standard` (HTML). The JSON specification is served separately at `/api/standard/spec`.
 
 ---
 
@@ -520,8 +551,10 @@ Standard API: `GET /api/standard` | `POST /api/standard/validate`
 | `GET /llms-full.txt` | Complete LLM reference |
 | `POST /mcp` | MCP JSON-RPC 2.0 endpoint |
 | `GET /mcp` | MCP capability discovery |
-| `GET /api/standard` | Agent Proof Standard specification |
-| `GET /api/acp/openapi.json` | OpenAPI 3.1 spec for the full REST surface |
+| `GET /api/standard/spec` | Agent Proof Standard specification (JSON) |
+| `GET /standard` | Human-readable Agent Proof Standard (HTML) |
+| `GET /api/acp/openapi.json` | Public OpenAPI 3.1 spec for the full REST surface |
+| `GET /api/acp/openapi-3.0.json` | Public OpenAPI 3.0.3 compatibility export |
 
 ---
 

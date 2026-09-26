@@ -10,6 +10,8 @@ import { computeDrift, DRIFT_MONITORED_FIELDS } from "./helpers";
 import { IRREVERSIBLE_CONFIDENCE_THRESHOLD, buildTimingBreakdown } from "../auditSchema";
 import { getTxExplorerUrl } from "../blockchain";
 import { CANONICAL_PUBLIC_ORIGIN } from "../publicOrigin";
+import { recordProofVerificationMilestone } from "../conversion-telemetry";
+import { publicProofStatus } from "../proof-finality";
 
 // Hard cap on rows materialized by any public metadata-keyed lookup. Public
 // integration endpoints filter `certifications.metadata` with JSONB extraction
@@ -34,6 +36,7 @@ export function registerProofReadRoutes(app: Express) {
   // hashes to map certified content or perform timing-based oracle attacks at no cost.
   app.get("/api/proof/check", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const hash = req.query.hash as string;
       if (!hash || !/^[a-f0-9]{64}$/i.test(hash)) {
         return res.status(400).json({ error: "Valid SHA-256 hash required" });
@@ -77,7 +80,13 @@ export function registerProofReadRoutes(app: Express) {
       // Reject non-UUID inputs immediately before touching the database.
       const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
       if (!id || !UUID_REGEX.test(id)) {
-        return res.status(400).json({ error: "Invalid proof id — expected UUID format" });
+        return res.status(400).json({
+          error: "INVALID_PROOF_ID",
+          message: "Invalid proof id — expected UUID format",
+          next_action: {
+            instruction: "Use proof_id or verify_url exactly as returned by POST /api/proof.",
+          },
+        });
       }
 
       const [certification] = await db
@@ -86,7 +95,13 @@ export function registerProofReadRoutes(app: Express) {
         .where(eq(certifications.id, id));
 
       if (!certification || !certification.isPublic) {
-        return res.status(404).json({ message: "Proof not found" });
+        return res.status(404).json({
+          error: "PROOF_NOT_FOUND",
+          message: "Proof not found",
+          next_action: {
+            instruction: "Check proof_id from the certification response and retry the returned verify_url.",
+          },
+        });
       }
 
       // Require the owning user to have a public profile — isPublic alone is insufficient.
@@ -104,6 +119,27 @@ export function registerProofReadRoutes(app: Express) {
         return res.status(404).json({ message: "Proof not found" });
       }
       const ownerWallet = owner.walletAddress;
+      const ordinalResult = await db.execute(sql`
+        SELECT proof_ordinal
+        FROM (
+          SELECT
+            id,
+            ROW_NUMBER() OVER (ORDER BY created_at ASC, id ASC)::int AS proof_ordinal
+          FROM certifications
+          WHERE user_id = ${certification.userId}
+            AND auth_method != 'onboarding'
+            AND blockchain_status = 'confirmed'
+            AND finality_checked_at IS NOT NULL
+            AND transaction_hash ~ '^[a-fA-F0-9]{64}$'
+        ) ranked
+        WHERE id = ${certification.id}
+      `);
+      const proofOrdinal = Number((ordinalResult.rows[0] as any)?.proof_ordinal ?? 0);
+      const status = publicProofStatus(certification);
+      const isConfirmed = status === "confirmed";
+      if (isConfirmed && (proofOrdinal === 1 || proofOrdinal === 2)) {
+        void recordProofVerificationMilestone(req, certification.id, proofOrdinal);
+      }
 
       // Return only explicitly public fields — never spread the full DB row.
       // Internal fields (userId, webhookUrl, webhookStatus, webhookAttempts,
@@ -122,7 +158,36 @@ export function registerProofReadRoutes(app: Express) {
         authorSignature: certification.authorSignature,
         transactionHash: certification.transactionHash,
         transactionUrl: getTxExplorerUrl(certification.transactionHash),
-        blockchainStatus: certification.blockchainStatus,
+        blockchainStatus: status,
+        verified: isConfirmed,
+        activation: !isConfirmed
+          ? {
+              stage: "awaiting_confirmation",
+              complete: false,
+              next_action: {
+                method: "GET",
+                url: `${CANONICAL_PUBLIC_ORIGIN}/api/proof/${certification.id}`,
+                instruction: status === "failed"
+                  ? "This proof failed to confirm and cannot complete activation. Create a new proof with a different hash."
+                  : "Wait for on-chain confirmation, then retry this URL.",
+              },
+            }
+          : proofOrdinal === 1
+            ? {
+                stage: "first_proof_verified",
+                complete: false,
+                next_action: {
+                  method: "POST",
+                  url: `${CANONICAL_PUBLIC_ORIGIN}/api/proof`,
+                  instruction: "Create proof #2 with a different locally computed SHA-256 hash, then open its verify_url.",
+                },
+              }
+            : proofOrdinal === 2
+              ? {
+                  stage: "external_agent_second_proof_verified",
+                  complete: true,
+                }
+              : undefined,
         certificateUrl: certification.certificateUrl,
         isPublic: certification.isPublic,
         metadata: certification.metadata,
@@ -137,6 +202,9 @@ export function registerProofReadRoutes(app: Express) {
 
   app.get("/api/proof/hash/:hash", publicReadRateLimiter, async (req, res) => {
     try {
+      // A profile can become private after this response is generated; never
+      // let a shared intermediary replay its visibility-gated proof metadata.
+      res.setHeader("Cache-Control", "private, no-store");
       const { hash } = req.params;
       if (!hash || !/^[a-f0-9]{64}$/i.test(hash)) {
         return res.status(400).json({ error: "Valid 64-char SHA-256 hash required" });
@@ -170,7 +238,7 @@ export function registerProofReadRoutes(app: Express) {
         proof_id: cert.id,
         file_hash: cert.fileHash,
         filename: cert.fileName,
-        status: cert.blockchainStatus,
+        status: publicProofStatus(cert),
         created_at: cert.createdAt,
         proof_url: `https://provebeforeact.com/proof/${cert.id}`,
         blockchain: {
@@ -188,6 +256,7 @@ export function registerProofReadRoutes(app: Express) {
 
   app.get("/api/confidence-trail/:decisionId", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { decisionId } = req.params;
       if (!decisionId || !DECISION_ID_REGEX.test(decisionId)) {
         return res.status(400).json({ error: "decision_id must match [A-Za-z0-9._:-]{1,128}" });
@@ -202,6 +271,7 @@ export function registerProofReadRoutes(app: Express) {
           transactionHash: certifications.transactionHash,
           transactionUrl: certifications.transactionUrl,
           blockchainStatus: certifications.blockchainStatus,
+          finalityCheckedAt: certifications.finalityCheckedAt,
           authorName: certifications.authorName,
           createdAt: certifications.createdAt,
         })
@@ -237,7 +307,7 @@ export function registerProofReadRoutes(app: Express) {
           blockchain: {
             transaction_hash: r.transactionHash,
             explorer_url: r.transactionUrl,
-            status: r.blockchainStatus,
+            status: publicProofStatus(r),
           },
           anchored_at: r.createdAt,
           timing_breakdown,
@@ -291,6 +361,7 @@ export function registerProofReadRoutes(app: Express) {
   // useful for agents that only care about compliance without fetching full trail.
   app.get("/api/proofs/policy-check", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const decisionId = req.query.decision_id as string | undefined;
       if (!decisionId || !DECISION_ID_REGEX.test(decisionId)) {
         return res.status(400).json({ error: "decision_id must match [A-Za-z0-9._:-]{1,128}" });
@@ -356,6 +427,7 @@ export function registerProofReadRoutes(app: Express) {
   // ── Context Drift Detection ──────────────────────────────────────────────
   app.get("/api/context-drift/:decisionId", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { decisionId } = req.params;
       if (!decisionId || !DECISION_ID_REGEX.test(decisionId)) {
         return res.status(400).json({ error: "decision_id must match [A-Za-z0-9._:-]{1,128}" });
@@ -430,6 +502,7 @@ export function registerProofReadRoutes(app: Express) {
 
   app.get("/api/artifact/trust/:hash", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { hash } = req.params;
       if (!hash || !/^[a-f0-9]{64}$/i.test(hash)) {
         return res.status(400).json({ error: "Valid 64-char SHA-256 hash required" });
@@ -462,7 +535,8 @@ export function registerProofReadRoutes(app: Express) {
       const agentWallet = artifactOwner.walletAddress;
       agentTrust = await computeTrustScoreByWallet(agentWallet);
 
-      const verified = cert.blockchainStatus === "confirmed";
+      const status = publicProofStatus(cert);
+      const verified = status === "confirmed";
       const agentVerified = agentTrust ? agentTrust.score >= 100 : false;
       let score = 0;
       if (verified) score++;
@@ -476,7 +550,7 @@ export function registerProofReadRoutes(app: Express) {
         proof_id: cert.id,
         file_hash: cert.fileHash,
         anchored_at: cert.createdAt,
-        blockchain_status: cert.blockchainStatus,
+        blockchain_status: status,
         agent_wallet: agentWallet,
         agent_trust: agentTrust ? {
           score: agentTrust.score,
@@ -495,6 +569,7 @@ export function registerProofReadRoutes(app: Express) {
   // Returns the full proof layer data for a given agent wallet, formatted for leaderboard enrichment
   app.get("/api/agentproof/:wallet", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { wallet } = req.params;
       if (!wallet || wallet.length < 10) {
         return res.status(400).json({ error: "Valid wallet address required" });
@@ -573,6 +648,7 @@ export function registerProofReadRoutes(app: Express) {
   // CapAuth maps: persistent PGP key → wallet; xProof maps: wallet → proof history + architectural transitions
   app.get("/api/skworld/:wallet", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { wallet } = req.params;
       if (!wallet || !MX_WALLET_REGEX.test(wallet)) {
         return res.status(400).json({ error: "Valid MultiversX wallet address required (erd1...)" });
@@ -610,6 +686,7 @@ export function registerProofReadRoutes(app: Express) {
           metadata: certifications.metadata,
           blockchainStatus: certifications.blockchainStatus,
           transactionHash: certifications.transactionHash,
+          finalityCheckedAt: certifications.finalityCheckedAt,
         })
         .from(certifications)
         .where(
@@ -642,7 +719,7 @@ export function registerProofReadRoutes(app: Express) {
             model_hash: mh,
             strategy_hash: sh,
             proof_id: cert.id,
-            anchored: cert.blockchainStatus === "confirmed",
+            anchored: publicProofStatus(cert) === "confirmed",
           });
           if (mh) modelHashes.push(mh);
           if (sh) stratHashes.push(sh);
@@ -747,6 +824,7 @@ export function registerProofReadRoutes(app: Express) {
   // Convergence response makes the 4W stack explicit: WHO (SIGIL) + WHAT/WHEN/WHY (xProof)
   app.get("/api/sigil/:public_key", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { public_key } = req.params;
       if (!public_key || !SIGIL_PUBKEY_REGEX.test(public_key)) {
         return res.status(400).json({ error: "Valid SIGIL public key required (10-128 chars, alphanumeric/_-)" });
@@ -789,6 +867,8 @@ export function registerProofReadRoutes(app: Express) {
           userId: certifications.userId,
           createdAt: certifications.createdAt,
           blockchainStatus: certifications.blockchainStatus,
+          transactionHash: certifications.transactionHash,
+          finalityCheckedAt: certifications.finalityCheckedAt,
           metadata: certifications.metadata,
         })
         .from(certifications)
@@ -908,6 +988,7 @@ export function registerProofReadRoutes(app: Express) {
   // Link identities: certify with metadata.bnb_wallet = <0x_address> on MultiversX side.
   app.get("/api/bnb/:address", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { address } = req.params;
       const bnbAddressRegex = /^0x[0-9a-fA-F]{40}$/;
       if (!address || !bnbAddressRegex.test(address)) {
@@ -928,6 +1009,8 @@ export function registerProofReadRoutes(app: Express) {
           userId: certifications.userId,
           createdAt: certifications.createdAt,
           blockchainStatus: certifications.blockchainStatus,
+          transactionHash: certifications.transactionHash,
+          finalityCheckedAt: certifications.finalityCheckedAt,
           metadata: certifications.metadata,
         })
         .from(certifications)
@@ -959,7 +1042,7 @@ export function registerProofReadRoutes(app: Express) {
       }
 
       // Certs confirmed on MultiversX
-      const confirmedOnChain = linkedCerts.filter(c => c.blockchainStatus === "confirmed").length;
+      const confirmedOnChain = linkedCerts.filter(c => publicProofStatus(c) === "confirmed").length;
       const firstLinkedAt = linkedCerts[0]?.createdAt?.toISOString() ?? null;
       const lastLinkedAt = linkedCerts.at(-1)?.createdAt?.toISOString() ?? null;
 
@@ -1030,6 +1113,7 @@ export function registerProofReadRoutes(app: Express) {
   // Returns onboarding status, activity tiers, and quick-action links useful at bot startup.
   app.get("/api/moltbot/:wallet", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { wallet } = req.params;
       if (!wallet || wallet.length < 10) {
         return res.status(400).json({ error: "Valid MultiversX wallet address required" });
@@ -1145,6 +1229,7 @@ export function registerProofReadRoutes(app: Express) {
   //   metadata.eliza_character_name, metadata.eliza_session_id, metadata.eliza_runtime.
   app.get("/api/eliza/:identifier", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { identifier } = req.params;
       if (!identifier || identifier.length > 128) {
         return res.status(400).json({
@@ -1377,6 +1462,7 @@ export function registerProofReadRoutes(app: Express) {
   //   metadata.xai_model, metadata.xai_session_id, metadata.action_type.
   app.get("/api/xai/:identifier", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { identifier } = req.params;
       const isWallet = MX_WALLET_REGEX.test(identifier);
       const isAgentId = PARTNER_AGENT_ID_REGEX.test(identifier);
@@ -1582,6 +1668,7 @@ export function registerProofReadRoutes(app: Express) {
   // Link: certify with metadata.mpp_payment_intent_id = <pi_xxx> before or after payment.
   app.get("/api/mpp/:payment_intent_id", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const { payment_intent_id } = req.params;
       if (!payment_intent_id || !PAYMENT_INTENT_REGEX.test(payment_intent_id)) {
         return res.status(400).json({
@@ -1599,6 +1686,8 @@ export function registerProofReadRoutes(app: Express) {
           userId: certifications.userId,
           createdAt: certifications.createdAt,
           blockchainStatus: certifications.blockchainStatus,
+          transactionHash: certifications.transactionHash,
+          finalityCheckedAt: certifications.finalityCheckedAt,
           metadata: certifications.metadata,
         })
         .from(certifications)
@@ -1629,7 +1718,7 @@ export function registerProofReadRoutes(app: Express) {
         }
       }
 
-      const confirmedOnChain = linkedCerts.filter(c => c.blockchainStatus === "confirmed").length;
+      const confirmedOnChain = linkedCerts.filter(c => publicProofStatus(c) === "confirmed").length;
       const firstLinkedAt = linkedCerts[0]?.createdAt?.toISOString() ?? null;
       const lastLinkedAt = linkedCerts.at(-1)?.createdAt?.toISOString() ?? null;
 
@@ -1710,6 +1799,7 @@ export function registerProofReadRoutes(app: Express) {
 
   app.get("/api/proofs/status", publicReadRateLimiter, async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "private, no-store");
       const idsParam = req.query.ids;
       if (!idsParam || typeof idsParam !== "string") {
         return res.status(400).json({ error: "Missing required query parameter: ids (comma-separated proof UUIDs)" });
@@ -1736,6 +1826,7 @@ export function registerProofReadRoutes(app: Express) {
           file_hash: certifications.fileHash,
           filename: certifications.fileName,
           blockchain_status: certifications.blockchainStatus,
+          finality_checked_at: certifications.finalityCheckedAt,
           transaction_hash: certifications.transactionHash,
           transaction_url: certifications.transactionUrl,
           certified_at: certifications.createdAt,
@@ -1755,6 +1846,12 @@ export function registerProofReadRoutes(app: Express) {
         if (!r) return { proof_id: id, status: "not_found", file_hash: null, filename: null, blockchain_status: null, transaction_hash: null, transaction_url: null, certified_at: null, verify_url: null };
         return {
           ...r,
+          blockchain_status: publicProofStatus({
+            blockchainStatus: r.blockchain_status,
+            transactionHash: r.transaction_hash,
+            finalityCheckedAt: r.finality_checked_at,
+          }),
+          finality_checked_at: undefined,
           status: "found",
           verify_url: `${baseUrl}/verify/${r.proof_id}`,
         };
@@ -1809,8 +1906,8 @@ export function registerProofReadRoutes(app: Express) {
         return res.status(404).json({ message: "Certificate not found" });
       }
 
-      if (certification.blockchainStatus === "pending") {
-        return res.status(402).json({ message: "Certificate not yet available — payment is still pending blockchain confirmation" });
+      if (publicProofStatus(certification) !== "confirmed") {
+        return res.status(402).json({ message: "Certificate not yet available — blockchain finality has not been verified" });
       }
 
       // Enforce the same profile-visibility gate as /api/proof/:id and

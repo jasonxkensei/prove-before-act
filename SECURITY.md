@@ -67,12 +67,10 @@ The following vulnerabilities are currently unresolved due to upstream blockers.
 
 | CVE / Advisory | Package | Severity | Blocker | Owner | Next Review |
 |---|---|---|---|---|---|
-| GHSA-wj6h-64fc-37mp | `ecdsa@0.19.2` (Python) | High | 0.19.2 is the latest PyPI release; no upstream fix published | Security team | 2026-07-22 |
 | GHSA-4w7w-66w2-5vf9 (×2) | `vite@5.4.21` | Medium | Fix requires Vite 8.x — major breaking change affecting build pipeline and all Vite plugins | Platform team | 2026-07-22 |
 | GHSA-67mh-4wv8-2f99 | `esbuild@0.18.20` (via `@esbuild-kit/core-utils` in drizzle-kit) | Medium | `@esbuild-kit/core-utils` is an archived package used internally by drizzle-kit; upgrade path requires drizzle-kit to cut a new release or Vite 8 migration | Platform team | 2026-07-22 |
 | GHSA-67mh-4wv8-2f99 (×2) | `esbuild@0.21.5` (via Vite 5 internal) | Medium | Same root cause as Vite advisory above; both esbuild entries clear when Vite 8 migration is completed | Platform team | 2026-07-22 |
 
 **Action items:**
-- Monitor [`ecdsa` PyPI releases](https://pypi.org/project/ecdsa/#history) and apply fix immediately when available.
-- Track [Vite 8 migration guide](https://vitejs.dev) and plan breaking-change upgrade (clears 4 of the 6 blocked advisories in one go).
-- Re-evaluate all 6 entries at next scheduled security review (2026-07-22).
+- Track [Vite 8 migration guide](https://vitejs.dev) and plan breaking-change upgrade (clears 4 of the 5 blocked advisories in one go).
+- Re-evaluate all 5 entries at next scheduled security review (2026-07-22).

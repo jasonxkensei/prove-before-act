@@ -6,6 +6,7 @@ import {
 import { recordTransaction } from "./metrics";
 import { logger } from "./logger";
 import { claimNextNonce, resyncNonceFromChain } from "./nonce";
+import crypto from "crypto";
 
 // MultiversX configuration from environment
 const PRIVATE_KEY = process.env.MULTIVERSX_PRIVATE_KEY;
@@ -119,6 +120,46 @@ export class BlockchainValidationError extends Error {
   }
 }
 
+export type BlockchainRecordResult = {
+  transactionHash: string;
+  transactionUrl: string;
+  latencyMs?: number;
+};
+
+type BlockchainAdapter = (
+  fileHash: string,
+  filename?: string,
+  author?: string,
+) => Promise<BlockchainRecordResult>;
+
+let testBlockchainAdapter: BlockchainAdapter | null = null;
+
+/**
+ * Test-only injection point for exercising authenticated proof writes without
+ * signing or broadcasting a transaction. Refuse to enable it outside Vitest so
+ * development and production can never accidentally persist synthetic hashes.
+ */
+export function setTestBlockchainAdapter(adapter: BlockchainAdapter | null): void {
+  if (process.env.NODE_ENV !== "test") {
+    throw new Error("The test blockchain adapter is only available when NODE_ENV=test");
+  }
+  testBlockchainAdapter = adapter;
+}
+
+export function createDeterministicTestBlockchainAdapter(): BlockchainAdapter {
+  return async (fileHash, filename, author) => {
+    const transactionHash = crypto
+      .createHash("sha256")
+      .update(JSON.stringify({ fileHash, filename: filename ?? null, author: author ?? null }))
+      .digest("hex");
+    return {
+      transactionHash,
+      transactionUrl: `https://explorer.multiversx.com/transactions/${transactionHash}`,
+      latencyMs: 0,
+    };
+  };
+}
+
 /**
  * Record a file hash on the MultiversX blockchain
  * Creates a transaction with format: "certify:<hash>|filename:<name>|author:<author>"
@@ -127,11 +168,10 @@ export async function recordOnBlockchain(
   fileHash: string,
   filename?: string,
   author?: string
-): Promise<{
-  transactionHash: string;
-  transactionUrl: string;
-  latencyMs?: number;
-}> {
+): Promise<BlockchainRecordResult> {
+  if (testBlockchainAdapter) {
+    return testBlockchainAdapter(fileHash, filename, author);
+  }
   // Fail-closed in production: if the MultiversX signer is missing or
   // misconfigured, refuse to fabricate a simulated transaction. Returning a
   // sim_<...> hash to a paid /api/proof, /api/batch, or MCP certify_* caller

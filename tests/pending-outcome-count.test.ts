@@ -254,9 +254,9 @@ async function getCalibration(agentId: string): Promise<{
 // ─── 1. Single submission ─────────────────────────────────────────────────────
 
 describe("pending_outcome_count — single submission", () => {
-  it("decrements by 1 after submitting one outcome", async () => {
+  it("stores the four-decimal signed confidence gap and rejects a duplicate outcome", async () => {
     // Create two pending certs (beforeEach guarantees a clean DB: count = 2).
-    const certA = await insertPendingCert(0.8);
+    const certA = await insertPendingCert(0.8765);
     await insertPendingCert(0.6); // certB — left pending to confirm only certA decrements
 
     // Baseline — cache was busted in beforeEach, so this hits the DB.
@@ -264,8 +264,21 @@ describe("pending_outcome_count — single submission", () => {
     expect(before.pending_outcome_count).toBe(2);
 
     // Submit outcome for certA only.
-    const postRes = await submitOutcome(certA, 0.7);
+    const postRes = await submitOutcome(certA, 0.1234);
     expect(postRes.status, "POST /api/agent/outcome must return 201").toBe(201);
+    const outcome = await postRes.json();
+    // confidence_gap is anchored_confidence - outcome_score, not an absolute
+    // error or the inverse; it is rounded to four decimal places.
+    expect(outcome.anchored_confidence).toBe(0.8765);
+    expect(outcome.outcome_score).toBe(0.1234);
+    expect(outcome.confidence_gap).toBe(0.7531);
+    expect(outcome.bias_hint).toBe("overconfident");
+
+    // One outcome is allowed per proof even when the submission is otherwise
+    // valid and made by the same authenticated owner.
+    const duplicateRes = await submitOutcome(certA, 0.9);
+    expect(duplicateRes.status).toBe(409);
+    expect((await duplicateRes.json()).error).toBe("OUTCOME_ALREADY_SUBMITTED");
 
     // Immediately re-fetch — POST handler busts the cache, so the GET must
     // reflect the updated count right away (not after the 30-second TTL).

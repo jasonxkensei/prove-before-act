@@ -1,11 +1,11 @@
 {
   "name": "Prove Before Act",
   "short_name": "Prove Before Act",
-  "description": "The on-chain notary for AI agents. Verifiable trust, anchored on MultiversX.",
+  "description": "The accountability pattern for autonomous agents. Commit before execution, then verify the outcome independently.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0a0a0a",
-  "theme_color": "#10b981",
+  "background_color": "#0D1117",
+  "theme_color": "#00FF9D",
   "icons": [
     {
       "src": "/icon-192.png",
