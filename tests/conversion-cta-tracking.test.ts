@@ -18,7 +18,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import fs from "fs";
 import path from "path";
-import { trackAgentCta } from "../client/src/lib/conversionTracking";
+import { ensureConversionVisitor, trackAgentCta } from "../client/src/lib/conversionTracking";
 
 // ── Test doubles ─────────────────────────────────────────────────────────────
 
@@ -31,10 +31,12 @@ class MockSessionStorage {
 }
 
 let beaconCalls: Array<{ url: string; body: Blob }>;
+let pagehideHandler: (() => void) | undefined;
 
 beforeEach(() => {
   beaconCalls = [];
   vi.stubGlobal("sessionStorage", new MockSessionStorage());
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
   vi.stubGlobal("navigator", {
     sendBeacon: (url: string, body: Blob) => {
       beaconCalls.push({ url, body });
@@ -55,8 +57,30 @@ async function beaconJson(call: { url: string; body: Blob }): Promise<Record<str
 
 describe("trackAgentCta", () => {
   it("sends a cta_seen event with the exact page/cta payload", async () => {
+    let resolveBootstrap!: (response: Response) => void;
+    pagehideHandler = undefined;
+    vi.stubGlobal("window", {
+      location: { search: "" },
+      addEventListener: (_event: string, handler: () => void) => {
+        pagehideHandler = handler;
+      },
+    });
+    const bootstrapFetch = vi.fn(() => new Promise<Response>((resolve) => {
+      resolveBootstrap = resolve;
+    }));
+    vi.stubGlobal("fetch", bootstrapFetch);
+
     trackAgentCta("cta_seen", "landing", "trial_register");
 
+    // The initial CTA waits for the HttpOnly visitor-cookie setup so it can
+    // join the visitor's later registration/proof events.
+    expect(beaconCalls).toHaveLength(0);
+    expect(bootstrapFetch).toHaveBeenCalledWith("/api/conversion-visitor", expect.objectContaining({
+      credentials: "same-origin",
+      keepalive: true,
+    }));
+    resolveBootstrap(new Response(null, { status: 204 }));
+    await ensureConversionVisitor();
     expect(beaconCalls).toHaveLength(1);
     expect(beaconCalls[0].url).toBe("/api/conversion-events");
     expect(await beaconJson(beaconCalls[0])).toEqual({
@@ -66,23 +90,40 @@ describe("trackAgentCta", () => {
     });
   });
 
-  it("deduplicates cta_seen per session per CTA", () => {
+  it("flushes a pending CTA on navigation without sending it twice", async () => {
+    trackAgentCta("cta_clicked", "landing", "hero_free_trial");
+    expect(beaconCalls).toHaveLength(0);
+
+    pagehideHandler?.();
+    expect(beaconCalls).toHaveLength(1);
+    await ensureConversionVisitor();
+    await Promise.resolve();
+    expect(beaconCalls).toHaveLength(1);
+  });
+
+  it("deduplicates cta_seen per session per CTA", async () => {
     trackAgentCta("cta_seen", "landing", "trial_register");
     trackAgentCta("cta_seen", "landing", "trial_register");
+    await ensureConversionVisitor();
+    await Promise.resolve();
     expect(beaconCalls).toHaveLength(1);
 
     // A different CTA on the same page is a separate exposure.
     trackAgentCta("cta_seen", "landing", "hero_free_trial");
+    await Promise.resolve();
     expect(beaconCalls).toHaveLength(2);
 
     // Same CTA on a different page is also separate.
     trackAgentCta("cta_seen", "landing_zh", "trial_register");
+    await Promise.resolve();
     expect(beaconCalls).toHaveLength(3);
   });
 
   it("never deduplicates cta_clicked", async () => {
     trackAgentCta("cta_clicked", "landing", "trial_register");
     trackAgentCta("cta_clicked", "landing", "trial_register");
+    await ensureConversionVisitor();
+    await Promise.resolve();
     expect(beaconCalls).toHaveLength(2);
     expect(await beaconJson(beaconCalls[1])).toEqual({
       event: "cta_clicked",
@@ -91,7 +132,7 @@ describe("trackAgentCta", () => {
     });
   });
 
-  it("forwards only the privacy-safe UTM source with the CTA event", () => {
+  it("forwards only the privacy-safe UTM source with the CTA event", async () => {
     vi.stubGlobal("window", {
       location: {
         search: "?utm_source=product%20hunt&utm_medium=social&email=private%40example.com",
@@ -100,6 +141,8 @@ describe("trackAgentCta", () => {
 
     trackAgentCta("cta_clicked", "landing", "hero_free_trial");
 
+    await ensureConversionVisitor();
+    await Promise.resolve();
     expect(beaconCalls).toHaveLength(1);
     expect(beaconCalls[0].url).toBe(
       "/api/conversion-events?utm_source=product+hunt",
@@ -115,6 +158,8 @@ describe("trackAgentCta", () => {
 
     trackAgentCta("cta_clicked", "leaderboard", "leaderboard_register");
 
+    await ensureConversionVisitor();
+    await Promise.resolve();
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const [url, init] = fetchSpy.mock.calls[0];
     expect(url).toBe("/api/conversion-events");
@@ -134,6 +179,8 @@ describe("trackAgentCta", () => {
 
     trackAgentCta("cta_clicked", "leaderboard", "leaderboard_register");
 
+    await ensureConversionVisitor();
+    await Promise.resolve();
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const [url, init] = fetchSpy.mock.calls[0];
     expect(url).toBe("/api/conversion-events");

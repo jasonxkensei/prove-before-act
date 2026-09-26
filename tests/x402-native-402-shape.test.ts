@@ -56,11 +56,13 @@ const {
   mockCheckRateLimit3i,
   mockDbWhere3i,
   mockGetUserCreditBalance3j,
+  mockResolveAgentForApiKey3i,
 } = vi.hoisted(() => ({
   mockAtomicConsumeTrialCredit3i: vi.fn(),
   mockGetTrialUser3i:             vi.fn(),
   mockCheckRateLimit3i:           vi.fn(),
   mockDbWhere3i:                  vi.fn(),
+  mockResolveAgentForApiKey3i:    vi.fn().mockResolvedValue({ id: "test-agent" }),
   // Part 3j: controls getUserCreditBalance so creditInfo is populated for the
   // INSUFFICIENT_CREDITS branch (getTrialUser returns null → credit path).
   mockGetUserCreditBalance3j:     vi.fn().mockResolvedValue(0),
@@ -110,6 +112,12 @@ vi.mock("../server/db.js", () => ({
     }),
   },
   pool: {},
+}));
+
+// Keep API-key route tests focused on payment behavior; logical-agent resolution
+// has its own persistence tests and needs a richer DB fixture than these routes.
+vi.mock("../server/agent-identity.js", () => ({
+  resolveAgentForApiKey: mockResolveAgentForApiKey3i,
 }));
 
 // Mock blockchain so isMultiversXConfigured() can be controlled per-test.

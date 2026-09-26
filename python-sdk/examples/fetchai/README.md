@@ -31,6 +31,8 @@ The example uses a mock client — no live API key or MultiversX node required.
 ## Real usage
 
 ```python
+# `xproof` is the legacy module compatibility alias in the canonical
+# prove-before-act distribution.
 from xproof import XProofClient
 from xproof.integrations.fetchai import XProofuAgentMiddleware
 

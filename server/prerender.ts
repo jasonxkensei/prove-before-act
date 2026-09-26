@@ -156,7 +156,7 @@ function renderPublicHeader(baseUrl: string, { paper = false, locale = "en" }: {
   return `<header class="public-site-header${paper ? " public-site-header--paper" : ""}" data-brand-surface="${paper ? "paper" : "dark"}" data-brand-logo="${paper ? "light" : "dark"}" data-brand-fonts="Inter|DM Mono" data-brand-palette="anchor">
   <div class="public-site-header-inner">
     <a class="public-site-brand" href="${escapeHtml(baseUrl)}">
-      <img src="${escapeHtml(publicHref(baseUrl, paper ? "/pba-logo-on-light.png" : "/pba-logo.png"))}" alt="${PUBLIC_SITE_NAME}" />
+      <img src="${escapeHtml(publicHref(baseUrl, paper ? "/pba-logo-on-light.svg" : "/pba-logo.svg"))}" alt="${PUBLIC_SITE_NAME}" />
     </a>
     <nav class="public-site-nav" aria-label="${locale === "zh" ? PUBLIC_SITE_ZH.primaryNavigation : "Primary navigation"}">
       ${primaryLinks}
@@ -190,7 +190,7 @@ function renderPublicFooter(baseUrl: string, { paper = false, locale = "en" }: {
   <div class="public-site-footer-inner">
     <div class="public-site-footer-grid">
       <div class="public-site-footer-about">
-        <a href="${escapeHtml(baseUrl)}"><img src="${escapeHtml(publicHref(baseUrl, paper ? "/pba-logo-on-light.png" : "/pba-logo.png"))}" alt="${PUBLIC_SITE_NAME}" /></a>
+        <a href="${escapeHtml(baseUrl)}"><img src="${escapeHtml(publicHref(baseUrl, paper ? "/pba-logo-on-light.svg" : "/pba-logo.svg"))}" alt="${PUBLIC_SITE_NAME}" /></a>
         <p>${locale === "zh" ? PUBLIC_SITE_ZH.tagline : "The accountability pattern for agents that act in the world."}</p>
       </div>
       ${columns}
@@ -396,6 +396,7 @@ ${renderPublicHeader(baseUrl)}
     <p><a href="${baseUrl}/#free-trial"><strong>Integrate your agent</strong></a> — 10 free proofs, no wallet, no credit card. Or <a href="${baseUrl}/#verify-proof"><strong>verify a public proof</strong></a> without an account.</p>
     <p><a href="${baseUrl}/demo">Explore the controlled demo</a> if you prefer a walkthrough.</p>
     <p>Prove Before Act is the public accountability pattern. xProof is the reference implementation. Current live rate after the free proofs: $${priceUsd.toFixed(2)} per certification — <a href="${baseUrl}/api/pricing">see /api/pricing</a>.</p>
+    <p>Connect an agent with the <a href="${baseUrl}/mcp">MCP Server</a>; inspect <a href="${baseUrl}/.well-known/mcp.json">MCP discovery</a> or start with the <a href="${baseUrl}/agents">agent integration guide</a>.</p>
     <a href="${baseUrl}/learn">See the 60-second overview</a>
     <a href="${baseUrl}/standard">Inspect the standard</a>
   </section>

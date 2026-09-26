@@ -1450,6 +1450,9 @@ POST /api/proof + X-PAYMENT: <signed> → 200 {"proof_id": "..."}`}
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </a>
               </Button>
+              <p className="mt-4 text-sm text-muted-foreground">
+                Need the protocol endpoint? <a href="/mcp" className="text-primary underline-offset-4 hover:underline">MCP Server</a>
+              </p>
             </div>
           </div>
         </div>

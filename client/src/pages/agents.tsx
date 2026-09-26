@@ -218,6 +218,9 @@ export default function AgentsPage() {
               Use Certify a file.
             </a>
           </p>
+          <p className="mt-3 text-sm text-muted-foreground">
+            Connect through the <a href="/mcp" className="font-medium text-primary underline-offset-4 hover:underline">MCP Server</a> or use another integration below.
+          </p>
         </div>
       </section>
        <section className="border-y border-border/70 bg-card/30 py-16 md:py-24">

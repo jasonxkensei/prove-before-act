@@ -169,7 +169,7 @@ export default function FleetPage() {
       >
         <div className="container flex h-16 items-center justify-between gap-3 px-4">
           <Link href="/" data-testid="link-logo-home" className="flex items-center gap-2">
-            <img src="/pba-logo.png" alt="Prove Before Act" className="h-8 w-auto" />
+            <img src="/pba-logo.svg" alt="Prove Before Act" className="h-8 w-auto" />
           </Link>
           <nav className="flex min-w-0 items-center gap-1 sm:gap-4" aria-label="Fleet navigation">
             <Button asChild variant="ghost" size="sm" className="text-muted-foreground hover:bg-muted hover:text-foreground" data-testid="link-nav-coherence">

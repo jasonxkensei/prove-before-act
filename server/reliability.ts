@@ -432,21 +432,14 @@ export async function healthCheck(_req: Request, res: Response) {
         const LOW_EGLD_WARN = MX8004_LOW_BALANCE_EGLD;
         const LOW_EGLD_CRIT = Math.min(0.1, LOW_EGLD_WARN / 2);
         const balStatus = balanceEgld < LOW_EGLD_CRIT ? "critical_low_balance" : balanceEgld < LOW_EGLD_WARN ? "low_balance" : "ok";
-        checks.signer_balance = {
-          status: balStatus,
-          details: {
-            address: signerAddress,
-            balance_egld: Math.round(balanceEgld * 1e6) / 1e6,
-            balance_raw: balData.balance ?? "0",
-            nonce: balData.nonce ?? 0,
-            warning: balStatus !== "ok" ? `Signer wallet low on EGLD — certifications will fail below ~0.0001 EGLD. Top up: ${signerAddress}` : undefined,
-          },
-        };
+        // /api/health is public. Keep the operational signal, but never expose
+        // signer identifiers, balances, nonce, or wallet-specific advice here.
+        checks.signer_balance = { status: balStatus };
       } else {
-        checks.signer_balance = { status: "unknown", details: { address: signerAddress, error: `API returned ${balResp.status}` } };
+        checks.signer_balance = { status: "unknown" };
       }
-    } catch (e) {
-      checks.signer_balance = { status: "unknown", details: { address: signerAddress, error: e instanceof Error ? e.message : "fetch failed" } };
+    } catch {
+      checks.signer_balance = { status: "unknown" };
     }
   }
 

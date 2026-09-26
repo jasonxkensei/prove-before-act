@@ -143,7 +143,7 @@ export async function createMcpServer(ctx: McpContext) {
           const suggested = `${name}-${crypto.randomBytes(3).toString("hex")}`;
           return { content: [{ type: "text" as const, text: JSON.stringify({
             error: "DUPLICATE_AGENT_NAME",
-            message: `An agent named "${name}" already exists.`,
+            message: `An agent named "${name}" already exists. Try a different name (e.g. "${suggested}").`,
             next_action: {
               tool: "register_trial",
               arguments: { agent_name: suggested },

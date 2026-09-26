@@ -45,16 +45,38 @@ beforeAll(async () => {
   // Without at least one cert the base score is 0 and a negative penalty
   // would be clamped to 0 by Math.max(0, ...), masking whether the penalty
   // was actually applied.
+  const fileHash = crypto.randomBytes(32).toString("hex");
+  const transactionHash = crypto.randomBytes(32).toString("hex");
+  const finalityEvidence = {
+    source: "multiversx-transaction-api",
+    apiUrl: "https://api.multiversx.com",
+    chainId: "1",
+    checkedAt: new Date().toISOString(),
+    transactionHash,
+    returnedTransactionHash: transactionHash,
+    transactionStatus: "success",
+    round: 123,
+    blockNonce: 456,
+    blockHash: null,
+    miniblockHash: null,
+    expectedFileHash: fileHash,
+    payload: `certify:${fileHash}`,
+    payloadMatches: true,
+    payloadValidation: "matched",
+  };
   const certRow = await pool.query<{ id: string }>(
     `INSERT INTO certifications
        (user_id, file_name, file_hash, file_type, author_name,
-        blockchain_status, is_public, auth_method)
+        blockchain_status, transaction_hash, finality_checked_at,
+        finality_evidence, is_public, auth_method)
      VALUES ($1, 'test.txt', $2, 'txt', 'Test Agent',
-             'confirmed', TRUE, 'api_key')
+             'confirmed', $3, NOW(), $4::jsonb, TRUE, 'api_key')
      RETURNING id`,
     [
       userId,
-      crypto.randomBytes(32).toString("hex"), // unique hash
+      fileHash,
+      transactionHash,
+      JSON.stringify(finalityEvidence),
     ],
   );
   certId = certRow.rows[0].id;

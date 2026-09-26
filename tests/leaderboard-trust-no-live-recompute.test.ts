@@ -228,10 +228,15 @@ describe("computeTrustScoreByWallet() never live-recomputes on a cold cache", ()
     expect(trust!.activeAttestations).toBe(IMPOSSIBLE_ACTIVE_ATTESTATIONS);
   });
 
-  it("serves the same snapshot from the in-memory cache on a subsequent call without re-reading the DB value", async () => {
-    // First call (cache now warm from the previous test, or re-warm here).
+  it("invalidates the in-memory cache when another instance changes the snapshot revision", async () => {
+    _resetTrustCacheForTesting(TRUST_WALLET);
     const first = await computeTrustScoreByWallet(TRUST_WALLET);
     expect(first!.score).toBe(IMPOSSIBLE_SCORE);
+
+    const initialRevision = await pool.query<{ revision: string }>(
+      `SELECT xmin::text AS revision FROM trust_score_snapshots WHERE wallet_address = $1`,
+      [TRUST_WALLET],
+    );
 
     // Mutate the underlying snapshot row directly in the DB.
     await pool.query(
@@ -240,10 +245,16 @@ describe("computeTrustScoreByWallet() never live-recomputes on a cold cache", ()
       [TRUST_WALLET],
     );
 
-    // A cache hit must keep serving the OLD in-memory value — proving reads
-    // are served from cache, not re-derived per request.
+    const updatedRevision = await pool.query<{ revision: string }>(
+      `SELECT xmin::text AS revision FROM trust_score_snapshots WHERE wallet_address = $1`,
+      [TRUST_WALLET],
+    );
+    expect(updatedRevision.rows[0].revision).not.toBe(initialRevision.rows[0].revision);
+
+    // The old cache entry belongs to a different database row version, so
+    // this read must load the updated precomputed snapshot.
     const second = await computeTrustScoreByWallet(TRUST_WALLET);
-    expect(second!.score).toBe(IMPOSSIBLE_SCORE);
+    expect(second!.score).toBe(1);
 
     // Restore for cleanliness / other assertions.
     await pool.query(
@@ -315,10 +326,17 @@ describe("computeTrustScoreByWallet() snapshots a newly visible public wallet", 
       const score = await computeTrustScoreByWallet(READ_THROUGH_WALLET);
       expect(score).not.toBeNull();
       expect(score!.certTotal).toBe(1);
+      const insertAttempts = () => querySpy.mock.calls.filter(([text]) =>
+        String(text).includes("INSERT INTO trust_score_snapshots"),
+      );
+      expect(insertAttempts()).toHaveLength(1);
+      // A failed write leaves no revision to validate, so the next public
+      // request may recompute, but each request makes only one bounded write
+      // attempt rather than retrying the write in a loop.
       expect(await computeTrustScoreByWallet(READ_THROUGH_WALLET)).toEqual(score);
-      expect(querySpy.mock.calls.filter(([text]) => String(text).includes("INSERT INTO trust_score_snapshots"))).toHaveLength(1);
+      expect(insertAttempts()).toHaveLength(2);
       expect(getTrustSnapshotWriteHealth()).toMatchObject({
-        recent_failures: 1,
+        recent_failures: 2,
         last_database_error: "PostgreSQL 08006: database connection failure",
       });
       expect(JSON.stringify(getTrustSnapshotWriteHealth())).not.toContain("private database detail");

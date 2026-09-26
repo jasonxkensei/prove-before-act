@@ -9,8 +9,12 @@ const adminPage = fs.readFileSync(
 
 describe("admin statistics refresh behavior", () => {
   it("does not configure time-based polling on the stats page", () => {
-    expect(adminPage).not.toContain("refetchInterval:");
-    expect(adminPage).not.toContain("auto-refreshes every");
+    const start = adminPage.indexOf("useQuery<AdminStats>({");
+    const end = adminPage.indexOf("});", start);
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    expect(adminPage.slice(start, end)).not.toContain("refetchInterval:");
+    expect(adminPage.toLowerCase()).not.toContain("auto-refreshes every");
   });
 
   it("does not show a manual refresh control on the stats page", () => {

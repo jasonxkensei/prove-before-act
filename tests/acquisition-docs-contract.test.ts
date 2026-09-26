@@ -22,6 +22,10 @@ describe("acquisition documentation contract", () => {
       "server/x402.ts",
       "client/src/pages/landing.tsx",
       "client/src/pages/landing-zh.tsx",
+      "clawhub-publish/xproof/SKILL.md",
+      "clawhub-publish/xproof/references/api-reference.md",
+      "clawhub-publish-v140/xproof/SKILL.md",
+      "clawhub-publish-v140/xproof/references/api-reference.md",
     ];
 
     expect(implementation).toMatch(/Maximum 50 files per batch/);
@@ -29,8 +33,37 @@ describe("acquisition documentation contract", () => {
     for (const source of publicSources) {
       const contents = read(source);
       expect(contents, source).not.toMatch(
-        /up to 100 (?:files|actions|decisions)|最多 ?100|最多100个文件|100条\/次|单次提交100|100个哈希/,
+        /up to 100 (?:files|items|actions|decisions)|最多 ?100|最多100个文件|100条\/次|单次提交100|100个哈希/,
       );
+    }
+  });
+
+  it("documents the real standard JSON endpoint separately from the HTML page", () => {
+    const distributedDocs = [
+      "clawhub-publish/xproof/SKILL.md",
+      "clawhub-publish/xproof/references/api-reference.md",
+      "clawhub-publish-v140/xproof/SKILL.md",
+      "clawhub-publish-v140/xproof/references/api-reference.md",
+    ];
+
+    for (const source of distributedDocs) {
+      const contents = read(source);
+      expect(contents, source).toContain("/api/standard/spec");
+      expect(contents, source).toContain("/api/standard/validate");
+      expect(contents, source).toMatch(/\/standard.*HTML|HTML.*\/standard/);
+      expect(contents, source).not.toMatch(/GET\s+[`]?\/api\/standard(?:[`]|[ \t|])/);
+      expect(contents, source).not.toMatch(/GET\s+[`]?\/api\/standard\/validate/);
+    }
+  });
+
+  it("keeps both distributed skill versions aligned with the 50-file batch cap", () => {
+    for (const source of [
+      "clawhub-publish/xproof/SKILL.md",
+      "clawhub-publish/xproof/references/api-reference.md",
+      "clawhub-publish-v140/xproof/SKILL.md",
+      "clawhub-publish-v140/xproof/references/api-reference.md",
+    ]) {
+      expect(read(source), source).toMatch(/up to 50 (?:files|items)/i);
     }
   });
 

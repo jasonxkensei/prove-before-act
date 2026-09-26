@@ -1798,7 +1798,7 @@ export default function AdminDashboard() {
 
             <div className="flex flex-col items-center gap-2 border-t border-border pt-5">
               <p className="text-xs text-muted-foreground">
-                Last updated: {new Date(stats.generated_at).toLocaleString()} — Auto-refreshes every 30s
+                Last updated: {new Date(stats.generated_at).toLocaleString()}
               </p>
             </div>
           </>

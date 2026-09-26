@@ -773,11 +773,19 @@ Status values: `pending`, `confirmed`, `expired`, `failed`.
 
 ### GET /api/acp/openapi.json
 
-OpenAPI 3.0 specification for the ACP endpoints. Can be used directly with GPT Actions, LangChain OpenAPI chains, and other tools that consume OpenAPI specs.
+OpenAPI 3.1 specification for the ACP endpoints and outbound proof-certified webhooks.
 
 **Auth:** None (public)
 
-**Response:** OpenAPI 3.0 JSON document
+**Response:** OpenAPI 3.1 JSON document
+
+### GET /api/acp/openapi-3.0.json
+
+OpenAPI 3.0.3 compatibility export for tools and generators that do not support OpenAPI 3.1. It is derived from the canonical 3.1 document.
+
+**Auth:** None (public)
+
+**Response:** OpenAPI 3.0.3 JSON document
 
 ---
 

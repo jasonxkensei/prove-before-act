@@ -54,18 +54,25 @@ async function insertCert(opts: {
   fileHash?: string;
   metadata?: Record<string, unknown>;
   blockchainStatus?: string;
+  finalizedOnChain?: boolean;
   minsAgo?: number;
 }) {
   const fileHash = opts.fileHash ?? crypto.randomBytes(32).toString("hex");
   const status = opts.blockchainStatus ?? "confirmed";
+  // "confirmed" alone is intentionally insufficient for publicProofStatus:
+  // score fixtures that exercise the on-chain bonus must also model verified
+  // finality with a valid transaction hash and finality_checked_at.
+  const transactionHash = opts.finalizedOnChain ? crypto.randomBytes(32).toString("hex") : null;
+  const finalityCheckedAt = opts.finalizedOnChain ? new Date() : null;
   const meta = opts.metadata ?? {};
   const ts =
     opts.minsAgo != null ? `NOW() - INTERVAL '${opts.minsAgo} minutes'` : "NOW()";
   await pool.query(
     `INSERT INTO certifications
-       (id, user_id, file_name, file_hash, blockchain_status, is_public, metadata, created_at)
-     VALUES ($1, $2, 'test.json', $3, $4, true, $5, ${ts})`,
-    [opts.id, opts.userId, fileHash, status, JSON.stringify(meta)],
+       (id, user_id, file_name, file_hash, blockchain_status, transaction_hash,
+        finality_checked_at, is_public, metadata, created_at)
+     VALUES ($1, $2, 'test.json', $3, $4, $5, $6, true, $7, ${ts})`,
+    [opts.id, opts.userId, fileHash, status, transactionHash, finalityCheckedAt, JSON.stringify(meta)],
   );
   return fileHash;
 }
@@ -175,15 +182,16 @@ describe("POST /api/coherence/link", () => {
       metadata: { result: "some output" },
     });
 
-    // WHAT proof referencing whyId (confirmed, within 1h, references why → score=100).
+    // WHAT proof referencing whyId (finalized, within 1h, references why → score=100).
     await insertCert({
       id: whatId, userId, minsAgo: 25,
       blockchainStatus: "confirmed",
+      finalizedOnChain: true,
       metadata: { why_proof_id: whyId, result: "executed successfully" },
     });
 
     // Alternate WHAT for conflict tests.
-    await insertCert({ id: whatAltId, userId, minsAgo: 20 });
+    await insertCert({ id: whatAltId, userId, minsAgo: 20, finalizedOnChain: true });
   });
 
   afterAll(async () => {

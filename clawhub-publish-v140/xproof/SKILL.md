@@ -180,7 +180,7 @@ No configuration needed. Pay the current live per-proof USDC rate on Base (eip15
 > **WARNING -- autonomous payments:** x402 is an opt-in mode that enables your agent to initiate on-chain USDC transactions without per-transaction user confirmation. Before enabling x402 in production:
 > - Set a **spending cap** in your agent framework (e.g. max $N/day or $N/session).
 > - Require **human approval** for any single call that would exceed your risk threshold.
-> - Note that `POST /api/batch` supports up to 100 items per call; calculate any session spending cap from the current live rate at `/api/pricing`.
+> - Note that `POST /api/batch` supports up to 50 items per call; calculate any session spending cap from the current live rate at `/api/pricing`.
 > - Disable x402 entirely in environments where autonomous spending is not authorised.
 
 ---
@@ -533,7 +533,9 @@ Prove Before Act implements the open Agent Proof Standard -- a composable, chain
 
 Full specification: [AGENT_PROOF_STANDARD.md](https://github.com/jasonxkensei/prove-before-act/blob/main/AGENT_PROOF_STANDARD.md)
 
-Standard API: `GET /api/standard` | `POST /api/standard/validate`
+Standard API: `GET /api/standard/spec` | `POST /api/standard/validate`
+
+Human-readable specification: `GET /standard` (HTML). The JSON specification is served separately at `/api/standard/spec`.
 
 ---
 
@@ -549,8 +551,10 @@ Standard API: `GET /api/standard` | `POST /api/standard/validate`
 | `GET /llms-full.txt` | Complete LLM reference |
 | `POST /mcp` | MCP JSON-RPC 2.0 endpoint |
 | `GET /mcp` | MCP capability discovery |
-| `GET /api/standard` | Agent Proof Standard specification |
-| `GET /api/acp/openapi.json` | OpenAPI 3.1 spec for the full REST surface |
+| `GET /api/standard/spec` | Agent Proof Standard specification (JSON) |
+| `GET /standard` | Human-readable Agent Proof Standard (HTML) |
+| `GET /api/acp/openapi.json` | Public OpenAPI 3.1 spec for the full REST surface |
+| `GET /api/acp/openapi-3.0.json` | Public OpenAPI 3.0.3 compatibility export |
 
 ---
 

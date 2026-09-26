@@ -35,8 +35,9 @@ Complete OpenAPI 3.1 spec is available at: `GET https://provebeforeact.com/api/a
 
 | Method | Path | Purpose |
 |:---|:---|:---|
-| `GET` | `/api/standard` | Agent Proof Standard specification |
+| `GET` | `/api/standard/spec` | Agent Proof Standard specification (JSON) |
 | `POST` | `/api/standard/validate` | Validate a proof document against the standard |
+| `GET` | `/standard` | Human-readable Agent Proof Standard (HTML) |
 | `GET` | `/api/artifact/trust/:hash` | Aggregate trust score for an artifact |
 | `GET` | `/api/v1/skills/prove-before-act/file?path=...` | Read a published Clawhub skill file |
 
@@ -51,7 +52,8 @@ Complete OpenAPI 3.1 spec is available at: `GET https://provebeforeact.com/api/a
 
 | Method | Path | Purpose |
 |:---|:---|:---|
-| `GET` | `/api/acp/openapi.json` | OpenAPI 3.1 spec (full REST surface) |
+| `GET` | `/api/acp/openapi.json` | Public OpenAPI 3.1 spec (full REST surface, no auth) |
+| `GET` | `/api/acp/openapi-3.0.json` | Public OpenAPI 3.0.3 compatibility export (no auth) |
 | `GET` | `/api/acp/health` | Health check |
 | `GET` | `/.well-known/agent.json` | Agent Protocol manifest |
 | `GET` | `/.well-known/mcp.json` | MCP server manifest |

@@ -41,7 +41,9 @@ describe("shared public-site chrome", () => {
     expect(component.match(/href=\{PUBLIC_PRIMARY_CTA\.href\}/g)).toHaveLength(2);
     expect(component.match(/\{PUBLIC_PRIMARY_CTA\.label\}/g)).toHaveLength(2);
     expect(prerender).toContain("publicHref(baseUrl, PUBLIC_PRIMARY_CTA.href)");
-    expect(prerender).toContain("escapeHtml(PUBLIC_PRIMARY_CTA.label)");
+    expect(prerender).toContain(
+      'escapeHtml(locale === "zh" ? PUBLIC_SITE_ZH.primaryCta : PUBLIC_PRIMARY_CTA.label)',
+    );
     expect(prerender).toContain("renderPublicHeader");
     expect(prerender).toContain("renderPublicFooter");
     expect(prerender).toContain('/favicon-new.png" sizes="131x129"');

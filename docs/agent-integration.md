@@ -55,7 +55,7 @@ AI agents can automatically discover Prove Before Act through several standardiz
 | URL | Format | Description |
 |-----|--------|-------------|
 | `/api/acp/openapi.json` | OpenAPI 3.1 | Full API specification for ACP endpoints and outbound webhooks |
-| `/api/acp/openapi-3.0.json` | OpenAPI 3.0.3 | Full ACP API compatibility export for generators that cannot read 3.1 |
+| `/api/acp/openapi-3.0.json` | OpenAPI 3.0.3 | Public full ACP API compatibility export for generators that cannot read 3.1 (no authentication required) |
 | `/agent-tools/openapi-actions.json` | OpenAPI 3.0 | GPT Actions-compatible subset (not the full ACP partner API) |
 
 Use `/api/acp/openapi.json` when your tooling accepts OpenAPI 3.1. If your

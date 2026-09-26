@@ -102,9 +102,17 @@ describe("cross-account WHY→WHAT link flow (integration)", () => {
       const whatId = crypto.randomUUID();
       whatIds.push(whatId);
       await pool.query(
-        `INSERT INTO certifications (id, user_id, file_name, file_hash, blockchain_status, is_public, metadata, created_at)
-         VALUES ($1, $2, 'result.json', $3, 'confirmed', true, $4, NOW() - INTERVAL '5 minutes')`,
-        [whatId, u.id, crypto.randomBytes(32).toString("hex"), JSON.stringify({ why_proof_id: whyId })],
+        `INSERT INTO certifications
+           (id, user_id, file_name, file_hash, blockchain_status, transaction_hash,
+            finality_checked_at, is_public, metadata, created_at)
+         VALUES ($1, $2, 'result.json', $3, 'confirmed', $4, NOW(), true, $5, NOW() - INTERVAL '5 minutes')`,
+        [
+          whatId,
+          u.id,
+          crypto.randomBytes(32).toString("hex"),
+          crypto.randomBytes(32).toString("hex"),
+          JSON.stringify({ why_proof_id: whyId }),
+        ],
       );
     }
   });

@@ -67,6 +67,14 @@ beforeAll(async () => {
 });
 
 describe("OpenAPI partner endpoint contract", () => {
+  it("serves the OpenAPI 3.0 export publicly without an API key", async () => {
+    const response = await fetch(`${BASE_URL}/api/acp/openapi-3.0.json`);
+    expect(response.status, "the compatibility export must not require authentication").toBe(200);
+    expect(response.headers.get("content-type")).toContain("application/json");
+    const publicExport = await response.json();
+    expect(publicExport.openapi).toBe("3.0.3");
+  });
+
   it("offers a derived 3.0 document with the same API paths and nullable response types", async () => {
     const compatible = await fetchJson(`${BASE_URL}/api/acp/openapi-3.0.json`);
     expect(compatible.openapi).toBe("3.0.3");

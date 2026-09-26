@@ -92,7 +92,7 @@ export function PublicSiteHeader({
       >
       <div className="container flex min-h-16 items-center justify-between gap-3">
         <a href="/" className="flex shrink-0 items-center gap-2" data-testid="link-logo-home">
-          <img src={paper ? "/pba-logo-on-light.png" : "/pba-logo.png"} alt={PUBLIC_SITE_NAME} className="h-8 w-auto" />
+          <img src={paper ? "/pba-logo-on-light.svg" : "/pba-logo.svg"} alt={PUBLIC_SITE_NAME} className="h-8 w-auto" />
         </a>
 
         <nav className="public-desktop-navigation items-center gap-6" aria-label="Primary navigation">
@@ -222,7 +222,7 @@ export function PublicSiteFooter({ paper = false }: { paper?: boolean }) {
         <div className="mx-auto grid max-w-5xl gap-8 md:grid-cols-4">
           <div className="md:col-span-2">
         <a href="/" className="mb-4 inline-flex">
-              <img src={paper ? "/pba-logo-on-light.png" : "/pba-logo.png"} alt={PUBLIC_SITE_NAME} className="h-8 w-auto" />
+              <img src={paper ? "/pba-logo-on-light.svg" : "/pba-logo.svg"} alt={PUBLIC_SITE_NAME} className="h-8 w-auto" />
             </a>
             <p className={`max-w-xs text-sm ${muted}`}>
               The accountability pattern for agents that act in the world.

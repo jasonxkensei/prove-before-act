@@ -73,8 +73,8 @@ describe("digital presence audit regression", () => {
 
     expect(certify).toContain("This tool is for individuals.");
     expect(certify).toContain("/agents");
-    expect(agents).toContain("<h1>Prove Before Act for AI Agents</h1>");
-    expect(agents).not.toContain("Prove Before Act for AI Agents — Prove Before Act");
+    expect(agents).toContain("<h1>The accountability pattern for autonomous agents</h1>");
+    expect(agents).not.toContain("The accountability pattern for autonomous agents — Prove Before Act");
     expect(agents).toContain("MCP Server");
     expect(agents).toContain("Certifying a file as an individual?");
     expect(certifyClient).toContain("For individuals");
