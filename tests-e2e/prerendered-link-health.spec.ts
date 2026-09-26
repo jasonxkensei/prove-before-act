@@ -134,6 +134,34 @@ const CRAWLER_HEADERS = {
   accept: "text/html",
 };
 
+for (const [route, label] of [
+  ["/agent-context", "Skip to main content"],
+  ["/agent-context/zh", "跳转到主要内容"],
+] as const) {
+  test(`${route} lets keyboard visitors skip to the prerendered guide`, async ({ page }) => {
+    const response = await page.goto(route, { waitUntil: "domcontentloaded" });
+    expect(response?.status()).toBe(200);
+    expect(response?.headers()["content-type"]).toContain("text/html");
+
+    const skip = page.locator("body > a.agent-guide-skip");
+    const main = page.locator("main#main-content");
+    await expect(skip).toHaveText(label);
+    await expect(skip).toHaveAttribute("href", "#main-content");
+    await expect(page.locator("body > :first-child")).toHaveAttribute("class", "agent-guide-skip");
+    await expect(page.locator("#main-content")).toHaveCount(1);
+    await expect(main).toHaveAttribute("tabindex", "-1");
+
+    await page.keyboard.press("Tab");
+    await expect(skip).toBeFocused();
+    await expect(skip).toBeVisible();
+    await page.keyboard.press("Enter");
+    await expect(page).toHaveURL(new RegExp(`${route}#main-content$`));
+    await expect(main).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(main.locator("a").first()).toBeFocused();
+  });
+}
+
 test.describe("legal notices on every fixed crawler-facing page", () => {
   test("covers all fixed HTML routes handled by prerenderMiddleware", () => {
     const source = readFileSync(new URL("../server/prerender.ts", import.meta.url), "utf8");

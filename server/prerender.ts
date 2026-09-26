@@ -204,6 +204,14 @@ function renderPublicFooter(baseUrl: string, { paper = false, locale = "en" }: {
 }
 
 const PUBLIC_SITE_CHROME_STYLES = `
+  .agent-guide-skip {
+    position: fixed; left: 1rem; top: -5rem; z-index: 100;
+    padding: .65rem .9rem; border-radius: 4px;
+    background: #00FF9D; color: #0D1117; font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+    font-weight: 700; text-decoration: none;
+  }
+  .agent-guide-skip:focus { top: 1rem; outline: 2px solid #FFFFFF; outline-offset: 2px; }
+  .agent-guide-main { scroll-margin-top: 5rem; }
   .public-site-header, .public-site-footer {
     --public-bg: hsl(215 28% 7%);
     --public-fg: hsl(0 0% 100%);
@@ -1520,9 +1528,10 @@ async function renderAgentsPageZh(baseUrl: string): Promise<string> {
 
   return `${commonHead(title, description, `${baseUrl}/agent-context/zh`, "website", "zh-CN")}
 <body>
+<a class="agent-guide-skip" href="#main-content">跳转到主要内容</a>
 ${renderPublicHeader(baseUrl, { locale: "zh" })}
 
-<main>
+<main id="main-content" class="agent-guide-main" tabindex="-1">
   <h1>Prove Before Act：自主智能体的执行前问责模式</h1>
   <p><strong>Prove Before Act 是自主智能体的问责模式，xProof 是其参考实现。</strong>让你的智能体不再是黑箱，而是透明、可审计、可验证的系统。在执行前锚定声明的决策依据（WHY），执行后锚定实际结果（WHAT）。这并不要求披露内部思维链。完整的 4W（Who/What/When/Why）审计留痕，基于 MultiversX 区块链。每次存证 $${priceUsd.toFixed(2)}，通过 x402 无需 API key 即可使用。</p>
   <p>适用于合规存证（如《生成式人工智能服务管理暂行办法》）、风控留痕、以及多智能体舰队的审计追溯需求。</p>
@@ -1673,8 +1682,9 @@ async function renderAgentContextPage(baseUrl: string): Promise<string> {
 
   return `${commonHead(title, description, `${baseUrl}/agent-context`)}
 <body>
+<a class="agent-guide-skip" href="#main-content">Skip to main content</a>
 ${renderPublicHeader(baseUrl)}
-<main>
+<main id="main-content" class="agent-guide-main" tabindex="-1">
   <h1>Prove Before Act Agent Context</h1>
   <p><strong>Anchor a declared decision basis before execution.</strong> Prove Before Act is the pattern; xProof is the reference implementation. Hash locally → certify on MultiversX → proceed with <code>proof_id</code>. Production reference: ${referenceMetrics} <a href="${baseUrl}/agent/${REFERENCE_AGENT_WALLET}">Moltbook public profile</a>. <a href="${baseUrl}/founder">Jason Petitfourg is the AI Product Builder behind Prove Before Act</a>.</p>
   <p><strong>Decision basis, not chain-of-thought.</strong> Record only the declared decision, justification, context, and intended action that you choose to make auditable. The original content stays local; only its SHA-256 hash is transmitted.</p>
