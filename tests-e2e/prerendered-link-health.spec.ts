@@ -1,5 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { readFileSync } from "node:fs";
+import { createPublicKey, generateKeyPairSync, randomBytes, randomUUID, sign } from "node:crypto";
+import { pool } from "../server/db";
 
 /**
  * Link-health tests for the server-prerendered pages:
@@ -156,6 +158,96 @@ test.describe("legal notices on every fixed crawler-facing page", () => {
         expect(footerPaths, `${route} footer should link to ${path}`).toContain(path);
         const target = await request.get(path);
         expect(target.status(), `${route} legal link ${path} should return 200`).toBe(200);
+      }
+    });
+  }
+});
+
+test.describe("legal notices on individual public crawler pages", () => {
+  const wallet = `erd1e2elegal${randomBytes(20).toString("hex")}`;
+  const proofId = randomUUID();
+  const verificationId = randomUUID();
+  const requestDigest = randomBytes(32).toString("hex");
+  const keyId = `e2e-legal-${randomUUID()}`;
+  let userId: string | null = null;
+
+  test.beforeAll(async () => {
+    const user = await pool.query<{ id: string }>(
+      `INSERT INTO users (wallet_address, is_public_profile, agent_name)
+       VALUES ($1, TRUE, 'Legal fixture agent') RETURNING id`,
+      [wallet],
+    );
+    userId = user.rows[0].id;
+    await pool.query(
+      `INSERT INTO certifications (id, user_id, file_name, file_hash, blockchain_status, is_public)
+       VALUES ($1, $2, 'legal-fixture-proof.txt', $3, 'pending', TRUE)`,
+      [proofId, userId, randomBytes(32).toString("hex")],
+    );
+
+    // A signed, explicitly inconclusive test record exercises the successful
+    // verification renderer without using the app's official signing key.
+    const { privateKey } = generateKeyPairSync("ed25519");
+    const publicDer = createPublicKey(privateKey).export({ format: "der", type: "spki" });
+    const publicKey = `ed25519:${Buffer.from(publicDer).subarray(-32).toString("hex")}`;
+    const verdict = { reason: "E2E fixture; no chain evidence", status: "inconclusive" };
+    const canonical = `PBA-VERIFIED-ATTESTATION|v1\n${JSON.stringify({
+      evidence: {},
+      id: verificationId,
+      issued_at: new Date().toISOString(),
+      key_id: keyId,
+      origin: "e2e-test",
+      profile: "pba-verified-v1",
+      request_digest: requestDigest,
+      subject: "E2E legal notice verification fixture",
+      verdicts: { link: verdict, what: verdict, why: verdict },
+      verified: false,
+    })}`;
+    const signature = `hex:${sign(null, Buffer.from(canonical), privateKey).toString("hex")}`;
+
+    await pool.query(
+      `INSERT INTO pba_verification_keys (key_id, public_key) VALUES ($1, $2)`,
+      [keyId, publicKey],
+    );
+    await pool.query(
+      `INSERT INTO pba_verification_requests
+         (request_digest, subject, origin, amount_cents, quote_network, quote_pay_to, status)
+       VALUES ($1, 'E2E legal notice verification fixture', 'e2e-test', 1, 'e2e-test', 'e2e-test', 'completed')`,
+      [requestDigest],
+    );
+    await pool.query(
+      `INSERT INTO pba_verification_attestations
+         (id, request_digest, canonical, signature, key_id)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [verificationId, requestDigest, canonical, signature, keyId],
+    );
+  });
+
+  test.afterAll(async () => {
+    await pool.query(`DELETE FROM pba_verification_attestations WHERE id = $1`, [verificationId]);
+    await pool.query(`DELETE FROM pba_verification_requests WHERE request_digest = $1`, [requestDigest]);
+    await pool.query(`DELETE FROM pba_verification_keys WHERE key_id = $1`, [keyId]);
+    await pool.query(`DELETE FROM trust_score_snapshots WHERE wallet_address = $1`, [wallet]);
+    if (userId) await pool.query(`DELETE FROM users WHERE id = $1`, [userId]);
+  });
+
+  for (const [kind, route, expectedBody] of [
+    ["agent", `/agent/${wallet}`, "Legal fixture agent"],
+    ["proof", `/proof/${proofId}`, "legal-fixture-proof.txt - Blockchain Proof"],
+    ["verification", `/verify/${verificationId}`, "<h1>PBA verification</h1>"],
+  ]) {
+    test(`${kind} record includes legal footer links that resolve to HTTP 200`, async ({ request }) => {
+      const response = await request.get(route, { headers: CRAWLER_HEADERS });
+      expect(response.status(), `${route} should return an existing public record`).toBe(200);
+      expect(response.headers()["content-type"]).toContain("text/html");
+      const html = await response.text();
+      expect(html, `${route} should render its successful record, not an error shell`).toContain(expectedBody);
+      const footer = html.match(/<footer\b[^>]*>[\s\S]*?<\/footer>/i)?.[0];
+      expect(footer, `${route} should include a footer`).toBeDefined();
+      const footerPaths = extractInternalPaths(footer!);
+      for (const path of LEGAL_NOTICES) {
+        expect(footerPaths, `${route} footer should link to ${path}`).toContain(path);
+        const destination = await request.get(path);
+        expect(destination.status(), `${route} legal link ${path} should return 200`).toBe(200);
       }
     });
   }
