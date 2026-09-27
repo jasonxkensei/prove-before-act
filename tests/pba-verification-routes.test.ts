@@ -569,11 +569,12 @@ describe("PBA verification public API", () => {
     }
   });
 
-  it("keeps public issuance hard-blocked in production even with preview enabled", async () => {
-    const previousNodeEnv = process.env.NODE_ENV;
-    const previousPreview = process.env.PBA_VERIFIED_DEV_PREVIEW;
-    process.env.NODE_ENV = "production";
-    process.env.PBA_VERIFIED_DEV_PREVIEW = "true";
+  it("keeps production issuance disabled by default even with development preview enabled", async () => {
+    const restore = installEnvironment({
+      NODE_ENV: "production",
+      PBA_VERIFIED_DEV_PREVIEW: "true",
+      PBA_VERIFIED_PRODUCTION_ENABLED: undefined,
+    });
     try {
       const response = await request(createApp())
         .post("/api/pba/verify")
@@ -582,10 +583,88 @@ describe("PBA verification public API", () => {
       expect(response.body.error).toBe("PUBLIC_VERIFICATION_NOT_ENABLED");
       expect(dbMock.insert).not.toHaveBeenCalled();
     } finally {
-      if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
-      else process.env.NODE_ENV = previousNodeEnv;
-      if (previousPreview === undefined) delete process.env.PBA_VERIFIED_DEV_PREVIEW;
-      else process.env.PBA_VERIFIED_DEV_PREVIEW = previousPreview;
+      restore();
+    }
+  });
+
+  it("refuses an enabled production request without a dedicated signing key", async () => {
+    const restore = installEnvironment({
+      NODE_ENV: "production",
+      PBA_VERIFIED_PRODUCTION_ENABLED: "true",
+      PBA_VERIFIED_SIGNING_KEY_PEM: undefined,
+      PBA_VERIFIED_KEY_ID: undefined,
+    });
+    try {
+      const response = await request(createApp())
+        .post("/api/pba/verify")
+        .send(validEnvelope());
+      expect(response.status).toBe(503);
+      expect(response.body.error).toBe("OFFICIAL_SIGNING_NOT_CONFIGURED");
+      expect(dbMock.insert).not.toHaveBeenCalled();
+      expect(routeMocks.settlePayment).not.toHaveBeenCalled();
+    } finally {
+      restore();
+    }
+  });
+
+  it("refuses public payments without an operator reconciliation alert channel", async () => {
+    const signingKey = makeEd25519Key();
+    const restore = installEnvironment({
+      NODE_ENV: "production",
+      PBA_VERIFIED_PRODUCTION_ENABLED: "true",
+      PBA_VERIFIED_SIGNING_KEY_PEM: signingKey.privatePem,
+      PBA_VERIFIED_KEY_ID: "production-alert-test",
+      PBA_RECONCILIATION_ALERT_WEBHOOK_URL: undefined,
+      TX_ALERT_WEBHOOK_URL: undefined,
+    });
+    try {
+      const response = await request(createApp())
+        .post("/api/pba/verify")
+        .send(validEnvelope());
+      expect(response.status).toBe(503);
+      expect(response.body.error).toBe("RECONCILIATION_ALERTS_NOT_CONFIGURED");
+      expect(dbMock.insert).not.toHaveBeenCalled();
+      expect(routeMocks.settlePayment).not.toHaveBeenCalled();
+    } finally {
+      restore();
+    }
+  });
+
+  it("requires payment, never preview, when production issuance is enabled", async () => {
+    const signingKey = makeEd25519Key();
+    const payTo = "0x1111111111111111111111111111111111111111";
+    const restore = installEnvironment({
+      NODE_ENV: "production",
+      PBA_VERIFIED_PRODUCTION_ENABLED: "true",
+      PBA_VERIFIED_DEV_PREVIEW: "true",
+      PBA_VERIFIED_DEV_PAYMENTS: "true",
+      PBA_VERIFIED_SIGNING_KEY_PEM: signingKey.privatePem,
+      PBA_VERIFIED_KEY_ID: "production-route-test",
+      PBA_RECONCILIATION_ALERT_WEBHOOK_URL: "https://alerts.example/operator",
+      X402_PAY_TO: payTo,
+      X402_NETWORK: "eip155:8453",
+    });
+    const rows = installVerificationRequestDb();
+    routeMocks.examineLegacy.mockResolvedValue({
+      subject: PUBLIC_KEY,
+      origin: "test",
+      verified: true,
+      verdicts: {
+        why: { status: "verified" },
+        what: { status: "verified" },
+        link: { status: "verified" },
+      },
+    });
+    try {
+      const response = await request(createApp())
+        .post("/api/pba/verify")
+        .send(validEnvelope());
+      expect(response.status).toBe(402);
+      expect(response.body.accepts[0]).toMatchObject({ network: "base", payTo });
+      expect([...rows.values()][0].status).toBe("quoted");
+      expect(routeMocks.settlePayment).not.toHaveBeenCalled();
+    } finally {
+      restore();
     }
   });
 

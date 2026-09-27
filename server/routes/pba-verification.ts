@@ -616,13 +616,14 @@ export function registerPbaVerificationRoutes(app: Express): void {
     const production = process.env.NODE_ENV === "production";
     const previewMode = !production && process.env.PBA_VERIFIED_DEV_PREVIEW === "true";
     const paidDevelopmentMode = !production && process.env.PBA_VERIFIED_DEV_PAYMENTS === "true";
-    if (production) {
+    const paidProductionMode = production && process.env.PBA_VERIFIED_PRODUCTION_ENABLED === "true";
+    if (production && !paidProductionMode) {
       return res.status(503).json({
         error: "PUBLIC_VERIFICATION_NOT_ENABLED",
-        message: "Public verification issuance is not enabled in production. Production activation requires owner approval after the implementation report.",
+        message: "Public verification issuance is not enabled in production.",
       });
     }
-    if (!previewMode && !paidDevelopmentMode) {
+    if (!production && !previewMode && !paidDevelopmentMode) {
       return res.status(503).json({
         error: "VERIFICATION_NOT_ENABLED",
         message: "Enable an explicit non-production preview or payment mode to issue PBA verification records.",
@@ -639,6 +640,12 @@ export function registerPbaVerificationRoutes(app: Express): void {
     } catch (error) {
       logger.error("PBA signing preflight failed", { component: "pba-verification", error: error instanceof Error ? error.message : "invalid_signing_key" });
       return res.status(503).json({ error: "OFFICIAL_SIGNING_UNAVAILABLE", message: "The configured PBA signing key is unavailable or invalid." });
+    }
+    if (production && !process.env.PBA_RECONCILIATION_ALERT_WEBHOOK_URL && !process.env.TX_ALERT_WEBHOOK_URL) {
+      return res.status(503).json({
+        error: "RECONCILIATION_ALERTS_NOT_CONFIGURED",
+        message: "Operator alerts for uncertain PBA payments must be configured before public issuance.",
+      });
     }
 
     const digest = request.profile === PBA_HTTP_DELIVERY_PROFILE
