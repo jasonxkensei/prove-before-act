@@ -74,6 +74,20 @@ describe("PBA immutable Ed25519 attestations", () => {
     expect(verifyPbaSignedRecord(first.canonical, first.signature, first.publicKey)).toBe(true);
   });
 
+  it("accepts a valid PKCS#8 signing key flattened to one line by a secret form", () => {
+    const pair = configureSigningKey();
+    const multiline = signPbaPayload(samplePayload());
+    vi.stubEnv("PBA_VERIFIED_SIGNING_KEY_PEM", pair.privateKey.replace(/\s*\n\s*/g, ""));
+
+    const flattened = signPbaPayload(samplePayload());
+    expect(flattened.publicKey).toBe(multiline.publicKey);
+    expect(flattened.signature).toBe(multiline.signature);
+    expect(verifyPbaSignedRecord(flattened.canonical, flattened.signature, flattened.publicKey)).toBe(true);
+
+    vi.stubEnv("PBA_VERIFIED_SIGNING_KEY_PEM", "-----BEGIN PRIVATE KEY-----invalid-----END PRIVATE KEY-----");
+    expect(() => signPbaPayload(samplePayload())).toThrow("not a valid private key");
+  });
+
   it("uses a distinct signing domain for append-only lifecycle events", () => {
     configureSigningKey();
     const payload = { id: "event-1", attestation_id: "verification-1", event: "revoked" };

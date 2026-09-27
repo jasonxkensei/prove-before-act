@@ -29,6 +29,15 @@ export interface PbaSignedRecord {
   publicKey: string;
 }
 
+function normalizeSigningPem(configuredPem: string): string {
+  const expanded = configuredPem.replace(/\\n/g, "\n").trim();
+  // Secret forms can flatten a PEM onto one line. Rebuild only PKCS#8 PEM
+  // framing; createPrivateKey still validates the encoded key and algorithm.
+  const match = /^-----BEGIN PRIVATE KEY-----([\s\S]*?)-----END PRIVATE KEY-----$/.exec(expanded);
+  if (!match) return expanded;
+  return `-----BEGIN PRIVATE KEY-----\n${match[1].replace(/\s+/g, "")}\n-----END PRIVATE KEY-----\n`;
+}
+
 function stableJson(value: unknown, depth = 0): string {
   if (depth > 40) {
     throw new Error("PBA signed payload exceeds the maximum nesting depth");
@@ -67,7 +76,7 @@ function readSigningConfig(): { privateKey: KeyObject; keyId: string; publicKey:
 
   let privateKey: KeyObject;
   try {
-    privateKey = createPrivateKey(configuredPem.replace(/\\n/g, "\n"));
+    privateKey = createPrivateKey(normalizeSigningPem(configuredPem));
   } catch {
     throw new Error("PBA_VERIFIED_SIGNING_KEY_PEM is not a valid private key");
   }

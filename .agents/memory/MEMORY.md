@@ -43,3 +43,4 @@
 - [Alert observation fencing](alert-observation-fencing.md) — a suppressed duplicate check must still advance its observation timestamp or a delayed stale result can re-arm the episode.
 - [App Storage bucket provisioning](app-storage-bucket-provisioning.md) — SDK default-bucket lookup can return no usable bucket until the project creates one; fail closed on reads.
 - [x402 V1 network identifiers](x402-v1-network-identifiers.md) — V1 EVM uses legacy network slugs plus USDC EIP-712 domain metadata; V2 uses CAIP-2 identifiers.
+- [PEM secrets](pem-secret-normalization.md) — secret forms can flatten PEM line breaks; restore framing before parsing and still validate key type.
